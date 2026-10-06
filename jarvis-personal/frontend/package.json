@@ -19,6 +19,7 @@
     "test:theme": "node scripts/test-theme.mjs",
     "test:design-tokens": "node scripts/test-design-tokens.mjs",
     "test:debts-in-transactions": "node scripts/test-debts-in-transactions.mjs",
+    "test:debt-rate-unknown": "node scripts/test-debt-rate-unknown.mjs",
     "test:unified-movements": "node scripts/test-unified-movements.mjs",
     "test:currency": "node scripts/test-currency.mjs",
     "test:double-submit": "node scripts/test-double-submit.mjs",

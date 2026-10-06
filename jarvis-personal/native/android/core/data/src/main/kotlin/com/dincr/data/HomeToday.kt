@@ -69,8 +69,11 @@ data class HomeToday(
                 budget = budgetLeft(budget), pending = pending(calendar, today))
             val director = center.director
             val headline = director?.headline?.trim()?.takeIf { it.isNotEmpty() }
+            // The director needs inputs before recommending: priority `incomplete` (#326), or a known
+            // priority whose target can't be chosen yet (a debt's rate is missing: `debt_interest_rates`).
             val next = when {
-                director?.priority == "incomplete" -> HomeInput.codes(director.missing).let { missing ->
+                director != null && (director.priority == "incomplete" || HomeInput.codes(director.missing).isNotEmpty()) ->
+                    HomeInput.codes(director.missing).let { missing ->
                     HomeNext(HomeNext.Kind.NEEDS_INFORMATION, title = headline, missing = missing,
                         destination = missing.firstOrNull()?.destination ?: HomeDestination.SITUATION)
                 }
@@ -201,7 +204,9 @@ enum class HomeInput(val code: String) {
     ESSENTIAL_EXPENSES("essential_expenses"),
     DEBT_PAYMENTS("debt_payments"),
     SAVINGS("savings"),
-    EMERGENCY_FUND_TARGET("emergency_fund_target");
+    EMERGENCY_FUND_TARGET("emergency_fund_target"),
+    /** A debt's interest rate, needed to choose which debt to pay down first. */
+    DEBT_INTEREST_RATES("debt_interest_rates");
 
     /**
      * Where the user gives DINCR this input, in the flows that exist (never an estimate): income is
@@ -209,7 +214,7 @@ enum class HomeInput(val code: String) {
      */
     val destination: HomeDestination get() = when (this) {
         INCOME -> HomeDestination.REGISTER_INCOME
-        DEBT_PAYMENTS -> HomeDestination.DEBTS
+        DEBT_PAYMENTS, DEBT_INTEREST_RATES -> HomeDestination.DEBTS
         ESSENTIAL_EXPENSES, SAVINGS, EMERGENCY_FUND_TARGET -> HomeDestination.SITUATION
     }
 

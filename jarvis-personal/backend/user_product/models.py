@@ -72,7 +72,9 @@ class UserDebtCreateRequest(BaseModel):
 
 
 class UserDebtUpdateRequest(UserDebtCreateRequest):
-    pass
+    # True when the user typed or confirmed the rate in this edit. Saving the rest of the debt
+    # with the rate it was loaded with never confirms it (UNKNOWN ≠ 0%, see debt_rates.py).
+    interest_rate_confirmed: bool | None = None
 
 
 class DebtPaymentRequest(BaseModel):

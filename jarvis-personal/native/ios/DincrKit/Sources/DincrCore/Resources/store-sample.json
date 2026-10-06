@@ -757,7 +757,9 @@
           "name": "Tarjeta principal",
           "remaining_amount": 585000,
           "monthly_payment": 45000,
-          "interest_rate": 36,
+          "interest_rate": 36.0,
+          "interest_rate_known": true,
+          "debt_type": "credit_card",
           "payment_day": 3
         },
         "recommendation": "Cubrí tus compromisos y dirigí el excedente a Tarjeta principal.",
@@ -822,7 +824,9 @@
           "name": "Tarjeta principal",
           "remaining_amount": 585000,
           "monthly_payment": 45000,
-          "interest_rate": 36,
+          "interest_rate": 36.0,
+          "interest_rate_known": true,
+          "debt_type": "credit_card",
           "payment_day": 3
         },
         "recommendation": "Cubrí tus compromisos y dirigí el excedente a Tarjeta principal.",
@@ -2135,7 +2139,9 @@
           "name": "Main card",
           "remaining_amount": 585000,
           "monthly_payment": 45000,
-          "interest_rate": 36,
+          "interest_rate": 36.0,
+          "interest_rate_known": true,
+          "debt_type": "credit_card",
           "payment_day": 3
         },
         "recommendation": "Cover your commitments and send the surplus to Main card.",
@@ -2200,7 +2206,9 @@
           "name": "Main card",
           "remaining_amount": 585000,
           "monthly_payment": 45000,
-          "interest_rate": 36,
+          "interest_rate": 36.0,
+          "interest_rate_known": true,
+          "debt_type": "credit_card",
           "payment_day": 3
         },
         "recommendation": "Cover your commitments and send the surplus to Main card.",

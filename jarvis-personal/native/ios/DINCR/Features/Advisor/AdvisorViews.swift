@@ -219,7 +219,8 @@ private struct ReviewContent: View {
         }
         .dincrCard()
         ForEach(Array((review.scorecard ?? []).enumerated()), id: \.offset) { _, line in
-            InfoRow(label: line.label ?? line.key ?? "", value: [line.current.map { String(format: "%.0f", $0) }, line.unit].compactMap { $0 }.joined(separator: " "))
+            InfoRow(label: line.label ?? line.key ?? "",
+                    value: line.explanation ?? [line.current.map { String(format: "%.0f", $0) }, line.unit].compactMap { $0 }.joined(separator: " "))
                 .dincrCard(padding: DincrSpacing.s3)
         }
         if let next = review.nextMonth {

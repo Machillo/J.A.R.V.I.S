@@ -23,7 +23,7 @@ def build_goal_portfolio(
     *,
     available: float,
     one_month_protected: bool,
-    highest_debt_apr: float,
+    highest_debt_apr: float | None,
     immediate_risk: bool = False,
 ) -> dict[str, Any]:
     completed_groups = {
@@ -51,6 +51,9 @@ def build_goal_portfolio(
             blocked_by = tx("riesgo de liquidez en los próximos 45 días", "liquidity risk in the next 45 days")
         elif not one_month_protected:
             blocked_by = tx("Salvavidas menor a un mes", "emergency fund below one month")
+        elif highest_debt_apr is None:
+            # A debt's rate is unknown: whether it is expensive debt can't be told (never 0%).
+            blocked_by = tx("falta la tasa de interés de una deuda", "a debt's interest rate is missing")
         elif highest_debt_apr >= 10:
             blocked_by = tx("deuda prioritaria con tasa anual de 10% o más", "priority debt with an annual rate of 10% or more")
 

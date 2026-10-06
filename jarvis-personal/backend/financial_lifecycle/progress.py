@@ -35,14 +35,26 @@ METRICS = (
     ("emergency_coverage_months", ("emergency_fund", "coverage_months"), 1),
     ("health_score", ("health", "score"), 1),
 )
+# Metrics whose value can be unknown (the health score while a debt's rate is missing): an unknown
+# side is never read as 0, so there is no delta or trend to report.
+NULLABLE_METRICS = frozenset({"health_score"})
 
 
 def compare_states(current: dict[str, Any], baseline: dict[str, Any]) -> dict[str, Any]:
     """Compare two versioned states without depending on their source or ingestion path."""
     metrics = {}
     for name, path, positive_direction in METRICS:
-        current_value = _n(_path(current, *path))
-        baseline_value = _n(_path(baseline, *path))
+        current_raw, baseline_raw = _path(current, *path), _path(baseline, *path)
+        if name in NULLABLE_METRICS and (current_raw is None or baseline_raw is None):
+            metrics[name] = {
+                "current": None if current_raw is None else round(_n(current_raw), 2),
+                "baseline": None if baseline_raw is None else round(_n(baseline_raw), 2),
+                "delta": None,
+                "trend": "unknown",
+            }
+            continue
+        current_value = _n(current_raw)
+        baseline_value = _n(baseline_raw)
         delta = round(current_value - baseline_value, 2)
         directed = delta * positive_direction
         metrics[name] = {

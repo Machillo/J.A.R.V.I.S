@@ -249,7 +249,8 @@ data class MonthlyReview(
     @SerialName("next_month") val nextMonth: NextMonth? = null,
 ) {
     @Serializable
-    data class ScoreLine(val key: String? = null, val label: String? = null, val unit: String? = null, val current: Double? = null, val baseline: Double? = null, val delta: Double? = null, val trend: String? = null)
+    /** `trend` is `unknown` and `explanation` says why when a side can't be stated (the health score while a debt's rate is missing). */
+    data class ScoreLine(val key: String? = null, val label: String? = null, val unit: String? = null, val current: Double? = null, val baseline: Double? = null, val delta: Double? = null, val trend: String? = null, val explanation: String? = null)
 
     @Serializable
     data class NextMonth(val priority: String? = null, val title: String? = null, val amount: Money? = null, val rationale: String? = null)

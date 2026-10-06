@@ -68,6 +68,10 @@ data class DirectorStrategy(
     @SerialName("debt_progress_percent") val debtProgressPercent: Double? = null,
     @SerialName("investment_recommended") val investmentRecommended: Money? = null,
     val rules: List<String> = emptyList(),
+    /** Users: cautions in Basic's words (e.g. a debt's rate is missing). iOS: `DashboardStrategy.warnings`. */
+    val warnings: List<String> = emptyList(),
+    /** Users: stable codes of the inputs a decision needs (`debt_interest_rates`). */
+    val missing: List<String> = emptyList(),
     // Distribution (Plan → Distribución de dinero).
     @SerialName("allocation_base_amount") val allocationBaseAmount: Money? = null,
     @SerialName("allocation_items") val allocationItems: List<AllocationItem> = emptyList(),
@@ -89,6 +93,9 @@ data class DirectorStrategy(
     @SerialName("months_saved_by_current_extras") val monthsSavedByCurrentExtras: Int? = null,
 ) {
     val isOwnerScope: Boolean get() = scope == "owner"
+
+    /** A debt's rate is missing, so the plan names no debt to attack until the rates are complete. */
+    val needsDebtRates: Boolean get() = "debt_interest_rates" in missing
 
     /**
      * Whether `emergency_fund.current` is a real amount. The director reads unknown Users savings as

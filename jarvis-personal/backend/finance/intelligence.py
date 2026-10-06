@@ -10,6 +10,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import plural, tx as localized, voice
 from backend.finance import receivable_semantics
 from backend.finance import balance_movements
+from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, with_known_rates
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -359,7 +360,37 @@ def _monthly_rate(rate: float) -> float:
     return (rate / 100) / 12
 
 
-def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
+def _unknown_rate_scenario(debt: dict[str, Any], balance: float, minimum: float, monthly_extra: float) -> dict[str, Any]:
+    """A debt whose rate is unknown: no payoff, interest or A/B/C choice is computed from it."""
+    unknown = {"months": None, "total_interest": None, "total_paid": None, "status": "RATE_UNKNOWN"}
+    months_to_save = math.ceil(balance / monthly_extra) if monthly_extra > 0 else None
+    hybrid_extra = monthly_extra * 0.5
+    return {
+        "debt": debt,
+        "available_extra_cash": round(monthly_extra, 2),
+        "baseline_minimum": dict(unknown),
+        "A_monthly_amortization": {"payment": round(minimum + monthly_extra, 2), "months_saved_vs_minimum": None, "interest_saved_vs_minimum": None, **unknown},
+        "B_save_and_liquidate": {
+            "monthly_saving": round(monthly_extra, 2),
+            "estimated_months_to_lump_sum": months_to_save,
+            "estimated_interest_while_saving": None,
+            "assumed_monthly_yield": round(0.02 / 12, 6),
+            "status": "OK" if months_to_save else "NO_SURPLUS",
+        },
+        "C_hybrid": {"payment": round(minimum + hybrid_extra, 2), "extra_to_debt": round(hybrid_extra, 2), "months_saved_vs_minimum": None, "interest_saved_vs_minimum": None, **unknown},
+        "recommended_scenario": None,
+        "recommendation": voice(
+            "Señor, falta la tasa de interés de esta deuda: regístrela en Deudas para comparar las opciones.",
+            "Falta la tasa de interés de esta deuda: registrala en Deudas para comparar las opciones.",
+            "This debt's interest rate is missing: add it in Debts to compare the options.",
+        ),
+    }
+
+
+def get_debt_advisory(extra_cash: float | None = None, *, canonical_rates: bool = False) -> dict[str, Any]:
+    """Per-debt payoff scenarios. `canonical_rates` (the Users VIP route) reads rates with
+    debts.interest_rate_known: an unknown rate is never simulated as 0%. The Owner's /finance
+    route keeps the raw stored rate."""
     workspace_id = get_current_workspace_id()
     availability = get_real_availability()
     if extra_cash is None:
@@ -373,10 +404,11 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
             surplus = _as_float(availability.get("money_really_available"))
     else:
         surplus = _as_float(extra_cash)
+    flag_columns = ", interest_rate_known" if canonical_rates else ""
     with get_connection() as conn:
         rows = conn.execute(
-            """
-            SELECT id, name, debt_type, remaining_amount, monthly_payment, interest_rate, payment_day
+            f"""
+            SELECT id, name, debt_type, remaining_amount, monthly_payment, interest_rate, payment_day{flag_columns}
             FROM debts
             WHERE workspace_id = %s AND remaining_amount > 0
             ORDER BY remaining_amount DESC
@@ -384,6 +416,8 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
             (workspace_id,),
         ).fetchall()
     debts = [dict(row) for row in rows]
+    if canonical_rates:
+        debts = with_known_rates(debts)
     if not debts:
         return {"status": "EMPTY", "message": voice("Señor, no hay deudas activas para simular.", "No hay deudas activas para simular.", "There are no active debts to simulate."), "scenarios": []}
 
@@ -391,8 +425,11 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
     for debt in debts:
         balance = _as_float(debt.get("remaining_amount"))
         minimum = _as_float(debt.get("monthly_payment"))
-        rate = _monthly_rate(_as_float(debt.get("interest_rate")))
         monthly_extra = max(surplus, 0.0)
+        if canonical_rates and debt.get("interest_rate") is None:
+            scenarios.append(_unknown_rate_scenario(debt, balance, minimum, monthly_extra))
+            continue
+        rate = _monthly_rate(_as_float(debt.get("interest_rate")))
         baseline = _simulate_payoff(balance, minimum, rate)
         amortization_payment = minimum + monthly_extra
         amortization = _simulate_payoff(balance, amortization_payment, rate)
@@ -460,13 +497,17 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
     else:
         message = scenarios[0]["recommendation"] if scenarios else voice("Señor, no hay escenario disponible.", "No hay escenario disponible.", "No scenario is available.")
 
-    return {
+    result = {
         "status": "OK",
         "availability": availability,
         "available_extra_cash": round(max(surplus, 0.0), 2),
         "scenarios": scenarios,
         "message": message,
     }
+    if canonical_rates:
+        # Every scenario's choice depends on its debt's rate, even with a single debt.
+        result["missing"] = [RATES_MISSING] if any(item["recommended_scenario"] is None for item in scenarios) else []
+    return result
 
 
 def list_receivables() -> dict[str, Any]:

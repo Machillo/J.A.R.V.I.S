@@ -138,6 +138,7 @@ struct DebtForm: View {
     @State private var total = ""
     @State private var monthly = ""
     @State private var rate = ""
+    @State private var initialRate = ""
     @State private var day = ""
     @State private var error: String?
     @State private var saving = false
@@ -190,7 +191,10 @@ struct DebtForm: View {
         remaining = debt.remainingAmount.map(format.inputText) ?? ""
         total = debt.totalAmount.map(format.inputText) ?? ""
         monthly = debt.monthlyPayment.map(format.inputText) ?? ""
-        rate = debt.interestRate.map { "\($0)" } ?? ""
+        // An unknown rate starts empty (never "0"), and the starting text is kept to tell whether
+        // the user touched it.
+        rate = debt.rateForEditing.map { "\($0)" } ?? ""
+        initialRate = rate
         day = debt.paymentDay.map(String.init) ?? ""
     }
 
@@ -207,7 +211,9 @@ struct DebtForm: View {
         if (!rate.isEmpty && interest == nil) || (!day.isEmpty && !(1...31).contains(paymentDay ?? 0)) {
             error = tx("Revisá el interés y el día de pago.", "Check the interest and the payment day."); return
         }
-        let request = DebtRequest(name: trimmed, debtType: type, remainingAmount: balance, totalAmount: original, monthlyPayment: payment, interestRate: interest, paymentDay: paymentDay)
+        let request = DebtRequest(name: trimmed, debtType: type, remainingAmount: balance, totalAmount: original, monthlyPayment: payment,
+                                  interestRate: interest, paymentDay: paymentDay,
+                                  interestRateConfirmed: isEditing ? DebtRequest.rateConfirmed(initial: initialRate, current: rate) : nil)
         saving = true; error = nil
         defer { saving = false }
         let epoch = model.currentEpoch

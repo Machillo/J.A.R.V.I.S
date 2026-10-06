@@ -17,7 +17,7 @@ class DebtRequest(BaseModel):
     total_amount: float
     remaining_amount: float
     monthly_payment: float
-    interest_rate: float = 0
+    interest_rate: float | None = None  # None = unknown rate, never 0% (debts.interest_rate_known)
     term_months: int | None = None
     payment_day: int | None = None
     start_date: str | None = None
@@ -75,7 +75,7 @@ class DebtUpdateRequest(BaseModel):
     total_amount: float
     remaining_amount: float
     monthly_payment: float
-    interest_rate: float = 0
+    interest_rate: float | None = None  # None = unknown rate, never 0% (debts.interest_rate_known)
     term_months: int | None = None
     payment_day: int | None = None
     start_date: str | None = None

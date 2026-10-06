@@ -498,7 +498,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
 
                 <div className="strategy-debt-mini-grid">
                   <div><span>{tx("Cuota", "Payment")}</span><strong>{money(debt.monthly_payment)}</strong></div>
-                  <div><span>{tx("Tasa", "Rate")}</span><strong>{Number(debt.interest_rate || 0).toFixed(2)}%</strong></div>
+                  <div><span>{tx("Tasa", "Rate")}</span><strong>{debt.interest_rate == null ? tx("Sin registrar", "Not recorded") : `${Number(debt.interest_rate).toFixed(2)}%`}</strong></div>
                   <div><span>{tx("Solo mínimos", "Minimums only")}</span><strong>{monthsText(baseline.months)}</strong></div>
                 </div>
 

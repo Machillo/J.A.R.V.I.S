@@ -593,8 +593,8 @@ class FakeBackend(
             Movement("expense:6", 6, "expense", day(6), "Farmacia", BigDecimal(9800), "expense", "Salud", "", true),
             Movement("expense:5", 5, "expense", day(9), "Alquiler", BigDecimal(210000), "expense", "Vivienda", "", true),
         )
-        debts += Debt(1, "Tarjeta de ejemplo", "credit_card", BigDecimal(900000), BigDecimal(585000), BigDecimal(45000), BigDecimal("36.0"), null, 15, today.plusDays(5).toString())
-        debts += Debt(2, "Préstamo de ejemplo", "loan", BigDecimal(2400000), BigDecimal(1560000), BigDecimal(50000), BigDecimal("14.5"), 48, 1, null)
+        debts += Debt(1, "Tarjeta de ejemplo", "credit_card", BigDecimal(900000), BigDecimal(585000), BigDecimal(45000), BigDecimal("36.0"), null, 15, today.plusDays(5).toString(), interestRateKnown = true)
+        debts += Debt(2, "Préstamo de ejemplo", "loan", BigDecimal(2400000), BigDecimal(1560000), BigDecimal(50000), BigDecimal("14.5"), 48, 1, null, interestRateKnown = true)
         goals += Goal(3, "Fondo de emergencia", BigDecimal(600000), BigDecimal(240000), today.plusMonths(8).toString(), "high", "active")
         savings += SavingsPlan(4, "Vacaciones", BigDecimal(25000), BigDecimal(75000), today.minusMonths(3).withDayOfMonth(1).toString(), today.plusMonths(9).withDayOfMonth(1).toString(), "active")
         recurring += RecurringItem(5, "Internet", BigDecimal(24900), "Internet", "expense", "monthly", 4, true)

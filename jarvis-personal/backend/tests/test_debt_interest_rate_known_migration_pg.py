@@ -1,8 +1,8 @@
 """The debt interest-rate provenance migration (20261006120000) on a real PostgreSQL.
 
 A schema-faithful local copy (the ownership fixture's `debts`, as in production), synthetic rows.
-Migration only: preflight, apply, postflight, no historical row marked, a single transaction
-apply_migration.py accepts, idempotency, manual rollback and reapply.
+Migration only: preflight, apply, postflight, no historical row marked, idempotency, the SQL
+"unknown rate" rule matching the Python one, manual rollback and reapply.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from backend.tests.test_financial_ownership_integrity_pg import (  # noqa: F401 
     _seed_identities,
     admin_uri,
 )
+from backend.user_product.debt_rates import UNKNOWN_RATE_SQL, known_interest_rate
 
 psycopg2 = pytest.importorskip("psycopg2")
 
@@ -105,6 +106,21 @@ def test_it_is_idempotent(db):
     with db.cursor() as cur:
         cur.execute(POSTFLIGHT)
         assert cur.fetchall() == []
+
+
+def test_the_sql_unknown_rule_matches_the_python_one(db):
+    _run(db, MIGRATION)
+    with db.cursor() as cur:
+        cur.execute("INSERT INTO debts(user_id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,"
+                    "interest_rate_known,workspace_id) VALUES(%s,'Nueva 0%%','other',1000,800,100,0,TRUE,%s),"
+                    "(%s,'Nueva sin tasa','other',1000,800,100,NULL,FALSE,%s)", (A["users"], A["workspace"], A["users"], A["workspace"]))
+        cur.execute(f"SELECT name, {UNKNOWN_RATE_SQL} FROM debts ORDER BY id")
+        sql_unknown = dict(cur.fetchall())
+    for name, kind, rate, known in _rows(db):
+        python_unknown = known_interest_rate({"interest_rate": rate, "interest_rate_known": known, "debt_type": kind}) is None
+        assert sql_unknown[name] is python_unknown, name
+    assert sql_unknown == {"Sin tasa": True, "Tasa cero": False, "Con tasa": False, "Nula": True,
+                           "Nueva 0%": False, "Nueva sin tasa": True}
 
 
 def test_manual_rollback_keeps_the_knowledge_and_reapply_works(db):

@@ -136,7 +136,8 @@ def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     return {"strategy_hash": fingerprint, "changed": changed, "persisted": True}
 
 
-def _data_quality(summary: dict[str, Any], accounts: list[dict[str, Any]], debts: list[dict[str, Any]], reconciliation: dict[str, Any]) -> dict[str, Any]:
+def _data_quality(summary: dict[str, Any], accounts: list[dict[str, Any]], debts: list[dict[str, Any]], reconciliation: dict[str, Any],
+                  canonical_rates: bool = False) -> dict[str, Any]:
     issues: list[dict[str, Any]] = []
     if not (summary.get("setup") or {}).get("has_income_profile"):
         issues.append({"code": "income_missing", "severity": "blocking", "message": "Falta un ingreso mensual verificable."})
@@ -155,8 +156,9 @@ def _data_quality(summary: dict[str, Any], accounts: list[dict[str, Any]], debts
         debt.get("name") or "Deuda"
         for debt in debts
         if _n(debt.get("remaining_amount")) > 0
-        and _n(debt.get("interest_rate")) <= 0
-        and str(debt.get("debt_type") or "").lower() not in {"tasa_cero", "family", "familiar"}
+        and (debt.get("interest_rate") is None if canonical_rates else (
+            _n(debt.get("interest_rate")) <= 0
+            and str(debt.get("debt_type") or "").lower() not in {"tasa_cero", "family", "familiar"}))
     ]
     if unknown_rates:
         issues.append({"code": "debt_rates_missing", "severity": "warning", "message": "Faltan tasas: " + ", ".join(unknown_rates)})
@@ -183,21 +185,31 @@ def build_advisor_strategy() -> dict[str, Any]:
     return {**strategy, "persistence": _persistence_preview(strategy)}
 
 
-def compute_advisor_strategy() -> dict[str, Any]:
-    """The current ordered strategy, computed from canonical finance services. No writes."""
+def compute_advisor_strategy(*, canonical_rates: bool = False) -> dict[str, Any]:
+    """The current ordered strategy, computed from canonical finance services. No writes.
+
+    `canonical_rates` (the Users VIP lifecycle) reads debt rates with debts.interest_rate_known:
+    an unknown rate is never 0%, so it names no rate-based debt target, opens no goal or
+    investment as if the debt were cheap, and reports `debt_rates_missing`. The default (the
+    Owner's advisor and its daily history) keeps the raw stored rate.
+    """
     summary = get_financial_summary()
     accounts_report = list_account_balances()
     accounts = accounts_report.get("items") or []
     debts = [item for item in (get_debts() or []) if _n(item.get("remaining_amount")) > 0]
+    debt_strategy = calculate_debt_strategies(canonical_rates=True) if canonical_rates else calculate_debt_strategies()
+    if canonical_rates:
+        known_rates = {item.get("id"): item.get("interest_rate") for item in debt_strategy.get("debts") or []}
+        debts = [{**debt, "interest_rate": known_rates.get(debt.get("id"))} for debt in debts]
+    rates_unknown = canonical_rates and any(debt.get("interest_rate") is None for debt in debts)
     reconciliation = get_financial_reconciliation()
-    quality = _data_quality(summary, accounts, debts, reconciliation)
+    quality = _data_quality(summary, accounts, debts, reconciliation, canonical_rates=canonical_rates)
     timeline = get_financial_timeline(days=45)
     deterioration = get_financial_deterioration()
     salvavidas = get_salvavidas_state()
     availability = get_real_availability()
-    debt_strategy = calculate_debt_strategies()
     goals = calculate_goal_reserves(_fetch_active_goals(get_current_workspace_id()))
-    health = calculate_financial_health_score()
+    health = calculate_financial_health_score(canonical_rates=True) if canonical_rates else calculate_financial_health_score()
 
     liquidity = _n(timeline.get("opening_available"))
     timeline_floor = _minimum_projected_balance(timeline)
@@ -246,7 +258,8 @@ def compute_advisor_strategy() -> dict[str, Any]:
         goals.get("items") or [],
         available=usable,
         one_month_protected=protection["gap_one_month"] <= 0.01,
-        highest_debt_apr=_n(target_debt.get("interest_rate")) if target_debt else 0.0,
+        # An unknown rate is not cheap debt: goals wait for it (never read as 0%).
+        highest_debt_apr=None if rates_unknown else _n(target_debt.get("interest_rate")) if target_debt else 0.0,
         immediate_risk=immediate_risk["exists"],
     )
     goal_items = goal_portfolio.get("items") or []
@@ -263,7 +276,9 @@ def compute_advisor_strategy() -> dict[str, Any]:
         investment_blockers.append("riesgo de liquidez en los próximos 45 días")
     if protection["coverage_months"] < 3:
         investment_blockers.append("Salvavidas menor a tres meses")
-    if highest_apr >= 10:
+    if rates_unknown:
+        investment_blockers.append("falta la tasa de interés de una deuda")
+    elif highest_apr >= 10:
         investment_blockers.append("deuda con tasa anual de 10% o más")
     if debt_service_ratio > 0.25:
         investment_blockers.append("cuotas superiores al 25% del ingreso")

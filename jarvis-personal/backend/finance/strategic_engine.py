@@ -10,6 +10,7 @@ from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx as localized
 from backend.finance.emergency_fund import get_salvavidas_state
+from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, known_interest_rate
 
 
 ESSENTIAL_CATEGORIES = {
@@ -128,14 +129,15 @@ def _fetch_transactions() -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def _fetch_debts() -> list[dict[str, Any]]:
+def _fetch_debts(rate_flag: bool = False) -> list[dict[str, Any]]:
     workspace_id = get_current_workspace_id()
+    flag_column = ", interest_rate_known" if rate_flag else ""
     with get_connection() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT id, name, debt_type, total_amount, remaining_amount,
                    monthly_payment, interest_rate, term_months, payment_day,
-                   interest_method, fixed_fee_amount, created_at
+                   interest_method, fixed_fee_amount, created_at{flag_column}
             FROM debts
             WHERE workspace_id = %s
             ORDER BY remaining_amount DESC
@@ -280,14 +282,25 @@ def get_expense_category_report(limit: int = 12) -> dict[str, Any]:
     }
 
 
-def calculate_debt_strategies(extra_payment: float = 0.0) -> dict[str, Any]:
-    debts = _fetch_debts()
+def calculate_debt_strategies(extra_payment: float = 0.0, *, canonical_rates: bool = False) -> dict[str, Any]:
+    """Snowball/avalanche and minimum-payment costs for the active workspace.
+
+    `canonical_rates` (the Users VIP route) reads rates with debts.interest_rate_known: an
+    unknown rate stays None (never 0%), so no avalanche order, recommendation or interest
+    estimate is made from it. The Owner's /finance route keeps the raw stored rate.
+    """
+    debts = _fetch_debts(rate_flag=canonical_rates)
     normalized = []
     for debt in debts:
         remaining = _as_float(debt.get("remaining_amount"))
         monthly_payment = _as_float(debt.get("monthly_payment"))
-        interest_rate = _as_float(debt.get("interest_rate"))
-        monthly_rate, rate_type = _rate_to_monthly(interest_rate)
+        if canonical_rates:
+            interest_rate = known_interest_rate(debt)
+            monthly_rate, rate_type = (None, "tasa_desconocida") if interest_rate is None else _rate_to_monthly(interest_rate)
+            debt = {**debt, "interest_rate_known": interest_rate is not None}
+        else:
+            interest_rate = _as_float(debt.get("interest_rate"))
+            monthly_rate, rate_type = _rate_to_monthly(interest_rate)
         normalized.append({
             **debt,
             "remaining_amount": remaining,
@@ -307,8 +320,15 @@ def calculate_debt_strategies(extra_payment: float = 0.0) -> dict[str, Any]:
             "minimum_cost": None,
         }
 
-    snowball_order = sorted(normalized, key=lambda d: (d["remaining_amount"], -d["monthly_interest_rate"]))
-    avalanche_order = sorted(normalized, key=lambda d: (-d["monthly_interest_rate"], d["remaining_amount"]))
+    rates_unknown = any(d["monthly_interest_rate"] is None for d in normalized)
+    # Ranking by rate needs every rate: with an unknown one there is no avalanche order.
+    comparison_blocked = rates_unknown and len(normalized) > 1
+    if rates_unknown:
+        snowball_order = sorted(normalized, key=lambda d: d["remaining_amount"])
+        avalanche_order = None if comparison_blocked else list(normalized)
+    else:
+        snowball_order = sorted(normalized, key=lambda d: (d["remaining_amount"], -d["monthly_interest_rate"]))
+        avalanche_order = sorted(normalized, key=lambda d: (-d["monthly_interest_rate"], d["remaining_amount"]))
 
     def strategy_payload(name: str, order: list[dict[str, Any]]) -> dict[str, Any]:
         first = order[0]
@@ -346,6 +366,8 @@ def calculate_debt_strategies(extra_payment: float = 0.0) -> dict[str, Any]:
             return {"months": 0, "total_interest": 0.0, "status": "PAID"}
         if payment <= 0:
             return {"months": None, "total_interest": None, "status": "NO_PAYMENT"}
+        if rate is None:
+            return {"months": None, "total_interest": None, "status": "RATE_UNKNOWN"}
         if rate > 0 and payment <= balance * rate:
             return {"months": None, "total_interest": None, "status": "PAYMENT_TOO_LOW"}
 
@@ -376,23 +398,31 @@ def calculate_debt_strategies(extra_payment: float = 0.0) -> dict[str, Any]:
             **estimate,
         })
 
-    return {
+    rate_missing = any(item["status"] == "RATE_UNKNOWN" for item in minimum_cost_items)
+    result = {
         "status": "OK",
         "debts": normalized,
         "snowball": strategy_payload("snowball", snowball_order),
-        "avalanche": strategy_payload("avalanche", avalanche_order),
+        "avalanche": strategy_payload("avalanche", avalanche_order) if avalanche_order else None,
         "minimum_cost": {
             "items": minimum_cost_items,
             "total_remaining": round(sum(item["remaining_amount"] for item in normalized), 2),
             "total_monthly_payment": round(sum(item["monthly_payment"] for item in normalized), 2),
-            "total_projected_interest": round(sum(_as_float(item.get("total_interest")) for item in minimum_cost_items), 2),
+            # A total that leaves out a debt whose interest is unknown would look complete.
+            "total_projected_interest": None if rate_missing else round(sum(_as_float(item.get("total_interest")) for item in minimum_cost_items), 2),
         },
-        "recommended": strategy_payload("avalanche", avalanche_order),
+        "recommended": strategy_payload("avalanche", avalanche_order) if avalanche_order else None,
         "note": localized(
             "Avalancha es la estrategia recomendada por costo: prioriza la tasa más alta. Bola de nieve queda disponible como alternativa para priorizar saldos pequeños.",
             "Avalanche is the recommended strategy by cost: it prioritizes the highest rate. Snowball remains available as an alternative that prioritizes small balances.",
+        ) if not comparison_blocked else localized(
+            "Falta la tasa de interés de una deuda: completala en Deudas para comparar por costo. Bola de nieve ordena solo por saldo.",
+            "A debt's interest rate is missing: add it in Debts to compare by cost. Snowball orders by balance only.",
         ),
     }
+    if canonical_rates:
+        result["missing"] = [RATES_MISSING] if comparison_blocked else []
+    return result
 
 
 def calculate_emergency_fund() -> dict[str, Any]:
@@ -416,10 +446,17 @@ def calculate_emergency_fund() -> dict[str, Any]:
     }
 
 
-def calculate_financial_health_score() -> dict[str, Any]:
+def calculate_financial_health_score(*, canonical_rates: bool = False) -> dict[str, Any]:
+    """The 0-100 health score.
+
+    `canonical_rates` (the Users VIP lifecycle) reads rates with debts.interest_rate_known: while
+    an outstanding debt's rate is unknown, the debt-cost component can't be computed, so it and
+    the total score are unknown (status INCOMPLETE, missing debt_interest_rates) — never 0%, no
+    rescaling of the other components. The default (the Owner) keeps the raw stored rate.
+    """
     flow = get_monthly_financial_flow()
     emergency = calculate_emergency_fund()
-    debts = _fetch_debts()
+    debts = _fetch_debts(rate_flag=canonical_rates)
 
     average_income = _as_float(flow.get("averages", {}).get("income"))
     average_net = _as_float(flow.get("averages", {}).get("net_operational"))
@@ -431,19 +468,27 @@ def calculate_financial_health_score() -> dict[str, Any]:
     coverage = emergency_fund_current / fixed_expenses if fixed_expenses > 0 else 0.0
     savings_rate = average_net / average_income if average_income > 0 else 0.0
     debt_service_ratio = debt_minimums / average_income if average_income > 0 else 1.0
-    highest_apr = max([_as_float(debt.get("interest_rate")) for debt in debts] or [0.0])
+    if canonical_rates:
+        rates = [(known_interest_rate(debt), _as_float(debt.get("remaining_amount"))) for debt in debts]
+        rate_unknown = any(rate is None and remaining > 0 for rate, remaining in rates)
+        highest_apr = None if rate_unknown else max([rate for rate, _ in rates if rate is not None] or [0.0])
+    else:
+        highest_apr = max([_as_float(debt.get("interest_rate")) for debt in debts] or [0.0])
 
     components = {
         "cashflow": max(0.0, min((savings_rate + 0.05) / 0.25, 1.0)) * 30,
         "emergency_coverage": min(coverage / 6, 1.0) * 30,
         "debt_service": max(0.0, min((0.50 - debt_service_ratio) / 0.30, 1.0)) * 25,
-        "debt_cost": max(0.0, min((40 - highest_apr) / 40, 1.0)) * 15,
+        "debt_cost": None if highest_apr is None else max(0.0, min((40 - highest_apr) / 40, 1.0)) * 15,
     }
-    score = round(sum(components.values()), 2)
+    # A component that can't be computed leaves the score unknown: never a number out of 100.
+    score = None if highest_apr is None else round(sum(components.values()), 2)
     known_inputs = sum([average_income > 0, fixed_expenses > 0, bool(debts), flow.get("status") == "OK"])
     confidence = round(known_inputs / 4, 2)
 
-    if score >= 80:
+    if score is None:
+        level = None
+    elif score >= 80:
         level = "strong"
     elif score >= 50:
         level = "stable"
@@ -452,12 +497,12 @@ def calculate_financial_health_score() -> dict[str, Any]:
     else:
         level = "critical"
 
-    return {
-        "status": "OK",
+    result = {
+        "status": "OK" if score is not None else "INCOMPLETE",
         "formula": "30% flujo + 30% cobertura + 25% carga de deuda + 15% costo de deuda",
         "score": score,
         "confidence": confidence,
-        "components": {key: round(value, 2) for key, value in components.items()},
+        "components": {key: None if value is None else round(value, 2) for key, value in components.items()},
         "level": level,
         "inputs": {
             "monthly_saving_estimate": round(monthly_saving, 2),
@@ -467,11 +512,18 @@ def calculate_financial_health_score() -> dict[str, Any]:
             "savings_rate": round(savings_rate, 4),
             "debt_service_ratio": round(debt_service_ratio, 4),
             "emergency_coverage_months": round(coverage, 2),
-            "highest_debt_apr": round(highest_apr, 4),
+            "highest_debt_apr": None if highest_apr is None else round(highest_apr, 4),
             "total_debt": round(total_debt, 2),
             "fixed_expenses_base": round(fixed_expenses, 2),
         },
     }
+    if score is None:  # only in canonical mode; a complete score keeps the historical shape
+        result["missing"] = [RATES_MISSING]
+        result["explanation"] = localized(
+            "Falta la tasa de interés de una deuda para completar tu salud financiera.",
+            "A debt's interest rate is missing to complete your financial health.",
+        )
+    return result
 
 
 def detect_micro_spending(limit: int = 12) -> dict[str, Any]:

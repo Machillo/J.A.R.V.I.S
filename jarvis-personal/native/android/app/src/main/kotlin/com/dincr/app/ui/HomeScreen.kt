@@ -321,12 +321,14 @@ private val HomeInput.explanation: String
         HomeInput.DEBT_PAYMENTS -> tx("Una de tus deudas no tiene su cuota mensual.", "One of your debts has no monthly payment.")
         HomeInput.SAVINGS -> tx("Falta tu ahorro disponible o el saldo de una cuenta.", "Your available savings or an account balance is missing.")
         HomeInput.EMERGENCY_FUND_TARGET -> tx("Falta la meta de tu fondo de emergencia.", "Your emergency fund target is missing.")
+        HomeInput.DEBT_INTEREST_RATES -> tx("Falta la tasa de interés de una o más deudas. Con todas las tasas, DINCR puede decirte qué deuda atacar primero.",
+            "The interest rate of one or more debts is missing. With every rate, DINCR can tell you which debt to pay down first.")
     }
 
 private val HomeInput.actionTitle: String
     get() = when (this) {
         HomeInput.INCOME -> tx("Registrar ingreso", "Record income")
-        HomeInput.DEBT_PAYMENTS -> tx("Revisar deudas", "Review debts")
+        HomeInput.DEBT_PAYMENTS, HomeInput.DEBT_INTEREST_RATES -> tx("Revisar deudas", "Review debts")
         HomeInput.ESSENTIAL_EXPENSES, HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET -> tx("Completar mi situación", "Complete my situation")
     }
 

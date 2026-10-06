@@ -218,6 +218,13 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     public let investmentPortfolio: InvestmentPortfolio?
     public let baseTimeline: [TimelineItem]?
     public let monthsSavedByCurrentExtras: Int?
+    /// Users: cautions in Basic's words (e.g. a debt's rate is missing) and the stable codes of the
+    /// inputs a decision needs (`debt_interest_rates`). Empty or nil when nothing is missing.
+    public let warnings: [String]?
+    public let missing: [String]?
+
+    /// A debt's rate is missing, so the plan names no debt to attack until the rates are complete.
+    public var needsDebtRates: Bool { (missing ?? []).contains("debt_interest_rates") }
 
     enum CodingKeys: String, CodingKey {
         case scope, status, title, objective, priority, monthlyIncome, incomePolicy, monthlyExpenses
@@ -227,6 +234,7 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         case recurringMonthlyIncome, currentMonthExtraNet, incomeReceivedCurrentCycle, remainingIncomeCurrentCycle
         case distributableAccountCash, statementExpenses, newExpensesAfterCut, mandatoryFixedPending
         case mandatoryFixedPendingItems, investmentPortfolio, baseTimeline, monthsSavedByCurrentExtras
+        case warnings, missing
     }
 
     public init(from decoder: Decoder) throws {
@@ -250,6 +258,8 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         debtProgressPercent = c.lenient(Double.self, .debtProgressPercent)
         investmentRecommended = c.lenient(Decimal.self, .investmentRecommended)
         rules = c.lenient([String].self, .rules)
+        warnings = c.lenient([String].self, .warnings)
+        missing = c.lenient([String].self, .missing)
         allocationBaseAmount = c.lenient(Decimal.self, .allocationBaseAmount)
         allocationItems = c.lenient([AllocationItem].self, .allocationItems)
         distributionFormula = c.lenient(DistributionFormula.self, .distributionFormula)

@@ -2,6 +2,7 @@ package com.dincr.app.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -162,6 +163,9 @@ private fun DirectorMonthPlan(s: DirectorStrategy, plan: MonthPlan, nav: Navigat
     if (plan.isCritical) DincrMessage(MessageKind.ATTENTION, tx("Este mes no hay sobrante real", "No real surplus this month"), plan.criticalDetail.orEmpty())
     MonthPlanSummary(plan, tx("Sobrante para repartir", "Surplus to allocate"), "strategy.director.${s.scope}")
     MonthPlanSplit(plan)
+    // VIP (Users): Basic's cautions, and the way to complete a missing debt rate.
+    s.warnings.takeIf { it.isNotEmpty() }?.let { warnings -> Section(tx("Tené en cuenta", "Keep in mind")) { warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) } } }
+    if (s.needsDebtRates) Box(Modifier.testTag("plan.month.debtRates")) { LinkButton(tx("Revisar deudas", "Review debts")) { nav.open("debts") } }
     Disclosure(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?"), "plan.month.why") {
         DincrCard {
             Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {

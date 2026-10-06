@@ -12,10 +12,15 @@ const tx = (es, en) => language === "es" ? es : en;
 // Amounts are in the account's base currency (CRC or USD).
 const money = (value) => value == null ? tx("Sin dato", "No data") : formatMoney(value);
 const empty = { name:"", debt_type:"other", total_amount:"", remaining_amount:"", monthly_payment:"", interest_rate:"", term_months:"", payment_day:"", next_payment_date:"" };
-const opt = (value) => value === "" ? null : Number(value);
+const opt = (value) => value === "" || value == null ? null : Number(value);
+// An unknown rate (interest_rate_known false) is never 0%: no payoff estimate, shown as not recorded.
+const rateUnknown = (debt) => debt.interest_rate_known === false || debt.interest_rate == null;
+const rateText = (debt) => rateUnknown(debt) ? tx("Sin registrar", "Not recorded") : `${Number(debt.interest_rate)}%`;
+const editableRate = (debt) => rateUnknown(debt) ? "" : String(debt.interest_rate);
 const monthsLeft = (debt) => {
   const balance = Number(debt.remaining_amount) || 0;
   const payment = Number(debt.monthly_payment) || 0;
+  if (rateUnknown(debt)) return null;
   const rate = (Number(debt.interest_rate) || 0) / 1200;
   if (!payment) return null;
   if (!rate) return Math.ceil(balance/payment);
@@ -45,6 +50,7 @@ export default function Debts({ plan = "free" }) {
   const [form,setForm] = useState(empty);
   const [creating,setCreating] = useState(false);
   const [edit,setEdit] = useState(null);
+  const [editRate,setEditRate] = useState("");
   const [payment,setPayment] = useState(null);
   const [paymentAmount,setPaymentAmount] = useState("");
   const [deleting,setDeleting] = useState(null);
@@ -67,7 +73,9 @@ export default function Debts({ plan = "free" }) {
   });
   const save = once(async (event) => {
     event.preventDefault();
-    if (await run(() => updateDebt(edit.id,payload(edit)))) { setEdit(null); load(); }
+    // The rate is confirmed only when the user changed the field (the server never confirms a loaded value).
+    const interest_rate_confirmed = String(edit.interest_rate ?? "").trim() !== editRate.trim();
+    if (await run(() => updateDebt(edit.id,{...payload(edit),interest_rate_confirmed}))) { setEdit(null); load(); }
   });
   const registerPayment = async () => {
     setBusyDialog(true);
@@ -93,7 +101,7 @@ export default function Debts({ plan = "free" }) {
         <span className="free-detail-icon"><CreditCard size={24}/></span><h2>{selected.name}</h2>
         <div className="free-progress-ring" style={{"--progress":`${progress * 3.6}deg`}}><span><strong>{Math.round(progress)}%</strong><small>{tx("pagado", "paid")}</small></span></div>
         <div className="free-detail-values"><span><small>{tx("Pagado", "Paid")}</small><strong>{money(total - Number(selected.remaining_amount || 0))}</strong></span><span><small>{tx("Restante", "Remaining")}</small><strong>{money(selected.remaining_amount)}</strong></span></div>
-        <div className="free-detail-meta"><span>{tx("Cuota mensual", "Monthly payment")}<b>{money(selected.monthly_payment)}</b></span><span>{tx("Interés", "Interest")}<b>{Number(selected.interest_rate || 0)}%</b></span></div>
+        <div className="free-detail-meta"><span>{tx("Cuota mensual", "Monthly payment")}<b>{money(selected.monthly_payment)}</b></span><span>{tx("Interés", "Interest")}<b>{rateText(selected)}</b></span></div>
       </article>
       <button className="free-primary-button" type="button" onClick={() => { setPayment(selected); setPaymentAmount(""); }}>{tx("Registrar pago", "Record payment")}</button>
       <button className="free-secondary-button" type="button" onClick={() => setDeleting(selected)}>{tx("Eliminar deuda", "Delete debt")}</button>
@@ -129,7 +137,7 @@ export default function Debts({ plan = "free" }) {
         {advanced && <div className="record-meta"><span>{tx("Próximo pago", "Next payment")}: {(debt.next_payment_date || debt.payment_day) ? `${tx("día", "day")} ${debt.payment_day || String(debt.next_payment_date).slice(8,10)}` : tx("sin fecha", "no date")}</span><span>{tx("Finalización", "Payoff")}: {months ? `~${months} ${tx("meses", "months")}` : tx("faltan datos", "missing data")}</span></div>}
         <div className="actions">
           <button className="finva-button finva-button-primary" type="button" onClick={() => { setPayment(debt); setPaymentAmount(""); }}>{tx("Registrar pago", "Record payment")}</button>
-          {advanced && <button className="finva-button finva-button-secondary" type="button" onClick={() => setEdit({...debt})}>{tx("Editar", "Edit")}</button>}
+          {advanced && <button className="finva-button finva-button-secondary" type="button" onClick={() => { const rate = editableRate(debt); setEditRate(rate); setEdit({...debt,interest_rate:rate}); }}>{tx("Editar", "Edit")}</button>}
           <button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(debt)}>{tx("Eliminar", "Delete")}</button>
         </div>
       </article>;

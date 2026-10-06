@@ -193,7 +193,9 @@ private fun DebtForm(model: AppModel, debt: Debt?, advanced: Boolean, onDismiss:
     var remaining by remember { mutableStateOf(text(debt?.remainingAmount)) }
     var total by remember { mutableStateOf(text(debt?.totalAmount)) }
     var monthly by remember { mutableStateOf(text(debt?.monthlyPayment)) }
-    var interest by remember { mutableStateOf(debt?.interestRate?.let(format::inputText).orEmpty()) }
+    // An unknown rate starts empty (never "0"); the starting text tells whether the user touched it.
+    val initialInterest = remember { debt?.rateForEditing?.let(format::inputText).orEmpty() }
+    var interest by remember { mutableStateOf(initialInterest) }
     var term by remember { mutableStateOf(debt?.termMonths?.toString().orEmpty()) }
     var day by remember { mutableStateOf(debt?.paymentDay?.toString().orEmpty()) }
     var next by remember { mutableStateOf(debt?.nextPaymentDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }) }
@@ -219,7 +221,8 @@ private fun DebtForm(model: AppModel, debt: Debt?, advanced: Boolean, onDismiss:
         saving = true; error = null
         val request = DebtRequest(name.trim(), if (advanced) type else (debt?.debtType ?: "other"), remainingValue, totalValue, monthlyValue,
             if (advanced) interestValue else debt?.interestRate, if (advanced) termValue else debt?.termMonths, if (advanced) dayValue else debt?.paymentDay,
-            if (advanced) next?.toString() else debt?.nextPaymentDate)
+            if (advanced) next?.toString() else debt?.nextPaymentDate,
+            interestRateConfirmed = if (debt != null && advanced) DebtRequest.rateConfirmed(initialInterest, interest) else null)
         scope.launch {
             model.load(tx("No pudimos guardar la deuda.", "We couldn’t save the debt.")) {
                 if (debt == null) model.api.createDebt(request, key) else model.api.updateDebt(debt.id, request, key)

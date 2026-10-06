@@ -21,7 +21,15 @@ data class Debt(
     @SerialName("payment_day") val paymentDay: Int? = null,
     @SerialName("next_payment_date") val nextPaymentDate: String? = null,
     @SerialName("progress_percent") val progressPercent: Double? = null,
+    /**
+     * Whether DINCR knows the rate (the server's rule): false for a rate never given and for an
+     * unconfirmed historical 0. Null from an older server (the stored rate is then shown as before).
+     */
+    @SerialName("interest_rate_known") val interestRateKnown: Boolean? = null,
 ) {
+    /** The rate the edit form starts with: an unknown rate starts empty, never as "0". iOS: `Debt.rateForEditing`. */
+    val rateForEditing: Money? get() = if (interestRateKnown == false) null else interestRate
+
     /**
      * The backend's paid percentage, only when it can be true: the list answers 0 % when the
      * original amount is unknown (`ELSE 0`), which is not a fact about the debt. Unknown ≠ 0 %.
@@ -52,7 +60,17 @@ data class DebtRequest(
     @SerialName("term_months") val termMonths: Int? = null,
     @SerialName("payment_day") val paymentDay: Int? = null,
     @SerialName("next_payment_date") val nextPaymentDate: String? = null,
-)
+    /**
+     * On edit: true only when the user typed or changed the rate. Saving the rest of the debt never
+     * confirms the rate it was loaded with (the server keeps an unconfirmed rate unconfirmed).
+     */
+    @SerialName("interest_rate_confirmed") val interestRateConfirmed: Boolean? = null,
+) {
+    companion object {
+        /** Whether an edit touched the rate: its text differs from the one the form started with. */
+        fun rateConfirmed(initial: String, current: String): Boolean = initial.trim() != current.trim()
+    }
+}
 
 @Serializable
 data class AmountRequest(val amount: Money)

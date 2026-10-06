@@ -15,14 +15,22 @@ public struct Debt: Decodable, Sendable, Equatable, Identifiable {
     public let paymentDay: Int?
     public let nextPaymentDate: String?
     public let progressPercent: Double?
+    /// Whether DINCR knows the rate (the server's rule): false for a rate never given and for an
+    /// unconfirmed historical 0. Nil from an older server (the stored rate is then shown as before).
+    public let interestRateKnown: Bool?
 
     public init(id: Int, name: String?, debtType: String? = "other", totalAmount: Decimal? = nil, remainingAmount: Decimal?,
                 monthlyPayment: Decimal? = nil, interestRate: Decimal? = nil, paymentDay: Int? = nil,
-                nextPaymentDate: String? = nil, progressPercent: Double? = nil) {
+                nextPaymentDate: String? = nil, progressPercent: Double? = nil, interestRateKnown: Bool? = nil) {
         self.id = id; self.name = name; self.debtType = debtType; self.totalAmount = totalAmount
         self.remainingAmount = remainingAmount; self.monthlyPayment = monthlyPayment; self.interestRate = interestRate
         self.paymentDay = paymentDay; self.nextPaymentDate = nextPaymentDate; self.progressPercent = progressPercent
+        self.interestRateKnown = interestRateKnown
     }
+
+    /// The rate the edit form starts with: an unknown rate starts empty, never as "0" (UNKNOWN ≠ 0%).
+    /// Android: `Debt.rateForEditing`.
+    public var rateForEditing: Decimal? { interestRateKnown == false ? nil : interestRate }
 
     /// The backend's paid percentage, only when it can be true: the list answers 0 % when the
     /// original amount is unknown (`ELSE 0`), which is not a fact about the debt. Unknown ≠ 0 %.
@@ -174,10 +182,20 @@ public struct DebtRequest: Encodable, Sendable, Equatable {
     public let monthlyPayment: Decimal?
     public let interestRate: Decimal?
     public let paymentDay: Int?
+    /// On edit: true only when the user typed or changed the rate. Saving the rest of the debt never
+    /// confirms the rate it was loaded with (the server keeps an unconfirmed rate unconfirmed).
+    public let interestRateConfirmed: Bool?
 
-    public init(name: String, debtType: String = "other", remainingAmount: Decimal, totalAmount: Decimal?, monthlyPayment: Decimal?, interestRate: Decimal? = nil, paymentDay: Int? = nil) {
+    public init(name: String, debtType: String = "other", remainingAmount: Decimal, totalAmount: Decimal?, monthlyPayment: Decimal?,
+                interestRate: Decimal? = nil, paymentDay: Int? = nil, interestRateConfirmed: Bool? = nil) {
         self.name = name; self.debtType = debtType; self.remainingAmount = remainingAmount; self.totalAmount = totalAmount
         self.monthlyPayment = monthlyPayment; self.interestRate = interestRate; self.paymentDay = paymentDay
+        self.interestRateConfirmed = interestRateConfirmed
+    }
+
+    /// Whether an edit touched the rate: its text differs from the one the form started with.
+    public static func rateConfirmed(initial: String, current: String) -> Bool {
+        initial.trimmingCharacters(in: .whitespaces) != current.trimmingCharacters(in: .whitespaces)
     }
 }
 
