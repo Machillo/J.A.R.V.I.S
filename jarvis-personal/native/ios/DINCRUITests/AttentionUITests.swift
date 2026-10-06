@@ -37,7 +37,7 @@ final class AttentionUITests: XCTestCase {
 
     func testVipTodayShowsThreeMattersInOrderAndSeeAll() {
         let app = launch(plan: "vip")
-        XCTAssertTrue(element("home.safeToSpend", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("home.status.amount", in: app).waitForExistence(timeout: 10))
         reveal("home.attention.all", in: app)
         let high = texts("Reserva menor a un mes", in: app).firstMatch
         let medium = texts("Pago de tarjeta en 5 días", in: app).firstMatch
@@ -77,7 +77,7 @@ final class AttentionUITests: XCTestCase {
     func testFreeAndBasicHaveNoAttentionSection() {
         for plan in [nil, "basic"] as [String?] {
             let app = launch(plan: plan)
-            let today = plan == nil ? app.staticTexts["Disponible este mes"] : element("home.basic", in: app)
+            let today = element("home.status", in: app)
             XCTAssertTrue(today.waitForExistence(timeout: 10), plan ?? "free")
             XCTAssertFalse(element("home.attention", in: app).exists, plan ?? "free")
             XCTAssertFalse(texts("Nada pendiente", in: app).firstMatch.exists, plan ?? "free")

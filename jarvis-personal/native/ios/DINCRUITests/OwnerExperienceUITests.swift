@@ -52,7 +52,7 @@ final class OwnerExperienceUITests: XCTestCase {
     func testOwnerTodayAnswersMoneyAttentionAgendaAndJarvis() {
         let app = launch()
         XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(element("owner.home.hero", in: app).waitForExistence(timeout: 10), "the backend's key figure")
+        XCTAssertTrue(element("owner.home.status", in: app).waitForExistence(timeout: 10), "the backend's key figure")
         XCTAssertTrue((element("owner.home.greeting", in: app).label).contains("Ana."), "the greeting uses the profile's first name")
         XCTAssertTrue(element("owner.home.jarvis.mark", in: app).exists)
         // Para atender (UX-5): the command center's alerts in the backend's words, high first, and
@@ -110,8 +110,7 @@ final class OwnerExperienceUITests: XCTestCase {
     func testOtherAccountsKeepTheirTodayAndNeverSeeOwnerUI() {
         for plan in [nil, "basic", "vip"] as [String?] {
             let app = launch(role: nil, plan: plan)
-            let today = plan == "vip" ? "home.safeToSpend" : (plan == "basic" ? "home.basic" : "Disponible este mes")
-            let shown = plan == nil ? text(today, in: app) : element(today, in: app)
+            let shown = element("home.status", in: app)
             XCTAssertTrue(shown.waitForExistence(timeout: 10), plan ?? "free")
             XCTAssertFalse(element("owner.home", in: app).exists, plan ?? "free")
             XCTAssertFalse(element("owner.home.jarvis.mark", in: app).exists, plan ?? "free")
@@ -121,12 +120,14 @@ final class OwnerExperienceUITests: XCTestCase {
 
     func testOwnerTodayHoldsAtTheLargestTextSize() {
         let app = launch(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
-        XCTAssertTrue(element("owner.home.hero", in: app).waitForExistence(timeout: 10))
-        reveal("owner.home.attention.all", in: app)
+        XCTAssertTrue(element("owner.home.status", in: app).waitForExistence(timeout: 10))
+        // JARVIS comes first on the Owner's Hoy (UX-6); the financial blocks follow.
         reveal("owner.home.jarvis.chat", in: app).tap()
         XCTAssertTrue(element("jarvis.chat.input", in: app).waitForExistence(timeout: 5))
         // The quick actions wrap instead of disappearing.
         reveal("jarvis.chat.quick.overtime", in: app)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        reveal("owner.home.attention.all", in: app)
     }
 
     // MARK: Chat scope
@@ -162,7 +163,7 @@ final class OwnerExperienceUITests: XCTestCase {
                 try XCUIScreen.main.screenshot().pngRepresentation.write(to: folder.appendingPathComponent("\(id).png"))
             }
             var app = launch(appearance: appearance)
-            XCTAssertTrue(element("owner.home.hero", in: app).waitForExistence(timeout: 10))
+            XCTAssertTrue(element("owner.home.status", in: app).waitForExistence(timeout: 10))
             XCTAssertTrue(element("owner.home.agenda.event", in: app).waitForExistence(timeout: 10))
             try shot("01-today")
             app.swipeUp()

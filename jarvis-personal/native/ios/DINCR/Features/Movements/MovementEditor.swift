@@ -25,6 +25,8 @@ struct MovementEditor: View {
     let mode: Mode
     /// The user's own most recent rate (never a market rate), to prefill a foreign-currency entry.
     var latestRate: Decimal? = nil
+    /// What a new movement starts as (Hoy opens it as an income to register the month's pay).
+    var initialKind: Movement.Kind = .expense
     let onSaved: (String) -> Void
 
     @State private var kind: Movement.Kind = .expense
@@ -203,7 +205,10 @@ struct MovementEditor: View {
 
     private func prefill() {
         guard case .edit(let movement) = mode else {
-            if category.isEmpty { category = categories[0] }
+            if category.isEmpty {
+                kind = initialKind
+                category = categories[0]
+            }
             if currency.isEmpty { currency = base }
             return
         }

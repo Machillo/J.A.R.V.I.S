@@ -40,12 +40,12 @@ expect "login shows Google sign-in and the demo notice" "$ui" 'Continu(e|ar) (wi
 if grep -q 'Apple' <<<"$ui"; then echo "FAIL login: Apple sign-in must not appear on Android"; failures=$((failures + 1)); else echo "ok   login has no Apple button on Android"; fi
 
 launch POPULATED true
-expect "home key figure, signed amounts, spoken labels" "$(screen)" \
-  'Available this month|Disponible este mes' '₡257\.550' '\+₡865\.000' '−₡512\.450' \
-  'content-desc="(plus|más) 865000 colones"' 'Income and expenses|Ingresos y gastos'
+expect "home four blocks, signed amounts, spoken labels" "$(screen)" \
+  "This month’s result|Resultado del mes" '₡257\.550' '\+₡865\.000' '−₡512\.450' \
+  'content-desc="(plus|más) 865000 colones"' "Today’s status|Estado de hoy"
 
 launch EMPTY true
-expect "empty account teaches the first action" "$(screen)" 'No transactions yet|Todavía no hay movimientos' 'Add transaction|Agregar movimiento'
+expect "empty account: unknown, never ₡0, and the month's income first" "$(screen)" "I can’t calculate this yet|Aún no puedo calcularlo" "Record this month’s income|Registrá tus ingresos del mes"
 
 launch FAILING true
 expect "failing backend offers recovery and sign-out" "$(screen)" "load your account|cargar tu cuenta" 'Try again|Intentar de nuevo' 'Sign out|Cerrar sesi'

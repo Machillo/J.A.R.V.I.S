@@ -447,6 +447,8 @@ class FakeBackend(
             listOf(CommandCenter.RoadmapStep(1, "Completá tu fondo de emergencia inicial", BigDecimal(50000), "Te protege de imprevistos."),
                 CommandCenter.RoadmapStep(2, "Pagá extra a la tarjeta", BigDecimal(40000), "Tiene la tasa más alta.")),
             automation = CommandCenter.Automation(4, candidates.count { it.isPending }, 0),
+            reports = today.toString().take(7).let { month -> totals(month).let { (income, expenses) ->
+                CommandCenter.Reports(MonthTotals(month, income, expenses, BigDecimal.ZERO, income - expenses)) } },
         ))
         "/user-product/finance/strategy-vip" -> store?.let { ok(it.engine("strategy_vip")) } ?: ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
         "/user-product/finance/strategy-vip/simulate" -> ok(ScenarioResult(strategy(), strategy().copy(strategicMargin = BigDecimal(260000)), ScenarioResult.Delta(BigDecimal(46000), BigDecimal(50000), BigDecimal(4000))))
@@ -545,7 +547,8 @@ class FakeBackend(
         val month = today.toString().take(7)
         val spent = categories(month).associate { (it.category ?: "").lowercase() to (it.amount ?: BigDecimal.ZERO) }
         val items = budget.map { it.copy(spent = spent[it.category.lowercase()] ?: BigDecimal.ZERO) }
-        return Budget(items, items.sumOf { it.monthlyLimit ?: BigDecimal.ZERO }, BigDecimal(420000), month)
+        // As the backend: the user's own items are never a proposal.
+        return Budget(items, items.sumOf { it.monthlyLimit ?: BigDecimal.ZERO }, BigDecimal(420000), month, isProposal = budget.isEmpty())
     }
 
     private fun financialSituation() = FinancialSituation(situation, FinancialSituation.Observed(90, 3, BigDecimal(865000), 12),

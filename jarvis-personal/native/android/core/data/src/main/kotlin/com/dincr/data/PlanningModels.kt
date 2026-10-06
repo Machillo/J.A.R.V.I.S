@@ -124,6 +124,8 @@ data class Budget(
     @SerialName("total_budgeted") val totalBudgeted: Money? = null,
     @SerialName("available_for_categories") val availableForCategories: Money? = null,
     val period: String? = null,
+    /** True when the user has no budget yet and the items are DINCR's proposal, not the user's. */
+    @SerialName("is_proposal") val isProposal: Boolean? = null,
 )
 
 @Serializable

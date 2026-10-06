@@ -1,19 +1,31 @@
 package com.dincr.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.AddCircleOutline
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.Inbox
-import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.SouthWest
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,205 +33,418 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
-import com.dincr.data.BasicDashboard
-import com.dincr.data.Budget
-import com.dincr.data.AttentionList
-import com.dincr.data.CommandCenter
-import com.dincr.data.FinancialCalendar
-import com.dincr.data.FinancialSituation
-import com.dincr.data.FreeDashboard
-import com.dincr.data.MessageKind
+import com.dincr.data.HomeDestination
+import com.dincr.data.HomeInput
+import com.dincr.data.HomeNext
+import com.dincr.data.HomeShortcut
+import com.dincr.data.HomeStatus
+import com.dincr.data.HomeToday
+import com.dincr.data.JarvisEvent
+import com.dincr.data.MonthPlan
 import com.dincr.data.MoneyFormat
+import com.dincr.data.MovementKind
 import com.dincr.data.OpsFlag
+import com.dincr.data.OwnerHome
 import com.dincr.data.PlanTier
-import com.dincr.design.CategoryBars
+import com.dincr.data.TrendMeaning
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
-import com.dincr.design.DincrMessage
-import com.dincr.design.DincrPrimaryButton
-import com.dincr.design.EmptyState
-import com.dincr.design.IncomeExpenseBars
+import com.dincr.design.DincrProgressBar
 import com.dincr.design.MoneyText
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
-import java.time.LocalDate
+import java.time.LocalTime
+import java.time.YearMonth
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 sealed interface Load<out T> { data object Loading : Load<Nothing>; data class Failed(val message: String) : Load<Nothing>; data class Ready<T>(val value: T) : Load<T> }
 
-/** PARITY C1/C2/C3 — Today, per plan. Every figure is a backend value. */
+/**
+ * Hoy (UX-6). The public plans get four blocks — Estado de hoy, Para atender, Qué sigue, Accesos
+ * rápidos — from [HomeToday]; the plan decides what each block knows (Free facts, Basic + budget and
+ * commitments, VIP + safe to spend and the director). The Owner (server role, never a plan) gets its
+ * JARVIS space first, then the same blocks. Read-only: opening Hoy never writes. iOS: `HomeView`.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val flags by model.flags.collectAsStateWithLifecycle()
+    val owner = profile?.isOwner == true
     val plan = profile?.planTier ?: PlanTier.FREE
-    val vipLive = plan == PlanTier.VIP && flags.isEnabled(OpsFlag.VIP_INTELLIGENCE)
-    LaunchedEffect(Unit) { model.recordScreen("dashboard_opened", "home") }
-    val home = rememberLoad(model, plan, vipLive, fallback = tx("No pudimos cargar tu resumen.", "We couldn’t load your overview.")) {
-        when {
-            vipLive -> HomeData.Vip(model.api.commandCenter())
-            plan != PlanTier.FREE -> HomeData.Basic(model.api.basicDashboard(),
-                runCatching { model.api.budget() }.getOrNull(), runCatching { model.api.calendar(LocalDate.now().toString().take(7)) }.getOrNull())
-            else -> HomeData.Free(model.api.freeDashboard())
-        }
+    // VIP intelligence is VIP while `vip_intelligence` is on; otherwise VIP reads as Basic (as before).
+    val tier = when {
+        plan == PlanTier.VIP && flags.isEnabled(OpsFlag.VIP_INTELLIGENCE) -> HomeToday.Tier.VIP
+        plan != PlanTier.FREE -> HomeToday.Tier.BASIC
+        else -> HomeToday.Tier.FREE
     }
-    val situation = rememberLoad(model) { model.api.financialSituation() }
-    PullToRefreshBox(home.state is Load.Loading && false, onRefresh = { home.reload(); situation.reload() }, modifier = Modifier.fillMaxSize().padding(padding)) {
+    val mailReview = flags.isEnabled(OpsFlag.GMAIL_AUTOMATION)
+    LaunchedEffect(Unit) { model.recordScreen("dashboard_opened", "home") }
+    val home = rememberLoad(model, tier, mailReview, fallback = tx("No pudimos cargar tu resumen.", "We couldn’t load your overview.")) {
+        loadHomeToday(model, tier, mailReview)
+    }
+    val agenda = if (owner) rememberLoad(model, fallback = tx("No pudimos cargar tu agenda.", "We couldn’t load your calendar.")) { model.api.jarvisUpcomingEvents() } else null
+    PullToRefreshBox(false, onRefresh = { home.reload(); agenda?.reload() }, modifier = Modifier.fillMaxSize().padding(padding)) {
         ScreenColumn {
-            Text(tx("Hola, ${profile?.firstName.orEmpty()}", "Hi, ${profile?.firstName.orEmpty()}"), style = MaterialTheme.typography.headlineMedium,
-                color = Dincr.colors.text, modifier = Modifier.padding(top = DincrSpacing.s2).semantics { heading() })
-            if (profile?.isCourtesy == true) Caption(tx("Tenés ${profile?.subscription?.planName ?: plan.name} de cortesía.", "You have ${profile?.subscription?.planName ?: plan.name} as a courtesy."))
-            LoadContent(home, rows = 3) { data ->
-                when (data) {
-                    is HomeData.Free -> FreeHome(data.dashboard, nav)
-                    is HomeData.Basic -> BasicHome(data, nav)
-                    is HomeData.Vip -> VipHome(data.center, flags.isEnabled(OpsFlag.GMAIL_AUTOMATION), nav)
-                }
+            if (owner && agenda != null) {
+                OwnerJarvisSpace(profile?.firstName.orEmpty(), agenda, nav)
+            } else {
+                Text(tx("Hola, ${profile?.firstName.orEmpty()}", "Hi, ${profile?.firstName.orEmpty()}"), style = MaterialTheme.typography.headlineMedium,
+                    color = Dincr.colors.text, modifier = Modifier.padding(top = DincrSpacing.s2).semantics { heading() })
             }
-            YourFinances(nav)
-            (situation.state as? Load.Ready)?.value?.let { ProfileNudge(it, nav) }
+            Column(Modifier.testTag(if (owner) "owner.home" else "home.today"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+                LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = home.reload) }
+            }
         }
     }
 }
 
-/** Debts and goals (all plans) live in Hoy; the screens themselves are unchanged. */
+/**
+ * Reads what Hoy needs for a plan. The plan's main source is required (its failure is the screen's
+ * error); the extras (debts, budget, calendar, strategy) are optional and simply left out when they
+ * can't be read. GETs only.
+ */
+private suspend fun loadHomeToday(model: AppModel, tier: HomeToday.Tier, mailReview: Boolean): HomeToday = coroutineScope {
+    val api = model.api
+    val debts = async { runCatching { api.debts() }.getOrNull() }
+    when (tier) {
+        HomeToday.Tier.FREE -> HomeToday.free(api.freeDashboard(), debts.await())
+        HomeToday.Tier.BASIC -> {
+            val budget = async { runCatching { api.budget() }.getOrNull() }
+            val calendar = async { runCatching { api.calendar(YearMonth.now().toString()) }.getOrNull() }
+            val strategy = async { runCatching { api.strategyBasic() }.getOrNull() }
+            HomeToday.basic(api.basicDashboard(), budget.await(), calendar.await(), strategy.await()?.let(MonthPlan::of), debts.await())
+        }
+        HomeToday.Tier.VIP -> {
+            val budget = async { runCatching { api.budget() }.getOrNull() }
+            val calendar = async { runCatching { api.calendar(YearMonth.now().toString()) }.getOrNull() }
+            HomeToday.vip(api.commandCenter(), budget.await(), calendar.await(), debts.await(), mailReview)
+        }
+    }
+}
+
+// MARK: 0. The Owner's JARVIS space (first, as it historically was)
+
 @Composable
-private fun YourFinances(nav: Navigator) {
+private fun OwnerJarvisSpace(name: String, agenda: LoadHandle<List<JarvisEvent>>, nav: Navigator) {
+    val greeting = when (OwnerHome.greeting(LocalTime.now().hour)) {
+        OwnerHome.Greeting.MORNING -> tx("Buenos días,", "Good morning,")
+        OwnerHome.Greeting.AFTERNOON -> tx("Buenas tardes,", "Good afternoon,")
+        OwnerHome.Greeting.EVENING -> tx("Buenas noches,", "Good evening,")
+    }
+    Column(Modifier.padding(top = DincrSpacing.s2).testTag("owner.home.greeting").semantics(mergeDescendants = true) { heading() }) {
+        Text(greeting, style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text2)
+        if (name.isNotEmpty()) Text("$name.", style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
+    }
+    SectionTitle("JARVIS")
     DincrCard {
         Column {
-            NavRow(Icons.Rounded.CreditCard, tx("Deudas", "Debts"), tx("Saldos, cuotas y pagos", "Balances, payments")) { nav.open("debts") }
-            NavRow(Icons.Rounded.Flag, tx("Metas y ahorros", "Goals and savings"), tx("Metas y planes de ahorro", "Goals and savings plans")) { nav.open("goals") }
-        }
-    }
-}
-
-private sealed interface HomeData {
-    data class Free(val dashboard: FreeDashboard) : HomeData
-    data class Basic(val dashboard: BasicDashboard, val budget: Budget?, val calendar: FinancialCalendar?) : HomeData
-    data class Vip(val center: CommandCenter) : HomeData
-}
-
-@Composable
-private fun FreeHome(d: FreeDashboard, nav: Navigator) {
-    KeyFigure(tx("Disponible este mes", "Available this month"), d.available, d.income, d.expenses, d.debtBalance)
-    // Presentation only: the backend always sends six months, zero-filled for new accounts.
-    val empty = d.categories.isEmpty() && d.income.signum() == 0 && d.expenses.signum() == 0 &&
-        d.monthlyHistory.all { it.income.signum() == 0 && it.expenses.signum() == 0 }
-    if (empty) {
-        EmptyState(Icons.Rounded.Inbox, tx("Todavía no hay movimientos", "No transactions yet"),
-            tx("Cuando registrés ingresos y gastos, acá verás tu mes y en qué se va el dinero.", "When you record income and expenses, you’ll see your month and where the money goes here.")) {
-            DincrPrimaryButton(tx("Agregar movimiento", "Add transaction"), { nav.tab(Destination.MOVEMENTS) })
-        }
-    } else {
-        Section(tx("Ingresos y gastos", "Income and expenses")) { IncomeExpenseBars(d.monthlyHistory.map { Triple(shortMonth(it.month), it.income, it.expenses) }) }
-        Section(tx("En qué se va el dinero", "Where the money goes")) { CategoryBars(d.categories.map { it.category to it.amount }) }
-        TextButton({ nav.open("monthly") }, modifier = Modifier.fillMaxWidth()) { Text(tx("Ver resumen del mes", "See monthly summary"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.tint) }
-    }
-}
-
-@Composable
-private fun BasicHome(data: HomeData.Basic, nav: Navigator) {
-    val d = data.dashboard
-    KeyFigure(tx("Balance del mes", "Month balance"), d.balance, d.income, d.expenses, d.debt?.remaining)
-    // The backend's six months (zero-filled), as on iOS (PlanDashboards); nothing summed on the device.
-    if (d.monthlyHistory.isNotEmpty()) Section(tx("Ingresos y gastos", "Income and expenses")) {
-        IncomeExpenseBars(d.monthlyHistory.map { Triple(shortMonth(it.month), it.income, it.expenses) })
-    }
-    data.budget?.let { budget ->
-        val spent = budget.items.sumOf { it.spent ?: BigDecimal.ZERO }
-        Section(tx("Presupuesto", "Budget")) {
-            AmountLine(tx("Gastado", "Spent"), spent)
-            AmountLine(tx("Presupuestado", "Budgeted"), budget.totalBudgeted)
-            percentOf(spent, budget.totalBudgeted)?.let { ProgressLine(it, tx("${(it * 100).toInt()} % usado", "${(it * 100).toInt()} % used")) }
-            TextButton({ nav.open("budget") }) { Text(tx("Ver presupuesto", "See budget"), color = Dincr.colors.tint) }
-        }
-    }
-    data.calendar?.let { calendar ->
-        val today = LocalDate.now()
-        val upcoming = calendar.events.filter { e -> e.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let { !it.isBefore(today) && !it.isAfter(today.plusDays(7)) } == true }
-        Section(tx("Próximos 7 días", "Next 7 days")) {
-            if (upcoming.isEmpty()) Caption(tx("No tenés pagos conocidos esta semana.", "No known payments this week."))
-            upcoming.take(4).forEach { AmountLine("${dateLabel(it.date)} · ${it.name.orEmpty()}", it.amount) }
-            TextButton({ nav.open("calendar") }) { Text(tx("Ver calendario", "See calendar"), color = Dincr.colors.tint) }
-        }
-    }
-    d.goals?.let { goals ->
-        Section(tx("Metas", "Goals")) {
-            AmountLine(tx("Ahorrado", "Saved"), goals.current)
-            percentOf(goals.current, goals.target)?.let { ProgressLine(it, tx("${(it * 100).toInt()} % de tus metas", "${(it * 100).toInt()} % of your goals")) }
-        }
-    }
-    if (d.categories.isNotEmpty()) Section(tx("En qué se va el dinero", "Where the money goes")) {
-        CategoryBars(d.categories.map { (it.category ?: tx("Sin categoría", "Uncategorized")) to (it.amount ?: BigDecimal.ZERO) })
-    }
-}
-
-@Composable
-private fun VipHome(c: CommandCenter, mailReviewAvailable: Boolean, nav: Navigator) {
-    DincrCard {
-        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
-            Text(tx("Podés gastar con tranquilidad", "Safe to spend"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
-            MoneyText(c.safeToSpend?.amount, style = MaterialTheme.typography.displaySmall)
-            c.safeToSpend?.next45DaysMinimum?.let { AmountLine(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"), it) }
-        }
-    }
-    c.director?.let { d ->
-        Section(tx("Tu prioridad", "Your priority")) {
-            d.headline?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text) }
-            d.nextAction?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text2) }
-            if (d.dataComplete == false) TextButton({ nav.open("situation") }) { Text(tx("Completar mi situación", "Complete my situation"), color = Dincr.colors.tint) }
-        }
-    }
-    // UX-5: alerts and pending mail notices, ordered and deduplicated; left out when there are none.
-    AttentionSection(AttentionList.today(c, mailReviewAvailable), nav)
-    if (c.roadmap.isNotEmpty()) Section(tx("Tu plan de acción", "Your action plan")) {
-        c.roadmap.sortedBy { it.order ?: Int.MAX_VALUE }.take(3).forEach { step ->
-            Column(Modifier.padding(vertical = DincrSpacing.s1)) {
-                AmountLine("${step.order ?: ""}. ${step.title.orEmpty()}", step.amount?.takeIf { it.signum() > 0 })
-                step.why?.let { Caption(it) }
+            Box(Modifier.testTag("owner.home.jarvis.chat")) {
+                NavRow(Icons.Rounded.Forum, tx("Chat", "Chat"), tx("Horas extra, VGH, feriados, bonos y tu agenda", "Overtime, VGH, holidays, bonuses and your calendar")) { nav.push("jarvis/chat") }
+            }
+            Box(Modifier.testTag("owner.home.jarvis.agenda")) {
+                NavRow(Icons.Rounded.CalendarMonth, tx("Agenda", "Calendar"), tx("Tus eventos y recordatorios", "Your events and reminders")) { nav.push("jarvis/calendar") }
+            }
+            Box(Modifier.testTag("owner.home.jarvis.hub")) {
+                NavRow(Icons.Rounded.GridView, tx("Todo JARVIS", "All of JARVIS"), tx("Tu espacio personal", "Your personal space")) { nav.open("jarvis") }
             }
         }
     }
-    c.projections.firstOrNull { it.months == 6 }?.let { p ->
-        Section(tx("En 6 meses", "In 6 months")) {
-            AmountLine(tx("Patrimonio neto", "Net worth"), p.netWorth, emphasize = true)
-            AmountLine(tx("Deuda", "Debt"), p.debt)
-            TextButton({ nav.open("projections") }) { Text(tx("Ver proyecciones", "See projections"), color = Dincr.colors.tint) }
-        }
-    }
-}
-
-@Composable
-private fun KeyFigure(label: String, available: BigDecimal?, income: BigDecimal?, expenses: BigDecimal?, debt: BigDecimal?) {
-    DincrCard {
-        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
-            Text(label, style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
-            MoneyText(available, style = MaterialTheme.typography.displaySmall)
-            Row(Modifier.padding(top = DincrSpacing.s2), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s6)) {
-                Figure(tx("Ingresos", "Income"), income, MoneyFormat.Sign.INCOME)
-                Figure(tx("Gastos", "Expenses"), expenses, MoneyFormat.Sign.EXPENSE)
-            }
-            debt?.takeIf { it.signum() > 0 }?.let {
-                HorizontalDivider(color = Dincr.colors.line, modifier = Modifier.padding(vertical = DincrSpacing.s1))
-                AmountLine(tx("Deuda pendiente", "Outstanding debt"), it)
+    SectionTitle(tx("Próximos", "Coming up"))
+    LoadContent(agenda, rows = 2) { events ->
+        val next = OwnerHome.upcoming(events)
+        DincrCard {
+            Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                if (next.isEmpty()) {
+                    Box(Modifier.testTag("owner.home.agenda.empty")) {
+                        NavRow(Icons.Rounded.CalendarMonth, tx("Sin compromisos próximos", "No upcoming commitments"), tx("Agendá con JARVIS", "Schedule with JARVIS")) { nav.push("jarvis/chat") }
+                    }
+                }
+                next.forEach { event ->
+                    Row(Modifier.fillMaxWidth().testTag("owner.home.agenda.event").semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
+                        Column(Modifier.width(88.dp)) {
+                            Caption(dateLabel(event.day))
+                            Text(event.time ?: tx("Todo el día", "All day"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.tint)
+                        }
+                        Text(event.title, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text)
+                    }
+                }
+                TextButton({ nav.push("jarvis/calendar") }) { Text(tx("Ver agenda", "See calendar"), color = Dincr.colors.tint) }
             }
         }
     }
 }
 
+// MARK: The four blocks
+
 @Composable
-private fun Figure(label: String, amount: BigDecimal?, sign: MoneyFormat.Sign) {
+private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved: () -> Unit) {
+    var editor by remember { mutableStateOf<MovementKind?>(null) }
+    val open: (HomeDestination) -> Unit = { destination ->
+        when (destination) {
+            HomeDestination.REGISTER_INCOME -> editor = MovementKind.INCOME
+            HomeDestination.REGISTER_MOVEMENT -> editor = MovementKind.EXPENSE
+            HomeDestination.MOVEMENTS -> nav.tab(Destination.MOVEMENTS)
+            else -> destination.route?.let(nav::open)
+        }
+    }
+    HomeStatusCard(home.status, open)
+    home.attention?.let { AttentionSection(it, nav) }
+    HomeNextCard(home.next, open)
+    HomeShortcuts(home.shortcuts, open)
+    editor?.let { kind ->
+        MovementEditorSheet(model, EditorMode.Create, onDismiss = { editor = null }, onSaved = { editor = null; onSaved() }, onDelete = {}, initialKind = kind)
+    }
+}
+
+// 1. Estado de hoy
+
+@Composable
+private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) {
+    var explains by remember { mutableStateOf(false) }
+    Column(Modifier.testTag("home.status"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+        SectionTitle(tx("Estado de hoy", "Today’s status"))
+        DincrCard {
+            Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
+                Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+                    Text(
+                        when (status.headline) {
+                            HomeStatus.Headline.MONTH_RESULT -> tx("Resultado del mes", "This month’s result")
+                            HomeStatus.Headline.SAFE_TO_SPEND -> tx("Podés gastar con tranquilidad", "Safe to spend")
+                        },
+                        style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2,
+                    )
+                    if (status.amount != null) {
+                        MoneyText(status.amount, modifier = Modifier.testTag("home.status.amount"), style = MaterialTheme.typography.displaySmall)
+                    } else {
+                        // Unknown, never ₡0: what DINCR can't calculate yet, and on "?" why and how to give it.
+                        Row(Modifier.testTag("home.status.unknown"), verticalAlignment = Alignment.CenterVertically) {
+                            Text("—", style = MaterialTheme.typography.displaySmall, color = Dincr.colors.text2, modifier = Modifier.clearAndSetSemantics {})
+                            Text(tx("Aún no puedo calcularlo", "I can’t calculate this yet"), style = MaterialTheme.typography.bodyMedium,
+                                color = Dincr.colors.text2, modifier = Modifier.weight(1f).padding(start = DincrSpacing.s2))
+                            val helpLabel = tx("Qué necesita DINCR", "What DINCR needs")
+                            IconButton({ explains = !explains }, Modifier.testTag("home.status.help").semantics { contentDescription = helpLabel }) {
+                                Icon(Icons.Rounded.HelpOutline, contentDescription = null, tint = Dincr.colors.tint)
+                            }
+                        }
+                        if (explains) MissingInputs(status.missing, "home.status", open)
+                    }
+                    if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) {
+                        Row(Modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s1), verticalAlignment = Alignment.CenterVertically) {
+                            Caption(tx("Margen del mes", "Monthly margin"))
+                            if (status.margin != null) MoneyText(status.margin, style = MaterialTheme.typography.bodySmall) else Caption("—")
+                        }
+                    }
+                    status.lowestBalance?.let { lowest ->
+                        Row(Modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s1), verticalAlignment = Alignment.CenterVertically) {
+                            Caption(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"))
+                            MoneyText(lowest, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().testTag("home.status.facts"), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+                    Fact(tx("Ingresos", "Income"), status.income, MoneyFormat.Sign.INCOME, tx("Sin registrar", "Not recorded"))
+                    Fact(tx("Gastos", "Expenses"), status.expenses, MoneyFormat.Sign.EXPENSE, tx("Sin registrar", "Not recorded"))
+                    if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) Fact(tx("Resultado del mes", "Month result"), status.result, MoneyFormat.Sign.NONE, "—")
+                }
+                status.debtPaid?.let { Box(Modifier.testTag("home.status.debtPaid")) { AmountLine(tx("Pagado a deudas", "Paid to debts"), it) } }
+                status.debtBalance?.let { Box(Modifier.testTag("home.status.debtBalance")) { AmountLine(tx("Deuda pendiente", "Outstanding debt"), it) } }
+                status.budget?.let { budget ->
+                    Column(Modifier.testTag("home.status.budget"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+                        AmountLine(tx("Presupuesto restante", "Budget left"), budget.remaining)
+                        DincrProgressBar(budget.used, overMeaning = TrendMeaning.UNFAVORABLE)
+                    }
+                }
+                status.pending?.let { pending ->
+                    Row(Modifier.fillMaxWidth().testTag("home.status.pending").semantics(mergeDescendants = true) {}) {
+                        Text(tx("Próximos pagos conocidos este mes", "Known upcoming payments this month"), style = MaterialTheme.typography.bodyMedium,
+                            color = Dincr.colors.text2, modifier = Modifier.weight(1f))
+                        Text(pendingText(pending), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Fact(label: String, amount: BigDecimal?, sign: MoneyFormat.Sign, unknown: String) {
     Column(Modifier.semantics(mergeDescendants = true) {}) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
-        MoneyText(amount, sign = sign)
+        if (amount != null) MoneyText(amount, sign = sign, style = MaterialTheme.typography.labelLarge)
+        else Text(unknown, style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
     }
 }
+
+/** Payments the calendar knows of (scheduled from today on): none known is not "none due". */
+@Composable
+private fun pendingText(pending: HomeStatus.Pending): String {
+    if (pending.count == 0) return tx("Ninguno registrado", "None recorded")
+    val count = if (pending.count == 1) tx("1 pago", "1 payment") else tx("${pending.count} pagos", "${pending.count} payments")
+    val total = pending.total ?: return tx("$count · monto por confirmar", "$count · amount to confirm")
+    return "$count · ${Dincr.money.format(total)}"
+}
+
+/** Why a figure is unknown and where to give DINCR what it needs (never an estimate). */
+@Composable
+private fun MissingInputs(missing: List<HomeInput>, tagPrefix: String, open: (HomeDestination) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+        if (missing.isEmpty()) Caption(tx("Aún no tengo suficiente información para calcular esto.", "I don’t have enough information to calculate this yet."))
+        missing.forEach { input ->
+            Text(input.explanation, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.text2)
+            TextButton({ open(input.destination) }, Modifier.testTag("$tagPrefix.missing.${input.code}")) { Text(input.actionTitle, color = Dincr.colors.tint) }
+        }
+    }
+}
+
+private val HomeInput.explanation: String
+    get() = when (this) {
+        HomeInput.INCOME -> tx("DINCR necesita tus ingresos del mes registrados (tu salario o boleta de pago) para calcularlo.",
+            "DINCR needs this month’s income recorded (your salary or pay stub) to calculate it.")
+        HomeInput.ESSENTIAL_EXPENSES -> tx("Faltan tus gastos esenciales del mes.", "Your essential monthly expenses are missing.")
+        HomeInput.DEBT_PAYMENTS -> tx("Una de tus deudas no tiene su cuota mensual.", "One of your debts has no monthly payment.")
+        HomeInput.SAVINGS -> tx("Falta tu ahorro disponible o el saldo de una cuenta.", "Your available savings or an account balance is missing.")
+        HomeInput.EMERGENCY_FUND_TARGET -> tx("Falta la meta de tu fondo de emergencia.", "Your emergency fund target is missing.")
+    }
+
+private val HomeInput.actionTitle: String
+    get() = when (this) {
+        HomeInput.INCOME -> tx("Registrar ingreso", "Record income")
+        HomeInput.DEBT_PAYMENTS -> tx("Revisar deudas", "Review debts")
+        HomeInput.ESSENTIAL_EXPENSES, HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET -> tx("Completar mi situación", "Complete my situation")
+    }
+
+// 3. Qué sigue
+
+@Composable
+private fun HomeNextCard(next: HomeNext, open: (HomeDestination) -> Unit) {
+    Column(Modifier.testTag("home.next"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+        SectionTitle(tx("Qué sigue", "What’s next"))
+        DincrCard {
+            Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
+                    RoundedIcon(next.icon)
+                    Column(Modifier.weight(1f).padding(start = DincrSpacing.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(next.titleText, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
+                        next.detailText?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
+                        if (next.kind == HomeNext.Kind.COMMITMENT) {
+                            if (next.amount != null) MoneyText(next.amount, style = MaterialTheme.typography.labelLarge)
+                            else Text(tx("Monto por confirmar", "Amount to confirm"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
+                        }
+                    }
+                }
+                if (next.kind == HomeNext.Kind.NEEDS_INFORMATION && next.missing.isNotEmpty()) {
+                    MissingInputs(next.missing, "home.next", open)
+                } else {
+                    TextButton({ open(next.destination) }, Modifier.testTag("home.next.action")) { Text("${next.actionTitle} ›", color = Dincr.colors.tint) }
+                }
+                if (next.kind == HomeNext.Kind.RECOMMENDATION) FinancialDisclaimer()
+            }
+        }
+    }
+}
+
+private val HomeNext.icon: ImageVector
+    get() = when (kind) {
+        HomeNext.Kind.RECOMMENDATION -> Icons.Rounded.AutoAwesome
+        HomeNext.Kind.NEEDS_INFORMATION -> Icons.Rounded.HelpOutline
+        HomeNext.Kind.COMMITMENT -> Icons.Rounded.CalendarMonth
+        HomeNext.Kind.REGISTER_INCOME -> Icons.Rounded.SouthWest
+        HomeNext.Kind.REGISTER_MOVEMENT -> Icons.Rounded.AddCircleOutline
+    }
+
+private val HomeNext.titleText: String
+    get() = when (kind) {
+        HomeNext.Kind.RECOMMENDATION -> title.orEmpty()
+        HomeNext.Kind.NEEDS_INFORMATION -> title ?: tx("DINCR necesita más información antes de recomendarte.", "DINCR needs more information before recommending.")
+        HomeNext.Kind.COMMITMENT -> tx("Próximo pago: ${title ?: "deuda"}", "Next payment: ${title ?: "debt"}")
+        HomeNext.Kind.REGISTER_INCOME -> tx("Registrá tus ingresos del mes", "Record this month’s income")
+        HomeNext.Kind.REGISTER_MOVEMENT -> tx("Mantené tu mes al día", "Keep your month up to date")
+    }
+
+private val HomeNext.detailText: String?
+    get() = when (kind) {
+        HomeNext.Kind.RECOMMENDATION -> detail
+        HomeNext.Kind.NEEDS_INFORMATION -> null
+        HomeNext.Kind.COMMITMENT -> date?.let(::dateLabel)
+        HomeNext.Kind.REGISTER_INCOME -> tx("Con tu salario o boleta de pago registrados, DINCR puede mostrarte el resultado del mes.",
+            "With your salary or pay stub recorded, DINCR can show you this month’s result.")
+        HomeNext.Kind.REGISTER_MOVEMENT -> tx("Registrá tus gastos e ingresos para ver tu mes completo.", "Record your expenses and income to see your whole month.")
+    }
+
+private val HomeNext.actionTitle: String
+    get() = when (kind) {
+        HomeNext.Kind.RECOMMENDATION -> tx("Ver tu plan del mes", "See your plan for the month")
+        HomeNext.Kind.NEEDS_INFORMATION -> tx("Completar mi situación", "Complete my situation")
+        HomeNext.Kind.COMMITMENT -> tx("Ver deudas", "See debts")
+        HomeNext.Kind.REGISTER_INCOME -> tx("Registrar ingreso", "Record income")
+        HomeNext.Kind.REGISTER_MOVEMENT -> tx("Registrar movimiento", "Record a transaction")
+    }
+
+// 4. Accesos rápidos
+
+@Composable
+private fun HomeShortcuts(shortcuts: List<HomeShortcut>, open: (HomeDestination) -> Unit) {
+    Column(Modifier.testTag("home.shortcuts"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+        SectionTitle(tx("Accesos rápidos", "Quick access"))
+        shortcuts.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
+                row.forEach { shortcut ->
+                    Box(Modifier.weight(1f).testTag(shortcut.tag)) {
+                        DincrCard(Modifier.fillMaxWidth().heightIn(min = 88.dp).clickable { open(shortcut.destination) }) {
+                            Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                                RoundedIcon(shortcut.icon)
+                                Text(shortcut.title, style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text)
+                            }
+                        }
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** Debts and goals keep the texts the reachability spec names ("Deudas", "Metas y ahorros"). */
+private val HomeShortcut.title: String
+    get() = when (this) {
+        HomeShortcut.REGISTER_MOVEMENT -> tx("Registrar movimiento", "Record a transaction")
+        HomeShortcut.MOVEMENTS -> tx("Movimientos", "Transactions")
+        HomeShortcut.DEBTS -> tx("Deudas", "Debts")
+        HomeShortcut.GOALS -> tx("Metas y ahorros", "Goals and savings")
+    }
+
+private val HomeShortcut.tag: String
+    get() = when (this) {
+        HomeShortcut.REGISTER_MOVEMENT -> "home.shortcut.registerMovement"
+        HomeShortcut.MOVEMENTS -> "home.shortcut.movements"
+        HomeShortcut.DEBTS -> "home.debts"
+        HomeShortcut.GOALS -> "home.goals"
+    }
+
+private val HomeShortcut.icon: ImageVector
+    get() = when (this) {
+        HomeShortcut.REGISTER_MOVEMENT -> Icons.Rounded.AddCircleOutline
+        HomeShortcut.MOVEMENTS -> Icons.AutoMirrored.Rounded.ReceiptLong
+        HomeShortcut.DEBTS -> Icons.Rounded.CreditCard
+        HomeShortcut.GOALS -> Icons.Rounded.Flag
+    }
 
 @Composable
 fun Section(title: String, content: @Composable () -> Unit) {
@@ -227,27 +452,6 @@ fun Section(title: String, content: @Composable () -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, modifier = Modifier.semantics { heading() })
             content()
-        }
-    }
-}
-
-/** B10 — one missing piece of the declared situation at a time (read only; never guessed). */
-@Composable
-private fun ProfileNudge(situation: FinancialSituation, nav: Navigator) {
-    val profile = situation.profile
-    val prompt = when {
-        profile?.incomeType == null -> tx("Contanos cómo recibís tus ingresos para calcular mejor tu mes.", "Tell us how you get paid to plan your month better.")
-        profile.essentialMonthlyExpenses == null -> tx("Indicá tus gastos esenciales del mes.", "Add your essential monthly expenses.")
-        (situation.debts?.missingInterest ?: 0) > 0 -> tx("Algunas deudas no tienen tasa de interés.", "Some debts have no interest rate.")
-        else -> null
-    } ?: return
-    DincrCard {
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            RoundedIcon(Icons.Rounded.PersonOutline)
-            Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
-                Text(prompt, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text)
-                TextButton({ nav.open(if (prompt.contains("tasa") || prompt.contains("interest")) "debts" else "situation") }) { Text(tx("Completar", "Complete"), color = Dincr.colors.tint) }
-            }
         }
     }
 }

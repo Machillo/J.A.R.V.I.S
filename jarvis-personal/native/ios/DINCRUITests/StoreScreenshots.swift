@@ -79,20 +79,20 @@ final class StoreScreenshots: XCTestCase {
     func testS01Home() throws {
         try shoot("01-home", plan: "vip") { app, l in
             self.wait(app, l.pick("Podés gastar con tranquilidad", "Safe to spend"))
-            self.wait(app, l.pick("Tu prioridad", "Your priority"))
+            self.wait(app, l.pick("Qué sigue", "What’s next"))
         }
     }
 
     func testS02Overview() throws {
         try shoot("02-overview", plan: "free") { app, l in
-            self.wait(app, l.pick("Disponible este mes", "Available this month"))
-            self.wait(app, l.pick("Ingresos y gastos", "Income and expenses"))
+            self.wait(app, l.pick("Resultado del mes", "This month’s result"))
+            self.wait(app, l.pick("Accesos rápidos", "Quick access"))
         }
     }
 
     func testS03Movements() throws {
         try shoot("03-movements", plan: "free") { app, l in
-            self.wait(app, l.pick("Disponible este mes", "Available this month"))
+            self.wait(app, l.pick("Resultado del mes", "This month’s result"))
             self.tab(app, l.pick("Movimientos", "Transactions"))
             self.wait(app, l.pick("Café", "Coffee"))
         }

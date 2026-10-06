@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -93,10 +94,11 @@ class FlowsTest {
         waitForTag("editor.amount")
     }
 
-    private fun tab(label: String) = compose.onAllNodesWithText(label).onFirst().performClick()
+    /** The bottom-bar tab itself (selectable), never a Hoy shortcut with the same text (UX-6). */
+    private fun tab(label: String) = compose.onAllNodes(hasText(label) and isSelectable()).onFirst().performClick()
 
     private fun openMovements() {
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
         tab(tx("Movimientos", "Transactions"))
         waitForTag("movements.add")
     }
@@ -105,14 +107,19 @@ class FlowsTest {
         launch(skipLogin = false)
         waitForTag("login.google")
         compose.onNodeWithTag("login.google").performClick()
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
     }
 
-    @Test fun homeShowsKeyFigureAndSections() {
+    @Test fun homeShowsItsFourBlocks() {
+        // UX-6: Estado de hoy, Qué sigue and Accesos rápidos (Free has no "Para atender" source).
         launch()
-        waitForText(tx("Disponible este mes", "Available this month"))
-        compose.onNodeWithText(tx("Ingresos y gastos", "Income and expenses")).performScrollTo()
-        compose.onNodeWithText(tx("En qué se va el dinero", "Where the money goes")).performScrollTo()
+        waitForText(tx("Resultado del mes", "This month’s result"))
+        for (tag in listOf("home.status", "home.next", "home.shortcuts")) {
+            assertTrue(tag, compose.onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        }
+        // The month's analysis lives in Movimientos, not on Hoy.
+        compose.onAllNodes(hasText(tx("Ingresos y gastos", "Income and expenses")), useUnmergedTree = true).assertCountEquals(0)
+        compose.onAllNodes(hasText(tx("En qué se va el dinero", "Where the money goes")), useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test fun addExpenseRejectsAmbiguousAmountThenSaves() {
@@ -201,7 +208,7 @@ class FlowsTest {
 
     @Test fun debtPaymentIsRecorded() {
         launch()
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
         // Debts live in Hoy.
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
@@ -214,7 +221,7 @@ class FlowsTest {
 
     @Test fun goalContributionIsRecorded() {
         launch()
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
         // Goals live in Hoy.
         click(tx("Metas y ahorros", "Goals and savings"))
         waitForText("Fondo de emergencia")
@@ -227,15 +234,16 @@ class FlowsTest {
 
     @Test fun freePlanOffersBasicToolsAsAnUpgrade() {
         launch(plan = "free")
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
         tab(tx("Plan", "Plan"))
         waitForText(tx("Disponible desde Basic", "Available from Basic"))
     }
 
     @Test fun basicPlanShowsTheBudget() {
         launch(plan = "basic")
-        waitForText(tx("Balance del mes", "Month balance"))
-        // Budget lives in Perfil → Finanzas.
+        waitForText(tx("Resultado del mes", "This month’s result"))
+        // Hoy shows the user's own budget left; the budget itself lives in Perfil → Finanzas.
+        assertTrue(compose.onAllNodes(hasTestTag("home.status.budget"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
         tab(tx("Perfil", "Profile"))
         click(tx("Presupuesto", "Budget"))
         waitForText(tx("Gastado este mes", "Spent this month"))
@@ -269,12 +277,14 @@ class FlowsTest {
         click(tx("Acepto los Términos y Condiciones", "I accept the Terms and Conditions"))
         click(tx("Acepto la Política de Privacidad", "I accept the Privacy Policy"))
         click(tx("Aceptar y continuar", "Accept and continue"))
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
     }
 
     @Test fun emptyAccountTeachesTheFirstAction() {
+        // UX-6: nothing registered is unknown (never ₡0), and Qué sigue starts with the month's income.
         launch("EMPTY")
-        waitForText(tx("Todavía no hay movimientos", "No transactions yet"))
+        waitForText(tx("Aún no puedo calcularlo", "I can’t calculate this yet"))
+        waitForText(tx("Registrá tus ingresos del mes", "Record this month’s income"))
     }
 
     @Test fun failingBackendShowsRecovery() {
@@ -293,6 +303,6 @@ class FlowsTest {
         compose.onNodeWithTag("setup.continue").performClick()
         waitForText(tx("Elegí tu plan", "Choose your plan"))
         click(tx("Elegir Free", "Choose Free"))
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
     }
 }

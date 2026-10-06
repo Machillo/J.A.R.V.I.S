@@ -2,151 +2,112 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY C1–C3 — the overview of each plan: Free (below), Basic (`BasicHomeView`) and VIP
-/// (`VipHomeView`, while `vip_intelligence` is on). C1 — Free overview. One key figure (available this month, from the backend), the
-/// month's income and expenses, the 6-month comparison and where the money goes. Every number
-/// is a backend value; nothing is derived here.
+/// Hoy (UX-6). The public plans get four blocks — Estado de hoy, Para atender, Qué sigue, Accesos
+/// rápidos — from `HomeToday`; the plan decides what each block knows (Free facts, Basic + budget
+/// and commitments, VIP + safe to spend and the director). The Owner (server role, never a plan) has
+/// its own Hoy: JARVIS first, then the same blocks. Read-only: opening Hoy never writes.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     let openMovements: () -> Void
-    @State private var state: LoadState<FreeDashboard> = .loading
 
     var body: some View {
-        // The Owner (server role, never a plan) has its own Today: money, attention, agenda and JARVIS.
         if Jarvis.isAvailable(to: model.profile) {
-            OwnerHomeView()
+            OwnerHomeView(openMovements: openMovements)
         } else {
-            planBody
+            PublicHomeView(openMovements: openMovements)
         }
     }
+}
 
-    @ViewBuilder
-    private var planBody: some View {
-        switch model.planTier {
-        case .vip where model.flags.isEnabled(.vipIntelligence):
-            VipHomeView(openMovements: openMovements)
-        case .basic, .vip:
-            BasicHomeView(openMovements: openMovements)
-        case .free:
-            freeBody
-        }
-    }
+private struct PublicHomeView: View {
+    @Environment(AppModel.self) private var model
+    let openMovements: () -> Void
+    @State private var state: LoadState<HomeToday> = .loading
 
-    private var freeBody: some View {
+    var body: some View {
+        let tier = HomeTodayLoader.tier(model)
         ScrollView {
             VStack(alignment: .leading, spacing: DincrSpacing.s4) {
                 switch state {
                 case .loading:
                     SkeletonView(rows: 3)
                 case .failed(let message):
-                    ErrorStateView(message: message) { Task { await load() } }
-                case .loaded(let dashboard):
-                    content(dashboard)
+                    ErrorStateView(message: message) { Task { await load(tier) } }
+                case .loaded(let home):
+                    HomeBlocks(home: home, openMovements: openMovements) { await load(tier) }
                 }
             }
             .padding(.horizontal, DincrSpacing.s4)
             .padding(.bottom, DincrSpacing.s6)
-            .frame(maxWidth: 600)
+            .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("home.today")
         }
         .dincrScreenBackground()
         .navigationTitle(tx("Hola, \(model.profile?.firstName ?? "")", "Hi, \(model.profile?.firstName ?? "")"))
-        .refreshable { await load() }
-        .task { if case .loading = state { await load() } }
+        .refreshable { await load(tier) }
+        .task(id: tier) { await load(tier) }
     }
 
-    @ViewBuilder
-    private func content(_ dashboard: FreeDashboard) -> some View {
-        // Presentation only: the backend always sends six months, zero-filled for new accounts.
-        let empty = dashboard.categories.isEmpty && dashboard.income == 0 && dashboard.expenses == 0
-            && dashboard.monthlyHistory.allSatisfy { $0.income == 0 && $0.expenses == 0 }
-
-        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Disponible este mes", "Available this month")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
-            MoneyText(dashboard.available, font: DincrFont.displayAmount)
-            HStack(spacing: DincrSpacing.s4) {
-                figure(tx("Ingresos", "Income"), dashboard.income, sign: .income)
-                figure(tx("Gastos", "Expenses"), dashboard.expenses, sign: .expense)
-            }
-            .padding(.top, DincrSpacing.s2)
-            if let debt = dashboard.debtBalance, debt > 0 {
-                Divider().overlay(DincrColor.line).padding(.vertical, DincrSpacing.s1)
-                HStack {
-                    Text(tx("Deuda pendiente", "Outstanding debt")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                    Spacer()
-                    MoneyText(debt, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .dincrCard()
-        .accessibilityElement(children: .contain)
-
-        HomePlanningLinks()
-
-        if empty {
-            EmptyStateView(
-                symbol: "tray",
-                title: tx("Todavía no hay movimientos", "No transactions yet"),
-                message: tx("Cuando registrés ingresos y gastos, acá verás tu mes y en qué se va el dinero.", "When you record income and expenses, you’ll see your month and where the money goes here.")
-            ) {
-                Button(tx("Agregar movimiento", "Add transaction"), action: openMovements).buttonStyle(.dincrPrimary)
-            }
-        } else {
-            section(tx("Ingresos y gastos", "Income and expenses")) {
-                IncomeExpenseChart(months: dashboard.monthlyHistory)
-            }
-            section(tx("En qué se va el dinero", "Where the money goes")) {
-                if dashboard.categories.isEmpty {
-                    Text(tx("Cuando registrés gastos, los agruparemos acá.", "When you record expenses, we’ll group them here."))
-                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                } else {
-                    CategoryBars(categories: dashboard.categories)
-                }
-            }
-            Button(action: openMovements) {
-                HStack {
-                    Text(tx("Ver movimientos", "See transactions")).font(DincrFont.title2)
-                    Spacer()
-                    Image(systemName: "chevron.forward").accessibilityHidden(true)
-                }
-                .foregroundStyle(DincrColor.tint)
-                .frame(minHeight: 44)
-            }
-            .dincrCard(padding: DincrSpacing.s3)
-        }
-    }
-
-    private func figure(_ label: String, _ amount: Decimal, sign: MoneyFormat.Sign) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-            MoneyText(amount, sign: sign)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-            Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text).accessibilityAddTraits(.isHeader)
-            content()
-        }
-        .dincrCard()
-        .padding(.top, DincrSpacing.s2)
-    }
-
-    private func load() async {
+    private func load(_ tier: HomeToday.Tier) async {
+        let epoch = model.currentEpoch
         do {
-            state = .loaded(try await model.service.freeDashboard())
-        } catch let error as APIError {
-            state = .failed(error.message)
+            let home = try await HomeTodayLoader.load(model, tier: tier)
+            if epoch == model.currentEpoch { state = .loaded(home) }
         } catch is CancellationError {
             return
-        } catch AuthError.signedOut {
-            await model.signOut()
         } catch {
-            state = .failed(tx("No pudimos cargar tu resumen.", "We couldn’t load your overview."))
+            if let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar tu resumen.", "We couldn’t load your overview.")) {
+                state = .failed(message)
+            }
         }
     }
+}
+
+/// Reads what Hoy needs for a plan. The plan's main source is required (its failure is the screen's
+/// error); the extras (debts, budget, calendar, strategy) are optional and simply left out when they
+/// can't be read. GETs only.
+enum HomeTodayLoader {
+    /// VIP intelligence is VIP while `vip_intelligence` is on; otherwise VIP reads as Basic (as before).
+    @MainActor
+    static func tier(_ model: AppModel) -> HomeToday.Tier {
+        switch model.planTier {
+        case .vip where model.flags.isEnabled(.vipIntelligence): .vip
+        case .basic, .vip: .basic
+        case .free: .free
+        }
+    }
+
+    @MainActor
+    static func load(_ model: AppModel, tier: HomeToday.Tier) async throws -> HomeToday {
+        let service = model.service
+        async let debts = optional { try await service.debts() }
+        switch tier {
+        case .free:
+            let dashboard = try await service.freeDashboard()
+            return .free(dashboard, debts: await debts)
+        case .basic:
+            async let budget = optional { try await service.budget() }
+            async let calendar = optional { try await service.calendar(period: month()) }
+            async let strategy = optional { try await service.strategyBasic() }
+            let dashboard = try await service.basicDashboard()
+            return .basic(dashboard, budget: await budget, calendar: await calendar,
+                          plan: await strategy.map { MonthPlan(.basic($0)) }, debts: await debts)
+        case .vip:
+            async let budget = optional { try await service.budget() }
+            async let calendar = optional { try await service.calendar(period: month()) }
+            let center = try await service.commandCenter()
+            return .vip(center, budget: await budget, calendar: await calendar, debts: await debts,
+                        mailReviewAvailable: model.flags.isEnabled(.gmailAutomation))
+        }
+    }
+
+    private static func optional<T: Sendable>(_ read: @Sendable () async throws -> T) async -> T? {
+        try? await read()
+    }
+
+    private static func month() -> String { String(HomeToday.dayKey(.now).prefix(7)) }
 }
 
 enum LoadState<Value: Equatable>: Equatable {
