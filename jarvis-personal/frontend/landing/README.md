@@ -19,7 +19,7 @@ Dashboard settings, which must match:
 
 `wrangler preview` requires the `previews` block. It stays empty on purpose, because a Preview of the landing needs nothing and can reach nothing. Never point `assets.directory` at `dist`. `npm run test:landing` checks this config.
 
-Vercel continues to build the app separately for internal previews.
+Vercel builds the web app separately as DINCR's **internal lab** (not the commercial app, never indexed, never linked from here). The commercial app is native iOS/Android. `npm run test:surfaces` keeps the three surfaces apart.
 
 The legal pages are rendered from `src/pages/PublicInfoPage.jsx` at build time, with the version read from the same source. Prices come from `config.json` and `npm run test:landing` checks them against `backend/product_ops/service.py`. The review block is disabled until authentic, authorized data is configured.
 
