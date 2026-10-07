@@ -14,6 +14,9 @@ import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -311,6 +314,34 @@ class PlanRecoveryUiTest {
         back()
         click("Banco Popular")
         waitForText("Transferencia de ejemplo")
+    }
+
+    @Test fun freeCreatesEditsAndDeletesRecurringCommitments() {
+        // UX-9: registering fixed/recurring commitments is every plan's; budget and calendar stay Basic.
+        launch(plan = "free")
+        home()
+        click(tx("Perfil", "Profile"))
+        waitForText(tx("Presupuesto y calendario", "Budget and calendar"))
+        assertTrue("calendar stays Basic", !present(tx("Calendario financiero", "Financial calendar")))
+        click(tx("Pagos recurrentes", "Recurring payments"))
+        waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
+        // Create.
+        compose.onNodeWithContentDescription(tx("Agregar recurrente", "Add recurring")).performClick()
+        compose.onAllNodes(hasText(tx("Nombre", "Name"))).onFirst().performTextInput("Gimnasio sintético")
+        compose.onAllNodes(hasText(tx("Monto", "Amount"))).onFirst().performTextInput("15000")
+        click(tx("Guardar", "Save"))
+        waitForText("Gimnasio sintético")
+        // Edit (every field, through the same form).
+        click(tx("Editar", "Edit"))
+        waitForText(tx("Editar pago recurrente", "Edit recurring payment"))
+        compose.onAllNodes(hasText(tx("Nombre", "Name"))).onFirst().performTextClearance()
+        compose.onAllNodes(hasText(tx("Nombre", "Name"))).onFirst().performTextInput("Editado sintético")
+        click(tx("Guardar", "Save"))
+        waitForText("Editado sintético")
+        // Delete.
+        click(tx("Eliminar", "Delete"))
+        compose.onAllNodes(hasText(tx("Eliminar", "Delete")) and hasClickAction()).onLast().performSemanticsAction(SemanticsActions.OnClick)
+        waitForGone("Editado sintético")
     }
 
     @Test fun onboardingShowsTheBankLogosAndSaysItConnectsNothing() {

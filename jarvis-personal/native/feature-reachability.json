@@ -39,7 +39,8 @@
   "D20",
   "R1",
   "P-1",
-  "UX-7"
+  "UX-7",
+  "UX-9"
  ],
  "fixtures": {
   "ios": {
@@ -1196,11 +1197,11 @@
    "android": {
     "tab": "Perfil",
     "text": "Presupuesto",
-    "locked_text": "Presupuesto, calendario y recurrentes",
+    "locked_text": "Presupuesto y calendario",
     "en": {
      "tab": "Profile",
      "text": "Budget",
-     "locked_text": "Budget, calendar and recurring"
+     "locked_text": "Budget and calendar"
     }
    },
    "platform_states": {
@@ -1208,12 +1209,12 @@
      "free": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row",
+   "parity_gap": "P6.4 — iOS hides the budget and calendar rows for Free; Android shows one locked row",
    "transitional_hidden": [
     {
      "plan": "free",
      "platform": "ios",
-     "reason": "iOS omits Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
+     "reason": "iOS omits the budget and calendar rows of Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
      "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
     }
    ]
@@ -1247,11 +1248,11 @@
    "android": {
     "tab": "Perfil",
     "text": "Calendario financiero",
-    "locked_text": "Presupuesto, calendario y recurrentes",
+    "locked_text": "Presupuesto y calendario",
     "en": {
      "tab": "Profile",
      "text": "Financial calendar",
-     "locked_text": "Budget, calendar and recurring"
+     "locked_text": "Budget and calendar"
     }
    },
    "platform_states": {
@@ -1259,22 +1260,22 @@
      "free": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row",
+   "parity_gap": "P6.4 — iOS hides the budget and calendar rows for Free; Android shows one locked row",
    "transitional_hidden": [
     {
      "plan": "free",
      "platform": "ios",
-     "reason": "iOS omits Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
+     "reason": "iOS omits the budget and calendar rows of Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
      "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
     }
    ]
   },
   {
    "id": "profile.recurring",
-   "name": "Perfil → Finanzas → Pagos recurrentes",
-   "decision": "baseline-81fd2cc4",
+   "name": "Perfil → Finanzas → Pagos recurrentes (UX-9: every plan registers, edits and deletes them)",
+   "decision": "UX-9",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
+    "free": "AVAILABLE",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
@@ -1286,6 +1287,7 @@
      "path": "/user-product/basic/recurring",
      "gate": "feature:recurring_items",
      "used_by": [
+      "free",
       "basic",
       "vip"
      ]
@@ -1298,27 +1300,11 @@
    "android": {
     "tab": "Perfil",
     "text": "Pagos recurrentes",
-    "locked_text": "Presupuesto, calendario y recurrentes",
     "en": {
      "tab": "Profile",
-     "text": "Recurring payments",
-     "locked_text": "Budget, calendar and recurring"
+     "text": "Recurring payments"
     }
-   },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row",
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "ios",
-     "reason": "iOS omits Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+   }
   },
   {
    "id": "profile.jarvis",

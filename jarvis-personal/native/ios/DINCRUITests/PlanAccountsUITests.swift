@@ -114,6 +114,49 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Calendario"].waitForExistence(timeout: 10))
     }
 
+    // MARK: Recurring commitments (UX-9: every plan)
+
+    func testFreeCreatesEditsAndDeletesRecurringCommitments() {
+        let app = launch(tab: "profile")
+        XCTAssertTrue(element("profile.recurring", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("profile.budget", in: app).exists, "budget stays Basic")
+        XCTAssertFalse(element("profile.calendar", in: app).exists, "calendar stays Basic")
+        open("profile.recurring", in: app)
+
+        // Create.
+        let add = app.navigationBars.buttons["Agregar"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        add.tap()
+        let name = app.textFields["recurring.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("Gimnasio sintético")
+        let amount = app.textFields["recurring.amount"]
+        amount.tap(); amount.typeText("15000")
+        app.navigationBars.buttons["Guardar"].tap()
+        XCTAssertTrue(text("Recurrente agregado", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Gimnasio sintético", in: app).exists)
+
+        // Edit (every field, through the same form).
+        open("recurring.edit", in: app)
+        let editName = app.textFields["recurring.name"]
+        XCTAssertTrue(editName.waitForExistence(timeout: 5))
+        editName.tap()
+        editName.press(forDuration: 1.0)
+        if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
+        editName.typeText("Editado sintético")
+        app.navigationBars.buttons["Guardar"].tap()
+        XCTAssertTrue(text("Recurrente actualizado", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Editado sintético", in: app).exists)
+
+        // Delete.
+        open("recurring.delete", in: app)
+        // The dialog repeats "Eliminar"; the rows' own buttons carry the `recurring.delete` identifier.
+        let confirm = app.buttons.matching(NSPredicate(format: "label == 'Eliminar' AND identifier != 'recurring.delete'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Editado sintético")).firstMatch.waitForNonExistence(timeout: 10))
+    }
+
     // MARK: Strategy and distribution
 
     func testBasicStrategyFromRecordedIncomeSaysSo() {

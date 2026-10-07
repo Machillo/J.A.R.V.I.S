@@ -43,18 +43,18 @@ struct ProfileHubView: View {
                 }
                 .dincrRowBackground()
             }
-            if model.planTier.rank >= PlanTier.basic.rank {
-                // Basic tools, moved here from the Plan tab (navigation only).
-                Section(tx("Finanzas", "Finances")) {
+            // Finanzas: recurring commitments on every plan (UX-9); budget and calendar from Basic.
+            Section(tx("Finanzas", "Finances")) {
+                if model.planTier.rank >= Feature.guidedBudget.minimum.rank {
                     NavigationLink { BudgetView() } label: { Label(tx("Presupuesto", "Budget"), systemImage: "chart.pie") }
                         .accessibilityIdentifier("profile.budget")
                     NavigationLink { CalendarView() } label: { Label(tx("Calendario financiero", "Financial calendar"), systemImage: "calendar") }
                         .accessibilityIdentifier("profile.calendar")
-                    NavigationLink { RecurringView() } label: { Label(tx("Recurrentes", "Recurring"), systemImage: "repeat") }
-                        .accessibilityIdentifier("profile.recurring")
                 }
-                .dincrRowBackground()
+                NavigationLink { RecurringView() } label: { Label(tx("Recurrentes", "Recurring"), systemImage: "repeat") }
+                    .accessibilityIdentifier("profile.recurring")
             }
+            .dincrRowBackground()
             Section(tx("Cuenta", "Account")) {
                 NavigationLink { PlanSettingsView() } label: { Label(tx("Plan", "Plan"), systemImage: "star") }
                     .accessibilityIdentifier("profile.plan")
