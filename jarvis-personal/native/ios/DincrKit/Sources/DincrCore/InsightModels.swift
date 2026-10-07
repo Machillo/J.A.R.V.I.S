@@ -242,6 +242,12 @@ public struct CommandCenter: Decodable, Sendable, Equatable {
         public let netWorth: Decimal?
         public let confidence: String?
     }
+    /// UX-14 — whether the projections could be made: `missing` names the unknown inputs (stable
+    /// codes, #326), and then `projections` is empty. Read by `Projections`.
+    public struct ProjectionStatus: Decodable, Sendable, Equatable {
+        public let complete: Bool?
+        public let missing: [String]?
+    }
     public struct RoadmapStep: Decodable, Sendable, Equatable {
         public let order: Int?
         public let title: String?
@@ -260,6 +266,7 @@ public struct CommandCenter: Decodable, Sendable, Equatable {
     public let safeToSpend: SafeToSpend?
     public let alerts: [Alert]?
     public let projections: [ProjectionPoint]?
+    public let projectionStatus: ProjectionStatus?
     public let roadmap: [RoadmapStep]?
     public let automation: Automation?
     /// The ledger of recorded movements; `current` is this month's (Hoy's month facts for VIP).

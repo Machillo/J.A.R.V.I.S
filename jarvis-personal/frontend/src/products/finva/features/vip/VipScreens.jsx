@@ -164,8 +164,8 @@ function VipProjections({ data, user, onNavigate }) {
     <VipHeader title={tx("Proyecciones", "Projections")} user={user} onNavigate={onNavigate}/>
     <Focus eyebrow={tx("PRÓXIMOS 6 MESES", "NEXT 6 MONTHS")} title={tx("Así podría evolucionar tu dinero", "How your money could evolve")} caption={tx("Estimación basada en tus datos actuales.", "Estimate based on your current data.")}/>
     <Card title={tx("Patrimonio disponible", "Available net worth")}><ProjectionBars rows={rows}/></Card>
-    <Card><DataRow label={tx("Deuda total", "Total debt")} value={`${money(first.debt)} → ${money(last.debt)}`} tone="mint"/></Card>
-    <Card><DataRow label={tx("Efectivo", "Cash")} value={`${money(first.cash)} → ${money(last.cash)}`} tone="gold"/></Card>
+    <Card><DataRow label={tx("Deuda total", "Total debt")} value={`${knownMoney(first.debt)} → ${knownMoney(last.debt)}`} tone="mint"/></Card>
+    <Card><DataRow label={tx("Efectivo", "Cash")} value={`${knownMoney(first.cash)} → ${knownMoney(last.cash)}`} tone="gold"/></Card>
     <PrimaryButton onClick={() => onNavigate?.("vip-projection-detail")}>{tx("Explorar una proyección", "Explore a projection")}</PrimaryButton>
   </section>;
 }
@@ -176,7 +176,7 @@ function VipProjectionDetail({ data, user, onNavigate }) {
     <VipHeader title={`${debt.target || tx("Deuda", "Debt")} · ${tx("Proyección", "Projection")}`} user={user} onNavigate={onNavigate}/>
     <Focus eyebrow={tx("CON EL PLAN ACTUAL", "WITH THE CURRENT PLAN")} title={debt.months == null ? tx("Proyección disponible", "Projection available") : tx(`Deuda estimada en ${debt.months} meses`, `Debt estimated in ${debt.months} months`)} caption={tx("El resultado cambia con tus ingresos, gastos y pagos.", "The result changes with your income, expenses, and payments.")} tone="mint"/>
     <Card title={tx("Saldo proyectado", "Projected balance")}><ProjectionBars rows={rows} descending/></Card>
-    <Card title={tx("Resumen", "Summary")} tone="gold"><DataRow label={tx("Saldo actual", "Current balance")} value={money(rows[0]?.debt)}/><DataRow label={tx("Pago mensual objetivo", "Target monthly payment")} value={money(debt.monthly_to_target)} tone="violet"/><DataRow label={tx("Interés estimado", "Estimated interest")} value={debt.interest == null ? "—" : money(debt.interest)} tone="mint"/></Card>
+    <Card title={tx("Resumen", "Summary")} tone="gold"><DataRow label={tx("Saldo actual", "Current balance")} value={knownMoney(rows[0]?.debt)}/><DataRow label={tx("Pago mensual objetivo", "Target monthly payment")} value={knownMoney(debt.monthly_to_target)} tone="violet"/><DataRow label={tx("Interés estimado", "Estimated interest")} value={debt.interest == null ? "—" : money(debt.interest)} tone="mint"/></Card>
     <PrimaryButton onClick={() => onNavigate?.("vip-scenarios")}>{tx("Crear escenario", "Create scenario")}</PrimaryButton>
   </section>;
 }
@@ -230,7 +230,7 @@ function VipReality({ data, budget, user, onNavigate }) {
   const delta = planned - spent;
   const groups = [
     [tx("Gastos esenciales", "Essential expenses"), planned, spent],
-    [tx("Deudas", "Debts"), Number(data.debt_planner?.recommended?.monthly_to_target) || 0, Number(data.reports?.current?.debt_paid) || 0],
+    [tx("Deudas", "Debts"), data.debt_planner?.recommended?.monthly_to_target == null ? null : Number(data.debt_planner.recommended.monthly_to_target) || 0, Number(data.reports?.current?.debt_paid) || 0],
     [tx("Ahorro", "Savings"), data.safe_to_spend?.monthly_margin == null ? null : Number(data.safe_to_spend.monthly_margin) || 0, Math.max(Number(data.reports?.current?.balance) || 0, 0)],
   ];
   return <section className="vip-screen"><VipHeader title={tx("Plan vs realidad", "Plan vs reality")} user={user} onNavigate={onNavigate}/><Focus eyebrow={new Intl.DateTimeFormat(localeTag(language), {month:"long"}).format(new Date()).toUpperCase()} title={delta >= 0 ? tx(`${money(delta)} mejor que el plan`, `${money(delta)} better than plan`) : tx(`${money(Math.abs(delta))} sobre el plan`, `${money(Math.abs(delta))} over plan`)} caption={tx("DINCR puede reajustar el próximo mes con este resultado.", "DINCR can readjust next month using this result.")} tone={delta >= 0 ? "mint" : "coral"}/>{groups.map(([name, plan, actual]) => <Card key={name} title={name}><DataRow label={`${tx("Plan", "Plan")} ${knownMoney(plan)}`} value={`${tx("Real", "Actual")} ${money(actual)}`} tone={plan == null ? undefined : actual <= plan ? "mint" : "coral"}/></Card>)}<Card title={tx("Ajuste sugerido", "Suggested adjustment")} tone="gold"><p>{delta >= 0 ? tx("Protegé el excedente dentro de tu prioridad estratégica.", "Protect the surplus within your strategic priority.") : tx("Revisá las categorías sobre el plan antes del próximo mes.", "Review categories over plan before next month.")}</p></Card></section>;

@@ -167,9 +167,15 @@ data class CommandCenter(
     val automation: Automation? = null,
     /** The ledger of recorded movements; `current` is this month's (Hoy's month facts for VIP). */
     val reports: Reports? = null,
+    /** UX-14 — whether [projections] could be made; read by [Projections]. */
+    @SerialName("projection_status") val projectionStatus: ProjectionStatus? = null,
 ) {
     @Serializable
     data class Reports(val current: MonthTotals? = null)
+
+    /** UX-14 — `missing` names the unknown inputs (stable codes, #326); then `projections` is empty. */
+    @Serializable
+    data class ProjectionStatus(val complete: Boolean? = null, val missing: List<String>? = null)
 
     @Serializable
     data class Director(

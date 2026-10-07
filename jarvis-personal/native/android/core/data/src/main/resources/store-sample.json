@@ -1084,6 +1084,10 @@
             "confidence": "medium"
           }
         ],
+        "projection_status": {
+          "complete": true,
+          "missing": []
+        },
         "net_worth": {
           "assets": 0,
           "liabilities": 2145000.0,
@@ -2466,6 +2470,10 @@
             "confidence": "medium"
           }
         ],
+        "projection_status": {
+          "complete": true,
+          "missing": []
+        },
         "net_worth": {
           "assets": 0,
           "liabilities": 2145000.0,

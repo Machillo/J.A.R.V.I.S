@@ -180,34 +180,6 @@ fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
     }
 }
 
-/** F5 — VIP projections from the command center. */
-@Composable
-fun ProjectionsScreen(model: AppModel, nav: Navigator) {
-    val center = rememberLoad(model) { model.api.commandCenter() }
-    DetailScaffold(tx("Proyecciones", "Projections"), nav::back) {
-        LoadContent(center) { c ->
-            if (c.projections.isEmpty()) EmptyState(Icons.Rounded.Timeline, tx("Sin proyecciones todavía", "No projections yet"), tx("Registrá ingresos, gastos y deudas para proyectar.", "Record income, expenses and debts to project."))
-            c.projections.sortedBy { it.months ?: 0 }.forEach { p ->
-                Section(tx("En ${p.months} ${if (p.months == 1) "mes" else "meses"}", "In ${p.months} month${if (p.months == 1) "" else "s"}")) {
-                    AmountLine(tx("Patrimonio neto", "Net worth"), p.netWorth, emphasize = true)
-                    AmountLine(tx("Efectivo", "Cash"), p.cash)
-                    AmountLine(tx("Deuda", "Debt"), p.debt)
-                    if (p.confidence == "low") Caption(tx("Confianza baja: faltan datos.", "Low confidence: data is missing."))
-                }
-            }
-            c.debtPlanner?.recommended?.let { plan ->
-                Section(tx("Plan de deudas recomendado", "Recommended debt plan")) {
-                    plan.target?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text) }
-                    AmountLine(tx("Pago mensual", "Monthly payment"), plan.monthlyToTarget)
-                    plan.months?.let { InfoLine(tx("Meses", "Months"), it.toString()) }
-                    AmountLine(tx("Intereses estimados", "Estimated interest"), plan.interest)
-                }
-            }
-        }
-        FinancialDisclaimer()
-    }
-}
-
 /** E12 — VIP aguinaldo from the CCSS payroll notices in the connected mailbox (always colones). */
 @Composable
 fun AguinaldoScreen(model: AppModel, nav: Navigator) {

@@ -218,7 +218,7 @@ def get_vip_command_center() -> dict:
     # treated as an unknown payment (create_user_debt stores an unknown one as 0) — a heuristic to
     # replace once the schema represents it explicitly. Cash for the 45-day view is known from
     # confirmed balances or declared savings. The reserve gap is known with a declared target and
-    # declared savings (or a target of 0). Score, projections and net worth are unchanged here.
+    # declared savings (or a target of 0). Score and net worth are unchanged here.
     essentials_known = profile.get("essential_monthly_expenses") is not None
     debt_payments_known = all(_money(row.get("monthly_payment")) > 0 for row in debts)
     target_known = profile.get("emergency_fund_target") is not None
@@ -227,6 +227,9 @@ def get_vip_command_center() -> dict:
     cash_missing = [code for code, known in (("debt_payments", debt_payments_known), ("savings", bool(balance_accounts) or savings_known)) if not known]
     reserve_missing = [code for code, known in (("savings", savings_known), ("emergency_fund_target", target_known)) if not known]
     safe_missing = list(dict.fromkeys(margin_missing + cash_missing))
+    # UX-14 — a projection needs the monthly margin and today's cash: with any of their inputs
+    # missing it states no figure (an empty `projections`, never one built on a 0).
+    projection_missing = list(dict.fromkeys(margin_missing + cash_missing))
 
     if margin_missing:
         priority, director_missing = "incomplete", margin_missing
@@ -283,7 +286,8 @@ def get_vip_command_center() -> dict:
 
     strategies = [_debt_plan(debts, max(margin, 0), method) for method in ("avalanche", "snowball", "finva")]
     # The recommended plan compares the plans' interest: with an unknown rate there is none to recommend.
-    best = None if unknown_rate_count(debts) else min((row for row in strategies if row["months"] is not None), key=lambda row: (row["interest"], row["months"]), default=None)
+    # The plans add the monthly margin to the payments: without a known margin none is recommended.
+    best = None if unknown_rate_count(debts) or margin_missing else min((row for row in strategies if row["months"] is not None), key=lambda row: (row["interest"], row["months"]), default=None)
 
     events = []
     start = today.replace(day=1)
@@ -313,7 +317,7 @@ def get_vip_command_center() -> dict:
     safe_to_spend = round(max(min(margin, lowest_balance), 0), 2) if not safe_missing else None
 
     projection = []
-    for months_ahead in (1, 3, 6, 12):
+    for months_ahead in ((1, 3, 6, 12) if not projection_missing else ()):
         projected_cash = round(liquid_assets + margin * months_ahead, 2)
         projected_debt = round(max(debt_balance - debt_minimums * months_ahead, 0), 2)
         projection.append({"months": months_ahead, "cash": projected_cash, "debt": projected_debt, "net_worth": round(projected_cash - projected_debt, 2), "confidence": "medium" if positive_incomes else "low"})
@@ -348,6 +352,7 @@ def get_vip_command_center() -> dict:
         "alerts": alerts,
         "calendar": timeline,
         "projections": projection,
+        "projection_status": {"complete": not projection_missing, "missing": projection_missing},
         "net_worth": {"assets": all_assets, "liabilities": debt_balance, "value": net_worth, "accounts": accounts},
         "recurring": {"items": recurring, "detected": detected_recurring, "monthly_expenses": recurring_expense, "annual_expenses": round(recurring_expense*12, 2)},
         "reports": {"months": months, "current": months[-1], "previous": months[-2]},

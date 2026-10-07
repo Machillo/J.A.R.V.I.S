@@ -460,14 +460,19 @@ public actor FixtureBackend: HTTPTransport {
             return ok(["as_of": day(0),
                        "director": ["priority": "debt", "headline": "Tu prioridad es bajar la tarjeta", "next_action": "Pagá ₡40.000 extra a la tarjeta este mes", "data_complete": true],
                        "score": ["value": 72, "label": "Estable", "factors": [["label": "Ahorro de emergencia", "impact": "warning"]]],
-                       "debt_planner": ["recommended": ["method": "finva", "target": "Tarjeta de ejemplo", "monthly_to_target": 95_000, "months": 14, "interest": 84_000]],
+                       // UX-14: the empty account has no income, essentials or savings yet, so no plan or projection.
+                       "debt_planner": scenario == .empty ? ["recommended": NSNull()]
+                           : ["recommended": ["method": "finva", "target": "Tarjeta de ejemplo", "monthly_to_target": 95_000, "months": 14, "interest": 84_000]],
                        "safe_to_spend": ["amount": 118_000, "monthly_margin": 214_000, "next_45_days_minimum": 96_000],
                        // More than Hoy's three (UX-5), including the backend's own pending-review alert.
                        "alerts": [["severity": "medium", "title": "Pago de tarjeta en 5 días", "context": "El pago mínimo vence pronto.", "action": "Revisá la deuda"],
                                   ["severity": "high", "title": "Reserva menor a un mes", "context": "La cobertura estimada es 0.7 meses.", "action": "Protegé el siguiente excedente en el fondo de emergencia."],
                                   ["severity": "medium", "title": "Recurrente con variación", "context": "Servicio de ejemplo cambió más de 10% entre cobros.", "action": "Confirmá si fue un aumento, consumo variable o cargo incorrecto."]]
                            + (pendingCount() > 0 ? [["severity": "medium", "title": "Movimientos por revisar", "context": "Hay \(pendingCount()) movimientos importados sin confirmar.", "action": "Revisalos antes de confiar en el cierre mensual."]] : []),
-                       "projections": [1, 3, 6].map { ["months": $0, "cash": 200_000 * $0, "debt": 900_000 - 90_000 * $0, "net_worth": -700_000 + 290_000 * $0, "confidence": "medium"] },
+                       "projections": scenario == .empty ? []
+                           : [1, 3, 6, 12].map { ["months": $0, "cash": 200_000 * $0, "debt": max(900_000 - 90_000 * $0, 0), "net_worth": 200_000 * $0 - max(900_000 - 90_000 * $0, 0), "confidence": "medium"] },
+                       "projection_status": scenario == .empty ? ["complete": false, "missing": ["income", "essential_expenses", "savings"]]
+                           : ["complete": true, "missing": []],
                        "roadmap": [["order": 1, "title": "Completá tu fondo de emergencia inicial", "amount": 50_000, "why": "Te protege de imprevistos."],
                                    ["order": 2, "title": "Pagá extra a la tarjeta", "amount": 40_000, "why": "Tiene la tasa más alta."]],
                        "automation": ["confirmed": 4, "review": pendingCount(), "duplicates": 0],

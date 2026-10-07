@@ -265,46 +265,6 @@ private struct ReviewContent: View {
     }
 }
 
-/// PARITY F5 — projections and the debt plan (VIP), from the command center.
-struct ProjectionsView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        ScreenScroll(title: tx("Proyecciones", "Projections")) {
-            AsyncContent(load: { try await model.service.commandCenter() }) { center, _ in
-                ProjectionsContent(center: center)
-            }
-            FinancialDisclaimer()
-        }
-    }
-}
-
-private struct ProjectionsContent: View {
-    let center: CommandCenter
-
-    var body: some View {
-        ForEach(Array((center.projections ?? []).enumerated()), id: \.offset) { _, point in
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                Text(tx("En \(point.months ?? 0) meses", "In \(point.months ?? 0) months")).font(DincrFont.title2)
-                FigureRow(label: tx("Efectivo", "Cash"), amount: point.cash)
-                FigureRow(label: tx("Deuda", "Debt"), amount: point.debt)
-                FigureRow(label: tx("Patrimonio neto", "Net worth"), amount: point.netWorth)
-            }
-            .dincrCard()
-        }
-        if let plan = center.debtPlanner?.recommended {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                SectionHeader(title: tx("Plan de deudas recomendado", "Recommended debt plan"))
-                InfoRow(label: tx("Empezar por", "Start with"), value: plan.target ?? "—")
-                FigureRow(label: tx("Pago mensual al objetivo", "Monthly payment to the target"), amount: plan.monthlyToTarget)
-                if let months = plan.months { InfoRow(label: tx("Tiempo estimado", "Estimated time"), value: tx("\(months) meses", "\(months) months")) }
-                FigureRow(label: tx("Intereses estimados", "Estimated interest"), amount: plan.interest)
-            }
-            .dincrCard()
-        }
-    }
-}
-
 /// Reports (Basic; `advanced_reports`).
 struct ReportsView: View {
     @Environment(AppModel.self) private var model
