@@ -31,7 +31,7 @@ data class AttentionItem(
         REVIEW("review", "mail"),
         DEBTS("debts", "debts"),
         SALVAVIDAS("salvavidas", "salvavidas"),
-        SITUATION("situation", "situation"),
+        INCOME_BASE("incomeBase", "incomeBase"),
         STRATEGY("strategy", "strategy"),
         MOVEMENTS("movements", "movements"),
         MONTHLY_REVIEW("monthlyReview", "review"),
@@ -68,7 +68,8 @@ object AttentionList {
     fun destination(advisorRoute: String?): AttentionItem.Destination? = when (advisorRoute?.trim('/', ' ')?.lowercase()) {
         "debts" -> AttentionItem.Destination.DEBTS
         "vip-emergency" -> AttentionItem.Destination.SALVAVIDAS
-        "situation" -> AttentionItem.Destination.SITUATION
+        // The declared situation lives in Plan → Ingresos y base (UX-7).
+        "situation" -> AttentionItem.Destination.INCOME_BASE
         "strategy" -> AttentionItem.Destination.STRATEGY
         "finance", "movements" -> AttentionItem.Destination.MOVEMENTS
         "vip-monthly-review" -> AttentionItem.Destination.MONTHLY_REVIEW

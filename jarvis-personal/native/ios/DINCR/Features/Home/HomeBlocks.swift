@@ -70,7 +70,7 @@ struct HomeDestinationView: View {
         case .movements, .registerIncome, .registerMovement: MovementsView()
         case .debts: DebtsView()
         case .goals: GoalsView()
-        case .situation: SituationView()
+        case .incomeBase: IncomeBaseView()
         case .monthPlan: PlanStrategyView()
         }
     }

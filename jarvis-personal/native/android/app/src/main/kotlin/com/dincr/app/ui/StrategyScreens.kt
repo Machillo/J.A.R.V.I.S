@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +45,7 @@ import com.dincr.data.StrategyDashboard
 import com.dincr.design.BannerTone
 import com.dincr.design.CompositionDonut
 import com.dincr.design.Dincr
+import com.dincr.data.PlanTier
 import com.dincr.design.DincrCard
 import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
@@ -87,8 +89,8 @@ private fun LockedStrategy(nav: Navigator) {
 
 @Composable
 private fun NeedsIncome(message: String?, nav: Navigator) {
-    EmptyState(Icons.Rounded.AutoAwesome, tx("Necesitamos tus ingresos", "We need your income"), message ?: tx("Registrá tus ingresos o completá tu situación financiera para armar tu estrategia.", "Record your income or complete your financial situation to build your strategy.")) {
-        DincrPrimaryButton(tx("Completar situación", "Complete situation"), { nav.open("situation") })
+    EmptyState(Icons.Rounded.AutoAwesome, tx("Necesitamos tus ingresos", "We need your income"), message ?: tx("Registrá tus ingresos o completá Ingresos y base para armar tu estrategia.", "Record your income or complete Income and base to build your strategy.")) {
+        DincrPrimaryButton(tx("Completar ingresos y base", "Complete income and base"), { nav.open("incomeBase") })
     }
 }
 
@@ -117,6 +119,11 @@ fun StrategyScreen(model: AppModel, nav: Navigator) {
                 is StrategyData.Director -> data.dashboard.strategy?.let { DirectorMonthPlan(it, MonthPlan.of(data.dashboard), nav) }
                     ?: EmptyState(Icons.Rounded.AutoAwesome, tx("Sin plan todavía", "No plan yet"), data.dashboard.content.orEmpty())
             }
+        }
+        val profile by model.profile.collectAsStateWithLifecycle()
+        if (profile?.planTier == PlanTier.VIP) Box(Modifier.testTag("plan.month.preferences")) {
+            // UX-7: the plan priority and personal minimum (moved from the Situación screen).
+            DincrCard { NavRow(Icons.Rounded.Tune, tx("Ajustes del plan", "Plan settings"), tx("Prioridad y mínimo personal", "Priority and personal minimum")) { nav.open("planPreferences") } }
         }
         FinancialDisclaimer()
     }
@@ -289,7 +296,7 @@ private val ESTIMATED_INCOME = setOf("observed", "recorded")
 private fun incomeSourceNote(source: String?): String? = when (source) {
     in ESTIMATED_INCOME -> tx("Estimado con tus ingresos registrados (no declarado)", "Estimated from your recorded income (not declared)")
     "declared_capped_by_recorded" -> tx("Ingreso declarado, ajustado a lo que registraste", "Declared income, capped by what you recorded")
-    "declared" -> tx("Ingreso declarado en tu situación financiera", "Income declared in your financial situation")
+    "declared" -> tx("Ingreso declarado", "Declared income")
     else -> null
 }
 

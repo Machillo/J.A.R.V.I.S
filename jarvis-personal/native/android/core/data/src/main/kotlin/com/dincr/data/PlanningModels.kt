@@ -246,3 +246,17 @@ object SituationDefaults {
 
     fun workDays(current: FinancialProfile?): Int = current?.workDaysPerWeek?.takeIf { it in WORK_DAYS_RANGE } ?: WORK_DAYS
 }
+
+/**
+ * The VIP plan priority (`financial_profiles.strategy_preference`), edited in Tu plan del mes →
+ * Ajustes (UX-7). `null` is "no preference": nothing is stored that the user did not choose. The
+ * codes are exactly the backend's; same on iOS (`StrategyPreference`).
+ */
+enum class StrategyPreference(val code: String) {
+    DEBT("debt"), EMERGENCY("emergency"), GOALS("goals"), BALANCED("balanced");
+
+    companion object {
+        /** The choices in display order, "no preference" first. */
+        val choices: List<StrategyPreference?> = listOf(null) + entries
+    }
+}

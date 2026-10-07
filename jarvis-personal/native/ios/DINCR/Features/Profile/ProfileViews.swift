@@ -32,18 +32,17 @@ struct ProfileHubView: View {
                 }
                 .dincrRowBackground()
             }
-            Section {
-                NavigationLink { SituationView() } label: { Label(tx("Situación financiera", "Financial situation"), systemImage: "person.text.rectangle") }
-                    .accessibilityIdentifier("profile.situation")
-                if model.planTier == .vip {
+            // UX-7: the declared situation lives in Plan → Ingresos y base and Tu plan del mes → Ajustes.
+            if model.planTier == .vip {
+                Section {
                     NavigationLink(value: ProfileRoute.mail) { Label(tx("Monitor de correo", "Email Monitor"), systemImage: "envelope") }
                         .accessibilityIdentifier("profile.mail")
                     // Cuentas: the detected accounts by bank, with their movements (same review as the monitor).
                     NavigationLink { AccountsView() } label: { Label(tx("Cuentas", "Accounts"), systemImage: "building.columns") }
                         .accessibilityIdentifier("profile.accounts")
                 }
+                .dincrRowBackground()
             }
-            .dincrRowBackground()
             if model.planTier.rank >= PlanTier.basic.rank {
                 // Basic tools, moved here from the Plan tab (navigation only).
                 Section(tx("Finanzas", "Finances")) {
@@ -163,162 +162,6 @@ struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
     func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: items, applicationActivities: nil) }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-}
-
-/// PARITY G2/F10 — the declared financial situation. An empty field is unknown and is sent as null,
-/// never as zero; the observed income average is shown apart and never copied into a declared value.
-struct SituationView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        AsyncContent(load: { try await model.service.financialSituation() }) { situation, reload in
-            SituationForm(situation: situation, reload: reload)
-        }
-        .navigationTitle(tx("Situación financiera", "Financial situation"))
-        .dincrScreenBackground()
-    }
-}
-
-private struct SituationForm: View {
-    @Environment(AppModel.self) private var model
-    let situation: FinancialSituation
-    let reload: () -> Void
-    @State private var incomeType = "fixed"
-    @State private var salary = ""
-    @State private var hourly = ""
-    @State private var days = String(WorkDays.defaultValue)
-    @State private var hours = ""
-    @State private var frequency = "monthly"
-    @State private var essentials = ""
-    @State private var savings = ""
-    @State private var emergency = ""
-    @State private var preference = ""
-    @State private var minimum = ""
-    @State private var error: String?
-    @State private var saved = false
-    @State private var saving = false
-    @State private var loaded = false
-
-    var body: some View {
-        Form {
-            if let observed = situation.observed?.monthlyIncomeAverage {
-                Section {
-                    FigureRow(label: tx("Ingreso promedio observado", "Observed average income"), amount: observed)
-                } footer: {
-                    Text(tx("Calculado de tus movimientos de los últimos \(situation.observed?.windowDays ?? 90) días. No reemplaza lo que declarás.", "From your transactions of the last \(situation.observed?.windowDays ?? 90) days. It doesn’t replace what you declare."))
-                }
-            }
-            Section(tx("Ingreso", "Income")) {
-                Picker(tx("Tipo de ingreso", "Income type"), selection: $incomeType) {
-                    Text(tx("Salario fijo", "Fixed salary")).tag("fixed")
-                    Text(tx("Por horas", "Hourly")).tag("hourly")
-                }
-                if incomeType == "fixed" {
-                    MoneyField(label: tx("Salario mensual", "Monthly salary"), text: $salary)
-                } else {
-                    MoneyField(label: tx("Pago por hora", "Hourly rate"), text: $hourly)
-                    TextField(tx("Horas por día", "Hours per day"), text: $hours).keyboardType(.decimalPad)
-                }
-                // Every income type: the backend needs it (1–7), like the historical web form.
-                LabeledContent(tx("Días que trabajás por semana", "Days you work per week")) {
-                    TextField(tx("Días", "Days"), text: $days)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 80)
-                        .accessibilityIdentifier("situation.workDays")
-                }
-                Picker(tx("Frecuencia de pago", "Pay frequency"), selection: $frequency) {
-                    Text(tx("Semanal", "Weekly")).tag("weekly")
-                    Text(tx("Quincenal", "Every two weeks")).tag("biweekly")
-                    Text(tx("Mensual", "Monthly")).tag("monthly")
-                }
-            }
-            Section(tx("Gastos y ahorro", "Expenses and savings")) {
-                MoneyField(label: tx("Gastos esenciales del mes", "Essential monthly expenses"), text: $essentials)
-                MoneyField(label: tx("Ahorros disponibles", "Available savings"), text: $savings)
-                MoneyField(label: tx("Meta de fondo de emergencia", "Emergency fund target"), text: $emergency)
-            }
-            if model.planTier == .vip {
-                Section(tx("Preferencias", "Preferences")) {
-                    Picker(tx("Prioridad", "Priority"), selection: $preference) {
-                        Text(tx("Sin preferencia", "No preference")).tag("")
-                        Text(tx("Salir de deudas", "Get out of debt")).tag("debt")
-                        Text(tx("Fondo de emergencia", "Emergency fund")).tag("emergency")
-                        Text(tx("Metas", "Goals")).tag("goals")
-                    }
-                    MoneyField(label: tx("Mínimo personal por mes", "Personal minimum per month"), text: $minimum)
-                }
-            }
-            Section {
-                if let error { Text(error).foregroundStyle(DincrColor.negative) }
-                if saved { Label(tx("Guardado", "Saved"), systemImage: "checkmark.circle").foregroundStyle(DincrColor.positive) }
-                Button(tx("Guardar", "Save")) { Task { await save() } }.disabled(saving || !model.flags.isEnabled(.financialWrites))
-                    .accessibilityIdentifier("situation.save")
-            } footer: {
-                Text(tx("Dejá vacío lo que no sabés: DINCR lo trata como desconocido, no como cero.", "Leave empty what you don’t know: DINCR treats it as unknown, not zero."))
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .onAppear(perform: prefill)
-    }
-
-    private func prefill() {
-        guard !loaded else { return }
-        loaded = true
-        let format = model.moneyFormat
-        let profile = situation.financialProfile
-        incomeType = profile?.incomeType ?? "fixed"
-        salary = profile?.fixedMonthlySalary.map(format.inputText) ?? ""
-        hourly = profile?.hourlyRate.map(format.inputText) ?? ""
-        days = String(profile?.workDaysPerWeek ?? WorkDays.defaultValue)
-        hours = profile?.hoursPerDay.map { "\($0)" } ?? ""
-        frequency = profile?.payFrequency ?? "monthly"
-        essentials = profile?.essentialMonthlyExpenses.map(format.inputText) ?? ""
-        savings = profile?.liquidSavings.map(format.inputText) ?? ""
-        emergency = profile?.emergencyFundTarget.map(format.inputText) ?? ""
-        preference = profile?.strategyPreference ?? ""
-        minimum = profile?.discretionaryMonthlyMinimum.map(format.inputText) ?? ""
-    }
-
-    /// Empty → nil (unknown); anything else must parse, or nothing is sent.
-    private func optional(_ text: String) -> Decimal?? {
-        if text.trimmingCharacters(in: .whitespaces).isEmpty { return .some(nil) }
-        guard let value = AmountInput.parseZeroOrMore(text, separators: model.moneyFormat.separators) else { return nil }
-        return .some(value)
-    }
-
-    private func save() async {
-        guard let salaryValue = optional(salary), let hourlyValue = optional(hourly), let essentialsValue = optional(essentials),
-              let savingsValue = optional(savings), let emergencyValue = optional(emergency), let minimumValue = optional(minimum) else {
-            error = model.moneyFormat.amountHint; return
-        }
-        guard let workDays = WorkDays.parse(days) else {
-            error = tx("Indicá cuántos días trabajás por semana, de 1 a 7.", "Enter how many days you work per week, from 1 to 7."); return
-        }
-        var profile = situation.financialProfile ?? FinancialProfile()
-        profile.incomeType = incomeType
-        profile.fixedMonthlySalary = incomeType == "fixed" ? salaryValue : nil
-        profile.hourlyRate = incomeType == "hourly" ? hourlyValue : nil
-        profile.workDaysPerWeek = workDays
-        profile.hoursPerDay = incomeType == "hourly" ? Decimal(string: hours.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX")) : nil
-        profile.payFrequency = frequency
-        profile.essentialMonthlyExpenses = essentialsValue
-        profile.liquidSavings = savingsValue
-        profile.emergencyFundTarget = emergencyValue
-        if model.planTier == .vip {
-            profile.strategyPreference = preference.isEmpty ? nil : preference
-            profile.discretionaryMonthlyMinimum = minimumValue
-        }
-        saving = true; error = nil; saved = false
-        defer { saving = false }
-        let epoch = model.currentEpoch
-        do {
-            _ = try await model.service.updateFinancialSituation(profile, idempotencyKey: IdempotencyKey.new())
-            saved = true
-        } catch {
-            self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))
-        }
-    }
 }
 
 /// PARITY G3 — current plan and plan change. Paid plans are chosen here only while the launch

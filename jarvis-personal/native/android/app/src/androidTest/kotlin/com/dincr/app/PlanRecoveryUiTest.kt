@@ -32,8 +32,8 @@ import org.junit.Test
 /**
  * Plan recovery on the FakeBackend (Debug only; synthetic data): the Plan tab's four rows, the
  * relocated screens, the three strategy contracts, Salvavidas, the distribution, Cuentas as the
- * second surface of the mail review, bank logos, the Owner's "Análisis financiero" and the
- * situation form. Copy is resolved with the app's own `tx`, so the tests pass in either language.
+ * second surface of the mail review, bank logos, the Owner's "Análisis financiero" and Plan →
+ * Ingresos y base (UX-7: the declared figures; there is no Situación screen). Copy is resolved with the app's own `tx`, so the tests pass in either language.
  */
 class PlanRecoveryUiTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -184,7 +184,7 @@ class PlanRecoveryUiTest {
         waitForTag("salvavidas.fund")
         // Unknown savings: "Sin dato" and the way to declare them, never "0 meses".
         waitForText(tx("Sin dato", "No data"))
-        waitForText(tx("Completar situación financiera", "Complete financial situation"))
+        waitForText(tx("Completar tus ahorros", "Complete your savings"))
         assertTrue(!present(tx("0 meses", "0 months"), substring = true))
     }
 
@@ -336,29 +336,80 @@ class PlanRecoveryUiTest {
         launch(plan = "vip")
         home()
         click(tx("Perfil", "Profile"))
-        waitForText(tx("Mi situación financiera", "My financial situation"))
+        waitForText(tx("Ajustes de cuenta", "Account settings"))
         assertTrue(!present("JARVIS") && !present(tx("Análisis financiero", "Financial analysis")))
         launch(plan = "vip", role = "admin")
         waitForText(tx("Esta cuenta no está disponible en DINCR", "This account isn’t available in DINCR"))
         assertTrue(!present(tx("Análisis financiero", "Financial analysis")))
     }
 
-    @Test fun theSituationFormSendsWorkDaysForAFixedIncome() {
+    @Test fun ingresosYBaseSendsWorkDaysForAFixedIncome() {
+        // UX-7: the declared income lives in Plan → Ingresos y base.
         launch(plan = "free")
         home()
-        click(tx("Perfil", "Profile"))
-        click(tx("Mi situación financiera", "My financial situation"))
-        waitForTag("situation.days")
-        compose.onNodeWithTag("situation.days").assert(hasText("5"))
+        click(tx("Plan", "Plan"))
+        click(tx("Ingresos y base", "Income and base"))
+        waitForTag("incomeBase.days")
+        compose.onNodeWithTag("incomeBase.days").assert(hasText("5"))
         compose.onAllNodes(hasText(tx("Salario mensual", "Monthly salary"))).onFirst().performTextInput("800.000")
         click(tx("Guardar", "Save"))
         // The fake answers 422 without work_days_per_week, like the backend: the saved salary is
         // what the server returns when the screen is opened again.
         repeat(20) { advance(); Thread.sleep(100) } // the in-memory server answers in milliseconds
         back()
-        click(tx("Mi situación financiera", "My financial situation"))
+        click(tx("Ingresos y base", "Income and base"))
         waitUntil("the stored salary") { present("800.000") }
-        compose.onNodeWithTag("situation.days").assert(hasText("5"))
+        compose.onNodeWithTag("incomeBase.days").assert(hasText("5"))
+    }
+
+    @Test fun freeKeepsEveryDeclaredFigureInItsHomeAndPerfilHasNoSituacion() {
+        // UX-7: income and essential expenses in Plan → Ingresos y base; savings in Metas y ahorros.
+        launch(plan = "free")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Ingresos y base", "Income and base"))
+        waitForTag("incomeBase.days")
+        scrollTo(tx("Gastos esenciales del mes", "Essential monthly expenses"))
+        assertTrue("savings live in Ahorros", !present(tx("Ahorros disponibles", "Available savings")))
+        back()
+        click(tx("Hoy", "Today"))
+        click(tx("Metas y ahorros", "Goals and savings"))
+        click(tx("Tus ahorros", "Your savings"))
+        waitForText(tx("Ahorros disponibles", "Available savings"))
+        scrollTo(tx("Meta de fondo de emergencia", "Emergency fund target"))
+        back(); back()
+        click(tx("Perfil", "Profile"))
+        waitForText(tx("Ajustes de cuenta", "Account settings"))
+        assertTrue("no Situación row in Perfil", !present(tx("Mi situación financiera", "My financial situation")))
+    }
+
+    @Test fun vipEditsThePriorityAndMinimumInTuPlanDelMes() {
+        launch(plan = "vip")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
+        click(tx("Ajustes del plan", "Plan settings"))
+        // The settings are saved with the declared profile: without an income they say where to declare it.
+        waitForText(tx("Primero declará tu ingreso: tus ajustes se guardan junto con él.", "Declare your income first: your settings are saved with it."))
+        assertTrue("no save without a declared income", !present(tx("Guardar", "Save")))
+        back(); back()
+        click(tx("Ingresos y base", "Income and base"))
+        waitForTag("incomeBase.days")
+        compose.onAllNodes(hasText(tx("Salario mensual", "Monthly salary"))).onFirst().performTextInput("800.000")
+        click(tx("Guardar", "Save"))
+        waitForText(tx("Ingresos y base guardados", "Income and base saved"))
+        back()
+        click(tx("Tu plan del mes", "Your plan for the month"))
+        click(tx("Ajustes del plan", "Plan settings"))
+        click(tx("Metas", "Goals"))
+        click(tx("Guardar", "Save"))
+        waitForText(tx("Ajustes guardados", "Settings saved"))
+        launch(plan = "basic")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
+        waitForText(tx("Margen para decidir", "Room to decide"))
+        assertTrue("the priority and minimum are VIP", !present(tx("Ajustes del plan", "Plan settings")))
     }
 
     @Test fun basicHomeOpensMovementsWhichShowTheOriginalCurrency() {

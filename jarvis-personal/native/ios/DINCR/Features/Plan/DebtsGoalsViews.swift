@@ -253,6 +253,14 @@ struct GoalsView: View {
     var body: some View {
         ScreenScroll(title: tx("Metas y ahorro", "Goals and savings")) {
             WritesPausedBanner()
+            // UX-7: the declared available savings and emergency-fund target (moved from Situación).
+            NavigationLink { DeclaredSavingsView() } label: {
+                HubRow(symbol: "banknote", title: tx("Tus ahorros", "Your savings"),
+                       subtitle: tx("Ahorros disponibles y meta de fondo de emergencia", "Available savings and emergency fund target"))
+            }
+            .buttonStyle(.plain)
+            .dincrCard(padding: DincrSpacing.s3)
+            .accessibilityIdentifier("goals.declaredSavings")
             if let notice { StatusBanner(tone: .info, title: notice, message: "").accessibilityIdentifier("plan.notice") }
             AsyncContent(load: { () async throws -> Snapshot in
                 let service = model.service

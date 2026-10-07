@@ -159,7 +159,7 @@ import Testing
     @Test func advisorRoutesOpenTheirRealScreens() {
         #expect(AttentionList.destination(advisorRoute: "debts") == .debts)
         #expect(AttentionList.destination(advisorRoute: "vip-emergency") == .salvavidas)
-        #expect(AttentionList.destination(advisorRoute: "situation") == .situation)
+        #expect(AttentionList.destination(advisorRoute: "situation") == .incomeBase)  // UX-7: no Situación screen
         #expect(AttentionList.destination(advisorRoute: "strategy") == .strategy)
         #expect(AttentionList.destination(advisorRoute: "finance") == .movements)
         #expect(AttentionList.destination(advisorRoute: "/vip-monthly-review") == .monthlyReview)

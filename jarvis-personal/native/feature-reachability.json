@@ -38,7 +38,8 @@
   "D19",
   "D20",
   "R1",
-  "P-1"
+  "P-1",
+  "UX-7"
  ],
  "fixtures": {
   "ios": {
@@ -462,6 +463,41 @@
    }
   },
   {
+   "id": "plan.incomeBase",
+   "name": "Plan → Ingresos y base (UX-7: replaces Perfil → Situación financiera for income and essential expenses; savings and the emergency target moved to Metas y ahorros → Tus ahorros, the VIP priority and personal minimum to Tu plan del mes → Ajustes)",
+   "decision": "UX-7",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/financial-situation",
+     "gate": "feature:finance_overview",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.incomeBase"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Ingresos y base",
+    "en": {
+     "tab": "Plan",
+     "text": "Income and base"
+    }
+   }
+  },
+  {
    "id": "plan.salvavidas",
    "name": "Plan → Salvavidas",
    "decision": "baseline-81fd2cc4",
@@ -857,42 +893,6 @@
      "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
     }
    ]
-  },
-  {
-   "id": "profile.situation",
-   "name": "Perfil → Situación financiera",
-   "decision": "baseline-81fd2cc4",
-   "plans": {
-    "free": "AVAILABLE",
-    "basic": "AVAILABLE",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "target": "P6: Plan → Ingresos y base",
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/financial-situation",
-     "gate": "feature:finance_overview",
-     "used_by": [
-      "free",
-      "basic",
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "profile",
-    "id": "profile.situation"
-   },
-   "android": {
-    "tab": "Perfil",
-    "text": "Mi situación financiera",
-    "en": {
-     "tab": "Profile",
-     "text": "My financial situation"
-    }
-   }
   },
   {
    "id": "profile.plan",

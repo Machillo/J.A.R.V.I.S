@@ -188,7 +188,8 @@ import Testing
     @Test func missingInputsLeadToTheRealFlows() {
         #expect(HomeInput.income.destination == .registerIncome)
         #expect(HomeInput.debtPayments.destination == .debts)
-        #expect([HomeInput.essentialExpenses, .savings, .emergencyFundTarget].allSatisfy { $0.destination == .situation })
+        #expect(HomeInput.essentialExpenses.destination == .incomeBase)  // UX-7: Plan → Ingresos y base
+        #expect([HomeInput.savings, .emergencyFundTarget].allSatisfy { $0.destination == .goals })  // UX-7: savings in Ahorros
         #expect(HomeInput.codes(["essential_expenses", "savings", "emergency_fund_target"]) == [.essentialExpenses, .savings, .emergencyFundTarget])
     }
 

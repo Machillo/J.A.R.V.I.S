@@ -132,7 +132,7 @@ final class JarvisChatUITests: XCTestCase {
         // Back to the Profile hub (chat → JARVIS → Profile), sign out and in again: the chat starts empty.
         for _ in 0..<2 { app.navigationBars.buttons.element(boundBy: 0).tap() }
         let signOut = element("profile.signOut", in: app)
-        XCTAssertTrue(element("profile.situation", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("profile.plan", in: app).waitForExistence(timeout: 5))
         for _ in 0..<6 where !(signOut.exists && signOut.isHittable) { app.swipeUp() }
         signOut.tap()
         let sheetButton = app.sheets.buttons["Cerrar sesión"]

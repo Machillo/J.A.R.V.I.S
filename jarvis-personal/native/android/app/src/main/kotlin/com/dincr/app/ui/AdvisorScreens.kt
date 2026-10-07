@@ -186,7 +186,7 @@ fun TodayScreen(model: AppModel, nav: Navigator) {
                 else -> a.alerts.forEach { alert ->
                     DincrMessage(MessageKind.financial(alert.severity), alert.title.orEmpty(), alert.explanation.orEmpty())
                     alert.action?.let { action ->
-                        val route = when (action.route?.trim('/')) { "debts" -> "debts"; "goals" -> "goals"; "budget" -> "budget"; "finance", "movements" -> "movements"; "situation" -> "situation"; else -> null }
+                        val route = when (action.route?.trim('/')) { "debts" -> "debts"; "goals" -> "goals"; "budget" -> "budget"; "finance", "movements" -> "movements"; "situation" -> "incomeBase"; else -> null }
                         val label = action.label
                         if (route != null && label != null) TextButton({ nav.open(route) }) { Text(label, color = Dincr.colors.tint) }
                     }

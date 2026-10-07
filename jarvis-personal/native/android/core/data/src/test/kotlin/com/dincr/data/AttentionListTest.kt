@@ -162,7 +162,7 @@ class AttentionListTest {
     @Test fun advisorRoutesOpenTheirRealScreens() {
         assertEquals(AttentionItem.Destination.DEBTS, AttentionList.destination("debts"))
         assertEquals(AttentionItem.Destination.SALVAVIDAS, AttentionList.destination("vip-emergency"))
-        assertEquals(AttentionItem.Destination.SITUATION, AttentionList.destination("situation"))
+        assertEquals(AttentionItem.Destination.INCOME_BASE, AttentionList.destination("situation"))  // UX-7: no Situación screen
         assertEquals(AttentionItem.Destination.STRATEGY, AttentionList.destination("strategy"))
         assertEquals(AttentionItem.Destination.MOVEMENTS, AttentionList.destination("finance"))
         assertEquals(AttentionItem.Destination.MONTHLY_REVIEW, AttentionList.destination("/vip-monthly-review"))
@@ -171,7 +171,7 @@ class AttentionListTest {
     @Test fun destinationsMapToTheSameScreensAsIos() {
         // App routes that exist in MainScaffold; the review item opens the Email Monitor.
         assertEquals(
-            mapOf("review" to "mail", "debts" to "debts", "salvavidas" to "salvavidas", "situation" to "situation",
+            mapOf("review" to "mail", "debts" to "debts", "salvavidas" to "salvavidas", "incomeBase" to "incomeBase",
                 "strategy" to "strategy", "movements" to "movements", "monthlyReview" to "review"),
             AttentionItem.Destination.entries.associate { it.key to it.route },
         )

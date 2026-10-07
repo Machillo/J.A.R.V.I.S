@@ -70,9 +70,10 @@ enum class Destination(val route: String, val icon: ImageVector) {
     companion object {
         /**
          * Screens opened from several tabs (UX-4: Deudas, from Plan and from the shortcuts on Hoy,
-         * Movimientos, Salvavidas and DINCR): they keep the tab they were opened from highlighted.
+         * Movimientos, Salvavidas and DINCR; UX-7: Ingresos y base, from Plan and from Hoy's missing
+         * figures; Tus ahorros, from Metas y ahorros and Salvavidas): they keep the tab they were opened from highlighted.
          */
-        private val SHARED = setOf("debts")
+        private val SHARED = setOf("debts", "incomeBase", "declaredSavings")
 
         /** The tab a pushed screen belongs to, or null when it is opened from several ([SHARED]). */
         fun owner(route: String?): Destination? = if (route?.substringBefore('/') in SHARED) null else of(route)
@@ -81,7 +82,7 @@ enum class Destination(val route: String, val icon: ImageVector) {
         fun of(route: String?): Destination = when (route?.substringBefore('/')) {
             null, "home", "debts", "goals", "attention" -> HOME
             "movements", "monthly" -> MOVEMENTS
-            "plan", "aguinaldo", "strategy", "salvavidas", "distribution" -> PLAN
+            "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "planPreferences" -> PLAN
             "advisor", "scenarios", "review", "today", "projections", "reports" -> ADVISOR
             // Perfil → Finanzas (budget, calendar, recurring), Cuentas and everything else.
             else -> PROFILE
@@ -166,7 +167,9 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("projections") { ProjectionsScreen(model, nav) }
                             composable("reports") { ReportsScreen(model, nav) }
                             composable("profile") { ProfileHubScreen(model, nav) }
-                            composable("situation") { SituationScreen(model, nav) }
+                            composable("incomeBase") { IncomeBaseScreen(model, nav) }
+                            composable("planPreferences") { PlanPreferencesScreen(model, nav) }
+                            composable("declaredSavings") { DeclaredSavingsScreen(model, nav) }
                             composable("settings") { SettingsScreen(model, nav, appearance, onAppearance) }
                             composable("plans") { PlanSettingsScreen(model, nav) }
                             composable("security") { SecurityScreen(model, nav) }

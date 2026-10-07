@@ -75,7 +75,7 @@ data class HomeToday(
                 director != null && (director.priority == "incomplete" || HomeInput.codes(director.missing).isNotEmpty()) ->
                     HomeInput.codes(director.missing).let { missing ->
                     HomeNext(HomeNext.Kind.NEEDS_INFORMATION, title = headline, missing = missing,
-                        destination = missing.firstOrNull()?.destination ?: HomeDestination.SITUATION)
+                        destination = missing.firstOrNull()?.destination ?: HomeDestination.INCOME_BASE)
                 }
                 headline != null -> HomeNext(HomeNext.Kind.RECOMMENDATION, title = headline,
                     detail = director?.nextAction?.trim()?.takeIf { it.isNotEmpty() }, destination = HomeDestination.MONTH_PLAN)
@@ -210,12 +210,15 @@ enum class HomeInput(val code: String) {
 
     /**
      * Where the user gives DINCR this input, in the flows that exist (never an estimate): income is
-     * registered as a movement (salary / pay stub), debts in Deudas, the rest in Situación.
+     * registered as a movement (salary / pay stub), debts in Deudas, essential expenses in Plan →
+     * Ingresos y base, savings and the emergency-fund target in Metas y ahorros → Tus ahorros (UX-7:
+     * there is no separate Situación screen).
      */
     val destination: HomeDestination get() = when (this) {
         INCOME -> HomeDestination.REGISTER_INCOME
         DEBT_PAYMENTS, DEBT_INTEREST_RATES -> HomeDestination.DEBTS
-        ESSENTIAL_EXPENSES, SAVINGS, EMERGENCY_FUND_TARGET -> HomeDestination.SITUATION
+        ESSENTIAL_EXPENSES -> HomeDestination.INCOME_BASE
+        SAVINGS, EMERGENCY_FUND_TARGET -> HomeDestination.GOALS
     }
 
     companion object {
@@ -227,7 +230,7 @@ enum class HomeInput(val code: String) {
 /** Screens Hoy opens. All exist on both platforms; [route] is the app's own route (null: not a route). */
 enum class HomeDestination(val route: String?) {
     REGISTER_INCOME(null), REGISTER_MOVEMENT(null), MOVEMENTS("movements"), DEBTS("debts"), GOALS("goals"),
-    SITUATION("situation"), MONTH_PLAN("strategy"),
+    INCOME_BASE("incomeBase"), MONTH_PLAN("strategy"),
 }
 
 /** Accesos rápidos: the same essentials for every plan. */
