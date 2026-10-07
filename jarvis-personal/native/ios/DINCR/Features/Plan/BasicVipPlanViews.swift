@@ -200,6 +200,7 @@ struct RecurringView: View {
     @State private var creating = false
     @State private var notice: String?
     @State private var deleting: RecurringList.Item?
+    @State private var editing: RecurringList.Item?
 
     var body: some View {
         ScreenScroll(title: tx("Recurrentes", "Recurring")) {
@@ -207,7 +208,7 @@ struct RecurringView: View {
             if let notice { StatusBanner(tone: .info, title: notice, message: "") }
             AsyncContent(load: { try await model.service.recurring() }) { list, _ in
                 RecurringContent(list: list, canWrite: model.flags.isEnabled(.financialWrites),
-                                 toggle: { item in Task { await toggle(item) } }, delete: { item in deleting = item })
+                                 toggle: { item in Task { await toggle(item) } }, edit: { item in editing = item }, delete: { item in deleting = item })
             }
             .id(generation)
         }
@@ -217,6 +218,7 @@ struct RecurringView: View {
             }
         }
         .sheet(isPresented: $creating) { RecurringForm { notice = $0; generation += 1 } }
+        .sheet(item: $editing) { item in RecurringForm(editing: item) { notice = $0; generation += 1 } }
         .confirmationDialog(tx("¿Eliminar «\(deleting?.name ?? "")»?", "Delete “\(deleting?.name ?? "")”?"),
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(tx("Eliminar", "Delete"), role: .destructive) { if let item = deleting { Task { await delete(item) } } }
@@ -253,6 +255,7 @@ private struct RecurringContent: View {
     let list: RecurringList
     let canWrite: Bool
     let toggle: (RecurringList.Item) -> Void
+    let edit: (RecurringList.Item) -> Void
     let delete: (RecurringList.Item) -> Void
 
     var body: some View {
@@ -276,7 +279,10 @@ private struct RecurringContent: View {
                 if canWrite {
                     HStack {
                         Button((item.isActive ?? true) ? tx("Pausar", "Pause") : tx("Activar", "Activate")) { toggle(item) }.buttonStyle(.dincrSecondary)
+                        Button(tx("Editar", "Edit")) { edit(item) }.frame(minHeight: 44)
+                            .accessibilityIdentifier("recurring.edit")
                         Button(tx("Eliminar", "Delete"), role: .destructive) { delete(item) }.frame(minHeight: 44)
+                            .accessibilityIdentifier("recurring.delete")
                     }
                 }
             }
@@ -286,9 +292,11 @@ private struct RecurringContent: View {
     }
 }
 
+/// Creates a recurring commitment, or edits one (`editing`: every field, its active state kept).
 private struct RecurringForm: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    var editing: RecurringList.Item?
     let onDone: (String) -> Void
     @State private var name = ""
     @State private var amount = ""
@@ -299,6 +307,7 @@ private struct RecurringForm: View {
     @State private var error: String?
     @State private var saving = false
     @State private var key = IdempotencyKey.new()
+    @State private var loaded = false
 
     static func label(_ frequency: String?) -> String? {
         switch frequency {
@@ -319,8 +328,8 @@ private struct RecurringForm: View {
                     Text(tx("Ingreso", "Income")).tag(true)
                 }
                 .pickerStyle(.segmented)
-                TextField(tx("Nombre", "Name"), text: $name)
-                MoneyField(label: tx("Monto", "Amount"), text: $amount)
+                TextField(tx("Nombre", "Name"), text: $name).accessibilityIdentifier("recurring.name")
+                MoneyField(label: tx("Monto", "Amount"), text: $amount, identifier: "recurring.amount")
                 TextField(tx("Categoría", "Category"), text: $category)
                 Picker(tx("Frecuencia", "Frequency"), selection: $frequency) {
                     ForEach(RecurringRequest.frequencies, id: \.self) { Text(Self.label($0) ?? $0).tag($0) }
@@ -328,13 +337,25 @@ private struct RecurringForm: View {
                 TextField(tx("Día (1–31, opcional)", "Day (1–31, optional)"), text: $day).keyboardType(.numberPad)
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
-            .navigationTitle(tx("Nuevo recurrente", "New recurring item"))
+            .navigationTitle(editing == nil ? tx("Nuevo recurrente", "New recurring item") : tx("Editar recurrente", "Edit recurring item"))
+            .onAppear(perform: prefill)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(tx("Cancelar", "Cancel")) { dismiss() }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) { Button(tx("Guardar", "Save")) { Task { await save() } }.disabled(saving) }
             }
         }
+    }
+
+    private func prefill() {
+        guard let editing, !loaded else { return }
+        loaded = true
+        name = editing.name ?? ""
+        amount = editing.amount.map(model.moneyFormat.inputText) ?? ""
+        category = editing.category ?? "general"
+        income = editing.itemType == "income"
+        frequency = editing.frequency ?? "monthly"
+        day = editing.dueDay.map(String.init) ?? ""
     }
 
     private func save() async {
@@ -344,13 +365,18 @@ private struct RecurringForm: View {
         let dueDay = day.isEmpty ? nil : Int(day)
         if !day.isEmpty && !(1...31).contains(dueDay ?? 0) { error = tx("El día va de 1 a 31.", "The day goes from 1 to 31."); return }
         let request = RecurringRequest(name: trimmed, amount: value, category: category.isEmpty ? "general" : category, itemType: income ? "income" : "expense",
-                                       frequency: frequency, dueDay: dueDay, isActive: true)
+                                       frequency: frequency, dueDay: dueDay, isActive: editing?.isActive ?? true)
         saving = true; error = nil
         defer { saving = false }
         let epoch = model.currentEpoch
         do {
-            _ = try await model.service.createRecurring(request, idempotencyKey: key)
-            onDone(tx("Recurrente agregado", "Recurring item added"))
+            if let editing {
+                _ = try await model.service.updateRecurring(id: editing.id, request, idempotencyKey: key)
+                onDone(tx("Recurrente actualizado", "Recurring item updated"))
+            } else {
+                _ = try await model.service.createRecurring(request, idempotencyKey: key)
+                onDone(tx("Recurrente agregado", "Recurring item added"))
+            }
             dismiss()
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))

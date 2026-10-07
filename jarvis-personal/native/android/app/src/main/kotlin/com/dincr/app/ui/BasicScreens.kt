@@ -204,11 +204,12 @@ private fun eventKind(kind: String?) = when (kind) {
     "income" -> tx("Ingreso", "Income"); "debt" -> tx("Cuota", "Instalment"); "goal" -> tx("Meta", "Goal"); else -> tx("Pago", "Payment")
 }
 
-/** E10 — recurring payments (Basic): create, pause/activate, delete. */
+/** E10 — recurring payments (every plan, UX-9): create, edit, pause/activate, delete. */
 @Composable
 fun RecurringScreen(model: AppModel, nav: Navigator) {
     val list = rememberLoad(model) { model.api.recurring() }
     var creating by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<RecurringItem?>(null) }
     var deleting by remember { mutableStateOf<RecurringItem?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -247,6 +248,7 @@ fun RecurringScreen(model: AppModel, nav: Navigator) {
                                     busy = false
                                 }
                             }, modifier = Modifier.semantics { contentDescription = "${item.name.orEmpty()}: $label" })
+                            TextButton({ editing = item }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Editar", "Edit"), color = Dincr.colors.tint) }
                             TextButton({ deleting = item }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Eliminar", "Delete"), color = Dincr.colors.negative) }
                         }
                     }
@@ -255,6 +257,7 @@ fun RecurringScreen(model: AppModel, nav: Navigator) {
         }
     }
     if (creating) RecurringForm(model, onDismiss = { creating = false }) { creating = false; list.reload(); model.showNotice(it) }
+    editing?.let { item -> RecurringForm(model, item, onDismiss = { editing = null }) { editing = null; list.reload(); model.showNotice(it) } }
     deleting?.let { item ->
         ConfirmDialog(tx("¿Eliminar «${item.name.orEmpty()}»?", "Delete “${item.name.orEmpty()}”?"), tx("No se puede deshacer.", "This can’t be undone."), tx("Eliminar", "Delete"), busy = busy, onDismiss = { deleting = null }, onConfirm = {
             busy = true
@@ -273,21 +276,22 @@ fun frequencyLabel(frequency: String?) = when (frequency) {
     "annual" -> tx("Anual", "Yearly"); else -> tx("Mensual", "Monthly")
 }
 
+/** Creates a recurring payment, or edits one ([editing]: every field, its active state kept). */
 @Composable
-private fun RecurringForm(model: AppModel, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
+private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
     val format = Dincr.money
-    var name by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf("expense") }
-    var frequency by remember { mutableStateOf("monthly") }
-    var day by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(editing?.name.orEmpty()) }
+    var amount by remember { mutableStateOf(editing?.amount?.let(format::inputText).orEmpty()) }
+    var category by remember { mutableStateOf(editing?.category.orEmpty()) }
+    var type by remember { mutableStateOf(editing?.itemType ?: "expense") }
+    var frequency by remember { mutableStateOf(editing?.frequency ?: "monthly") }
+    var day by remember { mutableStateOf(editing?.dueDay?.toString().orEmpty()) }
     var errors by remember { mutableStateOf(mapOf<String, String>()) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val key = remember { IdempotencyKey.new() }
     val scope = rememberCoroutineScope()
-    FormSheet(tx("Nuevo pago recurrente", "New recurring payment"), saving, error, tx("Guardar", "Save"), onDismiss = onDismiss, onPrimary = {
+    FormSheet(if (editing == null) tx("Nuevo pago recurrente", "New recurring payment") else tx("Editar pago recurrente", "Edit recurring payment"), saving, error, tx("Guardar", "Save"), onDismiss = onDismiss, onPrimary = {
         val found = mutableMapOf<String, String>()
         if (name.isBlank()) found["name"] = tx("Escribí un nombre.", "Enter a name.")
         val amountValue = AmountInput.parse(amount, format.separators).also { if (it == null) found["amount"] = tx("Escribí un monto mayor que cero.", "Enter an amount above zero.") }
@@ -297,8 +301,9 @@ private fun RecurringForm(model: AppModel, onDismiss: () -> Unit, onSaved: (Stri
         saving = true; error = null
         scope.launch {
             model.load(tx("No pudimos guardarlo.", "We couldn’t save it.")) {
-                model.api.createRecurring(RecurringRequest(name.trim(), amountValue, category.trim().ifEmpty { "general" }, type, frequency, dayValue, true), key)
-            }.onSuccess { onSaved(tx("Pago recurrente agregado", "Recurring payment added")) }.onFailure { if (it !is AuthException.SignedOut) error = it.message }
+                val request = RecurringRequest(name.trim(), amountValue, category.trim().ifEmpty { "general" }, type, frequency, dayValue, editing?.isActive ?: true)
+                if (editing == null) model.api.createRecurring(request, key) else model.api.updateRecurring(editing.id, request, key)
+            }.onSuccess { onSaved(if (editing == null) tx("Pago recurrente agregado", "Recurring payment added") else tx("Pago recurrente actualizado", "Recurring payment updated")) }.onFailure { if (it !is AuthException.SignedOut) error = it.message }
             saving = false
         }
     }) {

@@ -359,6 +359,8 @@ class FakeBackend(
             path == "/user-product/financial-situation" -> ok(financialSituation())
 
             // Basic
+            // UX-9: recurring commitments are every plan's (`recurring_items` from Free), like the backend.
+            path.startsWith("/user-product/basic/recurring") -> basic(method, path, segments, query, body)
             path.startsWith("/user-product/basic") || path.startsWith("/user-product/finance/strategy-basic") -> needs(PlanTier.BASIC) ?: basic(method, path, segments, query, body)
 
             // VIP

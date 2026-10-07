@@ -26,7 +26,8 @@ enum class Feature(val minimum: PlanTier) {
     BASIC_DASHBOARD(PlanTier.BASIC),
     GUIDED_BUDGET(PlanTier.BASIC),
     FINANCIAL_CALENDAR(PlanTier.BASIC),
-    RECURRING_ITEMS(PlanTier.BASIC),
+    /** UX-9: recurring commitments are the user's own reality, registered on every plan. */
+    RECURRING_ITEMS(PlanTier.FREE),
     BASIC_REPORTS(PlanTier.BASIC),
     STRATEGY_VIP(PlanTier.VIP),
     GMAIL_AUTOMATION(PlanTier.VIP),

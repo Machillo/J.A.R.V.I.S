@@ -285,7 +285,8 @@ public actor FixtureBackend: HTTPTransport {
             return ok(["status": "ok"])
         }
         if path.hasPrefix("/user-product/basic") || path == "/user-product/finance/strategy-basic" {
-            if let denied = needs(.basic) { return denied }
+            // UX-9: recurring commitments are every plan's (`recurring_items` from Free), like the backend.
+            if !path.hasPrefix("/user-product/basic/recurring"), let denied = needs(.basic) { return denied }
             return basic(method, path, parts, query, body)
         }
         if path.hasPrefix("/user-product/vip/gmail") || path.hasPrefix("/user-product/vip/mail") || path.hasPrefix("/user-product/vip/financial-identity") {

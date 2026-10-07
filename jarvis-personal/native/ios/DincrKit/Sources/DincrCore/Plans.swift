@@ -31,8 +31,9 @@ public enum Feature: String, Sendable, CaseIterable {
 
     public var minimum: PlanTier {
         switch self {
-        case .financeOverview, .spending, .debts, .goals, .transactions: .free
-        case .strategyBasic, .basicDashboard, .guidedBudget, .financialCalendar, .recurringItems, .basicReports: .basic
+        // UX-9: recurring commitments are the user's own reality, registered on every plan.
+        case .financeOverview, .spending, .debts, .goals, .transactions, .recurringItems: .free
+        case .strategyBasic, .basicDashboard, .guidedBudget, .financialCalendar, .basicReports: .basic
         case .strategyVip, .gmailAutomation: .vip
         }
     }

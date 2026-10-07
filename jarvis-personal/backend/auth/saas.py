@@ -13,15 +13,15 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 
 PLAN_COPY = {
-    "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Resumen financiero", "Ingresos y gastos", "Deudas", "Metas", "Transacciones", "Horas extra"]},
-    "basic": {"name": "Basic", "tagline": "DINCR organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Recurrentes", "Reportes"]},
+    "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Resumen financiero", "Ingresos y gastos", "Deudas", "Metas", "Pagos fijos y recurrentes", "Transacciones", "Horas extra"]},
+    "basic": {"name": "Basic", "tagline": "DINCR organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Reportes"]},
     "vip": {"name": "VIP", "tagline": "Una estrategia más completa con información que vos autorizás.", "features": ["Todo Basic", "Estrategia dinámica, proyecciones y escenarios", "Con tu permiso, detecta avisos financieros en correos compatibles para que revisés movimientos y mantengás al día tus cuentas y deudas", "Estimación del aguinaldo si DINCR detecta órdenes patronales de la CCSS en un correo conectado"]},
 }
 # English copy for the same plans (Accept-Language: en). PLAN_COPY stays the
 # canonical catalog used for validation.
 PLAN_COPY_EN = {
-    "free": {"name": "Free", "tagline": "Organize and understand your numbers.", "features": ["Financial summary", "Income and expenses", "Debts", "Goals", "Transactions", "Overtime"]},
-    "basic": {"name": "Basic", "tagline": "DINCR organizes and guides your month.", "features": ["Everything in Free", "Full dashboard", "Guided budget", "Full debts and goals", "Calendar", "Recurring items", "Reports"]},
+    "free": {"name": "Free", "tagline": "Organize and understand your numbers.", "features": ["Financial summary", "Income and expenses", "Debts", "Goals", "Fixed and recurring payments", "Transactions", "Overtime"]},
+    "basic": {"name": "Basic", "tagline": "DINCR organizes and guides your month.", "features": ["Everything in Free", "Full dashboard", "Guided budget", "Full debts and goals", "Calendar", "Reports"]},
     "vip": {"name": "VIP", "tagline": "A more complete strategy with information you authorize.", "features": ["Everything in Basic", "Dynamic strategy, projections, and scenarios", "With your permission, it detects financial notices in supported emails so you can review transactions and keep your accounts and debts up to date", "Annual bonus (aguinaldo) estimate if DINCR detects CCSS employer statements in a connected email"]},
 }
 OWNER_ONLY_SUBSCRIPTION_FIELDS = frozenset({"granted_by", "courtesy_note"})
@@ -37,7 +37,9 @@ BUILTIN_FEATURE_MIN_PLAN = {
     "basic_dashboard": "basic",
     "guided_budget": "basic",
     "financial_calendar": "basic",
-    "recurring_items": "basic",
+    # UX-9: registering fixed/recurring commitments is the user's own reality, not a paid feature
+    # (Basic and VIP add calendar, budget and strategy around them).
+    "recurring_items": "free",
     "basic_reports": "basic",
     "strategy_vip": "vip",
     "gmail_automation": "vip",

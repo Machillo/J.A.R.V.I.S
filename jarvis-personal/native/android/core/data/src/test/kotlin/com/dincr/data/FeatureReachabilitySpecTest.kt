@@ -37,7 +37,7 @@ class FeatureReachabilitySpecTest {
         "advisor.reports" to Feature.BASIC_REPORTS, "advisor.today" to Feature.STRATEGY_VIP,
         "advisor.projections" to Feature.STRATEGY_VIP, "advisor.scenarios" to Feature.STRATEGY_VIP,
         "advisor.review" to Feature.STRATEGY_VIP, "profile.budget" to Feature.GUIDED_BUDGET,
-        "profile.calendar" to Feature.GUIDED_BUDGET, "profile.recurring" to Feature.GUIDED_BUDGET,
+        "profile.calendar" to Feature.GUIDED_BUDGET, "profile.recurring" to Feature.RECURRING_ITEMS,
         "profile.mail" to Feature.GMAIL_AUTOMATION, "profile.accounts" to Feature.GMAIL_AUTOMATION,
     )
 

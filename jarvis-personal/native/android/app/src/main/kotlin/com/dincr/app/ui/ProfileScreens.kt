@@ -126,7 +126,7 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
         tx("Cerrar sesión", "Sign out"), onDismiss = { confirming = false }, onConfirm = { confirming = false; model.signOut() })
 }
 
-/** Perfil → Finanzas: budget, financial calendar and recurring payments (Basic+; locked below). */
+/** Perfil → Finanzas: recurring payments on every plan (UX-9); budget and calendar from Basic (locked below). */
 @Composable
 private fun FinanceSection(plan: PlanTier, nav: Navigator) {
     SectionTitle(tx("Finanzas", "Finances"))
@@ -135,9 +135,11 @@ private fun FinanceSection(plan: PlanTier, nav: Navigator) {
             if (plan.allows(com.dincr.data.Feature.GUIDED_BUDGET)) {
                 NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") }
                 NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), tx("Pagos e ingresos del mes", "Payments and income this month")) { nav.open("calendar") }
-                NavRow(Icons.Rounded.Repeat, tx("Pagos recurrentes", "Recurring payments"), tx("Suscripciones y pagos fijos", "Subscriptions and fixed payments")) { nav.open("recurring") }
             } else {
-                NavRow(Icons.Rounded.PieChart, tx("Presupuesto, calendario y recurrentes", "Budget, calendar and recurring"), tx("Disponible desde Basic", "Available from Basic"), badge = "Basic") { nav.open("plans") }
+                NavRow(Icons.Rounded.PieChart, tx("Presupuesto y calendario", "Budget and calendar"), tx("Disponible desde Basic", "Available from Basic"), badge = "Basic") { nav.open("plans") }
+            }
+            if (plan.allows(com.dincr.data.Feature.RECURRING_ITEMS)) {
+                NavRow(Icons.Rounded.Repeat, tx("Pagos recurrentes", "Recurring payments"), tx("Suscripciones y pagos fijos", "Subscriptions and fixed payments")) { nav.open("recurring") }
             }
         }
     }
