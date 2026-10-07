@@ -140,7 +140,7 @@ fun PlanChooserScreen(model: AppModel) {
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     OnboardingColumn {
-        Text(tx("Elegí tu plan", "Choose your plan"), style = MaterialTheme.typography.headlineSmall, color = Dincr.colors.text, modifier = Modifier.semantics { heading() })
+        Text(tx("Elegí tu suscripción", "Choose your subscription"), style = MaterialTheme.typography.headlineSmall, color = Dincr.colors.text, modifier = Modifier.semantics { heading() })
         LoadContent(plans) { (options, catalog) ->
             val promotionActive = catalog?.promotion?.active == true || options.any { it.promotion?.active == true }
             if (promotionActive) (catalog?.promotion?.message ?: catalog?.notice)?.let { StatusBanner(BannerTone.INFO, tx("Promoción de lanzamiento", "Launch promotion"), it) }
@@ -148,7 +148,7 @@ fun PlanChooserScreen(model: AppModel) {
                 PlanCard(option, catalog, promotionActive, busy == option.code, enabled = busy == null) {
                     busy = option.code; error = null
                     scope.launch {
-                        model.load(tx("No pudimos guardar tu plan.", "We couldn’t save your plan.")) {
+                        model.load(tx("No pudimos guardar tu suscripción.", "We couldn’t save your subscription.")) {
                             model.api.choosePlan(PlanChangeRequest(option.code, consentVersion = PLAN_CONSENT_VERSION))
                         }.onSuccess { result -> (result.profile ?: model.api.me()).let { model.apply(it) } }
                             .onFailure { if (it !is AuthException.SignedOut) error = it.message }
@@ -170,7 +170,7 @@ fun PlanCard(option: PlanOption, catalog: BillingCatalog?, promotionActive: Bool
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(option.name ?: option.code.uppercase(), style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text, modifier = Modifier.weight(1f))
-                if (current) PlanBadge(tx("Tu plan", "Your plan"))
+                if (current) PlanBadge(tx("Tu suscripción", "Your subscription"))
             }
             option.tagline?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
             Text(

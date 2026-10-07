@@ -40,7 +40,7 @@ struct PlanHubView: View {
             .buttonStyle(.plain)
             .dincrCard(padding: DincrSpacing.s3)
             .accessibilityIdentifier("plan.\(item.rawValue)")
-            .accessibilityHint(tx("Abre los planes", "Opens the plans"))
+            .accessibilityHint(tx("Abre Suscripción", "Opens Subscription"))
         case .paused(let flag):
             NavigationLink {
                 ScreenScroll(title: item.title) { FeaturePausedView(message: model.flags.message(flag, language: model.language)) }

@@ -40,7 +40,8 @@
   "R1",
   "P-1",
   "UX-7",
-  "UX-9"
+  "UX-9",
+  "UX-12"
  ],
  "fixtures": {
   "ios": {
@@ -896,9 +897,9 @@
    ]
   },
   {
-   "id": "profile.plan",
-   "name": "Perfil → Plan",
-   "decision": "baseline-81fd2cc4",
+   "id": "profile.subscription",
+   "name": "Perfil → Suscripción (UX-12: Free / Basic / VIP; Plan is the financial plan)",
+   "decision": "UX-12",
    "plans": {
     "free": "AVAILABLE",
     "basic": "AVAILABLE",
@@ -919,14 +920,14 @@
    ],
    "ios": {
     "tab": "profile",
-    "id": "profile.plan"
+    "id": "profile.subscription"
    },
    "android": {
     "tab": "Perfil",
-    "text": "Mi plan",
+    "text": "Suscripción",
     "en": {
      "tab": "Profile",
-     "text": "My plan"
+     "text": "Subscription"
     }
    }
   },

@@ -130,7 +130,7 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Entrar a DINCR"].waitForExistence(timeout: 2))
         app.buttons["Entrar a DINCR"].tap()
         // A11: a new account chooses its plan; paid plans wait for the stores.
-        XCTAssertTrue(app.staticTexts["Elegí tu plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Elegí tu suscripción"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Próximamente en las tiendas"].exists)
         app.buttons["Elegir Free"].tap()
         XCTAssertTrue(app.staticTexts["Resultado del mes"].waitForExistence(timeout: 5))
@@ -203,7 +203,7 @@ final class DINCRUITests: XCTestCase {
         let app = launch()
         XCTAssertTrue(app.descendants(matching: .any)["home.debts"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Perfil"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["profile.plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.subscription"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.descendants(matching: .any)["profile.budget"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["profile.accounts"].exists)

@@ -75,8 +75,8 @@ class StoreBilling(context: Context, private val api: DincrApi, private val scop
         val entitlement = api.storeEntitlement()
         if (entitlement.isLive) { done(Result.failure(IllegalStateException(tx("Ya tenés una suscripción activa en la tienda.", "You already have an active store subscription.")))); return }
         val token = api.storeCustomerToken().token
-        val details = offer.details ?: run { done(Result.failure(IllegalStateException(tx("Este plan no está disponible en Google Play.", "This plan isn’t available on Google Play.")))); return }
-        val offerToken = offer.offerToken ?: run { done(Result.failure(IllegalStateException(tx("Este plan no está disponible en Google Play.", "This plan isn’t available on Google Play.")))); return }
+        val details = offer.details ?: run { done(Result.failure(IllegalStateException(tx("Esta suscripción no está disponible en Google Play.", "This subscription isn’t available on Google Play.")))); return }
+        val offerToken = offer.offerToken ?: run { done(Result.failure(IllegalStateException(tx("Esta suscripción no está disponible en Google Play.", "This subscription isn’t available on Google Play.")))); return }
         if (!connected()) { done(Result.failure(IllegalStateException(tx("No pudimos conectar con Google Play.", "We couldn’t reach Google Play.")))); return }
         onPurchase = done
         val params = BillingFlowParams.newBuilder()

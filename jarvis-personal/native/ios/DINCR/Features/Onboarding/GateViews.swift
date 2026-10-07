@@ -85,7 +85,7 @@ struct PlanChooserView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-                Text(tx("Elegí tu plan", "Choose your plan"))
+                Text(tx("Elegí tu suscripción", "Choose your subscription"))
                     .font(DincrFont.title1).foregroundStyle(DincrColor.text)
                     .accessibilityAddTraits(.isHeader)
                 switch state {
@@ -130,7 +130,7 @@ struct PlanChooserView: View {
         } catch is CancellationError {
             return
         } catch {
-            if let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar los planes.", "We couldn’t load the plans.")) {
+            if let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar las suscripciones.", "We couldn’t load the subscriptions.")) {
                 state = .failed(message)
             }
         }

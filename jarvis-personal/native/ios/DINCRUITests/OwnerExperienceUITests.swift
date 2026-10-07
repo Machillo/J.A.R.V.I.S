@@ -188,7 +188,7 @@ final class OwnerExperienceUITests: XCTestCase {
             try shot("06-agenda")
             app.navigationBars.buttons.element(boundBy: 0).tap()
             app.navigationBars.buttons.element(boundBy: 0).tap()
-            XCTAssertTrue(element("profile.plan", in: app).waitForExistence(timeout: 5))
+            XCTAssertTrue(element("profile.subscription", in: app).waitForExistence(timeout: 5))
             try shot("07-profile")
             app.tabBars.buttons["Movimientos"].tap()
             sleep(2)
