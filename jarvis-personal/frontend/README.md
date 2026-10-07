@@ -1,3 +1,20 @@
+# DINCR frontend — surfaces (UX-10/11)
+
+| Surface | What it is | Where it lives | Deploy |
+|---|---|---|---|
+| **Commercial app** | DINCR for users | `native/ios`, `native/android` (SwiftUI, Compose) | App Store / Google Play |
+| **Internal lab** | This web build: development, diagnosis, Owner/JARVIS tools | `src/`, `index.html` (`npm run build` → `dist/`) | Vercel, `noindex` (`vercel.json`) — never the commercial app |
+| **Public landing** | dincr.com: marketing, legal, support | `landing/` (`npm run build:landing` → `landing-dist/`) | Cloudflare Worker `dincr` (`wrangler.jsonc`) |
+
+Rules (`npm run test:surfaces`, in CI):
+- the landing and the native apps never link to the lab;
+- the lab is never indexable (Vercel `X-Robots-Tag`, robots meta) and its install name says it is the lab;
+- the landing deploy serves only `landing-dist/`, never `dist/`.
+
+The web build also feeds the older Capacitor shells (`android/`, `ios-dincr/`); keep it working for them.
+
+---
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

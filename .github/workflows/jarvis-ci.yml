@@ -43,6 +43,7 @@ jobs:
       - run: npm run build:landing
       - run: npm run test:landing
       - run: npm run test:landing-i18n
+      - run: npm run test:surfaces
       - run: npm run test:design-tokens
       - run: npm run build
       - run: npm run test:navigation
