@@ -6,7 +6,8 @@ import UIKit
 /// PARITY B1 — five sections; each owns its navigation stack. The app lock replaces the whole shell
 /// while locked (sheets and alerts go with it), and global notices sit above every tab.
 struct MainTabView: View {
-    enum Tab: String, Hashable { case home, movements, plan, advisor, profile }
+    /// UX-13: the public navigation is exactly Hoy · Movimientos · Plan · Patrimonio · Perfil.
+    enum Tab: String, Hashable { case home, movements, plan, wealth, profile }
 
     @Environment(AppModel.self) private var model
     /// `-DincrTab <tab>` opens a given tab (screenshots and UI tests on fixture data).
@@ -70,9 +71,9 @@ struct MainTabView: View {
             NavigationStack { PlanHubView() }
                 .tabItem { Label(tx("Plan", "Plan"), systemImage: "target") }
                 .tag(Tab.plan)
-            NavigationStack { AdvisorHubView() }
-                .tabItem { Label("DINCR", systemImage: "sparkle") }
-                .tag(Tab.advisor)
+            NavigationStack { WealthHubView() }
+                .tabItem { Label(tx("Patrimonio", "Wealth"), systemImage: "chart.line.uptrend.xyaxis") }
+                .tag(Tab.wealth)
             NavigationStack(path: $profilePath) {
                 ProfileHubView()
                     .navigationDestination(for: ProfileRoute.self) { route in ProfileRouteDestination(route: route) }

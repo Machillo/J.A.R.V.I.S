@@ -212,10 +212,11 @@ final class DINCRUITests: XCTestCase {
     func testVipHomeShowsSafeToSpend() {
         let app = launch(extra: ["-DincrPlan", "vip"])
         XCTAssertTrue(app.descendants(matching: .any)["home.status.amount"].waitForExistence(timeout: 5))
-        // The strategy left the DINCR tab: it lives in Plan → Estrategia.
-        app.tabBars.buttons["DINCR"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["advisor.summary"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.descendants(matching: .any)["advisor.strategy"].exists)
+        // UX-13: no DINCR tab; the monthly summary lives in Movimientos → Análisis, the strategy in Plan.
+        XCTAssertFalse(app.tabBars.buttons["DINCR"].exists)
+        app.tabBars.buttons["Movimientos"].tap()
+        open("movements.analysis", in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["analysis.summary"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Plan"].tap()
         open("plan.strategy", in: app)
         XCTAssertTrue(app.descendants(matching: .any)["strategy.dashboard"].waitForExistence(timeout: 10))

@@ -2,39 +2,69 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY F1 — the DINCR tab. Free → monthly summary; Basic → reports; VIP (while
-/// `vip_intelligence` is on) → Today, scenarios, monthly review and projections. The strategy lives
-/// in the Plan tab (Estrategia, Distribución de dinero).
-struct AdvisorHubView: View {
-    @Environment(AppModel.self) private var model
-
+/// UX-13 — Movimientos → Análisis: the monthly summary (every plan), reports (Basic+, paused with
+/// `advanced_reports`) and the monthly review (VIP, paused with `vip_intelligence`). The same screens
+/// the retired DINCR tab opened; below its plan a row stays visible, locked, and opens Suscripción.
+struct AnalysisHubView: View {
     var body: some View {
-        ScreenScroll(title: "DINCR") {
-            let tier = model.planTier
-            let vip = tier == .vip && model.flags.isEnabled(.vipIntelligence)
+        ScreenScroll(title: tx("Análisis", "Analysis")) {
             VStack(spacing: DincrSpacing.s2) {
-                if vip {
-                    link(TodayView(), "sun.max", tx("Hoy", "Today"), tx("Lo que DINCR vio en tus números", "What DINCR noticed in your numbers"), id: "advisor.today")
-                    link(ScenariosView(), "slider.horizontal.3", tx("Escenarios", "Scenarios"), tx("¿Y si gano o gasto distinto?", "What if I earn or spend differently?"), id: "advisor.scenarios")
-                    link(MonthlyReviewView(), "checklist", tx("Revisión del mes", "Monthly review"), tx("Cómo te fue y qué sigue", "How it went and what’s next"), id: "advisor.review")
-                    link(ProjectionsView(), "chart.line.uptrend.xyaxis", tx("Proyecciones", "Projections"), tx("Tus próximos meses", "Your next months"), id: "advisor.projections")
-                }
-                link(MonthlySummaryView(), "calendar.badge.checkmark", tx("Resumen del mes", "Monthly summary"), tx("Ingresos, gastos y categorías", "Income, expenses and categories"), id: "advisor.summary")
-                if tier.rank >= PlanTier.basic.rank && model.flags.isEnabled(.advancedReports) {
-                    link(ReportsView(), "doc.text.magnifyingglass", tx("Reportes", "Reports"), tx("Comparación con el mes anterior", "Comparison with the previous month"), id: "advisor.reports")
-                }
-            }
-            if tier == .free {
-                PlanRequiredView(tier: .basic, feature: tx("La estrategia de DINCR", "DINCR’s strategy"))
+                GatedEntry(minimum: .free, flag: nil, symbol: "calendar.badge.checkmark", title: tx("Resumen del mes", "Monthly summary"),
+                           subtitle: tx("Ingresos, gastos y categorías", "Income, expenses and categories"), id: "analysis.summary") { MonthlySummaryView() }
+                GatedEntry(minimum: .basic, flag: .advancedReports, symbol: "doc.text.magnifyingglass", title: tx("Reportes", "Reports"),
+                           subtitle: tx("Comparación con el mes anterior", "Comparison with the previous month"), id: "analysis.reports") { ReportsView() }
+                GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "checklist", title: tx("Revisión del mes", "Monthly review"),
+                           subtitle: tx("Cómo te fue y qué sigue", "How it went and what’s next"), id: "analysis.review") { MonthlyReviewView() }
             }
         }
     }
+}
 
-    private func link<Destination: View>(_ destination: Destination, _ symbol: String, _ title: String, _ subtitle: String, id: String) -> some View {
-        NavigationLink { destination } label: { HubRow(symbol: symbol, title: title, subtitle: subtitle) }
-            .buttonStyle(.plain)
-            .dincrCard(padding: DincrSpacing.s3)
-            .accessibilityIdentifier(id)
+/// UX-13 — the Patrimonio tab: projections and scenarios (VIP, paused with `vip_intelligence`), the
+/// same screens the retired DINCR tab opened. Only what UX-13 needs: no new figure or calculation.
+struct WealthHubView: View {
+    var body: some View {
+        ScreenScroll(title: tx("Patrimonio", "Wealth")) {
+            VStack(spacing: DincrSpacing.s2) {
+                GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "chart.line.uptrend.xyaxis", title: tx("Proyecciones", "Projections"),
+                           subtitle: tx("Tus próximos meses", "Your next months"), id: "wealth.projections") { ProjectionsView() }
+                GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "slider.horizontal.3", title: tx("Escenarios", "Scenarios"),
+                           subtitle: tx("¿Y si gano o gasto distinto?", "What if I earn or spend differently?"), id: "wealth.scenarios") { ScenariosView() }
+            }
+        }
+    }
+}
+
+/// One entry of a hub: open while the plan includes it, locked below its plan (opens Suscripción),
+/// paused while its operational switch is off. Same policy as the Plan tab's rows.
+private struct GatedEntry<Destination: View>: View {
+    @Environment(AppModel.self) private var model
+    let minimum: PlanTier
+    let flag: OpsFlag?
+    let symbol: String
+    let title: String
+    let subtitle: String
+    let id: String
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        Group {
+            if model.planTier.rank < minimum.rank {
+                NavigationLink { PlanSettingsView() } label: {
+                    HubRow(symbol: symbol, title: title, subtitle: tx("Disponible desde \(PlanLabel.name(minimum.rawValue))", "Available from \(PlanLabel.name(minimum.rawValue))"), locked: minimum)
+                }
+                .accessibilityHint(tx("Abre Suscripción", "Opens Subscription"))
+            } else if let flag, !model.flags.isEnabled(flag) {
+                NavigationLink {
+                    ScreenScroll(title: title) { FeaturePausedView(message: model.flags.message(flag, language: model.language)) }
+                } label: { HubRow(symbol: symbol, title: title, subtitle: tx("En pausa por mantenimiento", "Paused for maintenance")) }
+            } else {
+                NavigationLink { destination() } label: { HubRow(symbol: symbol, title: title, subtitle: subtitle) }
+            }
+        }
+        .buttonStyle(.plain)
+        .dincrCard(padding: DincrSpacing.s3)
+        .accessibilityIdentifier(id)
     }
 }
 
@@ -231,55 +261,6 @@ private struct ReviewContent: View {
                 if let rationale = next.rationale { Text(rationale).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
             }
             .dincrCard()
-        }
-    }
-}
-
-/// PARITY F9 — DINCR Today (VIP proactive advisor).
-struct TodayView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        ScreenScroll(title: tx("Hoy", "Today")) {
-            AsyncContent(load: { try await model.service.dincrToday() }) { today, _ in
-                TodayContent(today: today)
-            }
-            FinancialDisclaimer()
-        }
-    }
-}
-
-private struct TodayContent: View {
-    let today: DincrToday
-
-    var body: some View {
-        if today.isBaseline {
-            // No earlier observation yet: changes can't be compared, but the current situation is known.
-            StatusBanner(tone: .info, title: tx("Aprendiendo tu punto de partida", "Learning your starting point"),
-                         message: today.advisor.message ?? tx("DINCR necesita una observación anterior para detectar cambios.", "DINCR needs an earlier observation to detect changes."))
-                .accessibilityIdentifier("today.baseline")
-            let current = today.currentAlerts ?? []
-            if !current.isEmpty {
-                Text(tx("Tu situación actual", "Your current situation")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
-                    .accessibilityAddTraits(.isHeader)
-                ForEach(Array(current.enumerated()), id: \.offset) { _, alert in
-                    DincrMessage(.financial(severity: alert.severity), title: alert.title ?? "",
-                                 message: [alert.context, alert.action].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " "))
-                        .accessibilityIdentifier("today.current.alert")
-                }
-            } else if today.currentAlerts != nil {
-                EmptyStateView(symbol: "sun.max", title: tx("Nada urgente hoy", "Nothing urgent today"),
-                               message: tx("Tu situación actual no tiene avisos.", "Your current situation has no alerts.")) { EmptyView() }
-            }
-        } else {
-            let alerts = today.advisor.alerts ?? []
-            if alerts.isEmpty {
-                EmptyStateView(symbol: "sun.max", title: tx("Nada urgente", "Nothing urgent"),
-                               message: today.advisor.message ?? tx("DINCR te avisa cuando algo cambie en tus números.", "DINCR lets you know when something changes in your numbers.")) { EmptyView() }
-            }
-            ForEach(Array(alerts.enumerated()), id: \.offset) { _, alert in
-                DincrMessage(.financial(severity: alert.severity), title: alert.title ?? "", message: alert.explanation ?? "")
-            }
         }
     }
 }

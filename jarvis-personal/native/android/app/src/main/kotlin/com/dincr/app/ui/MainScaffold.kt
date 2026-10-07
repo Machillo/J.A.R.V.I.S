@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material.icons.rounded.TrackChanges
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -58,13 +58,14 @@ import com.dincr.design.DincrMessage
 import com.dincr.design.StatusBanner
 import com.dincr.design.generated.DincrSpacing
 
+/** UX-13: the public navigation is exactly Hoy · Movimientos · Plan · Patrimonio · Perfil. */
 enum class Destination(val route: String, val icon: ImageVector) {
     HOME("home", Icons.Rounded.BarChart), MOVEMENTS("movements", Icons.AutoMirrored.Rounded.ReceiptLong), PLAN("plan", Icons.Rounded.TrackChanges),
-    ADVISOR("advisor", Icons.Rounded.AutoAwesome), PROFILE("profile", Icons.Rounded.AccountCircle);
+    WEALTH("wealth", Icons.Rounded.Timeline), PROFILE("profile", Icons.Rounded.AccountCircle);
 
     val label: String get() = when (this) {
         HOME -> tx("Hoy", "Today"); MOVEMENTS -> tx("Movimientos", "Transactions"); PLAN -> tx("Plan", "Plan")
-        ADVISOR -> "DINCR"; PROFILE -> tx("Perfil", "Profile")
+        WEALTH -> tx("Patrimonio", "Wealth"); PROFILE -> tx("Perfil", "Profile")
     }
 
     companion object {
@@ -83,7 +84,9 @@ enum class Destination(val route: String, val icon: ImageVector) {
             null, "home", "debts", "goals", "attention" -> HOME
             "movements", "monthly" -> MOVEMENTS
             "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "planPreferences" -> PLAN
-            "advisor", "scenarios", "review", "today", "projections", "reports" -> ADVISOR
+            // UX-13: Movimientos → Análisis; Patrimonio → Proyecciones / Escenarios.
+            "analysis", "reports", "review" -> MOVEMENTS
+            "wealth", "scenarios", "projections" -> WEALTH
             // Perfil → Finanzas (budget, calendar, recurring), Cuentas and everything else.
             else -> PROFILE
         }
@@ -159,10 +162,10 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("strategy") { StrategyScreen(model, nav) }
                             composable("salvavidas") { SalvavidasScreen(model, nav) }
                             composable("distribution") { DistributionScreen(model, nav) }
-                            composable("advisor") { AdvisorHubScreen(model, nav) }
+                            composable("wealth") { WealthScreen(model, nav) }
+                            composable("analysis") { AnalysisScreen(model, nav) }
                             composable("scenarios") { ScenariosScreen(model, nav) }
                             composable("review") { MonthlyReviewScreen(model, nav) }
-                            composable("today") { TodayScreen(model, nav) }
                             composable("attention") { AttentionScreen(model, nav) }
                             composable("projections") { ProjectionsScreen(model, nav) }
                             composable("reports") { ReportsScreen(model, nav) }

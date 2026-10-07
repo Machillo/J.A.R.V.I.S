@@ -34,9 +34,10 @@ class FeatureReachabilitySpecTest {
     private val gated = mapOf(
         "plan.aguinaldo" to Feature.GMAIL_AUTOMATION, "plan.strategy" to Feature.STRATEGY_BASIC, "plan.debts" to Feature.DEBTS,
         "plan.salvavidas" to Feature.STRATEGY_VIP, "plan.distribution" to Feature.STRATEGY_BASIC,
-        "advisor.reports" to Feature.BASIC_REPORTS, "advisor.today" to Feature.STRATEGY_VIP,
-        "advisor.projections" to Feature.STRATEGY_VIP, "advisor.scenarios" to Feature.STRATEGY_VIP,
-        "advisor.review" to Feature.STRATEGY_VIP, "profile.budget" to Feature.GUIDED_BUDGET,
+        // UX-13: the former DINCR tab's entries, in Movimientos → Análisis, Patrimonio and Hoy.
+        "analysis.reports" to Feature.BASIC_REPORTS, "home.attention" to Feature.STRATEGY_VIP,
+        "wealth.projections" to Feature.STRATEGY_VIP, "wealth.scenarios" to Feature.STRATEGY_VIP,
+        "analysis.review" to Feature.STRATEGY_VIP, "profile.budget" to Feature.GUIDED_BUDGET,
         "profile.calendar" to Feature.GUIDED_BUDGET, "profile.recurring" to Feature.RECURRING_ITEMS,
         "profile.mail" to Feature.GMAIL_AUTOMATION, "profile.accounts" to Feature.GMAIL_AUTOMATION,
     )

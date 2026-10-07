@@ -140,8 +140,10 @@ class PlanRecoveryUiTest {
         back()
         click(tx("Pagos recurrentes", "Recurring payments"))
         waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
-        // The plan (formerly Estrategia) is not in the DINCR tab.
-        click("DINCR")
+        // UX-13: no DINCR tab; the monthly summary lives in Movimientos → Análisis, the plan in Plan.
+        assertTrue("no DINCR tab", !present("DINCR"))
+        click(tx("Movimientos", "Transactions"))
+        click(tx("Análisis", "Analysis"))
         waitForText(tx("Resumen del mes", "Monthly summary"))
         assertTrue(!present(tx("Tu plan del mes", "Your plan for the month")))
         assertTrue(!present(tx("Estrategia", "Strategy")))
