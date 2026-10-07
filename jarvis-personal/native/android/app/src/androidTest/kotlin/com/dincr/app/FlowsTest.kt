@@ -301,7 +301,7 @@ class FlowsTest {
         compose.onNodeWithTag("setup.continue").performClick()
         compose.onNodeWithTag("setup.continue").performClick()
         compose.onNodeWithTag("setup.continue").performClick()
-        waitForText(tx("Elegí tu plan", "Choose your plan"))
+        waitForText(tx("Elegí tu suscripción", "Choose your subscription"))
         click(tx("Elegir Free", "Choose Free"))
         waitForText(tx("Resultado del mes", "This month’s result"))
     }

@@ -137,7 +137,7 @@ struct PlanRequiredView: View {
         EmptyStateView(
             symbol: "lock",
             title: tx("Disponible en \(PlanLabel.name(tier.rawValue))", "Available on \(PlanLabel.name(tier.rawValue))"),
-            message: tx("\(feature) es parte del plan \(PlanLabel.name(tier.rawValue)). Podés ver los planes en Perfil → Plan.", "\(feature) is part of the \(PlanLabel.name(tier.rawValue)) plan. See the plans in Profile → Plan.")
+            message: tx("\(feature) es parte de la suscripción \(PlanLabel.name(tier.rawValue)). Podés verla en Perfil → Suscripción.", "\(feature) is part of the \(PlanLabel.name(tier.rawValue)) subscription. See it in Profile → Subscription.")
         ) { EmptyView() }
     }
 }

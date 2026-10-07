@@ -56,8 +56,9 @@ struct ProfileHubView: View {
             }
             .dincrRowBackground()
             Section(tx("Cuenta", "Account")) {
-                NavigationLink { PlanSettingsView() } label: { Label(tx("Plan", "Plan"), systemImage: "star") }
-                    .accessibilityIdentifier("profile.plan")
+                // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
+                NavigationLink { PlanSettingsView() } label: { Label(tx("Suscripción", "Subscription"), systemImage: "star") }
+                    .accessibilityIdentifier("profile.subscription")
                 NavigationLink { SecurityView() } label: { Label(tx("Seguridad", "Security"), systemImage: "lock") }
                     .accessibilityIdentifier("profile.security")
                 Picker(selection: $appearance) {
@@ -164,18 +165,49 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// PARITY G3 — current plan and plan change. Paid plans are chosen here only while the launch
-/// promotion is active; App Store purchases are not in this build (store identity gate).
+/// PARITY G3 — Perfil → Suscripción (UX-12): the current Free / Basic / VIP subscription and its
+/// change. Paid tiers are chosen here only while the launch promotion is active; App Store purchases
+/// are not in this build (store identity gate). The Owner is not a subscription: no choice offered.
 struct PlanSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var busy: String?
     @State private var error: String?
 
     var body: some View {
-        ScreenScroll(title: tx("Plan", "Plan")) {
+        ScreenScroll(title: tx("Suscripción", "Subscription")) {
+            if model.profile?.isOwner == true {
+                OwnerAccessCard()
+            } else {
+                SubscriptionChoice(busy: $busy, error: $error)
+            }
+        }
+    }
+}
+
+/// The Owner: internal access to DINCR, never a purchasable or selectable subscription.
+private struct OwnerAccessCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            InfoRow(label: tx("Acceso", "Access"), value: "DINCR Owner")
+            Text(tx("Acceso interno de DINCR: no es una suscripción y no se compra ni se cambia aquí.", "DINCR internal access: it isn’t a subscription and isn’t bought or changed here."))
+                .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+        }
+        .dincrCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("subscription.owner")
+    }
+}
+
+private struct SubscriptionChoice: View {
+    @Environment(AppModel.self) private var model
+    @Binding var busy: String?
+    @Binding var error: String?
+
+    var body: some View {
+        Group {
             if let subscription = model.profile?.subscription {
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                    InfoRow(label: tx("Plan actual", "Current plan"), value: PlanLabel.name(subscription.plan))
+                    InfoRow(label: tx("Suscripción actual", "Current subscription"), value: PlanLabel.name(subscription.plan))
                     if model.profile?.isCourtesy == true { InfoRow(label: tx("Acceso", "Access"), value: tx("Cortesía", "Courtesy")) }
                     if let expires = subscription.expiresAt { InfoRow(label: tx("Vence", "Expires"), value: Day.label(expires)) }
                     if let pending = subscription.pendingPlan {

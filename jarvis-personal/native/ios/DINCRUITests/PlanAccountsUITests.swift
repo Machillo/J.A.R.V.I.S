@@ -54,7 +54,7 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(text("Disponible desde Basic", in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(text("Disponible desde VIP", in: app).exists)
         open("plan.strategy", in: app)
-        XCTAssertTrue(text("Plan actual", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10))
     }
 
     /// UX-4 — Plan → Deudas is where debts are managed, for every plan, with the actions each plan
@@ -112,6 +112,36 @@ final class PlanAccountsUITests: XCTestCase {
         }
         open("profile.calendar", in: app)
         XCTAssertTrue(app.navigationBars["Calendario"].waitForExistence(timeout: 10))
+    }
+
+    // MARK: Subscription (UX-12: Free / Basic / VIP; "Plan" is the financial plan)
+
+    func testProfileShowsTheSubscriptionOfEachTier() {
+        for (plan, name) in [(nil, "Gratis"), ("basic", "Basic"), ("vip", "VIP")] as [(String?, String)] {
+            let app = launch(plan: plan, tab: "profile")
+            open("profile.subscription", in: app)
+            XCTAssertTrue(app.navigationBars["Suscripción"].waitForExistence(timeout: 10), plan ?? "free")
+            XCTAssertTrue(text("Suscripción actual", in: app).exists, plan ?? "free")
+            XCTAssertTrue(text(name, in: app).exists, plan ?? "free")
+            XCTAssertFalse(element("subscription.owner", in: app).exists)
+            app.terminate()
+        }
+    }
+
+    func testTheOwnerIsNotAPurchasableSubscription() {
+        let app = launch(role: "owner", tab: "profile")
+        open("profile.subscription", in: app)
+        XCTAssertTrue(element("subscription.owner", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(text("Suscripción actual", in: app).exists, "no tier is shown for the Owner")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Elegir' OR label CONTAINS 'Cambiar'")).firstMatch.exists, "nothing to choose")
+    }
+
+    func testTuPlanDelMesStaysTheFinancialPlan() {
+        let app = launch(plan: "basic", tab: "plan")
+        XCTAssertTrue(app.navigationBars["Plan"].waitForExistence(timeout: 10))
+        open("plan.strategy", in: app)
+        XCTAssertTrue(text("Tu plan del mes", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(text("Suscripción actual", in: app).exists, "the financial plan is not the subscription")
     }
 
     // MARK: Recurring commitments (UX-9: every plan)
@@ -320,7 +350,7 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(text("Ahorros disponibles", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(text("Meta de fondo de emergencia", in: app).exists)
         app.tabBars.buttons["Perfil"].tap()
-        XCTAssertTrue(element("profile.plan", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("profile.subscription", in: app).waitForExistence(timeout: 5))
         XCTAssertFalse(element("profile.situation", in: app).exists)
     }
 
@@ -367,7 +397,7 @@ final class PlanAccountsUITests: XCTestCase {
         owner.terminate()
 
         let user = launch(plan: "vip", tab: "profile")
-        XCTAssertTrue(element("profile.plan", in: user).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("profile.subscription", in: user).waitForExistence(timeout: 5))
         XCTAssertFalse(element("profile.jarvis", in: user).exists)
         XCTAssertFalse(element("jarvis.section.analysis", in: user).exists)
     }

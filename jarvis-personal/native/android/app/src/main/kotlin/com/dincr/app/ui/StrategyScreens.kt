@@ -84,7 +84,7 @@ private fun rememberStrategy(model: AppModel): Pair<StrategyContract?, LoadHandl
 @Composable
 private fun LockedStrategy(nav: Navigator) {
     EmptyState(Icons.Rounded.AutoAwesome, tx("Disponible desde Basic", "Available from Basic"), tx("La estrategia y la distribución de tu dinero llegan con Basic.", "Strategy and money distribution come with Basic.")) {
-        DincrPrimaryButton(tx("Ver planes", "See plans"), { nav.open("plans") })
+        DincrPrimaryButton(tx("Ver suscripciones", "See subscriptions"), { nav.open("plans") })
     }
 }
 

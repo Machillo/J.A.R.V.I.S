@@ -154,9 +154,9 @@ class PlanRecoveryUiTest {
         planRows.forEach { waitForText(it) }
         waitForText(tx("Disponible desde Basic", "Available from Basic"))
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
-        // A locked row opens the plans screen.
+        // A locked row opens the subscription screen.
         click(tx("Tu plan del mes", "Your plan for the month"))
-        waitForText(tx("Plan actual", "Current plan"))
+        waitForText(tx("Suscripción actual", "Current subscription"))
     }
 
     @Test fun basicStrategySaysTheIncomeIsObservedAndTheDistributionUsesItsAllocations() {
@@ -316,6 +316,35 @@ class PlanRecoveryUiTest {
         waitForText("Transferencia de ejemplo")
     }
 
+    @Test fun profileShowsTheSubscriptionOfEachTierAndTheOwnerIsNotOne() {
+        // UX-12: Free / Basic / VIP are subscriptions in Perfil → Suscripción; "Plan" is the financial plan.
+        listOf("free" to tx("Gratis", "Free"), "basic" to "Basic", "vip" to "VIP").forEach { (plan, name) ->
+            launch(plan = plan)
+            home()
+            click(tx("Perfil", "Profile"))
+            click(tx("Suscripción", "Subscription"))
+            waitForText(tx("Suscripción actual", "Current subscription"))
+            waitForText(name)
+            assertTrue("$plan: no Owner card", compose.onAllNodes(hasTestTag("subscription.owner"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        }
+        launch(role = "owner")
+        home()
+        click(tx("Perfil", "Profile"))
+        click(tx("Suscripción", "Subscription"))
+        waitForTag("subscription.owner")
+        assertTrue("no tier for the Owner", !present(tx("Suscripción actual", "Current subscription")))
+        assertTrue("nothing to choose", !present(tx("Cambiar a", "Switch to"), substring = true))
+    }
+
+    @Test fun tuPlanDelMesStaysTheFinancialPlan() {
+        launch(plan = "basic")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
+        waitForText(tx("Margen para decidir", "Room to decide"))
+        assertTrue("the financial plan is not the subscription", !present(tx("Suscripción actual", "Current subscription")))
+    }
+
     @Test fun freeCreatesEditsAndDeletesRecurringCommitments() {
         // UX-9: registering fixed/recurring commitments is every plan's; budget and calendar stay Basic.
         launch(plan = "free")
@@ -357,7 +386,7 @@ class PlanRecoveryUiTest {
         listOf("bac", "bn", "bcr", "popular", "davivienda", "davibank", "promerica", "multimoney").forEach { waitForTag("bank.logo.$it") }
         tapTag("setup.bank.bac")
         tapTag("setup.continue")
-        waitForText(tx("Elegí tu plan", "Choose your plan"))
+        waitForText(tx("Elegí tu suscripción", "Choose your subscription"))
     }
 
     @Test fun onlyTheOwnerGetsTheFinancialAnalysis() {

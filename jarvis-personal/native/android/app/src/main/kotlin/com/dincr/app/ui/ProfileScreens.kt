@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -75,7 +76,7 @@ import kotlinx.coroutines.withContext
 
 /** Display name of a backend plan code. The plan itself always comes from `/auth/me`. */
 fun planName(plan: String?): String = when (plan ?: "free") {
-    "free" -> "Free"
+    "free" -> tx("Gratis", "Free")  // as iOS (`PlanLabel`) and the plan catalogue
     "vip" -> "VIP"
     else -> (plan ?: "").replaceFirstChar { it.uppercase() }
 }
@@ -107,7 +108,9 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
         FinanceSection(plan, nav)
         DincrCard {
             Column {
-                NavRow(Icons.Rounded.Star, tx("Mi plan", "My plan"), planName(profile?.plan) + (if (profile?.isCourtesy == true) tx(" · cortesía", " · courtesy") else "")) { nav.open("plans") }
+                // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
+                NavRow(Icons.Rounded.Star, tx("Suscripción", "Subscription"),
+                    if (profile?.role == "owner") "DINCR Owner" else planName(profile?.plan) + (if (profile?.isCourtesy == true) tx(" · cortesía", " · courtesy") else "")) { nav.open("plans") }
                 if (plan == PlanTier.VIP && model.isOn(OpsFlag.GMAIL_AUTOMATION)) {
                     NavRow(Icons.Rounded.Email, tx("Correos financieros", "Financial emails"), tx("Avisos de tu banco para revisar", "Bank notices to review")) { nav.open("mail") }
                     NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Tus bancos, cuentas y movimientos", "Your banks, accounts and transactions")) { nav.open("accounts") }
@@ -235,7 +238,7 @@ fun SecurityScreen(model: AppModel, nav: Navigator) {
     }
 }
 
-/** G3 + store — current plan, change plan (with confirmation) and Google Play subscription. */
+/** G3 + store — Perfil → Suscripción (UX-12): the current Free / Basic / VIP subscription, its change (with confirmation) and Google Play. The Owner is not a subscription: no choice offered. */
 @Composable
 fun PlanSettingsScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
@@ -246,10 +249,21 @@ fun PlanSettingsScreen(model: AppModel, nav: Navigator) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val subscription = profile?.subscription
-    DetailScaffold(tx("Mi plan", "My plan"), nav::back) {
+    DetailScaffold(tx("Suscripción", "Subscription"), nav::back) {
+        // The Owner is not a subscription: internal access, never purchasable or selectable.
+        if (profile?.role == "owner") {
+            DincrCard {
+                Column(Modifier.testTag("subscription.owner"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+                    Text(tx("Acceso", "Access"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
+                    Text("DINCR Owner", style = MaterialTheme.typography.headlineSmall, color = Dincr.colors.text)
+                    Caption(tx("Acceso interno de DINCR: no es una suscripción y no se compra ni se cambia aquí.", "DINCR internal access: it isn’t a subscription and isn’t bought or changed here."))
+                }
+            }
+            return@DetailScaffold
+        }
         DincrCard {
             Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
-                Text(tx("Plan actual", "Current plan"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
+                Text(tx("Suscripción actual", "Current subscription"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
                 Text(subscription?.planName ?: planName(profile?.plan), style = MaterialTheme.typography.headlineSmall, color = Dincr.colors.text)
                 if (profile?.isCourtesy == true) Caption(tx("Acceso de cortesía", "Courtesy access") + (subscription?.expiresAt?.let { tx(" hasta ", " until ") + dateLabel(it) } ?: ""))
                 subscription?.pendingPlan?.let { pending ->
@@ -271,18 +285,18 @@ fun PlanSettingsScreen(model: AppModel, nav: Navigator) {
     confirmPlan?.let { code ->
         val downgrade = PlanTier.from(code).rank < (profile?.planTier ?: PlanTier.FREE).rank
         ConfirmDialog(tx("¿Cambiar a ${planName(code)}?", "Switch to ${planName(code)}?"),
-            if (downgrade) tx("El cambio se aplica al final de tu período actual. Hasta entonces conservás tu plan.", "The change applies at the end of your current period. Until then you keep your plan.")
+            if (downgrade) tx("El cambio se aplica al final de tu período actual. Hasta entonces conservás tu suscripción.", "The change applies at the end of your current period. Until then you keep your subscription.")
             else tx("Tendrás las funciones de ${planName(code)} de inmediato.", "You’ll get ${planName(code)} features right away."),
             tx("Cambiar", "Switch"), destructive = false, busy = busy, onDismiss = { confirmPlan = null }, onConfirm = {
                 busy = true; error = null
                 scope.launch {
-                    model.load(tx("No pudimos cambiar tu plan.", "We couldn’t change your plan.")) { model.api.choosePlan(PlanChangeRequest(code, consentVersion = PLAN_CONSENT_VERSION)) }
+                    model.load(tx("No pudimos cambiar tu suscripción.", "We couldn’t change your subscription.")) { model.api.choosePlan(PlanChangeRequest(code, consentVersion = PLAN_CONSENT_VERSION)) }
                         .onSuccess { result ->
                             (result.profile ?: model.api.me()).let(model::apply)
                             model.showNotice(when (result.status) {
                                 "downgrade_scheduled" -> tx("Cambio programado para el final de tu período.", "Change scheduled for the end of your period.")
-                                "plan_kept" -> tx("Conservás tu plan actual.", "You keep your current plan.")
-                                else -> tx("Plan actualizado", "Plan updated")
+                                "plan_kept" -> tx("Conservás tu suscripción actual.", "You keep your current subscription.")
+                                else -> tx("Suscripción actualizada", "Subscription updated")
                             })
                         }.onFailure { if (it !is AuthException.SignedOut) error = it.message }
                     busy = false; confirmPlan = null
@@ -309,7 +323,7 @@ private fun StoreSubscriptionPanel(model: AppModel) {
     var message by remember { mutableStateOf<String?>(null) }
     Section(tx("Suscripción en Google Play", "Google Play subscription")) {
         LoadContent(offers, rows = 2) { list ->
-            if (list.all { it.details == null }) Caption(tx("Los planes de la tienda no están disponibles en esta versión de la app.", "Store plans aren’t available in this app version."))
+            if (list.all { it.details == null }) Caption(tx("Las suscripciones de la tienda no están disponibles en esta versión de la app.", "Store subscriptions aren’t available in this app version."))
             list.filter { it.details != null }.forEach { offer ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {

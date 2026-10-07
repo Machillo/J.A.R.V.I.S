@@ -122,7 +122,7 @@ private struct GlobalBanners: View {
             }
             if let notice = model.profile?.subscription?.accessNotice, let message = notice.message, hiddenNotice != notice.code {
                 HStack(alignment: .top) {
-                    StatusBanner(tone: .info, title: notice.title ?? tx("Tu plan", "Your plan"), message: message)
+                    StatusBanner(tone: .info, title: notice.title ?? tx("Tu suscripción", "Your subscription"), message: message)
                     Button { hiddenNotice = notice.code } label: { Image(systemName: "xmark") }
                         .accessibilityLabel(tx("Cerrar aviso", "Dismiss notice"))
                         .frame(minWidth: 44, minHeight: 44)
@@ -209,6 +209,6 @@ struct PlanBadge: View {
             .foregroundStyle(vip ? DincrColor.vip : DincrColor.text2)
             .padding(.horizontal, 8).padding(.vertical, 2)
             .background(vip ? DincrColor.vipContainer : DincrColor.surface2, in: Capsule())
-            .accessibilityLabel(tx("Plan \(PlanLabel.name(plan))", "\(PlanLabel.name(plan)) plan"))
+            .accessibilityLabel(tx("Suscripción \(PlanLabel.name(plan))", "\(PlanLabel.name(plan)) subscription"))
     }
 }

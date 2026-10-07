@@ -281,7 +281,7 @@ final class AppModel {
             if let message = result.message, !message.isEmpty { notice = message }
             return nil
         } catch {
-            return message(for: error, epoch: epoch, fallback: language.pick("No pudimos guardar tu plan.", "We couldn’t save your plan."))
+            return message(for: error, epoch: epoch, fallback: language.pick("No pudimos guardar tu suscripción.", "We couldn’t save your subscription."))
         }
     }
 
