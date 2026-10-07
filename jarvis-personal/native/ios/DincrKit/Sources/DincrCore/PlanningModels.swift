@@ -395,13 +395,3 @@ public struct FinancialProfile: Codable, Sendable, Equatable {
         try c.encode(discretionaryMonthlyMinimum, forKey: .discretionaryMonthlyMinimum)
     }
 }
-
-/// The VIP plan priority (`financial_profiles.strategy_preference`), edited in Tu plan del mes →
-/// Ajustes (UX-7). `nil` is "no preference": nothing is stored that the user did not choose. The
-/// codes are exactly the backend's (`debt`, `emergency`, `goals`, `balanced`); same on Android.
-public enum StrategyPreference: String, CaseIterable, Sendable {
-    case debt, emergency, goals, balanced
-
-    /// The choices in display order, "no preference" first.
-    public static let choices: [StrategyPreference?] = [nil] + allCases
-}

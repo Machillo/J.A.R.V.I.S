@@ -383,7 +383,7 @@ class PlanRecoveryUiTest {
         assertTrue("no Situación row in Perfil", !present(tx("Mi situación financiera", "My financial situation")))
     }
 
-    @Test fun vipEditsThePriorityAndMinimumInTuPlanDelMes() {
+    @Test fun vipSeesDincrsRecommendationAndSetsOnlyTheMinimum() {
         launch(plan = "vip")
         home()
         click(tx("Plan", "Plan"))
@@ -400,8 +400,11 @@ class PlanRecoveryUiTest {
         waitForText(tx("Ingresos y base guardados", "Income and base saved"))
         back()
         click(tx("Tu plan del mes", "Your plan for the month"))
+        // UX-8: DINCR's recommendation is shown, and the priority is not a free choice in the settings.
+        waitForText(tx("Recomendación de DINCR", "DINCR’s recommendation"))
         click(tx("Ajustes del plan", "Plan settings"))
-        click(tx("Metas", "Goals"))
+        waitForText(tx("Mínimo personal por mes", "Personal minimum per month"))
+        assertTrue("no priority picker", !present(tx("Sin preferencia", "No preference")) && !present(tx("Equilibrado", "Balanced")))
         click(tx("Guardar", "Save"))
         waitForText(tx("Ajustes guardados", "Settings saved"))
         launch(plan = "basic")
@@ -409,7 +412,8 @@ class PlanRecoveryUiTest {
         click(tx("Plan", "Plan"))
         click(tx("Tu plan del mes", "Your plan for the month"))
         waitForText(tx("Margen para decidir", "Room to decide"))
-        assertTrue("the priority and minimum are VIP", !present(tx("Ajustes del plan", "Plan settings")))
+        waitForText(tx("Recomendación de DINCR", "DINCR’s recommendation"))
+        assertTrue("the settings are VIP", !present(tx("Ajustes del plan", "Plan settings")))
     }
 
     @Test fun basicHomeOpensMovementsWhichShowTheOriginalCurrency() {

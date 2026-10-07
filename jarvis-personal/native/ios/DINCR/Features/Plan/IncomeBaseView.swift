@@ -110,9 +110,9 @@ private struct IncomeBaseForm: View {
     }
 }
 
-/// UX-7 — Tu plan del mes → Ajustes (VIP): the plan priority and the personal minimum per month,
-/// moved from the Situación screen. Same source and endpoint; every other declared field is sent
-/// back exactly as stored. "No preference" stays null (nothing the user did not choose is stored).
+/// UX-7 — Tu plan del mes → Ajustes (VIP): the personal minimum per month, moved from the Situación
+/// screen. UX-8: the priority is DINCR's recommendation (shown in Tu plan del mes), not a free
+/// choice, so it is not edited here; a stored one is sent back unchanged with every other field.
 struct PlanPreferencesView: View {
     @Environment(AppModel.self) private var model
 
@@ -128,7 +128,6 @@ struct PlanPreferencesView: View {
 private struct PlanPreferencesForm: View {
     @Environment(AppModel.self) private var model
     let situation: FinancialSituation
-    @State private var preference = ""
     @State private var minimum = ""
     @State private var save = ProfileSave()
     @State private var loaded = false
@@ -148,13 +147,8 @@ private struct PlanPreferencesForm: View {
                 }
             }
             Section {
-                Picker(tx("Prioridad", "Priority"), selection: $preference) {
-                    ForEach(StrategyPreference.choices, id: \.self) { choice in
-                        Text(Self.label(choice)).tag(choice?.rawValue ?? "")
-                    }
-                }
-                .accessibilityIdentifier("planPreferences.priority")
                 MoneyField(label: tx("Mínimo personal por mes", "Personal minimum per month"), text: $minimum)
+                    .accessibilityIdentifier("planPreferences.minimum")
             } footer: {
                 Text(tx("Dejá vacío el mínimo si no lo sabés: DINCR lo trata como desconocido, no como cero.", "Leave the minimum empty if you don’t know it: DINCR treats it as unknown, not zero."))
             }
@@ -166,18 +160,7 @@ private struct PlanPreferencesForm: View {
         .onAppear {
             guard !loaded else { return }
             loaded = true
-            preference = situation.financialProfile?.strategyPreference ?? ""
             minimum = situation.financialProfile?.discretionaryMonthlyMinimum.map(model.moneyFormat.inputText) ?? ""
-        }
-    }
-
-    static func label(_ choice: StrategyPreference?) -> String {
-        switch choice {
-        case nil: tx("Sin preferencia", "No preference")
-        case .debt: tx("Salir de deudas", "Get out of debt")
-        case .emergency: tx("Fondo de emergencia", "Emergency fund")
-        case .goals: tx("Metas", "Goals")
-        case .balanced: tx("Equilibrado", "Balanced")
         }
     }
 
@@ -186,7 +169,6 @@ private struct PlanPreferencesForm: View {
             save.error = model.moneyFormat.amountHint; return
         }
         var profile = ProfileSave.withDefaults(situation.financialProfile)
-        profile.strategyPreference = preference.isEmpty ? nil : preference
         profile.discretionaryMonthlyMinimum = minimumValue
         await save.run(profile, model: model)
     }
