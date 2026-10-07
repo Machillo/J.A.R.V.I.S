@@ -486,7 +486,17 @@ public actor FixtureBackend: HTTPTransport {
             guard mailConnected else { return error(409, "Conectá tu correo para calcular el aguinaldo.") }
             return ok(["status": "OK", "period": ["start": "2025-12-01", "end": "2026-11-30"], "earned_salary_total": 5_190_000, "accrued_aguinaldo": 432_500])
         case "/user-product/vip/lifecycle/monthly-review":
-            return ok(["status": "BASELINE", "period": String(day(0).prefix(7)), "headline": "Tu primer mes con DINCR", "summary": "Todavía no hay suficiente historia para comparar."])
+            guard scenario == .populated else {
+                return ok(["status": "BASELINE", "period": String(day(0).prefix(7)), "headline": "Tu primer mes con DINCR", "summary": "Todavía no hay suficiente historia para comparar."])
+            }
+            // The backend's scorecard includes the health score; the app leaves that line out (K-2).
+            return ok(["status": "OK", "period": String(day(0).prefix(7)), "headline": "Hubo progreso, con áreas que DINCR debe reajustar.",
+                       "summary": "2 indicadores mejoraron y 1 se desvió.",
+                       "scorecard": [["key": "debt_total", "label": "Deuda total", "unit": "CRC", "current": 810_000, "baseline": 900_000, "delta": -90_000, "trend": "improved"],
+                                     ["key": "emergency_coverage_months", "label": "Cobertura de emergencia", "unit": "months", "current": 1, "baseline": 1, "delta": 0, "trend": "unchanged"],
+                                     ["key": "health_score", "label": "Salud financiera", "unit": "points", "current": 72, "baseline": 66, "delta": 6, "trend": "improved"],
+                                     ["key": "net_operational", "label": "Flujo operativo", "unit": "CRC", "current": 180_000, "baseline": 214_000, "delta": -34_000, "trend": "declined"]],
+                       "next_month": ["priority": "debt", "title": "Pagá extra a la tarjeta", "amount": 40_000, "rationale": "Tiene la tasa más alta."]])
         case "/user-product/vip/lifecycle/proactive-advisor":
             return ok(["status": "BASELINE", "as_of": day(0), "alerts": [Any](), "message": "DINCR necesita unos días de historia para avisarte de cambios."])
         default: return error(404, "Not Found")

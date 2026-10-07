@@ -461,7 +461,14 @@ class FakeBackend(
         "/user-product/finance/strategy-vip" -> store?.let { ok(it.engine("strategy_vip")) } ?: ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
         "/user-product/finance/strategy-vip/simulate" -> ok(ScenarioResult(strategy(), strategy().copy(strategicMargin = BigDecimal(260000)), ScenarioResult.Delta(BigDecimal(46000), BigDecimal(50000), BigDecimal(4000))))
         "/user-product/vip/aguinaldo" -> if (!mailConnected) error(409, "Conectá tu correo para calcular el aguinaldo.") else ok(Aguinaldo("OK", Aguinaldo.Period("${today.year - 1}-12-01", "${today.year}-11-30"), BigDecimal(5_190_000), BigDecimal(432_500)))
-        "/user-product/vip/lifecycle/monthly-review" -> ok(MonthlyReview("BASELINE", today.toString().take(7), "Tu primer mes con DINCR", "Todavía no hay suficiente historia para comparar."))
+        "/user-product/vip/lifecycle/monthly-review" -> if (scenario != Scenario.POPULATED) ok(MonthlyReview("BASELINE", today.toString().take(7), "Tu primer mes con DINCR", "Todavía no hay suficiente historia para comparar."))
+        // The backend's scorecard includes the health score; the app leaves that line out (K-2).
+        else ok(MonthlyReview("OK", today.toString().take(7), "Hubo progreso, con áreas que DINCR debe reajustar.", "2 indicadores mejoraron y 1 se desvió.",
+            listOf(MonthlyReview.ScoreLine("debt_total", "Deuda total", "CRC", 810000.0, 900000.0, -90000.0, "improved"),
+                MonthlyReview.ScoreLine("emergency_coverage_months", "Cobertura de emergencia", "months", 1.0, 1.0, 0.0, "unchanged"),
+                MonthlyReview.ScoreLine(MonthlyReview.HEALTH_SCORE_KEY, "Salud financiera", "points", 72.0, 66.0, 6.0, "improved"),
+                MonthlyReview.ScoreLine("net_operational", "Flujo operativo", "CRC", 180000.0, 214000.0, -34000.0, "declined")),
+            nextMonth = MonthlyReview.NextMonth("debt", "Pagá extra a la tarjeta", BigDecimal(40000), "Tiene la tasa más alta.")))
         "/user-product/vip/lifecycle/proactive-advisor" -> ok(ProactiveAdvisor("BASELINE", today.toString(), emptyList(), "DINCR necesita unos días de historia para avisarte de cambios."))
         else -> error(404, "Not Found")
     }

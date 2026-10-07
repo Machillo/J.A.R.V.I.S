@@ -159,8 +159,8 @@ fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
             else {
                 r.headline?.let { Text(it, style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text) }
                 r.summary?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text2) }
-                if (r.scorecard.isNotEmpty()) Section(tx("Indicadores", "Indicators")) {
-                    r.scorecard.forEach { line ->
+                if (r.publicScorecard.isNotEmpty()) Section(tx("Indicadores", "Indicators")) {
+                    r.publicScorecard.forEach { line ->
                         val trend = when (line.trend) { "improved" -> tx("mejoró", "improved"); "declined" -> tx("empeoró", "declined"); else -> tx("igual", "unchanged") }
                         val explanation = line.explanation
                         if (explanation != null) InfoLine(line.label.orEmpty(), explanation)
