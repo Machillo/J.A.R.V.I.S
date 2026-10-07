@@ -19,12 +19,13 @@ final class JarvisAccessUITests: XCTestCase {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
-    func testOwnerGetsJarvisOnTopOfDincr() {
+    func testOwnerGetsJarvisWithTheFiveFinalTabs() {
         let app = launch(role: "owner")
         let entry = element("profile.jarvis", in: app)
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
-        // The Owner keeps DINCR: every tab, and VIP screens such as the Email Monitor.
-        for tab in ["Hoy", "Movimientos", "Plan", "DINCR", "Perfil"] { XCTAssertTrue(app.tabBars.buttons[tab].exists, tab) }
+        // UX-13: the Owner has the five final tabs (no DINCR tab), VIP screens such as the Email Monitor, and JARVIS in Perfil.
+        for tab in ["Hoy", "Movimientos", "Plan", "Patrimonio", "Perfil"] { XCTAssertTrue(app.tabBars.buttons[tab].exists, tab) }
+        XCTAssertFalse(app.tabBars.buttons["DINCR"].exists)
         XCTAssertTrue(element("profile.mail", in: app).exists)
         entry.tap()
         let memory = element("jarvis.section.memory", in: app)

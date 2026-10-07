@@ -41,7 +41,8 @@
   "P-1",
   "UX-7",
   "UX-9",
-  "UX-12"
+  "UX-12",
+  "UX-13"
  ],
  "fixtures": {
   "ios": {
@@ -137,24 +138,23 @@
    }
   },
   {
-   "id": "tab.advisor",
-   "name": "Pestaña DINCR",
-   "decision": "baseline-81fd2cc4",
+   "id": "tab.wealth",
+   "name": "Pestaña Patrimonio (UX-13: replaces the DINCR tab)",
+   "decision": "UX-13",
    "plans": {
     "free": "AVAILABLE",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6.2/P6.3 redistribute tabs (Hoy, Movimientos, Plan, Patrimonio, Perfil)",
    "backend": [],
    "ios": {
-    "tab_button": "DINCR"
+    "tab_button": "Patrimonio"
    },
    "android": {
-    "tab_button": "DINCR",
+    "tab_button": "Patrimonio",
     "en": {
-     "tab_button": "DINCR"
+     "tab_button": "Wealth"
     }
    }
   },
@@ -582,16 +582,15 @@
    }
   },
   {
-   "id": "advisor.summary",
-   "name": "DINCR → Resumen del mes",
-   "decision": "baseline-81fd2cc4",
+   "id": "analysis.summary",
+   "name": "Movimientos → Análisis → Resumen del mes (UX-13)",
+   "decision": "UX-13",
    "plans": {
     "free": "AVAILABLE",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6: Movimientos → Análisis",
    "backend": [
     {
      "method": "GET",
@@ -605,29 +604,37 @@
     }
    ],
    "ios": {
-    "tab": "advisor",
-    "id": "advisor.summary"
+    "tab": "movements",
+    "via": [
+     "movements.analysis"
+    ],
+    "id": "analysis.summary"
    },
    "android": {
-    "tab": "DINCR",
+    "tab": "Movimientos",
+    "via": [
+     "Análisis"
+    ],
     "text": "Resumen del mes",
     "en": {
-     "tab": "DINCR",
+     "tab": "Transactions",
+     "via": [
+      "Analysis"
+     ],
      "text": "Monthly summary"
     }
    }
   },
   {
-   "id": "advisor.reports",
-   "name": "DINCR → Reportes",
-   "decision": "baseline-81fd2cc4",
+   "id": "analysis.reports",
+   "name": "Movimientos → Análisis → Reportes (UX-13)",
+   "decision": "UX-13",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6.4: Free VISIBLE_LOCKED on both platforms",
    "backend": [
     {
      "method": "GET",
@@ -640,45 +647,40 @@
     }
    ],
    "ios": {
-    "tab": "advisor",
-    "id": "advisor.reports"
+    "tab": "movements",
+    "via": [
+     "movements.analysis"
+    ],
+    "id": "analysis.reports",
+    "locked_label": "Disponible desde Basic"
    },
    "android": {
-    "tab": "DINCR",
+    "tab": "Movimientos",
+    "via": [
+     "Análisis"
+    ],
     "text": "Reportes",
     "locked_text": "Disponible desde Basic",
     "en": {
-     "tab": "DINCR",
+     "tab": "Transactions",
+     "via": [
+      "Analysis"
+     ],
      "text": "Reports",
      "locked_text": "Available from Basic"
     }
-   },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides Reports for Free; Android shows it locked",
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "ios",
-     "reason": "iOS omits the Reports row below Basic instead of showing it locked (Android shows it locked)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+   }
   },
   {
-   "id": "advisor.today",
-   "name": "DINCR → DINCR hoy",
-   "decision": "baseline-81fd2cc4",
+   "id": "home.attention",
+   "name": "Hoy → Para atender / Ver todas (UX-13: replaces DINCR hoy)",
+   "decision": "UX-13",
    "plans": {
     "free": "HIDDEN_BY_PLAN",
     "basic": "HIDDEN_BY_PLAN",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
    "backend": [
     {
      "method": "GET",
@@ -690,52 +692,54 @@
     }
    ],
    "ios": {
-    "tab": "advisor",
-    "id": "advisor.today"
+    "tab": "home",
+    "id": "home.attention",
+    "owner_id": "owner.home.attention"
    },
    "android": {
-    "tab": "DINCR",
-    "text": "DINCR hoy",
-    "locked_text": "Director financiero",
+    "tab": "Hoy",
+    "tag": "home.attention",
     "en": {
-     "tab": "DINCR",
-     "text": "DINCR today",
-     "locked_text": "Financial director"
+     "tab": "Today"
     }
    },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED",
-     "basic": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
    "transitional_hidden": [
     {
      "plan": "free",
      "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "reason": "Hoy's Para atender (the proactive advisor, formerly DINCR hoy) is VIP; below VIP Hoy shows no locked entry for it",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "free",
+     "platform": "android",
+     "reason": "Hoy's Para atender (the proactive advisor, formerly DINCR hoy) is VIP; below VIP Hoy shows no locked entry for it",
      "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
     },
     {
      "plan": "basic",
      "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "reason": "Hoy's Para atender (the proactive advisor, formerly DINCR hoy) is VIP; below VIP Hoy shows no locked entry for it",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "basic",
+     "platform": "android",
+     "reason": "Hoy's Para atender (the proactive advisor, formerly DINCR hoy) is VIP; below VIP Hoy shows no locked entry for it",
      "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
     }
    ]
   },
   {
-   "id": "advisor.projections",
-   "name": "DINCR → Proyecciones",
-   "decision": "baseline-81fd2cc4",
+   "id": "wealth.projections",
+   "name": "Patrimonio → Proyecciones (UX-13)",
+   "decision": "UX-13",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
-    "basic": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
    "backend": [
     {
      "method": "GET",
@@ -747,52 +751,31 @@
     }
    ],
    "ios": {
-    "tab": "advisor",
-    "id": "advisor.projections"
+    "tab": "wealth",
+    "id": "wealth.projections",
+    "locked_label": "Disponible desde VIP"
    },
    "android": {
-    "tab": "DINCR",
+    "tab": "Patrimonio",
     "text": "Proyecciones",
-    "locked_text": "Director financiero",
+    "locked_text": "Disponible desde VIP",
     "en": {
-     "tab": "DINCR",
+     "tab": "Wealth",
      "text": "Projections",
-     "locked_text": "Financial director"
+     "locked_text": "Available from VIP"
     }
-   },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED",
-     "basic": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    },
-    {
-     "plan": "basic",
-     "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+   }
   },
   {
-   "id": "advisor.scenarios",
-   "name": "DINCR → Escenarios",
-   "decision": "baseline-81fd2cc4",
+   "id": "wealth.scenarios",
+   "name": "Patrimonio → Escenarios (UX-13)",
+   "decision": "UX-13",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
-    "basic": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
    "backend": [
     {
      "method": "POST",
@@ -804,52 +787,31 @@
     }
    ],
    "ios": {
-    "tab": "advisor",
-    "id": "advisor.scenarios"
+    "tab": "wealth",
+    "id": "wealth.scenarios",
+    "locked_label": "Disponible desde VIP"
    },
    "android": {
-    "tab": "DINCR",
+    "tab": "Patrimonio",
     "text": "Escenarios",
-    "locked_text": "Director financiero",
+    "locked_text": "Disponible desde VIP",
     "en": {
-     "tab": "DINCR",
+     "tab": "Wealth",
      "text": "Scenarios",
-     "locked_text": "Financial director"
+     "locked_text": "Available from VIP"
     }
-   },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED",
-     "basic": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    },
-    {
-     "plan": "basic",
-     "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+   }
   },
   {
-   "id": "advisor.review",
-   "name": "DINCR → Revisión mensual",
-   "decision": "baseline-81fd2cc4",
+   "id": "analysis.review",
+   "name": "Movimientos → Análisis → Revisión del mes (UX-13)",
+   "decision": "UX-13",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
-    "basic": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
    "backend": [
     {
      "method": "GET",
@@ -861,40 +823,29 @@
     }
    ],
    "ios": {
-    "tab": "advisor",
-    "id": "advisor.review"
+    "tab": "movements",
+    "via": [
+     "movements.analysis"
+    ],
+    "id": "analysis.review",
+    "locked_label": "Disponible desde VIP"
    },
    "android": {
-    "tab": "DINCR",
-    "text": "Revisión mensual",
-    "locked_text": "Director financiero",
+    "tab": "Movimientos",
+    "via": [
+     "Análisis"
+    ],
+    "text": "Revisión del mes",
+    "locked_text": "Disponible desde VIP",
     "en": {
-     "tab": "DINCR",
+     "tab": "Transactions",
+     "via": [
+      "Analysis"
+     ],
      "text": "Monthly review",
-     "locked_text": "Financial director"
+     "locked_text": "Available from VIP"
     }
-   },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED",
-     "basic": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    },
-    {
-     "plan": "basic",
-     "platform": "ios",
-     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+   }
   },
   {
    "id": "profile.subscription",

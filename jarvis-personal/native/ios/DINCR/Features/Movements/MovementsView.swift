@@ -40,6 +40,11 @@ struct MovementsView: View {
                 .listRowInsets(EdgeInsets())
                 .sensoryFeedback(.selection, trigger: filter)
             }
+            // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
+            Section {
+                NavigationLink { AnalysisHubView() } label: { Label(tx("Análisis", "Analysis"), systemImage: "chart.bar.doc.horizontal") }
+                    .accessibilityIdentifier("movements.analysis")
+            }
             if let status {
                 Section {
                     Label(status, systemImage: "checkmark.circle")

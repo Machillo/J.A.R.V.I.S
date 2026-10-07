@@ -4,14 +4,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Insights
-import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Summarize
 import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,7 +22,6 @@ import com.dincr.app.tx
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.Feature
-import com.dincr.data.MessageKind
 import com.dincr.data.MoneyFormat
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
@@ -33,7 +30,6 @@ import com.dincr.data.ScenarioResult
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
-import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.StatusBanner
@@ -48,39 +44,62 @@ fun FinancialDisclaimer() {
         "DINCR guides you with your data; it is not financial, legal or tax advice. Check important decisions with a professional."))
 }
 
-/** F1 — the DINCR tab: Free → monthly summary; Basic → strategy; VIP → the director's tools. */
+/**
+ * UX-13 — Movimientos → Análisis: the monthly summary (every plan), reports (Basic+, paused with
+ * `advanced_reports`) and the monthly review (VIP, paused with `vip_intelligence`). The same screens
+ * the retired DINCR tab opened; below its plan a row stays visible, locked, and opens Suscripción.
+ */
 @Composable
-fun AdvisorHubScreen(model: AppModel, nav: Navigator) {
+fun AnalysisScreen(model: AppModel, nav: Navigator) {
+    val profile by model.profile.collectAsStateWithLifecycle()
+    val plan = profile?.planTier ?: PlanTier.FREE
+    val vipOn = model.isOn(OpsFlag.VIP_INTELLIGENCE)
+    DetailScaffold(tx("Análisis", "Analysis"), nav::back) {
+        if (plan == PlanTier.VIP && !vipOn) FeaturePaused(model, OpsFlag.VIP_INTELLIGENCE)
+        DincrCard {
+            Column {
+                NavRow(Icons.Rounded.Summarize, tx("Resumen del mes", "Monthly summary"), tx("Ingresos, gastos y metas por mes", "Income, expenses and goals by month")) { nav.open("monthly") }
+                if (plan.allows(Feature.BASIC_REPORTS)) {
+                    if (model.isOn(OpsFlag.ADVANCED_REPORTS)) NavRow(Icons.Rounded.QueryStats, tx("Reportes", "Reports"), tx("Tu mes comparado con el anterior", "Your month vs the previous one")) { nav.open("reports") }
+                } else LockedRow(Icons.Rounded.QueryStats, tx("Reportes", "Reports"), PlanTier.BASIC, nav)
+                if (plan != PlanTier.VIP) LockedRow(Icons.Rounded.Insights, tx("Revisión del mes", "Monthly review"), PlanTier.VIP, nav)
+                else if (vipOn) NavRow(Icons.Rounded.Insights, tx("Revisión del mes", "Monthly review"), tx("Qué cambió y qué sigue", "What changed and what’s next")) { nav.open("review") }
+            }
+        }
+    }
+}
+
+/**
+ * UX-13 — the Patrimonio tab: projections and scenarios (VIP, paused with `vip_intelligence`), the
+ * same screens the retired DINCR tab opened. Only what UX-13 needs: no new figure or calculation.
+ */
+@Composable
+fun WealthScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val plan = profile?.planTier ?: PlanTier.FREE
     val vipOn = model.isOn(OpsFlag.VIP_INTELLIGENCE)
     ScreenColumn {
-        Text("DINCR", style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
-        DincrCard {
-            Column {
-                NavRow(Icons.Rounded.Summarize, tx("Resumen del mes", "Monthly summary"), tx("Ingresos, gastos y metas por mes", "Income, expenses and goals by month")) { nav.open("monthly") }
-                // Estrategia lives in the Plan tab (with Salvavidas and the money distribution).
-                if (plan.allows(Feature.BASIC_REPORTS)) {
-                    if (model.isOn(OpsFlag.ADVANCED_REPORTS)) NavRow(Icons.Rounded.QueryStats, tx("Reportes", "Reports"), tx("Tu mes comparado con el anterior", "Your month vs the previous one")) { nav.open("reports") }
-                } else {
-                    NavRow(Icons.Rounded.QueryStats, tx("Reportes", "Reports"), tx("Disponible desde Basic", "Available from Basic"), badge = "Basic") { nav.open("plans") }
-                }
-            }
-        }
+        Text(tx("Patrimonio", "Wealth"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
         if (plan == PlanTier.VIP && !vipOn) FeaturePaused(model, OpsFlag.VIP_INTELLIGENCE)
         DincrCard {
             Column {
-                if (plan == PlanTier.VIP && vipOn) {
-                    NavRow(Icons.Rounded.NotificationsActive, tx("DINCR hoy", "DINCR today"), tx("Avisos sobre cambios en tus finanzas", "Alerts about changes in your finances")) { nav.open("today") }
+                if (plan != PlanTier.VIP) {
+                    LockedRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), PlanTier.VIP, nav)
+                    LockedRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), PlanTier.VIP, nav)
+                } else if (vipOn) {
                     NavRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), tx("Cómo se ven tus finanzas en 1 a 12 meses", "Your finances in 1 to 12 months")) { nav.open("projections") }
                     NavRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), tx("¿Qué pasa si gano o gasto más?", "What if I earn or spend more?")) { nav.open("scenarios") }
-                    NavRow(Icons.Rounded.Insights, tx("Revisión mensual", "Monthly review"), tx("Qué cambió y qué sigue", "What changed and what’s next")) { nav.open("review") }
-                } else if (plan != PlanTier.VIP) {
-                    NavRow(Icons.Rounded.Timeline, tx("Director financiero", "Financial director"), tx("Proyecciones, escenarios y revisión mensual", "Projections, scenarios and monthly review"), badge = "VIP") { nav.open("plans") }
                 }
             }
         }
     }
+}
+
+/** Below its plan an entry stays visible, locked, and opens Suscripción (as the Plan tab's rows). */
+@Composable
+private fun LockedRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, minimum: PlanTier, nav: Navigator) {
+    val name = if (minimum == PlanTier.VIP) "VIP" else "Basic"
+    NavRow(icon, title, tx("Disponible desde $name", "Available from $name"), badge = name) { nav.open("plans") }
 }
 
 /** F6 — VIP scenarios: what if (never saved). */
@@ -154,42 +173,6 @@ fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
                     next.title?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text) }
                     next.amount?.takeIf { it.signum() > 0 }?.let { AmountLine(tx("Monto", "Amount"), it) }
                     next.rationale?.let { Caption(it) }
-                }
-            }
-        }
-        FinancialDisclaimer()
-    }
-}
-
-/** F9 — VIP proactive advisor ("DINCR hoy"). */
-@Composable
-fun TodayScreen(model: AppModel, nav: Navigator) {
-    val today = rememberLoad(model) { model.api.dincrToday() }
-    DetailScaffold(tx("DINCR hoy", "DINCR today"), nav::back) {
-        LoadContent(today) { t ->
-            val a = t.advisor
-            when {
-                t.isBaseline -> {
-                    // No earlier observation yet: changes can't be compared, but the current situation is known.
-                    StatusBanner(BannerTone.INFO, tx("Aprendiendo tu punto de partida", "Learning your starting point"), a.message ?: tx("DINCR necesita unos días de historia para avisarte de cambios.", "DINCR needs a few days of history to alert you about changes."))
-                    val current = t.currentAlerts.orEmpty()
-                    if (current.isNotEmpty()) {
-                        SectionTitle(tx("Tu situación actual", "Your current situation"))
-                        current.forEach { alert ->
-                            DincrMessage(MessageKind.financial(alert.severity), alert.title.orEmpty(), listOfNotNull(alert.context, alert.action).filter { it.isNotBlank() }.joinToString(" "))
-                        }
-                    } else if (t.currentAlerts != null) {
-                        EmptyState(Icons.Rounded.NotificationsActive, tx("Nada urgente hoy", "Nothing urgent today"), tx("Tu situación actual no tiene avisos.", "Your current situation has no alerts."))
-                    }
-                }
-                a.alerts.isEmpty() -> EmptyState(Icons.Rounded.NotificationsActive, tx("Todo en orden", "All good"), a.message ?: tx("No hay cambios que requieran tu atención.", "Nothing needs your attention."))
-                else -> a.alerts.forEach { alert ->
-                    DincrMessage(MessageKind.financial(alert.severity), alert.title.orEmpty(), alert.explanation.orEmpty())
-                    alert.action?.let { action ->
-                        val route = when (action.route?.trim('/')) { "debts" -> "debts"; "goals" -> "goals"; "budget" -> "budget"; "finance", "movements" -> "movements"; "situation" -> "incomeBase"; else -> null }
-                        val label = action.label
-                        if (route != null && label != null) TextButton({ nav.open(route) }) { Text(label, color = Dincr.colors.tint) }
-                    }
                 }
             }
         }

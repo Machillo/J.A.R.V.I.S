@@ -62,11 +62,12 @@ class JarvisAccessUiTest {
         waitForText(tx("Ajustes de cuenta", "Account settings"))
     }
 
-    @Test fun ownerGetsJarvisOnTopOfDincr() {
+    @Test fun ownerGetsJarvisWithTheFiveFinalTabs() {
         launch(role = "owner")
         openProfile()
-        // The Owner keeps DINCR: every tab, and VIP screens such as the financial emails.
-        listOf(tx("Hoy", "Today"), tx("Movimientos", "Transactions"), "Plan", "DINCR", tx("Perfil", "Profile")).forEach { assertTrue(it, present(it)) }
+        // UX-13: the Owner has the five final tabs (no DINCR tab), VIP screens such as the financial emails, and JARVIS in Perfil.
+        listOf(tx("Hoy", "Today"), tx("Movimientos", "Transactions"), "Plan", tx("Patrimonio", "Wealth"), tx("Perfil", "Profile")).forEach { assertTrue(it, present(it)) }
+        assertTrue("no DINCR tab", !present("DINCR"))
         assertTrue(present(tx("Correos financieros", "Financial emails")))
         click("JARVIS")
         assertTrue(present(tx("Chat", "Chat")))

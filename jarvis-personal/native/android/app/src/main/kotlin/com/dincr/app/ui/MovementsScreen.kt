@@ -121,7 +121,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
-                            TextButton({ nav.open("monthly") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Resumen del mes", "Monthly summary"), color = Dincr.colors.tint) }
+                            // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
+                            TextButton({ nav.open("analysis") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.analysis")) { Text(tx("Análisis", "Analysis"), color = Dincr.colors.tint) }
                             if (filter == MovementFilter.DEBT) TextButton({ nav.open("debts") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Gestionar deudas", "Manage debts"), color = Dincr.colors.tint) }
                         }
                     }
