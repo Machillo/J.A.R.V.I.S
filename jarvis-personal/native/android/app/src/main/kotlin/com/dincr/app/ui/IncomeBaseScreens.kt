@@ -17,7 +17,6 @@ import com.dincr.data.FinancialProfile
 import com.dincr.data.FinancialSituation
 import com.dincr.data.IdempotencyKey
 import com.dincr.data.SituationDefaults
-import com.dincr.data.StrategyPreference
 import com.dincr.data.WholeNumberInput
 import com.dincr.design.Dincr
 import com.dincr.design.DincrPrimaryButton
@@ -98,9 +97,10 @@ private fun IncomeBaseForm(model: AppModel, current: FinancialProfile?, observed
 }
 
 /**
- * UX-7 — Tu plan del mes → Ajustes (VIP): the plan priority and the personal minimum per month,
- * moved from the Situación screen. Same source and endpoint; every other declared field is sent
- * back exactly as stored. "No preference" stays null. iOS twin: `PlanPreferencesView`.
+ * UX-7 — Tu plan del mes → Ajustes (VIP): the personal minimum per month, moved from the Situación
+ * screen. UX-8: the priority is DINCR's recommendation (shown in Tu plan del mes), not a free
+ * choice, so it is not edited here; a stored one is sent back unchanged with every other field.
+ * iOS twin: `PlanPreferencesView`.
  */
 @Composable
 fun PlanPreferencesScreen(model: AppModel, nav: Navigator) {
@@ -113,7 +113,6 @@ fun PlanPreferencesScreen(model: AppModel, nav: Navigator) {
 @Composable
 private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: FinancialProfile?, onSaved: (FinancialSituation) -> Unit) {
     val format = Dincr.money
-    var preference by remember { mutableStateOf(current?.strategyPreference.orEmpty()) }
     var minimum by remember { mutableStateOf(current?.discretionaryMonthlyMinimum?.let(format::inputText).orEmpty()) }
     var minimumError by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -123,8 +122,7 @@ private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: Financ
     // the settings say where to declare it (the old Situación form asked for it on the same page).
     val incomeDeclared = incomeDeclared(current)
     if (!incomeDeclared) DeclareIncomeFirst(tx("Primero declará tu ingreso: tus ajustes se guardan junto con él.", "Declare your income first: your settings are saved with it."), nav)
-    Section(tx("Prioridad", "Priority")) {
-        ChoiceChips(StrategyPreference.choices.map { (it?.code ?: "") to preferenceLabel(it) }, preference, { preference = it })
+    Section(tx("Mínimo personal", "Personal minimum")) {
         MoneyField(tx("Mínimo personal por mes", "Personal minimum per month"), minimum, { minimum = it }, minimumError)
         Caption(tx("Dejá vacío el mínimo si no lo sabés: DINCR lo trata como desconocido, no como cero.", "Leave the minimum empty if you don’t know it: DINCR treats it as unknown, not zero."))
     }
@@ -133,10 +131,7 @@ private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: Financ
         val minimumValue = if (minimum.isBlank()) null else AmountInput.parseZeroOrMore(minimum, format.separators)
         minimumError = if (minimum.isNotBlank() && minimumValue == null) tx("Monto no válido.", "Not a valid amount.") else null
         if (minimumError != null) return@DincrPrimaryButton
-        val request = withDefaults(current).copy(
-            strategyPreference = preference.ifEmpty { null },
-            discretionaryMonthlyMinimum = minimumValue,
-        )
+        val request = withDefaults(current).copy(discretionaryMonthlyMinimum = minimumValue)
         saving = true; error = null
         val key = IdempotencyKey.new()
         scope.launch {
@@ -148,13 +143,6 @@ private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: Financ
     }, modifier = Modifier.testTag("planPreferences.save"))
 }
 
-private fun preferenceLabel(choice: StrategyPreference?): String = when (choice) {
-    null -> tx("Sin preferencia", "No preference")
-    StrategyPreference.DEBT -> tx("Salir de deudas", "Get out of debt")
-    StrategyPreference.EMERGENCY -> tx("Fondo de emergencia", "Emergency fund")
-    StrategyPreference.GOALS -> tx("Metas", "Goals")
-    StrategyPreference.BALANCED -> tx("Equilibrado", "Balanced")
-}
 
 /**
  * UX-7 — Metas y ahorros → Tus ahorros: the declared available savings and the emergency-fund

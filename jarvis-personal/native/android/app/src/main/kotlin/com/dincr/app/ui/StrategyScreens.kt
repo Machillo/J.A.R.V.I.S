@@ -46,6 +46,7 @@ import com.dincr.design.BannerTone
 import com.dincr.design.CompositionDonut
 import com.dincr.design.Dincr
 import com.dincr.data.PlanTier
+import com.dincr.data.RecommendedPriority
 import com.dincr.design.DincrCard
 import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
@@ -122,8 +123,8 @@ fun StrategyScreen(model: AppModel, nav: Navigator) {
         }
         val profile by model.profile.collectAsStateWithLifecycle()
         if (profile?.planTier == PlanTier.VIP) Box(Modifier.testTag("plan.month.preferences")) {
-            // UX-7: the plan priority and personal minimum (moved from the Situación screen).
-            DincrCard { NavRow(Icons.Rounded.Tune, tx("Ajustes del plan", "Plan settings"), tx("Prioridad y mínimo personal", "Priority and personal minimum")) { nav.open("planPreferences") } }
+            // UX-7: the personal minimum (UX-8: the priority is DINCR's recommendation, not a setting).
+            DincrCard { NavRow(Icons.Rounded.Tune, tx("Ajustes del plan", "Plan settings"), tx("Mínimo personal por mes", "Personal minimum per month")) { nav.open("planPreferences") } }
         }
         FinancialDisclaimer()
     }
@@ -135,7 +136,10 @@ private fun BasicMonthPlan(s: Strategy, nav: Navigator) {
     if (plan.needsIncome) { NeedsIncome(s.recommendation, nav); return }
     if (plan.usesObservedIncome) ObservedIncomeNote()
     if (plan.isCritical) DincrMessage(MessageKind.ATTENTION, tx("Tus compromisos superan tus ingresos", "Your commitments exceed your income"), plan.criticalDetail.orEmpty())
-    MonthPlanSummary(plan, tx("Margen para decidir", "Room to decide"), "strategy.basic")
+    // UX-8: DINCR's recommended priority and why (the Basic engine's own; Free has no strategy).
+    val recommended = RecommendedPriority.of(s)
+    MonthPlanSummary(plan, tx("Margen para decidir", "Room to decide"), "strategy.basic", showsHeadline = recommended == null)
+    recommended?.let { RecommendedPriorityCard(it) }
     MonthPlanSplit(plan)
     // Cautions stay in sight, never behind "¿Por qué?".
     s.warnings.takeIf { it.isNotEmpty() }?.let { warnings -> Section(tx("Tené en cuenta", "Keep in mind")) { warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) } } }
@@ -168,7 +172,10 @@ private fun DirectorMonthPlan(s: DirectorStrategy, plan: MonthPlan, nav: Navigat
     if (plan.needsIncome) { NeedsIncome(s.objective, nav); return }
     if (s.incomePolicy?.source in ESTIMATED_INCOME) ObservedIncomeNote()
     if (plan.isCritical) DincrMessage(MessageKind.ATTENTION, tx("Este mes no hay sobrante real", "No real surplus this month"), plan.criticalDetail.orEmpty())
-    MonthPlanSummary(plan, tx("Sobrante para repartir", "Surplus to allocate"), "strategy.director.${s.scope}")
+    // UX-8: DINCR's recommended priority and why (the dashboard's own).
+    val recommended = RecommendedPriority.of(s)
+    MonthPlanSummary(plan, tx("Sobrante para repartir", "Surplus to allocate"), "strategy.director.${s.scope}", showsHeadline = recommended == null)
+    recommended?.let { RecommendedPriorityCard(it) }
     MonthPlanSplit(plan)
     // VIP (Users): Basic's cautions, and the way to complete a missing debt rate.
     s.warnings.takeIf { it.isNotEmpty() }?.let { warnings -> Section(tx("Tené en cuenta", "Keep in mind")) { warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) } } }
@@ -228,12 +235,28 @@ private fun DirectorMonthPlan(s: DirectorStrategy, plan: MonthPlan, nav: Navigat
 
 /** The result first: the amount DINCR plans with and, in one sentence, what it recommends. */
 @Composable
-private fun MonthPlanSummary(plan: MonthPlan, label: String, tag: String) {
+private fun MonthPlanSummary(plan: MonthPlan, label: String, tag: String, showsHeadline: Boolean = true) {
     DincrCard {
         Column(Modifier.testTag(tag), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
             Text(label, style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
             MoneyText(plan.base, style = MaterialTheme.typography.displaySmall)
-            plan.summaryHeadline?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text) }
+            // The headline says the same as the recommended priority, so it is left out when that is shown.
+            if (showsHeadline) plan.summaryHeadline?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text) }
+        }
+    }
+}
+
+/**
+ * UX-8 — "Recomendación de DINCR": the priority the engine already recommends and why. It is not a
+ * setting: the engines name one priority and no other option, so there is nothing to change here.
+ */
+@Composable
+private fun RecommendedPriorityCard(priority: RecommendedPriority) {
+    DincrCard {
+        Column(Modifier.testTag("plan.month.recommendedPriority").semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+            Text(tx("Recomendación de DINCR", "DINCR’s recommendation"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
+            Text(priority.title, style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text)
+            priority.why?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
         }
     }
 }

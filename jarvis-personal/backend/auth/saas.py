@@ -305,8 +305,7 @@ def complete_onboarding(payload):
             raise HTTPException(status_code=422, detail="Indicá cuánto te pagan por hora y cuántas horas trabajás normalmente por día.")
         if subscription_plan in {"basic","vip"} and payload.essential_monthly_expenses is None:
             raise HTTPException(status_code=422, detail="Basic/VIP requiere un estimado de gastos esenciales.")
-        if subscription_plan == "vip" and not payload.strategy_preference:
-            raise HTTPException(status_code=422, detail="VIP requiere una prioridad estratégica inicial.")
+        # UX-8: VIP never has to choose a priority to start; none stored means DINCR's recommendation.
         conn.execute(
             """INSERT INTO financial_profiles(account_id,workspace_id,income_type,fixed_monthly_salary,hourly_rate,work_days_per_week,hours_per_day,pay_frequency,payday_note,essential_monthly_expenses,liquid_savings,emergency_fund_target,strategy_preference,discretionary_monthly_minimum,created_at,updated_at)
                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())

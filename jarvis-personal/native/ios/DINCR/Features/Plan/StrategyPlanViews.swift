@@ -16,10 +16,10 @@ struct PlanStrategyView: View {
                 MonthPlanContent(strategy: strategy)
             }
             if model.planTier == .vip {
-                // UX-7: the plan priority and personal minimum (moved from the Situación screen).
+                // UX-7: the personal minimum (UX-8: the priority is DINCR's recommendation, not a setting).
                 NavigationLink { PlanPreferencesView() } label: {
                     HubRow(symbol: "slider.horizontal.3", title: tx("Ajustes del plan", "Plan settings"),
-                           subtitle: tx("Prioridad y mínimo personal", "Priority and personal minimum"))
+                           subtitle: tx("Mínimo personal por mes", "Personal minimum per month"))
                 }
                 .buttonStyle(.plain)
                 .dincrCard(padding: DincrSpacing.s3)
@@ -106,7 +106,10 @@ private struct MonthPlanContent: View {
                                                                    : tx("Este mes no hay sobrante real", "No real surplus this month"),
                                  message: plan.criticalDetail ?? "")
                 }
-                MonthPlanSummary(plan: plan)
+                // UX-8: DINCR's recommended priority and why (Basic and VIP; Free has no strategy).
+                let recommended = RecommendedPriority.of(strategy)
+                MonthPlanSummary(plan: plan, showsHeadline: recommended == nil)
+                if let recommended { RecommendedPriorityCard(priority: recommended) }
                 MonthPlanSplit(plan: plan)
                 // Cautions stay in sight, never behind "¿Por qué?".
                 if case .basic(let basic) = strategy {
@@ -146,15 +149,35 @@ private struct MonthPlanContent: View {
 }
 
 /// The result first: the amount DINCR plans with and, in one sentence, what it recommends.
+/// UX-8 — "Recomendación de DINCR": the priority the engine already recommends and why. It is not a
+/// setting: the engines name one priority and no other option, so there is nothing to change here.
+private struct RecommendedPriorityCard: View {
+    let priority: RecommendedPriority
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            Text(tx("Recomendación de DINCR", "DINCR’s recommendation")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(priority.title).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+            if let why = priority.why { Text(why).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dincrCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("plan.month.recommendedPriority")
+    }
+}
+
 private struct MonthPlanSummary: View {
     let plan: MonthPlan
+    /// The headline says the same as the recommended priority, so it is left out when that is shown.
+    var showsHeadline = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Text(plan.kind == .basic ? tx("Margen para decidir", "Margin to decide") : tx("Sobrante para repartir", "Surplus to allocate"))
                 .font(DincrFont.label).foregroundStyle(DincrColor.text2)
             MoneyText(plan.base, font: DincrFont.displayAmount)
-            if let headline = plan.summaryHeadline {
+            if showsHeadline, let headline = plan.summaryHeadline {
                 Text(headline).font(DincrFont.body).foregroundStyle(DincrColor.text)
             }
         }

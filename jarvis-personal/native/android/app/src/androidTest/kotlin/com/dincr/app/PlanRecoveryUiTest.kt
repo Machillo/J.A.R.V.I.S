@@ -99,6 +99,12 @@ class PlanRecoveryUiTest {
         node.performClick()
     }
 
+    /** Like [click], by test tag: scrolled into view and the node's own click action, not a tap at its center. */
+    private fun tapTag(tag: String) {
+        waitForTag(tag)
+        compose.onNodeWithTag(tag).also { runCatching { it.performScrollTo() } }.performSemanticsAction(SemanticsActions.OnClick)
+    }
+
     private fun back() = compose.onAllNodes(hasContentDescription(tx("Volver", "Back"))).onFirst().performClick()
 
     private fun home() = waitForText(tx("Hoy", "Today"))
@@ -310,14 +316,16 @@ class PlanRecoveryUiTest {
     @Test fun onboardingShowsTheBankLogosAndSaysItConnectsNothing() {
         launch(fixture = "NEW_USER")
         waitForTag("setup.continue")
-        compose.onNodeWithTag("setup.continue").performClick()
-        compose.onNodeWithText(tx("Tomar control de mis finanzas", "Take control of my finances")).performClick()
-        compose.onNodeWithTag("setup.continue").performClick()
-        compose.onNodeWithTag("setup.continue").performClick()
+        tapTag("setup.continue")
+        // The goal is the last-but-one option: on a small screen (CI's API 24 is 320×640) it sits at the
+        // bottom edge, where a tap at its center misses it. click() invokes the row's own action.
+        click(tx("Tomar control de mis finanzas", "Take control of my finances"))
+        tapTag("setup.continue")
+        tapTag("setup.continue")
         waitForText(tx("Esta selección no conecta tus cuentas", "This selection does not connect your accounts"), substring = true)
         listOf("bac", "bn", "bcr", "popular", "davivienda", "davibank", "promerica", "multimoney").forEach { waitForTag("bank.logo.$it") }
-        compose.onNodeWithTag("setup.bank.bac").performScrollTo().performClick()
-        compose.onNodeWithTag("setup.continue").performClick()
+        tapTag("setup.bank.bac")
+        tapTag("setup.continue")
         waitForText(tx("Elegí tu plan", "Choose your plan"))
     }
 
@@ -383,7 +391,7 @@ class PlanRecoveryUiTest {
         assertTrue("no Situación row in Perfil", !present(tx("Mi situación financiera", "My financial situation")))
     }
 
-    @Test fun vipEditsThePriorityAndMinimumInTuPlanDelMes() {
+    @Test fun vipSeesDincrsRecommendationAndSetsOnlyTheMinimum() {
         launch(plan = "vip")
         home()
         click(tx("Plan", "Plan"))
@@ -400,8 +408,11 @@ class PlanRecoveryUiTest {
         waitForText(tx("Ingresos y base guardados", "Income and base saved"))
         back()
         click(tx("Tu plan del mes", "Your plan for the month"))
+        // UX-8: DINCR's recommendation is shown, and the priority is not a free choice in the settings.
+        waitForText(tx("Recomendación de DINCR", "DINCR’s recommendation"))
         click(tx("Ajustes del plan", "Plan settings"))
-        click(tx("Metas", "Goals"))
+        waitForText(tx("Mínimo personal por mes", "Personal minimum per month"))
+        assertTrue("no priority picker", !present(tx("Sin preferencia", "No preference")) && !present(tx("Equilibrado", "Balanced")))
         click(tx("Guardar", "Save"))
         waitForText(tx("Ajustes guardados", "Settings saved"))
         launch(plan = "basic")
@@ -409,7 +420,8 @@ class PlanRecoveryUiTest {
         click(tx("Plan", "Plan"))
         click(tx("Tu plan del mes", "Your plan for the month"))
         waitForText(tx("Margen para decidir", "Room to decide"))
-        assertTrue("the priority and minimum are VIP", !present(tx("Ajustes del plan", "Plan settings")))
+        waitForText(tx("Recomendación de DINCR", "DINCR’s recommendation"))
+        assertTrue("the settings are VIP", !present(tx("Ajustes del plan", "Plan settings")))
     }
 
     @Test fun basicHomeOpensMovementsWhichShowTheOriginalCurrency() {

@@ -281,7 +281,7 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertFalse(element("profile.situation", in: app).exists)
     }
 
-    func testVipEditsThePriorityAndMinimumInTuPlanDelMes() {
+    func testVipSeesDincrsRecommendationAndSetsOnlyTheMinimum() {
         // Saved with the declared profile: without an income, the settings say where to declare it.
         let undeclared = launch(plan: "vip", tab: "plan")
         open("plan.strategy", in: undeclared)
@@ -290,18 +290,29 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertFalse(element("planPreferences.save", in: undeclared).exists)
         undeclared.terminate()
 
+        // UX-8: DINCR's recommendation is shown, and the priority is not a free choice in the settings.
         let app = launch("store", plan: "vip", tab: "plan")  // a declared fixed income
         open("plan.strategy", in: app)
+        XCTAssertTrue(element("plan.month.recommendedPriority", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Recomendación de DINCR", in: app).exists)
         open("plan.month.preferences", in: app)
-        XCTAssertTrue(element("planPreferences.priority", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("planPreferences.minimum", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(text("Prioridad", in: app).exists, "no priority picker")
         open("planPreferences.save", in: app)
         XCTAssertTrue(text("Guardado", in: app).waitForExistence(timeout: 10))
         app.terminate()
 
+        // Basic: DINCR's recommendation, no settings to change it.
         let basic = launch(plan: "basic", tab: "plan")
         open("plan.strategy", in: basic)
-        XCTAssertTrue(text("Tu plan del mes", in: basic).waitForExistence(timeout: 10))
-        XCTAssertFalse(element("plan.month.preferences", in: basic).exists, "the priority and minimum are VIP")
+        XCTAssertTrue(element("plan.month.recommendedPriority", in: basic).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("plan.month.preferences", in: basic).exists, "the settings are VIP")
+        basic.terminate()
+
+        // Free: no strategy, so no priority and no recommendation.
+        let free = launch(tab: "plan")
+        XCTAssertTrue(element("plan.strategy", in: free).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("plan.month.recommendedPriority", in: free).exists)
     }
 
     func testOnlyTheOwnerGetsTheFinancialAnalysis() {

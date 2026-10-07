@@ -4,8 +4,7 @@ import Testing
 
 /// UX-7 — there is no separate Situación screen: each declared figure has its home. Missing essential
 /// expenses and the advisor's old "situation" route open Plan → Ingresos y base; missing savings and
-/// emergency-fund target open Metas y ahorro (Tus ahorros); the VIP priority keeps
-/// exactly the backend's codes, with "no preference" stored as null. Android twin:
+/// emergency-fund target open Metas y ahorro (Tus ahorros). Android twin:
 /// `SituationDissolvedTest.kt`. Synthetic data.
 @Suite struct SituationDissolvedTests {
     @Test func noDestinationIsTheRetiredScreen() {
@@ -18,10 +17,6 @@ import Testing
         #expect(HomeInput.essentialExpenses.destination == .incomeBase)
         #expect([HomeInput.savings, .emergencyFundTarget].allSatisfy { $0.destination == .goals })
         #expect(AttentionList.destination(advisorRoute: "situation") == .incomeBase)
-    }
-
-    @Test func thePriorityChoicesAreTheBackendCodesWithNoPreferenceAsNull() {
-        #expect(StrategyPreference.choices.map { $0?.rawValue } == [nil, "debt", "emergency", "goals", "balanced"])
     }
 
     @Test func ingresosYBaseIsAPlanRowForEveryPlan() {
