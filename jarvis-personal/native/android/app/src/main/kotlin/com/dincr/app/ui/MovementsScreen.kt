@@ -1,5 +1,6 @@
 package com.dincr.app.ui
 
+import com.dincr.data.PlanTier
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -105,6 +106,7 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
             .onFailure { if (it !is AuthException.SignedOut) state = Load.Failed(it.message.orEmpty()) }
     }
     LaunchedEffect(Unit) { load() }
+    val plan = profile?.planTier ?: PlanTier.FREE
 
     Box(Modifier.fillMaxSize().padding(padding)) {
         PullToRefreshBox(refreshing, onRefresh = { scope.launch { refreshing = true; load(); refreshing = false } }) {
@@ -120,9 +122,21 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                 })
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                             // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
                             TextButton({ nav.open("analysis") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.analysis")) { Text(tx("Análisis", "Analysis"), color = Dincr.colors.tint) }
+                            // §15 PR 6: Movimientos → Por revisar — the bank notices detected in mail, reviewed in the
+                            // existing mail screen (the same as Perfil's; VIP and the Owner, locked below).
+                            if (plan == PlanTier.VIP) {
+                                TextButton({ nav.open("mail") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.review")) { Text(tx("Por revisar", "To review"), color = Dincr.colors.tint) }
+                            } else {
+                                TextButton({ nav.open("plans") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.review")) {
+                                    androidx.compose.foundation.layout.Column {
+                                        Text(tx("Por revisar", "To review"), color = Dincr.colors.textMuted)
+                                        Text(tx("Disponible desde VIP", "Available from VIP"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                                    }
+                                }
+                            }
                             if (filter == MovementFilter.DEBT) TextButton({ nav.open("debts") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Gestionar deudas", "Manage debts"), color = Dincr.colors.tint) }
                         }
                     }

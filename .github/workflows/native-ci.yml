@@ -111,7 +111,10 @@ jobs:
   # flows on fixture data in a simulator.
   ios-app:
     runs-on: macos-15
-    timeout-minutes: 45
+    # The whole XCUITest suite runs in one xcodebuild step: about 41 of the job's minutes on a passing
+    # run (2026-10-08), growing with each UI test added. At 45 the job hit the limit on main and on PRs
+    # ("exceeded the maximum execution time of 45m0s"); 75 leaves room for slower macOS runners.
+    timeout-minutes: 75
     defaults:
       run:
         working-directory: jarvis-personal/native/ios
