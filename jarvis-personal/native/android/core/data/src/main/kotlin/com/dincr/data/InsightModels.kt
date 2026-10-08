@@ -254,6 +254,17 @@ data class MonthlyReview(
     val deviations: List<kotlinx.serialization.json.JsonElement> = emptyList(),
     @SerialName("next_month") val nextMonth: NextMonth? = null,
 ) {
+    /**
+     * K-2: the scorecard lines the app shows. The financial-health score has no canonical
+     * calculation yet (P3.7), so its line is never shown publicly; the rest stays as sent.
+     */
+    val publicScorecard: List<ScoreLine> get() = scorecard.filter { it.key != HEALTH_SCORE_KEY }
+
+    companion object {
+        /** The financial-health line (a score out of 100 and its trend). */
+        const val HEALTH_SCORE_KEY = "health_score"
+    }
+
     @Serializable
     /** `trend` is `unknown` and `explanation` says why when a side can't be stated (the health score while a debt's rate is missing). */
     data class ScoreLine(val key: String? = null, val label: String? = null, val unit: String? = null, val current: Double? = null, val baseline: Double? = null, val delta: Double? = null, val trend: String? = null, val explanation: String? = null)

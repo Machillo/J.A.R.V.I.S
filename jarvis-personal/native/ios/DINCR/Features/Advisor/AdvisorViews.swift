@@ -248,7 +248,7 @@ private struct ReviewContent: View {
             if let summary = review.summary { Text(summary).font(DincrFont.body).foregroundStyle(DincrColor.text2) }
         }
         .dincrCard()
-        ForEach(Array((review.scorecard ?? []).enumerated()), id: \.offset) { _, line in
+        ForEach(Array(review.publicScorecard.enumerated()), id: \.offset) { _, line in
             InfoRow(label: line.label ?? line.key ?? "",
                     value: line.explanation ?? [line.current.map { String(format: "%.0f", $0) }, line.unit].compactMap { $0 }.joined(separator: " "))
                 .dincrCard(padding: DincrSpacing.s3)

@@ -323,6 +323,12 @@ public struct MonthlyReview: Decodable, Sendable, Equatable {
     public let summary: String?
     public let scorecard: [ScoreLine]?
     public let nextMonth: NextMonth?
+
+    /// The financial-health line (a score out of 100 and its trend).
+    public static let healthScoreKey = "health_score"
+    /// K-2: the scorecard lines the app shows. The financial-health score has no canonical
+    /// calculation yet (P3.7), so its line is never shown publicly; the rest stays as sent.
+    public var publicScorecard: [ScoreLine] { (scorecard ?? []).filter { $0.key != Self.healthScoreKey } }
 }
 
 /// `GET /user-product/vip/lifecycle/proactive-advisor` (VIP).
