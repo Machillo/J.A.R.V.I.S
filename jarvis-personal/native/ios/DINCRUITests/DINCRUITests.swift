@@ -204,9 +204,10 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.debts"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Perfil"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.subscription"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.descendants(matching: .any)["profile.budget"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["profile.accounts"].exists)
+        // PR 4: the rows stay visible, locked to the subscription that includes them.
+        XCTAssertTrue(app.descendants(matching: .any)["profile.budget"].label.contains("Disponible desde Basic"))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.mail"].label.contains("Disponible desde VIP"))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.accounts"].label.contains("Disponible desde VIP"))
     }
 
     func testVipHomeShowsSafeToSpend() {

@@ -3,6 +3,34 @@ import DincrDesign
 import SwiftUI
 import UIKit
 
+/// A Perfil row the subscription does not include (PR 4, P6.4): visible, with the subscription it
+/// needs, and opens Suscripción. The backend still answers 403 to the feature itself.
+private struct LockedProfileRow: View {
+    let title: String
+    let symbol: String
+    let tier: PlanTier
+    let id: String
+
+    var body: some View {
+        NavigationLink { PlanSettingsView() } label: {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        Text(tx("Disponible desde \(PlanLabel.name(tier.rawValue))", "Available from \(PlanLabel.name(tier.rawValue))"))
+                            .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                    }
+                } icon: { Image(systemName: symbol) }
+                Spacer(minLength: 0)
+                PlanBadge(plan: tier.rawValue)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(id)
+        .accessibilityHint(tx("Abre tu suscripción", "Opens your subscription"))
+    }
+}
+
 /// PARITY G1 — the Profile hub.
 struct ProfileHubView: View {
     @Environment(AppModel.self) private var model
@@ -33,16 +61,20 @@ struct ProfileHubView: View {
                 .dincrRowBackground()
             }
             // UX-7: the declared situation lives in Plan → Ingresos y base and Tu plan del mes → Ajustes.
-            if model.planTier == .vip {
-                Section {
+            // PR 4 (P6.4): below its plan a row stays visible, locked, and opens Suscripción.
+            Section {
+                if model.planTier == .vip {
                     NavigationLink(value: ProfileRoute.mail) { Label(tx("Monitor de correo", "Email Monitor"), systemImage: "envelope") }
                         .accessibilityIdentifier("profile.mail")
                     // Cuentas: the detected accounts by bank, with their movements (same review as the monitor).
                     NavigationLink { AccountsView() } label: { Label(tx("Cuentas", "Accounts"), systemImage: "building.columns") }
                         .accessibilityIdentifier("profile.accounts")
+                } else {
+                    LockedProfileRow(title: tx("Monitor de correo", "Email Monitor"), symbol: "envelope", tier: .vip, id: "profile.mail")
+                    LockedProfileRow(title: tx("Cuentas", "Accounts"), symbol: "building.columns", tier: .vip, id: "profile.accounts")
                 }
-                .dincrRowBackground()
             }
+            .dincrRowBackground()
             // Finanzas: recurring commitments on every plan (UX-9); budget and calendar from Basic.
             Section(tx("Finanzas", "Finances")) {
                 if model.planTier.rank >= Feature.guidedBudget.minimum.rank {
@@ -50,6 +82,9 @@ struct ProfileHubView: View {
                         .accessibilityIdentifier("profile.budget")
                     NavigationLink { CalendarView() } label: { Label(tx("Calendario financiero", "Financial calendar"), systemImage: "calendar") }
                         .accessibilityIdentifier("profile.calendar")
+                } else {
+                    LockedProfileRow(title: tx("Presupuesto", "Budget"), symbol: "chart.pie", tier: .basic, id: "profile.budget")
+                    LockedProfileRow(title: tx("Calendario financiero", "Financial calendar"), symbol: "calendar", tier: .basic, id: "profile.calendar")
                 }
                 NavigationLink { RecurringView() } label: { Label(tx("Recurrentes", "Recurring"), systemImage: "repeat") }
                     .accessibilityIdentifier("profile.recurring")

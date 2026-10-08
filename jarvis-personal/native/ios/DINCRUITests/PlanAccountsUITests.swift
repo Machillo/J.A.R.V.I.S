@@ -149,8 +149,8 @@ final class PlanAccountsUITests: XCTestCase {
     func testFreeCreatesEditsAndDeletesRecurringCommitments() {
         let app = launch(tab: "profile")
         XCTAssertTrue(element("profile.recurring", in: app).waitForExistence(timeout: 10))
-        XCTAssertFalse(element("profile.budget", in: app).exists, "budget stays Basic")
-        XCTAssertFalse(element("profile.calendar", in: app).exists, "calendar stays Basic")
+        XCTAssertTrue(element("profile.budget", in: app).label.contains("Disponible desde Basic"), "budget stays Basic (locked)")
+        XCTAssertTrue(element("profile.calendar", in: app).label.contains("Disponible desde Basic"), "calendar stays Basic (locked)")
         open("profile.recurring", in: app)
 
         // Create.

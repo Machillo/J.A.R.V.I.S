@@ -111,9 +111,14 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
                 // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
                 NavRow(Icons.Rounded.Star, tx("Suscripción", "Subscription"),
                     if (profile?.role == "owner") "DINCR Owner" else planName(profile?.plan) + (if (profile?.isCourtesy == true) tx(" · cortesía", " · courtesy") else "")) { nav.open("plans") }
-                if (plan == PlanTier.VIP && model.isOn(OpsFlag.GMAIL_AUTOMATION)) {
+                // PR 4 (P6.4): below VIP the rows stay visible, locked, and open Suscripción; with the
+                // mail switch off a VIP still sees them and each screen says it is paused (as on iOS).
+                if (plan == PlanTier.VIP) {
                     NavRow(Icons.Rounded.Email, tx("Correos financieros", "Financial emails"), tx("Avisos de tu banco para revisar", "Bank notices to review")) { nav.open("mail") }
                     NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Tus bancos, cuentas y movimientos", "Your banks, accounts and transactions")) { nav.open("accounts") }
+                } else {
+                    LockedNavRow(Icons.Rounded.Email, tx("Correos financieros", "Financial emails"), PlanTier.VIP, nav)
+                    LockedNavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), PlanTier.VIP, nav)
                 }
                 NavRow(Icons.Rounded.Settings, tx("Ajustes de cuenta", "Account settings"), tx("Apariencia, datos y privacidad", "Appearance, data and privacy")) { nav.open("settings") }
                 NavRow(Icons.Rounded.Lock, tx("Seguridad", "Security"), tx("Bloqueo de la app", "App lock")) { nav.open("security") }
@@ -129,6 +134,13 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
         tx("Cerrar sesión", "Sign out"), onDismiss = { confirming = false }, onConfirm = { confirming = false; model.signOut() })
 }
 
+/** A Perfil row the subscription does not include (PR 4, P6.4): visible, with the subscription it needs, and opens Suscripción. */
+@Composable
+private fun LockedNavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, tier: PlanTier, nav: Navigator) {
+    val name = planName(tier.wire)
+    NavRow(icon, title, tx("Disponible desde $name", "Available from $name"), badge = name) { nav.open("plans") }
+}
+
 /** Perfil → Finanzas: recurring payments on every plan (UX-9); budget and calendar from Basic (locked below). */
 @Composable
 private fun FinanceSection(plan: PlanTier, nav: Navigator) {
@@ -139,7 +151,8 @@ private fun FinanceSection(plan: PlanTier, nav: Navigator) {
                 NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") }
                 NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), tx("Pagos e ingresos del mes", "Payments and income this month")) { nav.open("calendar") }
             } else {
-                NavRow(Icons.Rounded.PieChart, tx("Presupuesto y calendario", "Budget and calendar"), tx("Disponible desde Basic", "Available from Basic"), badge = "Basic") { nav.open("plans") }
+                LockedNavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), PlanTier.BASIC, nav)
+                LockedNavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), PlanTier.BASIC, nav)
             }
             if (plan.allows(com.dincr.data.Feature.RECURRING_ITEMS)) {
                 NavRow(Icons.Rounded.Repeat, tx("Pagos recurrentes", "Recurring payments"), tx("Suscripciones y pagos fijos", "Subscriptions and fixed payments")) { nav.open("recurring") }
