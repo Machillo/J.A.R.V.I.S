@@ -1,5 +1,15 @@
 package com.dincr.app.ui
 
+import com.dincr.design.CompositionDonut
+import com.dincr.data.DebtComposition
+import com.dincr.data.Composition
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -71,8 +81,10 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
 }
 
 /**
- * UX-13 — the Patrimonio tab: projections and scenarios (VIP, paused with `vip_intelligence`), the
- * same screens the retired DINCR tab opened. Only what UX-13 needs: no new figure or calculation.
+ * UX-13 / §15 PR 8 — the Patrimonio tab. Cuentas: the accounts DINCR detected in bank notices and the
+ * mail connections that read them (the existing screens; VIP and the Owner, locked below). Deudas:
+ * how the active debts make up what is owed, from Plan → Deudas' balances (every plan). Proyecciones
+ * and Escenarios (VIP). No net worth figure until P0.9 (K-3), no balance invented. iOS: `WealthHubView`.
  */
 @Composable
 fun WealthScreen(model: AppModel, nav: Navigator) {
@@ -81,6 +93,22 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
     val vipOn = model.isOn(OpsFlag.VIP_INTELLIGENCE)
     ScreenColumn {
         Text(tx("Patrimonio", "Wealth"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
+        SectionTitle(tx("Cuentas", "Accounts"))
+        DincrCard {
+            Column {
+                // The screens say themselves when the mail switch pauses them (as in Perfil).
+                if (plan != PlanTier.VIP) {
+                    LockedRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), PlanTier.VIP, nav)
+                    LockedRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), PlanTier.VIP, nav)
+                } else {
+                    NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices")) { nav.open("accounts") }
+                    NavRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices")) { nav.open("mail") }
+                }
+            }
+        }
+        SectionTitle(tx("Deudas", "Debts"))
+        WealthDebtsCard(model, nav)
+        SectionTitle(tx("Proyecciones", "Projections"))
         if (plan == PlanTier.VIP && !vipOn) FeaturePaused(model, OpsFlag.VIP_INTELLIGENCE)
         DincrCard {
             Column {
@@ -91,6 +119,31 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
                     NavRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), tx("Cómo se ven tus finanzas en 1 a 12 meses", "Your finances in 1 to 12 months")) { nav.open("projections") }
                     NavRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), tx("¿Qué pasa si gano o gasto más?", "What if I earn or spend more?")) { nav.open("scenarios") }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * §15 PR 8 — what is owed, by debt, from the balances in Plan → Deudas ([DebtComposition]); managed
+ * there. An unknown balance is listed as unknown and no share or total is drawn from it.
+ */
+@Composable
+private fun WealthDebtsCard(model: AppModel, nav: Navigator) {
+    val debts = rememberLoad(model) { model.api.debts() }
+    DincrCard {
+        Column(Modifier.testTag("wealth.debts")) {
+            LoadContent(debts) { list ->
+                val composition = DebtComposition.of(list)
+                if (composition.status == Composition.Status.EMPTY) {
+                    Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."), style = MaterialTheme.typography.bodyMedium,
+                        color = Dincr.colors.text2, modifier = Modifier.testTag("wealth.debts.none"))
+                } else {
+                    Column(Modifier.testTag("wealth.debts.composition")) { CompositionDonut(tx("Lo que debés, por deuda", "What you owe, by debt"), composition) }
+                }
+            }
+            TextButton({ nav.open("debts") }, Modifier.heightIn(min = 48.dp).testTag("wealth.debts.manage")) {
+                Text(tx("Administrar en Plan › Deudas", "Manage in Plan › Debts"), color = Dincr.colors.tint)
             }
         }
     }

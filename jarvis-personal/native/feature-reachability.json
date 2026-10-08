@@ -44,7 +44,8 @@
   "UX-12",
   "UX-13",
   "PR-4",
-  "PR-6"
+  "PR-6",
+  "PR-8"
  ],
  "fixtures": {
   "ios": {
@@ -731,6 +732,112 @@
      "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
     }
    ]
+  },
+  {
+   "id": "wealth.accounts",
+   "name": "Patrimonio → Cuentas (§15 PR 8): the accounts detected in bank notices, the same screen as Perfil → Cuentas",
+   "decision": "PR-8",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/financial-identity",
+     "gate": "feature:gmail_automation",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "wealth",
+    "id": "wealth.accounts",
+    "locked_label": "Disponible desde VIP"
+   },
+   "android": {
+    "tab": "Patrimonio",
+    "text": "Cuentas",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Wealth",
+     "text": "Accounts",
+     "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "wealth.connections",
+   "name": "Patrimonio → Conexiones de correo (§15 PR 8): the mail connections, the same screen as Perfil → Correos financieros",
+   "decision": "PR-8",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/gmail/status",
+     "gate": "feature:gmail_automation",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "wealth",
+    "id": "wealth.connections",
+    "locked_label": "Disponible desde VIP"
+   },
+   "android": {
+    "tab": "Patrimonio",
+    "text": "Conexiones de correo",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Wealth",
+     "text": "Mail connections",
+     "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "wealth.debts",
+   "name": "Patrimonio → Deudas (§15 PR 8): what is owed by debt, from Plan → Deudas' balances; managed in Plan",
+   "decision": "PR-8",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/finance/debts",
+     "gate": "feature:debts",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "wealth",
+    "id": "wealth.debts"
+   },
+   "android": {
+    "tab": "Patrimonio",
+    "tag": "wealth.debts",
+    "en": {
+     "tab": "Wealth"
+    }
+   }
   },
   {
    "id": "wealth.projections",
