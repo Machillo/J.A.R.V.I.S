@@ -125,7 +125,7 @@ final class StoreScreenshots: XCTestCase {
         try shoot("07-strategy", plan: "basic") { app, l in
             self.tab(app, "Plan")
             self.open(app, "plan.strategy")
-            self.wait(app, l.pick("Margen para decidir", "Margin to decide"))
+            self.wait(app, l.pick("Libre después de tus compromisos", "Left after your commitments"))
         }
     }
 

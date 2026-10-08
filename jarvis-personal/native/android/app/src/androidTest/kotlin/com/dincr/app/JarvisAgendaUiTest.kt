@@ -3,6 +3,7 @@ package com.dincr.app
 import android.content.Intent
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -96,6 +97,9 @@ class JarvisAgendaUiTest {
         compose.onNodeWithTag("jarvis.agenda.schedule").performClick()
         waitUntil("the chat") { tagged("jarvis.chat.input") }
         compose.onNodeWithTag("jarvis.chat.input").performTextInput("Agendá dentista el 10 de octubre a las 3pm")
+        // Send is enabled only once the typed text is composed (and nothing is still sending): on a
+        // slow emulator a click before that is ignored and no confirmation ever comes.
+        waitUntil("send enabled") { compose.onAllNodes(hasTestTag("jarvis.chat.send") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("jarvis.chat.send").performClick()
         waitUntil("the confirmation") { tagged("jarvis.chat.confirm") }
         compose.onNodeWithTag("jarvis.chat.confirm").performClick()
