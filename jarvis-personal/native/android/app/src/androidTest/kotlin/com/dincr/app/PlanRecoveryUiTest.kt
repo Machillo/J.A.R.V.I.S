@@ -352,8 +352,9 @@ class PlanRecoveryUiTest {
         launch(plan = "free")
         home()
         click(tx("Perfil", "Profile"))
-        waitForText(tx("Presupuesto y calendario", "Budget and calendar"))
-        assertTrue("calendar stays Basic", !present(tx("Calendario financiero", "Financial calendar")))
+        // PR 4: budget and calendar stay Basic, shown locked.
+        waitForText(tx("Calendario financiero", "Financial calendar"))
+        assertTrue("budget and calendar locked", present(tx("Disponible desde Basic", "Available from Basic")))
         click(tx("Pagos recurrentes", "Recurring payments"))
         waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
         // Create.

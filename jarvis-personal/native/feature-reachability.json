@@ -42,7 +42,8 @@
   "UX-7",
   "UX-9",
   "UX-12",
-  "UX-13"
+  "UX-13",
+  "PR-4"
  ],
  "fixtures": {
   "ios": {
@@ -1027,10 +1028,10 @@
   {
    "id": "profile.mail",
    "name": "Perfil → Correos financieros",
-   "decision": "baseline-81fd2cc4",
+   "decision": "PR-4",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
-    "basic": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
@@ -1047,38 +1048,27 @@
    ],
    "ios": {
     "tab": "profile",
-    "id": "profile.mail"
+    "id": "profile.mail",
+    "locked_label": "Disponible desde VIP"
    },
    "android": {
     "tab": "Perfil",
     "text": "Correos financieros",
     "en": {
      "tab": "Profile",
-     "text": "Financial emails"
-    }
-   },
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "both",
-     "reason": "the mail rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+     "text": "Financial emails",
+     "locked_text": "Available from VIP"
     },
-    {
-     "plan": "basic",
-     "platform": "both",
-     "reason": "the mail rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+    "locked_text": "Disponible desde VIP"
+   }
   },
   {
    "id": "profile.accounts",
    "name": "Perfil → Cuentas",
-   "decision": "baseline-81fd2cc4",
+   "decision": "PR-4",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
-    "basic": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
@@ -1095,37 +1085,26 @@
    ],
    "ios": {
     "tab": "profile",
-    "id": "profile.accounts"
+    "id": "profile.accounts",
+    "locked_label": "Disponible desde VIP"
    },
    "android": {
     "tab": "Perfil",
     "text": "Cuentas",
     "en": {
      "tab": "Profile",
-     "text": "Accounts"
-    }
-   },
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "both",
-     "reason": "the accounts rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+     "text": "Accounts",
+     "locked_text": "Available from VIP"
     },
-    {
-     "plan": "basic",
-     "platform": "both",
-     "reason": "the accounts rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+    "locked_text": "Disponible desde VIP"
+   }
   },
   {
    "id": "profile.budget",
    "name": "Perfil → Finanzas → Presupuesto",
-   "decision": "baseline-81fd2cc4",
+   "decision": "PR-4",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
@@ -1144,39 +1123,26 @@
    ],
    "ios": {
     "tab": "profile",
-    "id": "profile.budget"
+    "id": "profile.budget",
+    "locked_label": "Disponible desde Basic"
    },
    "android": {
     "tab": "Perfil",
     "text": "Presupuesto",
-    "locked_text": "Presupuesto y calendario",
+    "locked_text": "Disponible desde Basic",
     "en": {
      "tab": "Profile",
      "text": "Budget",
-     "locked_text": "Budget and calendar"
+     "locked_text": "Available from Basic"
     }
-   },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides the budget and calendar rows for Free; Android shows one locked row",
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "ios",
-     "reason": "iOS omits the budget and calendar rows of Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+   }
   },
   {
    "id": "profile.calendar",
    "name": "Perfil → Finanzas → Calendario financiero",
-   "decision": "baseline-81fd2cc4",
+   "decision": "PR-4",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
@@ -1195,32 +1161,19 @@
    ],
    "ios": {
     "tab": "profile",
-    "id": "profile.calendar"
+    "id": "profile.calendar",
+    "locked_label": "Disponible desde Basic"
    },
    "android": {
     "tab": "Perfil",
     "text": "Calendario financiero",
-    "locked_text": "Presupuesto y calendario",
+    "locked_text": "Disponible desde Basic",
     "en": {
      "tab": "Profile",
      "text": "Financial calendar",
-     "locked_text": "Budget and calendar"
+     "locked_text": "Available from Basic"
     }
-   },
-   "platform_states": {
-    "android": {
-     "free": "VISIBLE_LOCKED"
-    }
-   },
-   "parity_gap": "P6.4 — iOS hides the budget and calendar rows for Free; Android shows one locked row",
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "ios",
-     "reason": "iOS omits the budget and calendar rows of Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
-     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
-    }
-   ]
+   }
   },
   {
    "id": "profile.recurring",
