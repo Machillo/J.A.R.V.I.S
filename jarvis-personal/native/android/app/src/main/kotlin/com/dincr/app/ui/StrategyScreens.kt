@@ -138,7 +138,7 @@ private fun BasicMonthPlan(s: Strategy, nav: Navigator) {
     if (plan.isCritical) DincrMessage(MessageKind.ATTENTION, tx("Tus compromisos superan tus ingresos", "Your commitments exceed your income"), plan.criticalDetail.orEmpty())
     // UX-8: DINCR's recommended priority and why (the Basic engine's own; Free has no strategy).
     val recommended = RecommendedPriority.of(s)
-    MonthPlanSummary(plan, tx("Margen para decidir", "Room to decide"), "strategy.basic", showsHeadline = recommended == null)
+    MonthPlanSummary(plan, tx("Libre después de tus compromisos", "Left after your commitments"), "strategy.basic", showsHeadline = recommended == null)
     recommended?.let { RecommendedPriorityCard(it) }
     MonthPlanSplit(plan)
     // Cautions stay in sight, never behind "¿Por qué?".
@@ -148,7 +148,7 @@ private fun BasicMonthPlan(s: Strategy, nav: Navigator) {
             AmountLine(tx("Ingresos del mes", "Monthly income"), s.monthlyIncome)
             AmountLine(tx("Gastos esenciales", "Essential expenses"), s.essentialExpenses)
             AmountLine(tx("Cuotas mínimas", "Minimum payments"), s.minimumDebtPayments)
-            AmountLine(tx("Margen para decidir", "Room to decide"), s.strategicMargin, emphasize = true)
+            AmountLine(tx("Libre después de tus compromisos", "Left after your commitments"), s.strategicMargin, emphasize = true)
         }
         s.projection?.let { p ->
             Section(tx("Tu deuda prioritaria", "Your priority debt")) {
@@ -272,7 +272,7 @@ private fun MonthPlanSplit(plan: MonthPlan) {
         Column(Modifier.testTag("plan.month.split"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             when {
                 plan.parts.isEmpty() -> Caption(
-                    if (plan.kind == MonthPlan.Kind.BASIC) tx("Este mes no hay margen para repartir.", "There’s no margin to split this month.")
+                    if (plan.kind == MonthPlan.Kind.BASIC) tx("Este mes no queda dinero libre para repartir.", "There’s no money left to split this month.")
                     else tx("Este mes no hay sobrante real para repartir.", "There’s no real surplus to allocate this month."),
                 )
                 plan.showsComposition -> CompositionDonut(title, plan.composition)
@@ -375,9 +375,9 @@ fun DistributionScreen(model: AppModel, nav: Navigator) {
 private fun BasicDistribution(s: Strategy, nav: Navigator) {
     if (s.status == "needs_income") { NeedsIncome(s.recommendation, nav); return }
     if (s.isIncomeObserved) ObservedIncomeNote()
-    AmountCard(tx("Margen para repartir", "Margin to split"), s.strategicMargin)
-    if (s.allocations.isEmpty()) Caption(tx("Este mes no hay margen para repartir.", "There’s no margin to split this month."))
-    else Section(tx("Cómo repartir tu margen", "How to split your margin")) { s.allocations.forEach { AmountLine(it.label ?: it.bucket.orEmpty(), it.amount) } }
+    AmountCard(tx("Libre después de tus compromisos", "Left after your commitments"), s.strategicMargin)
+    if (s.allocations.isEmpty()) Caption(tx("Este mes no queda dinero libre para repartir.", "There’s no money left to split this month."))
+    else Section(tx("Cómo repartir lo que te queda", "How to split what’s left")) { s.allocations.forEach { AmountLine(it.label ?: it.bucket.orEmpty(), it.amount) } }
     s.nextPaycheck?.takeIf { it.envelopes.isNotEmpty() }?.let { p ->
         Section(tx("Tu próximo ingreso", "Your next paycheck")) {
             AmountLine(tx("Estimado", "Estimated"), p.estimatedPaycheck, emphasize = true)
@@ -391,7 +391,7 @@ private fun BasicDistribution(s: Strategy, nav: Navigator) {
 private fun DirectorDistribution(s: DirectorStrategy, nav: Navigator) {
     if (s.status == "needs_income") { NeedsIncome(s.objective, nav); return }
     val language = AppLanguage.current()
-    AmountCard(tx("Sobrante a repartir", "Surplus to allocate"), s.allocationBaseAmount)
+    AmountCard(tx("Sobrante para repartir", "Surplus to allocate"), s.allocationBaseAmount)
     if (s.allocationItems.isEmpty()) Caption(tx("Este mes no hay sobrante real para repartir.", "There’s no real surplus to allocate this month."))
     else Section(tx("Cómo repartir tu sobrante", "How to split your surplus")) {
         s.allocationItems.forEach { item ->

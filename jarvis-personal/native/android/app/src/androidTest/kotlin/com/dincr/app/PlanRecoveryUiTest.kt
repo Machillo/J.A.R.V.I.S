@@ -167,10 +167,10 @@ class PlanRecoveryUiTest {
         click(tx("Plan", "Plan"))
         click(tx("Tu plan del mes", "Your plan for the month"))
         waitForText(tx("Estimado con tus ingresos registrados (no declarado)", "Estimated from your recorded income (not declared)"))
-        waitForText(tx("Margen para decidir", "Room to decide"))
+        waitForText(tx("Libre después de tus compromisos", "Left after your commitments"))
         back()
         click(tx("Distribución de dinero", "Money distribution"))
-        waitForText(tx("Cómo repartir tu margen", "How to split your margin"))
+        waitForText(tx("Cómo repartir lo que te queda", "How to split what’s left"))
         waitForText("Extra a la tarjeta")
     }
 
@@ -187,7 +187,7 @@ class PlanRecoveryUiTest {
         compose.onNodeWithText(tx("Sin dato", "No data")).performScrollTo()
         back()
         click(tx("Distribución de dinero", "Money distribution"))
-        waitForText(tx("Sobrante a repartir", "Surplus to allocate"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
         waitForText(tx("Gastos registrados", "Recorded spending"))
         assertTrue("Users never see an account cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))
         back()
@@ -233,7 +233,7 @@ class PlanRecoveryUiTest {
         assertTrue("Users never see an account cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))
         back()
         click(tx("Distribución de dinero", "Money distribution"))
-        waitForText(tx("Sobrante a repartir", "Surplus to allocate"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
     }
 
     /**
@@ -343,7 +343,7 @@ class PlanRecoveryUiTest {
         home()
         click(tx("Plan", "Plan"))
         click(tx("Tu plan del mes", "Your plan for the month"))
-        waitForText(tx("Margen para decidir", "Room to decide"))
+        waitForText(tx("Libre después de tus compromisos", "Left after your commitments"))
         assertTrue("the financial plan is not the subscription", !present(tx("Suscripción actual", "Current subscription")))
     }
 
@@ -481,7 +481,7 @@ class PlanRecoveryUiTest {
         home()
         click(tx("Plan", "Plan"))
         click(tx("Tu plan del mes", "Your plan for the month"))
-        waitForText(tx("Margen para decidir", "Room to decide"))
+        waitForText(tx("Libre después de tus compromisos", "Left after your commitments"))
         waitForText(tx("Recomendación de DINCR", "DINCR’s recommendation"))
         assertTrue("the settings are VIP", !present(tx("Ajustes del plan", "Plan settings")))
     }

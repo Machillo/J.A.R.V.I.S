@@ -23,6 +23,7 @@ import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.Feature
 import com.dincr.data.MoneyFormat
+import com.dincr.data.MonthlyReview
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
 import com.dincr.data.ScenarioRequest
@@ -116,7 +117,7 @@ fun ScenariosScreen(model: AppModel, nav: Navigator) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     DetailScaffold(tx("Escenarios", "Scenarios"), nav::back) {
-        Caption(tx("Probá cambios sin guardar nada: DINCR calcula cómo cambiaría tu margen.", "Try changes without saving anything: DINCR shows how your margin would change."))
+        Caption(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes.", "Try changes without saving anything: DINCR shows how much you’d have left each month."))
         fun value(text: String) = if (text.isBlank()) BigDecimal.ZERO else com.dincr.data.AmountInput.parseZeroOrMore(text, format.separators)
         ChoiceChips(listOf(false to tx("Ingreso sube", "Income rises"), true to tx("Ingreso baja", "Income falls")), incomeDown, { incomeDown = it })
         MoneyField(tx("Cambio mensual de ingresos", "Monthly income change"), income, { income = it })
@@ -137,8 +138,8 @@ fun ScenariosScreen(model: AppModel, nav: Navigator) {
         })
         result?.let { r ->
             Section(tx("Resultado", "Result")) {
-                AmountLine(tx("Margen actual", "Current margin"), r.current?.strategicMargin)
-                AmountLine(tx("Margen con el cambio", "Margin with the change"), r.scenario?.strategicMargin, emphasize = true)
+                AmountLine(tx("Te queda libre al mes hoy", "Left each month today"), r.current?.strategicMargin)
+                AmountLine(tx("Te quedaría libre con el cambio", "Left each month with the change"), r.scenario?.strategicMargin, emphasize = true)
                 AmountLine(tx("Diferencia", "Difference"), r.delta?.strategicMargin, sign = if ((r.delta?.strategicMargin?.signum() ?: 0) >= 0) MoneyFormat.Sign.INCOME else MoneyFormat.Sign.NONE)
                 r.scenario?.recommendation?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
             }
@@ -160,12 +161,7 @@ fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
                 r.headline?.let { Text(it, style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text) }
                 r.summary?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text2) }
                 if (r.publicScorecard.isNotEmpty()) Section(tx("Indicadores", "Indicators")) {
-                    r.publicScorecard.forEach { line ->
-                        val trend = when (line.trend) { "improved" -> tx("mejoró", "improved"); "declined" -> tx("empeoró", "declined"); else -> tx("igual", "unchanged") }
-                        val explanation = line.explanation
-                        if (explanation != null) InfoLine(line.label.orEmpty(), explanation)
-                        else if (line.unit == "CRC") AmountLine("${line.label.orEmpty()} · $trend", line.current?.toBigDecimal()) else InfoLine(line.label.orEmpty(), "${line.current ?: "—"} · $trend")
-                    }
+                    r.publicScorecard.forEach { ScoreLineRow(it) }
                 }
             }
             r.nextMonth?.let { next ->
@@ -178,6 +174,35 @@ fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
         }
         FinancialDisclaimer()
     }
+}
+
+/**
+ * One indicator of the review: its value (money or months) and how it moved since the previous
+ * month; an unknown trend says nothing. Same wording as iOS's `ScoreLineRow`.
+ */
+@Composable
+private fun ScoreLineRow(line: MonthlyReview.ScoreLine) {
+    val label = line.label ?: line.key.orEmpty()
+    val trend = when (line.trend) {
+        "improved" -> tx("mejoró", "improved")
+        "declined" -> tx("empeoró", "got worse")
+        "unchanged" -> tx("sin cambios", "no change")
+        else -> null
+    }
+    val titled = trend?.let { "$label · $it" } ?: label
+    val explanation = line.explanation
+    when {
+        explanation != null -> InfoLine(label, explanation)
+        line.unit == "CRC" -> AmountLine(titled, line.current?.toBigDecimal())
+        else -> InfoLine(titled, scoreValue(line))
+    }
+}
+
+private fun scoreValue(line: MonthlyReview.ScoreLine): String {
+    val current = line.current ?: return "—"
+    val number = java.text.NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(current)
+    if (line.unit != "months") return number
+    return if (current == 1.0) tx("1 mes", "1 month") else tx("$number meses", "$number months")
 }
 
 /** E12 — VIP aguinaldo from the CCSS payroll notices in the connected mailbox (always colones). */

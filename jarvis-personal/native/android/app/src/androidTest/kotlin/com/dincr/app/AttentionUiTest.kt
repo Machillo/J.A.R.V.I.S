@@ -68,9 +68,9 @@ class AttentionUiTest {
         launch("vip")
         waitForTag("home.attention")
         waitForTag("home.attention.all")
-        waitForText("Reserva menor a un mes")
-        assertTrue("high before medium", top("Reserva menor a un mes") < top("Pago de tarjeta en 5 días"))
-        assertTrue(texts("Recurrente con variación").isNotEmpty())
+        waitForText("Tu fondo de emergencia cubre menos de un mes")
+        assertTrue("high before medium", top("Tu fondo de emergencia cubre menos de un mes") < top("Pago de tarjeta en 5 días"))
+        assertTrue(texts("Un cobro recurrente cambió de monto").isNotEmpty())
         // The fourth (the mail notices, last among the medium ones) waits behind "Ver todas".
         assertTrue(texts("Movimientos por revisar").isEmpty())
         // A command-center action is free text: shown as words, never a link.
@@ -108,7 +108,7 @@ class AttentionUiTest {
     @Test fun theOwnersHoySharesTheSection() {
         launch("free", role = "owner")
         waitForTag("home.attention.all")
-        waitForText("Reserva menor a un mes")
-        assertTrue("high before medium", top("Reserva menor a un mes") < top("Pago de tarjeta en 5 días"))
+        waitForText("Tu fondo de emergencia cubre menos de un mes")
+        assertTrue("high before medium", top("Tu fondo de emergencia cubre menos de un mes") < top("Pago de tarjeta en 5 días"))
     }
 }

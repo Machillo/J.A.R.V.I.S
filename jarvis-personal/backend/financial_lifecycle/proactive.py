@@ -31,7 +31,7 @@ def build_proactive_advisor(
             "baseline_date": None,
             "alerts": [],
             "summary": {"urgent": 0, "attention": 0, "positive": 0},
-            "message": tx("DINCR necesita una observación anterior para detectar cambios significativos.", "DINCR needs a previous observation to detect meaningful changes."),
+            "message": tx("DINCR todavía no tiene una revisión anterior para comparar y detectar cambios importantes.", "DINCR doesn’t have an earlier check to compare with yet, so it can’t detect important changes."),
         }
 
     comparison = compare_states(current, previous)
@@ -42,17 +42,17 @@ def build_proactive_advisor(
     if _material_drop(safe, absolute=25_000, ratio=.20):
         severity = "critical" if safe["current"] < 0 else "high"
         alerts.append(_alert(
-            "safe_available_drop", severity, tx("Bajó tu dinero seguro disponible", "Your safe available money dropped"),
-            tx(f"Cambió {safe['delta']:+,.0f} CRC desde la observación anterior.", f"It changed {safe['delta']:+,.0f} CRC since the previous observation."),
-            tx("Revisar flujo", "Review cash flow"), "finance", safe, baseline_date, today,
+            "safe_available_drop", severity, tx("Bajó el dinero que podés usar con tranquilidad", "The money you can safely use dropped"),
+            tx(f"Cambió {safe['delta']:+,.0f} CRC desde la última revisión.", f"It changed {safe['delta']:+,.0f} CRC since the last check."),
+            tx("Revisar movimientos", "Review transactions"), "finance", safe, baseline_date, today,
         ))
 
     flow = metrics["net_operational"]
     if _material_drop(flow, absolute=25_000, ratio=.15):
         alerts.append(_alert(
             "cashflow_deterioration", "high" if flow["current"] < 0 else "medium",
-            tx("El flujo operativo se deterioró", "Operating cash flow worsened"),
-            tx(f"El resultado mensual cambió {flow['delta']:+,.0f} CRC.", f"The monthly result changed {flow['delta']:+,.0f} CRC."),
+            tx("Te queda menos dinero al final del mes", "You have less money left at the end of the month"),
+            tx(f"Tus ingresos menos tus gastos cambiaron {flow['delta']:+,.0f} CRC.", f"Your income minus your expenses changed {flow['delta']:+,.0f} CRC."),
             tx("Revisar movimientos", "Review transactions"), "finance", flow, baseline_date, today,
         ))
 
@@ -68,8 +68,8 @@ def build_proactive_advisor(
     if coverage["delta"] <= -.25:
         alerts.append(_alert(
             "emergency_coverage_drop", "high" if coverage["current"] < 1 else "medium",
-            tx("Disminuyó tu cobertura de emergencia", "Your emergency coverage decreased"),
-            tx(f"La cobertura bajó {abs(coverage['delta']):.2f} meses.", f"Coverage dropped {abs(coverage['delta']):.2f} months."),
+            tx("Tu fondo de emergencia cubre menos meses", "Your emergency fund covers fewer months"),
+            tx(f"Ahora cubre {abs(coverage['delta']):.2f} meses menos.", f"It now covers {abs(coverage['delta']):.2f} fewer months."),
             tx("Revisar Salvavidas", "Review emergency fund"), "vip-emergency", coverage, baseline_date, today,
         ))
 
@@ -126,7 +126,7 @@ def build_proactive_advisor(
             "attention": sum(item["severity"] == "medium" for item in alerts),
             "positive": sum(item["severity"] == "success" for item in alerts),
         },
-        "message": tx("DINCR detectó cambios que merecen atención.", "DINCR detected changes worth your attention.") if alerts else tx("No hay cambios significativos desde la observación anterior.", "No meaningful changes since the previous observation."),
+        "message": tx("DINCR detectó cambios que merecen atención.", "DINCR detected changes worth your attention.") if alerts else tx("No hay cambios importantes desde la última revisión.", "No important changes since the last check."),
     }
 
 

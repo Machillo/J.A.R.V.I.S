@@ -762,7 +762,7 @@
           "debt_type": "credit_card",
           "payment_day": 3
         },
-        "recommendation": "Cubrí tus compromisos y dirigí el excedente a Tarjeta principal.",
+        "recommendation": "Cubrí tus compromisos y usá lo que te quede libre para pagar Tarjeta principal.",
         "warnings": [],
         "projection": {
           "debt_id": 1,
@@ -829,7 +829,7 @@
           "debt_type": "credit_card",
           "payment_day": 3
         },
-        "recommendation": "Cubrí tus compromisos y dirigí el excedente a Tarjeta principal.",
+        "recommendation": "Cubrí tus compromisos y usá lo que te quede libre para pagar Tarjeta principal.",
         "warnings": [],
         "projection": {
           "debt_id": 1,
@@ -1020,9 +1020,9 @@
         "alerts": [
           {
             "severity": "high",
-            "title": "Reserva menor a un mes",
-            "context": "La cobertura estimada es 0.5 meses.",
-            "action": "Protegé el siguiente excedente en el fondo de emergencia."
+            "title": "Tu fondo de emergencia cubre menos de un mes",
+            "context": "Alcanza para unos 0.5 meses de tus compromisos.",
+            "action": "Cuando te sobre dinero, apartalo primero para tu fondo de emergencia."
           },
           {
             "severity": "medium",
@@ -1247,7 +1247,7 @@
             "order": 4,
             "title": "Esperar para invertir",
             "amount": 0,
-            "why": "Primero deben estar protegidos el flujo, la reserva y la deuda cara."
+            "why": "Antes de invertir, tus ingresos deben cubrir tus gastos, tu fondo de emergencia debe estar completo y tus deudas, bajo control."
           }
         ],
         "assumptions": [
@@ -2148,7 +2148,7 @@
           "debt_type": "credit_card",
           "payment_day": 3
         },
-        "recommendation": "Cover your commitments and send the surplus to Main card.",
+        "recommendation": "Cover your commitments and use what’s left to pay down Main card.",
         "warnings": [],
         "projection": {
           "debt_id": 1,
@@ -2215,7 +2215,7 @@
           "debt_type": "credit_card",
           "payment_day": 3
         },
-        "recommendation": "Cover your commitments and send the surplus to Main card.",
+        "recommendation": "Cover your commitments and use what’s left to pay down Main card.",
         "warnings": [],
         "projection": {
           "debt_id": 1,
@@ -2406,9 +2406,9 @@
         "alerts": [
           {
             "severity": "high",
-            "title": "Reserve below one month",
-            "context": "Estimated coverage is 0.5 months.",
-            "action": "Protect the next surplus in the emergency fund."
+            "title": "Your emergency fund covers less than a month",
+            "context": "It covers about 0.5 months of your commitments.",
+            "action": "When you have money left over, set it aside for your emergency fund first."
           },
           {
             "severity": "medium",
@@ -2633,7 +2633,7 @@
             "order": 4,
             "title": "Wait before investing",
             "amount": 0,
-            "why": "Cash flow, reserves, and expensive debt must be protected first."
+            "why": "Before investing, your income must cover your expenses, your emergency fund must be complete and your debts under control."
           }
         ],
         "assumptions": [

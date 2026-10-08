@@ -17,26 +17,24 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * K-2 — no public screen shows the financial-health score until it has a canonical calculation
- * (P3.7): Movimientos → Análisis → Revisión del mes keeps its other indicators and its next step
- * but not the score; the Owner keeps it in JARVIS → Análisis financiero. iOS twin:
- * `PublicScoreUITests`. FakeBackend only.
+ * UX-16 — plain financial language: the money left after commitments has one name everywhere (no
+ * "margen"), and the monthly review says how each indicator moved in words, with its unit. Copy is
+ * resolved with the app's own `tx` (the device language). iOS twin: `PlainLanguageUITests`.
  */
-class PublicScoreUiTest {
+class PlainLanguageUiTest {
     @get:Rule val compose = createEmptyComposeRule()
     private var scenario: ActivityScenario<MainActivity>? = null
 
-    private fun launch(plan: String = "free", role: String? = null) {
+    private fun launch(plan: String) {
         scenario?.close()
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
             .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
-        role?.let { intent.putExtra("dincrRole", it) }
         scenario = ActivityScenario.launch(intent)
     }
 
     @After fun close() { scenario?.close() }
 
-    private fun present(text: String) = compose.onAllNodes(hasText(text, substring = true, ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    private fun present(text: String) = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
     private fun waitUntil(what: String, condition: () -> Boolean) {
         repeat(150) { if (condition()) return; Thread.sleep(100); compose.waitForIdle() }
         throw AssertionError("timed out waiting for $what")
@@ -52,26 +50,31 @@ class PublicScoreUiTest {
         waitUntil("tab $text") { compose.onAllNodes(hasText(text) and isSelectable()).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasText(text) and isSelectable()).onFirst().performSemanticsAction(SemanticsActions.OnClick)
     }
+    private val noMargin get() = listOf("Margen", "margin", "Margin")
 
-    @Test fun theMonthlyReviewKeepsItsIndicatorsWithoutTheScore() {
-        for ((plan, role) in listOf("vip" to null, "free" to "owner")) {
-            launch(plan, role)
-            tab(tx("Movimientos", "Transactions"))
-            click(tx("Análisis", "Analysis"))
-            click(tx("Revisión del mes", "Monthly review"))
-            // The fixture's lines carry the backend's Spanish labels.
-            waitUntil("review ($role)") { present("Deuda total") }
-            waitUntil("flow") { present("Ingresos menos gastos") }
-            waitUntil("next step") { present("Pagá extra a la tarjeta") }
-            for (hidden in listOf("Salud financiera", tx("Salud financiera", "Financial health"), "/100", "de 100", "72.0")) assertFalse("${role ?: plan}: $hidden", present(hidden))
-        }
+    @Test fun hoySaysWhatIsLeft() {
+        launch("vip")
+        waitUntil("left after commitments") { present(tx("Libre después de compromisos", "Left after commitments")) }
+        noMargin.forEach { assertFalse(it, present(it)) }
     }
 
-    @Test fun theOwnerKeepsTheScoreInJarvis() {
-        launch(role = "owner")
-        tab(tx("Perfil", "Profile"))
-        click("JARVIS")
-        click(tx("Análisis financiero", "Financial analysis"))
-        waitUntil("health") { present(tx("Salud financiera", "Financial health")) }
+    @Test fun basicPlanNamesWhatIsLeft() {
+        launch("basic")
+        tab(tx("Plan", "Plan"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
+        waitUntil("left after your commitments") { present(tx("Libre después de tus compromisos", "Left after your commitments")) }
+        noMargin.forEach { assertFalse(it, present(it)) }
+    }
+
+    @Test fun theMonthlyReviewSaysHowEachIndicatorMoved() {
+        launch("vip")
+        tab(tx("Movimientos", "Transactions"))
+        click(tx("Análisis", "Analysis"))
+        click(tx("Revisión del mes", "Monthly review"))
+        // The fixture's labels are the backend's Spanish ones; the trend words and units are the app's.
+        waitUntil("debt") { present("Deuda total · ${tx("mejoró", "improved")}") }
+        waitUntil("coverage") { present("Meses que cubre tu fondo de emergencia · ${tx("sin cambios", "no change")}") }
+        waitUntil("one month") { present(tx("1 mes", "1 month")) }
+        waitUntil("flow") { present("Ingresos menos gastos · ${tx("empeoró", "got worse")}") }
     }
 }

@@ -39,11 +39,11 @@ final class AttentionUITests: XCTestCase {
         let app = launch(plan: "vip")
         XCTAssertTrue(element("home.status.amount", in: app).waitForExistence(timeout: 10))
         reveal("home.attention.all", in: app)
-        let high = texts("Reserva menor a un mes", in: app).firstMatch
+        let high = texts("Tu fondo de emergencia cubre menos de un mes", in: app).firstMatch
         let medium = texts("Pago de tarjeta en 5 días", in: app).firstMatch
         XCTAssertTrue(high.exists && medium.exists)
         XCTAssertLessThan(high.frame.minY, medium.frame.minY, "high before medium")
-        XCTAssertTrue(texts("Recurrente con variación", in: app).firstMatch.exists)
+        XCTAssertTrue(texts("Un cobro recurrente cambió de monto", in: app).firstMatch.exists)
         // The fourth (the mail notices, last among the medium ones) waits behind "Ver todas".
         XCTAssertFalse(texts("Movimientos por revisar", in: app).firstMatch.exists)
         XCTAssertFalse(element("home.attention.link.review", in: app).exists)
@@ -65,7 +65,7 @@ final class AttentionUITests: XCTestCase {
         XCTAssertEqual(Set((0..<items.count).map { items.element(boundBy: $0).identifier }), ["attention.item.center", "attention.item.review"])
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "attention.item.review").count, 1)
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "attention.item.center").count, 3)
-        XCTAssertTrue(texts("Reserva menor a un mes", in: app).firstMatch.exists)
+        XCTAssertTrue(texts("Tu fondo de emergencia cubre menos de un mes", in: app).firstMatch.exists)
         // The advisor answered (no earlier observation yet): no technical problem, no invented change.
         XCTAssertFalse(element("attention.advisor.unavailable", in: app).exists)
         XCTAssertFalse(element("attention.item.advisor", in: app).exists)
@@ -90,7 +90,7 @@ final class AttentionUITests: XCTestCase {
         XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))
         reveal("owner.home.attention.all", in: app)
         XCTAssertFalse(texts("Nada pendiente", in: app).firstMatch.exists)
-        let high = texts("Reserva menor a un mes", in: app).firstMatch
+        let high = texts("Tu fondo de emergencia cubre menos de un mes", in: app).firstMatch
         let medium = texts("Pago de tarjeta en 5 días", in: app).firstMatch
         XCTAssertLessThan(high.frame.minY, medium.frame.minY, "high before medium")
     }

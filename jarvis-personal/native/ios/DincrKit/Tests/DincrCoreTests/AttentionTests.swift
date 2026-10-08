@@ -177,7 +177,7 @@ import Testing
 
     @Test func noAmountIsInventedAndTheBackendWordsAreKept() throws {
         // The list never computes or rewrites figures: messages are the backend's text as sent.
-        let value = try center(#"{"alerts":[{"severity":"critical","title":"Cierre mensual negativo","context":"Faltan ₡150,000 para cubrir compromisos conocidos.","action":null}]}"#)
+        let value = try center(#"{"alerts":[{"severity":"critical","title":"Este mes tus compromisos superan tus ingresos","context":"Faltan ₡150,000 para cubrir compromisos conocidos.","action":null}]}"#)
         let items = AttentionList.items(center: value, advisor: nil)
         #expect(items[0].message == "Faltan ₡150,000 para cubrir compromisos conocidos.")
         // With no alerts (for example an unknown income, #324) nothing is shown: no zero is made up.

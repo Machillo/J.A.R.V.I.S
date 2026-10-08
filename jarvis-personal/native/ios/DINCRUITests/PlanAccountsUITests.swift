@@ -193,7 +193,7 @@ final class PlanAccountsUITests: XCTestCase {
         let app = launch(plan: "basic", tab: "plan")
         open("plan.strategy", in: app)
         XCTAssertTrue(text("Estimado con tus ingresos registrados (no declarado)", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(text("Margen para decidir", in: app).exists)
+        XCTAssertTrue(text("Libre después de tus compromisos", in: app).exists)
     }
 
     func testBasicStrategyWithoutIncomeAsksForIngresosYBase() {

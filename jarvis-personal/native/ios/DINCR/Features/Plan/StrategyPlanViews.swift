@@ -174,7 +174,7 @@ private struct MonthPlanSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(plan.kind == .basic ? tx("Margen para decidir", "Margin to decide") : tx("Sobrante para repartir", "Surplus to allocate"))
+            Text(plan.kind == .basic ? tx("Libre después de tus compromisos", "Left after your commitments") : tx("Sobrante para repartir", "Surplus to allocate"))
                 .font(DincrFont.label).foregroundStyle(DincrColor.text2)
             MoneyText(plan.base, font: DincrFont.displayAmount)
             if showsHeadline, let headline = plan.summaryHeadline {
@@ -197,7 +197,7 @@ private struct MonthPlanSplit: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             SectionHeader(title: title)
             if plan.parts.isEmpty {
-                Text(plan.kind == .basic ? tx("Este mes no hay margen para repartir.", "There’s no margin to split this month.")
+                Text(plan.kind == .basic ? tx("Este mes no queda dinero libre para repartir.", "There’s no money left to split this month.")
                                          : tx("Este mes no hay sobrante real para repartir.", "There’s no real surplus to allocate this month."))
                     .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
             } else if plan.showsComposition {
@@ -432,10 +432,10 @@ private struct DistributionContent: View {
                 if basic.usesObservedIncome { ObservedIncomeNote() }
                 let allocations = basic.allocations ?? []
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                    SectionHeader(title: tx("Cómo repartir tu margen", "How to split your margin"))
-                    FigureRow(label: tx("Margen para decidir", "Margin to decide"), amount: basic.strategicMargin)
+                    SectionHeader(title: tx("Cómo repartir lo que te queda", "How to split what’s left"))
+                    FigureRow(label: tx("Libre después de tus compromisos", "Left after your commitments"), amount: basic.strategicMargin)
                     if allocations.isEmpty {
-                        Text(tx("Este mes no hay margen seguro para repartir.", "This month there is no safe margin to split."))
+                        Text(tx("Este mes no queda dinero libre para repartir.", "There’s no money left to split this month."))
                             .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
                     }
                     ForEach(Array(allocations.enumerated()), id: \.offset) { _, allocation in

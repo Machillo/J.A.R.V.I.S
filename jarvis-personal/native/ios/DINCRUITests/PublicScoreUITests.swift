@@ -37,8 +37,8 @@ final class PublicScoreUITests: XCTestCase {
             open("movements.analysis", in: app)
             open("analysis.review", in: app)
             XCTAssertTrue(app.navigationBars["Revisión del mes"].waitForExistence(timeout: 10))
-            XCTAssertTrue(app.staticTexts["Deuda total"].waitForExistence(timeout: 10), role ?? "vip")
-            XCTAssertTrue(contains("Flujo operativo", in: app))
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Deuda total")).firstMatch.waitForExistence(timeout: 10), role ?? "vip")
+            XCTAssertTrue(contains("Ingresos menos gastos", in: app))
             XCTAssertTrue(contains("Pagá extra a la tarjeta", in: app))  // the next step stays
             for hidden in ["Salud financiera", "/100", "points", "puntos"] { XCTAssertFalse(contains(hidden, in: app), "\(role ?? "vip"): \(hidden)") }
             app.terminate()

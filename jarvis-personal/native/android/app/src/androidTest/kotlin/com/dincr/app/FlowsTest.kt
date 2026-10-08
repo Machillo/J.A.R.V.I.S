@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -66,6 +67,11 @@ class FlowsTest {
 
     private fun waitForTag(tag: String) =
         waitUntil("tag $tag") { compose.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun continueSetup() {
+        waitUntil("setup.continue enabled") { compose.onAllNodes(hasTestTag("setup.continue") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("setup.continue").performClick()
+    }
 
     private fun click(text: String) {
         waitForText(text)
@@ -295,12 +301,16 @@ class FlowsTest {
 
     @Test fun newUserGoesThroughProfileSetupAndPlan() {
         launch("NEW_USER")
-        waitForTag("setup.continue")
-        compose.onNodeWithTag("setup.continue").performClick()
+        // Each step is waited for, and Continue is tapped only once enabled (step 2 enables it when a
+        // goal is chosen): on a slow emulator a tap before that is ignored and the flow stalls.
+        continueSetup()
+        waitForText(tx("¿Qué querés lograr primero?", "What do you want to achieve first?"))
         compose.onNodeWithText(tx("Tomar control de mis finanzas", "Take control of my finances")).performClick()
-        compose.onNodeWithTag("setup.continue").performClick()
-        compose.onNodeWithTag("setup.continue").performClick()
-        compose.onNodeWithTag("setup.continue").performClick()
+        continueSetup()
+        waitForText(tx("¿Cómo querés ver tu dinero?", "How do you want to see your money?"))
+        continueSetup()
+        waitForText(tx("Entrar a DINCR", "Enter DINCR"))
+        continueSetup()
         waitForText(tx("Elegí tu suscripción", "Choose your subscription"))
         click(tx("Elegir Free", "Choose Free"))
         waitForText(tx("Resultado del mes", "This month’s result"))
