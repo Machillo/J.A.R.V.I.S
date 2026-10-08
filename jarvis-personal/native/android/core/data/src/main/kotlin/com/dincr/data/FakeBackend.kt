@@ -441,8 +441,8 @@ class FakeBackend(
             CommandCenter.SafeToSpend(BigDecimal(118000), BigDecimal(214000), BigDecimal(96000)),
             // More than Hoy's three (UX-5), including the backend's own pending-review alert.
             listOf(CommandCenter.Alert("medium", "Pago de tarjeta en 5 días", "El pago mínimo vence pronto.", "Revisá la deuda"),
-                CommandCenter.Alert("high", "Reserva menor a un mes", "La cobertura estimada es 0.7 meses.", "Protegé el siguiente excedente en el fondo de emergencia."),
-                CommandCenter.Alert("medium", "Recurrente con variación", "Servicio de ejemplo cambió más de 10% entre cobros.", "Confirmá si fue un aumento, consumo variable o cargo incorrecto.")) +
+                CommandCenter.Alert("high", "Tu fondo de emergencia cubre menos de un mes", "Alcanza para unos 0.7 meses de tus compromisos.", "Cuando te sobre dinero, apartalo primero para tu fondo de emergencia."),
+                CommandCenter.Alert("medium", "Un cobro recurrente cambió de monto", "Servicio de ejemplo cambió más de 10% entre cobros.", "Confirmá si fue un aumento, consumo variable o cargo incorrecto.")) +
                 candidates.count { it.isPending }.let { pending ->
                     if (pending > 0) listOf(CommandCenter.Alert("medium", "Movimientos por revisar", "Hay $pending movimientos importados sin confirmar.", "Revisalos antes de confiar en el cierre mensual.")) else emptyList()
                 },
@@ -463,11 +463,11 @@ class FakeBackend(
         "/user-product/vip/aguinaldo" -> if (!mailConnected) error(409, "Conectá tu correo para calcular el aguinaldo.") else ok(Aguinaldo("OK", Aguinaldo.Period("${today.year - 1}-12-01", "${today.year}-11-30"), BigDecimal(5_190_000), BigDecimal(432_500)))
         "/user-product/vip/lifecycle/monthly-review" -> if (scenario != Scenario.POPULATED) ok(MonthlyReview("BASELINE", today.toString().take(7), "Tu primer mes con DINCR", "Todavía no hay suficiente historia para comparar."))
         // The backend's scorecard includes the health score; the app leaves that line out (K-2).
-        else ok(MonthlyReview("OK", today.toString().take(7), "Hubo progreso, con áreas que DINCR debe reajustar.", "2 indicadores mejoraron y 1 se desvió.",
+        else ok(MonthlyReview("OK", today.toString().take(7), "Hubo progreso, con áreas que DINCR debe reajustar.", "2 indicadores mejoraron y 1 empeoró.",
             listOf(MonthlyReview.ScoreLine("debt_total", "Deuda total", "CRC", 810000.0, 900000.0, -90000.0, "improved"),
-                MonthlyReview.ScoreLine("emergency_coverage_months", "Cobertura de emergencia", "months", 1.0, 1.0, 0.0, "unchanged"),
+                MonthlyReview.ScoreLine("emergency_coverage_months", "Meses que cubre tu fondo de emergencia", "months", 1.0, 1.0, 0.0, "unchanged"),
                 MonthlyReview.ScoreLine(MonthlyReview.HEALTH_SCORE_KEY, "Salud financiera", "points", 72.0, 66.0, 6.0, "improved"),
-                MonthlyReview.ScoreLine("net_operational", "Flujo operativo", "CRC", 180000.0, 214000.0, -34000.0, "declined")),
+                MonthlyReview.ScoreLine("net_operational", "Ingresos menos gastos", "CRC", 180000.0, 214000.0, -34000.0, "declined")),
             nextMonth = MonthlyReview.NextMonth("debt", "Pagá extra a la tarjeta", BigDecimal(40000), "Tiene la tasa más alta.")))
         "/user-product/vip/lifecycle/proactive-advisor" -> ok(ProactiveAdvisor("BASELINE", today.toString(), emptyList(), "DINCR necesita unos días de historia para avisarte de cambios."))
         else -> error(404, "Not Found")

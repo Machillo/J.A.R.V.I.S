@@ -189,7 +189,7 @@ class AttentionListTest {
     // Data and purity
 
     @Test fun noAmountIsInventedAndTheBackendWordsAreKept() {
-        val value = center("""{"alerts":[{"severity":"critical","title":"Cierre mensual negativo","context":"Faltan ₡150,000 para cubrir compromisos conocidos.","action":null}]}""")
+        val value = center("""{"alerts":[{"severity":"critical","title":"Este mes tus compromisos superan tus ingresos","context":"Faltan ₡150,000 para cubrir compromisos conocidos.","action":null}]}""")
         assertEquals("Faltan ₡150,000 para cubrir compromisos conocidos.", AttentionList.items(value, null)[0].message)
         // With no alerts (for example an unknown income, #324) nothing is shown: no zero is made up.
         assertTrue(AttentionList.items(center("""{"alerts":[],"safe_to_spend":{"amount":0}}"""), null).isEmpty())

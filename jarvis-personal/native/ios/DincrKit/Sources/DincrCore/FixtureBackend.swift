@@ -466,8 +466,8 @@ public actor FixtureBackend: HTTPTransport {
                        "safe_to_spend": ["amount": 118_000, "monthly_margin": 214_000, "next_45_days_minimum": 96_000],
                        // More than Hoy's three (UX-5), including the backend's own pending-review alert.
                        "alerts": [["severity": "medium", "title": "Pago de tarjeta en 5 días", "context": "El pago mínimo vence pronto.", "action": "Revisá la deuda"],
-                                  ["severity": "high", "title": "Reserva menor a un mes", "context": "La cobertura estimada es 0.7 meses.", "action": "Protegé el siguiente excedente en el fondo de emergencia."],
-                                  ["severity": "medium", "title": "Recurrente con variación", "context": "Servicio de ejemplo cambió más de 10% entre cobros.", "action": "Confirmá si fue un aumento, consumo variable o cargo incorrecto."]]
+                                  ["severity": "high", "title": "Tu fondo de emergencia cubre menos de un mes", "context": "Alcanza para unos 0.7 meses de tus compromisos.", "action": "Cuando te sobre dinero, apartalo primero para tu fondo de emergencia."],
+                                  ["severity": "medium", "title": "Un cobro recurrente cambió de monto", "context": "Servicio de ejemplo cambió más de 10% entre cobros.", "action": "Confirmá si fue un aumento, consumo variable o cargo incorrecto."]]
                            + (pendingCount() > 0 ? [["severity": "medium", "title": "Movimientos por revisar", "context": "Hay \(pendingCount()) movimientos importados sin confirmar.", "action": "Revisalos antes de confiar en el cierre mensual."]] : []),
                        "projections": scenario == .empty ? []
                            : [1, 3, 6, 12].map { ["months": $0, "cash": 200_000 * $0, "debt": max(900_000 - 90_000 * $0, 0), "net_worth": 200_000 * $0 - max(900_000 - 90_000 * $0, 0), "confidence": "medium"] },
@@ -491,11 +491,11 @@ public actor FixtureBackend: HTTPTransport {
             }
             // The backend's scorecard includes the health score; the app leaves that line out (K-2).
             return ok(["status": "OK", "period": String(day(0).prefix(7)), "headline": "Hubo progreso, con áreas que DINCR debe reajustar.",
-                       "summary": "2 indicadores mejoraron y 1 se desvió.",
+                       "summary": "2 indicadores mejoraron y 1 empeoró.",
                        "scorecard": [["key": "debt_total", "label": "Deuda total", "unit": "CRC", "current": 810_000, "baseline": 900_000, "delta": -90_000, "trend": "improved"],
-                                     ["key": "emergency_coverage_months", "label": "Cobertura de emergencia", "unit": "months", "current": 1, "baseline": 1, "delta": 0, "trend": "unchanged"],
+                                     ["key": "emergency_coverage_months", "label": "Meses que cubre tu fondo de emergencia", "unit": "months", "current": 1, "baseline": 1, "delta": 0, "trend": "unchanged"],
                                      ["key": "health_score", "label": "Salud financiera", "unit": "points", "current": 72, "baseline": 66, "delta": 6, "trend": "improved"],
-                                     ["key": "net_operational", "label": "Flujo operativo", "unit": "CRC", "current": 180_000, "baseline": 214_000, "delta": -34_000, "trend": "declined"]],
+                                     ["key": "net_operational", "label": "Ingresos menos gastos", "unit": "CRC", "current": 180_000, "baseline": 214_000, "delta": -34_000, "trend": "declined"]],
                        "next_month": ["priority": "debt", "title": "Pagá extra a la tarjeta", "amount": 40_000, "rationale": "Tiene la tasa más alta."]])
         case "/user-product/vip/lifecycle/proactive-advisor":
             return ok(["status": "BASELINE", "as_of": day(0), "alerts": [Any](), "message": "DINCR necesita unos días de historia para avisarte de cambios."])

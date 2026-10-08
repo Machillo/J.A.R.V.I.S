@@ -85,9 +85,9 @@ def _scorecard(metrics: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         ("net_worth", tx("Patrimonio neto", "Net worth"), "CRC"),
         ("debt_total", tx("Deuda total", "Total debt"), "CRC"),
         ("emergency_fund_current", tx("Fondo de emergencia", "Emergency fund"), "CRC"),
-        ("emergency_coverage_months", tx("Cobertura de emergencia", "Emergency coverage"), "months"),
+        ("emergency_coverage_months", tx("Meses que cubre tu fondo de emergencia", "Months your emergency fund covers"), "months"),
         ("health_score", tx("Salud financiera", "Financial health"), "points"),
-        ("net_operational", tx("Flujo operativo", "Operating cash flow"), "CRC"),
+        ("net_operational", tx("Ingresos menos gastos", "Income minus expenses"), "CRC"),
     )
     lines = [{"key": key, "label": label, "unit": unit, **metrics[key]} for key, label, unit in definitions]
     for line in lines:
@@ -111,14 +111,14 @@ def _headline(wins: list[dict[str, Any]], deviations: list[dict[str, Any]]) -> s
 def _summary(summary: dict[str, int], transition: dict[str, Any]) -> str:
     improved, declined = summary["improved"], summary["declined"]
     movement = tx(
-        f"{improved} {'indicador mejoró' if improved == 1 else 'indicadores mejoraron'} y {declined} {'se desvió' if declined == 1 else 'se desviaron'}.",
-        f"{improved} {'indicator' if improved == 1 else 'indicators'} improved and {declined} deviated.",
+        f"{improved} {'indicador mejoró' if improved == 1 else 'indicadores mejoraron'} y {declined} {'empeoró' if declined == 1 else 'empeoraron'}.",
+        f"{improved} {'indicator' if improved == 1 else 'indicators'} improved and {declined} got worse.",
     )
     if transition["kind"] == "priority_changed":
         return f"{movement} " + tx("DINCR cambió la prioridad para responder a la nueva situación.", "DINCR changed the priority to respond to the new situation.")
     if transition["kind"] == "plan_adjusted":
         return f"{movement} " + tx("DINCR mantuvo el objetivo y ajustó la ejecución.", "DINCR kept the goal and adjusted the execution.")
-    return f"{movement} " + tx("La prioridad estratégica se mantiene.", "The strategic priority stays the same.")
+    return f"{movement} " + tx("Tu prioridad se mantiene.", "Your priority stays the same.")
 
 
 def _value_explanation(changed: int, transition: dict[str, Any]) -> str:
@@ -136,7 +136,7 @@ def _next_month(action: dict[str, Any]) -> dict[str, Any]:
         "priority": action.get("type") or "observe",
         "title": title or tx("Seguir acumulando historia financiera", "Keep building financial history"),
         "amount": round(float(action.get("amount") or 0), 2),
-        "rationale": rationale or tx("DINCR actualizará la recomendación con la próxima observación.", "DINCR will update the recommendation with the next observation."),
+        "rationale": rationale or tx("DINCR actualizará la recomendación con la próxima revisión.", "DINCR will update the recommendation with the next check."),
     }
 
 

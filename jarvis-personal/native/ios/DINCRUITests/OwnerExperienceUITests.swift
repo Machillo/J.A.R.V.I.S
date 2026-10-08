@@ -58,7 +58,7 @@ final class OwnerExperienceUITests: XCTestCase {
         // Para atender (UX-5): the command center's alerts in the backend's words, high first, and
         // "Ver todas" because there are more than three.
         reveal("owner.home.attention.item.center", in: app)
-        XCTAssertTrue(text("Reserva menor a un mes", in: app).exists)
+        XCTAssertTrue(text("Tu fondo de emergencia cubre menos de un mes", in: app).exists)
         XCTAssertTrue(text("Pago de tarjeta en 5 días", in: app).exists)
         XCTAssertTrue(element("owner.home.attention.all", in: app).exists)
         // Next: the JARVIS agenda, next event first.

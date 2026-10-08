@@ -261,11 +261,11 @@ def get_vip_command_center() -> dict:
 
     alerts = []
     if income_known and margin < 0:
-        alerts.append({"severity": "critical", "title": tx("Cierre mensual negativo", "Negative monthly close"), "context": tx(f"Faltan {_money_text(abs(margin))} para cubrir compromisos conocidos.", f"{_money_text(abs(margin))} is missing to cover known commitments."), "action": tx("Reducí variables o aumentá ingreso antes de asumir otra obligación.", "Reduce variable spending or increase income before taking on another obligation.")})
+        alerts.append({"severity": "critical", "title": tx("Este mes tus compromisos superan tus ingresos", "This month your commitments exceed your income"), "context": tx(f"Faltan {_money_text(abs(margin))} para cubrir compromisos conocidos.", f"{_money_text(abs(margin))} is missing to cover known commitments."), "action": tx("Antes de asumir otro pago, reducí los gastos que podés ajustar o buscá aumentar tus ingresos.", "Before taking on another payment, cut the expenses you can adjust or look for more income.")})
     if coverage_known and coverage < 1:
-        alerts.append({"severity": "high", "title": tx("Reserva menor a un mes", "Reserve below one month"), "context": tx(f"La cobertura estimada es {coverage:.1f} meses.", f"Estimated coverage is {coverage:.1f} months."), "action": tx("Protegé el siguiente excedente en el fondo de emergencia.", "Protect the next surplus in the emergency fund.")})
+        alerts.append({"severity": "high", "title": tx("Tu fondo de emergencia cubre menos de un mes", "Your emergency fund covers less than a month"), "context": tx(f"Alcanza para unos {coverage:.1f} meses de tus compromisos.", f"It covers about {coverage:.1f} months of your commitments."), "action": tx("Cuando te sobre dinero, apartalo primero para tu fondo de emergencia.", "When you have money left over, set it aside for your emergency fund first.")})
     if variability > 20:
-        alerts.append({"severity": "medium", "title": tx("Ingreso variable", "Variable income"), "context": tx(f"La variación reciente es {variability}%.", f"Recent variation is {variability}%."), "action": tx("Presupuestá con el ingreso conservador, no con el mejor mes.", "Budget with the conservative income, not your best month.")})
+        alerts.append({"severity": "medium", "title": tx("Tus ingresos cambian de un mes a otro", "Your income changes from month to month"), "context": tx(f"En los últimos meses variaron un {variability}%.", f"In recent months it varied by {variability}%."), "action": tx("Planificá con un ingreso prudente, no con tu mejor mes.", "Plan with a cautious income, not your best month.")})
     if candidates["review"]:
         alerts.append({"severity": "medium", "title": tx("Movimientos por revisar", "Transactions to review"), "context": (
             tx("Hay 1 movimiento importado sin confirmar.", "There is 1 unconfirmed imported transaction.")
@@ -274,7 +274,7 @@ def get_vip_command_center() -> dict:
         ), "action": tx("Revisalos antes de confiar en el cierre mensual.", "Review them before relying on the monthly close.")})
     increases = [row for row in detected_recurring if _money(row.get("minimum_amount")) and _money(row.get("maximum_amount")) > _money(row.get("minimum_amount")) * 1.10]
     if increases:
-        alerts.append({"severity": "medium", "title": tx("Recurrente con variación", "Recurring charge changed"), "context": tx(f"{increases[0]['merchant']} cambió más de 10% entre cobros.", f"{increases[0]['merchant']} changed more than 10% between charges."), "action": tx("Confirmá si fue un aumento, consumo variable o cargo incorrecto.", "Confirm whether it was a price increase, variable usage, or an incorrect charge.")})
+        alerts.append({"severity": "medium", "title": tx("Un cobro recurrente cambió de monto", "A recurring charge changed amount"), "context": tx(f"{increases[0]['merchant']} cambió más de 10% entre cobros.", f"{increases[0]['merchant']} changed more than 10% between charges."), "action": tx("Confirmá si fue un aumento, consumo variable o cargo incorrecto.", "Confirm whether it was a price increase, variable usage, or an incorrect charge.")})
 
     goal_guidance = []
     for goal in goals:
@@ -327,14 +327,14 @@ def get_vip_command_center() -> dict:
     # The roadmap's steps rest on the margin and the priority: none is stated from an unknown.
     if priority != "incomplete":
         if margin < 0:
-            roadmap.append({"order": 1, "title": tx("Eliminar déficit", "Eliminate deficit"), "amount": abs(margin), "why": tx("Sin flujo positivo no hay dinero seguro para deuda, metas o inversión.", "Without positive cash flow, there is no safe money for debt, goals, or investing.")})
+            roadmap.append({"order": 1, "title": tx("Eliminar déficit", "Eliminate deficit"), "amount": abs(margin), "why": tx("Mientras tus gastos superen tus ingresos, no hay dinero seguro para deudas, metas o inversión.", "While your expenses exceed your income, there is no safe money for debt, goals, or investing.")})
         if gap_known and emergency_gap > 0:
             roadmap.append({"order": len(roadmap)+1, "title": tx("Completar reserva", "Complete emergency fund"), "amount": min(max(margin, 0), emergency_gap), "why": tx("Protege tus obligaciones ante un imprevisto.", "It protects your obligations against the unexpected.")})
         if best and margin > 0:
             roadmap.append({"order": len(roadmap)+1, "title": tx(f"Abonar a {best['target']}", f"Pay extra toward {best['target']}"), "amount": margin, "why": tx("Es el uso de menor costo financiero según saldo y tasa conocidos.", "It is the lowest-cost use based on known balances and rates.")})
         if goals and margin > 0:
             roadmap.append({"order": len(roadmap)+1, "title": tx(f"Financiar {goals[0]['name']}", f"Fund {goals[0]['name']}"), "amount": min(margin, goal_guidance[0].get("monthly_required") or margin), "why": tx("Alinea el aporte con fecha y prioridad.", "It aligns the contribution with its date and priority.")})
-        roadmap.append({"order": len(roadmap)+1, "title": tx("Invertir", "Invest") if investing_allowed else tx("Esperar para invertir", "Wait before investing"), "amount": margin if investing_allowed else 0, "why": tx("Primero deben estar protegidos el flujo, la reserva y la deuda cara.", "Cash flow, reserves, and expensive debt must be protected first.")})
+        roadmap.append({"order": len(roadmap)+1, "title": tx("Invertir", "Invest") if investing_allowed else tx("Esperar para invertir", "Wait before investing"), "amount": margin if investing_allowed else 0, "why": tx("Antes de invertir, tus ingresos deben cubrir tus gastos, tu fondo de emergencia debe estar completo y tus deudas, bajo control.", "Before investing, your income must cover your expenses, your emergency fund must be complete and your debts under control.")})
 
     return {
         "as_of": today.isoformat(),

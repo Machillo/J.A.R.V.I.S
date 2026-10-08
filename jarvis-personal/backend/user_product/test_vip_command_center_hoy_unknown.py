@@ -116,7 +116,7 @@ def test_unknown_savings_with_a_target_never_state_the_gap(ledger):
     assert center["director"]["headline"] != "Completar el fondo de emergencia"
     assert center["roadmap"] == []
     # No fictitious coverage of 0: no reserve alert, and no cash figure from undeclared savings.
-    assert "Reserva menor a un mes" not in [alert["title"] for alert in center["alerts"]]
+    assert "Tu fondo de emergencia cubre menos de un mes" not in [alert["title"] for alert in center["alerts"]]
     assert center["safe_to_spend"]["amount"] is None and center["safe_to_spend"]["next_45_days_minimum"] is None
     assert center["safe_to_spend"]["missing"] == ["savings"]
 

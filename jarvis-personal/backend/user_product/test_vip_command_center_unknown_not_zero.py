@@ -1,8 +1,8 @@
 """The VIP command center never states a financial fact from an unknown value (unknown ≠ 0).
 
 Regression: with an income nobody knows (income policy source "none", returned as 0) the
-command center said "Cierre mensual negativo" (critical); with undeclared savings, or with no
-commitments at all (coverage fell back to 0), it said "Reserva menor a un mes" (high). Both
+command center said "Este mes tus compromisos superan tus ingresos" (critical); with undeclared savings, or with no
+commitments at all (coverage fell back to 0), it said "Tu fondo de emergencia cubre menos de un mes" (high). Both
 alerts now require the data behind them; a known zero keeps its meaning. Thresholds,
 severities and copy are unchanged. All data is synthetic.
 """
@@ -16,8 +16,8 @@ from backend.user_product import basic_service, service, vip_service
 from backend.user_product.test_mail_preserves_financial_state import ACCOUNT, ALLOWED_USER_ID, WORKSPACE
 from backend.user_product.test_vip_emergency_target import ProjectingConnection, ProjectingDB
 
-NEGATIVE_CLOSE = "Cierre mensual negativo"
-LOW_RESERVE = "Reserva menor a un mes"
+NEGATIVE_CLOSE = "Este mes tus compromisos superan tus ingresos"
+LOW_RESERVE = "Tu fondo de emergencia cubre menos de un mes"
 
 
 class RecordingConnection(ProjectingConnection):

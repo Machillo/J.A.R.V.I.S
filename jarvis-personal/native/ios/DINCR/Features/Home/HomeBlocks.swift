@@ -110,7 +110,7 @@ private struct HomeStatusCard: View {
                     }
                     if status.headline == .safeToSpend {
                         HStack(spacing: DincrSpacing.s1) {
-                            Text(tx("Margen del mes", "Monthly margin"))
+                            Text(tx("Libre después de compromisos", "Left after commitments"))
                             if let margin = status.margin {
                                 MoneyText(margin, font: DincrFont.caption.weight(.semibold).monospacedDigit())
                             } else {

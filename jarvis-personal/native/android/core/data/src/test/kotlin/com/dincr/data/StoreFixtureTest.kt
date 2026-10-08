@@ -61,7 +61,7 @@ class StoreFixtureTest {
         val api = store(PlanTier.VIP)
         val strategy = api.strategyBasic()
         assertEquals(engine<Strategy>("es", "strategy_basic"), strategy)
-        assertEquals("Cubrí tus compromisos y dirigí el excedente a Tarjeta principal.", strategy.recommendation)
+        assertEquals("Cubrí tus compromisos y usá lo que te quede libre para pagar Tarjeta principal.", strategy.recommendation)
         same(strategy.monthlyIncome!! - strategy.essentialExpenses!! - strategy.minimumDebtPayments!!, strategy.strategicMargin, "margin")
         same(strategy.strategicMargin, strategy.allocations.sumOf { it.amount!! }, "allocations")
         val center = api.commandCenter()
@@ -96,7 +96,7 @@ class StoreFixtureTest {
         val api = store(PlanTier.VIP, AppLanguage.ENGLISH)
         assertEquals("comma_dot", api.me().numberFormat)
         assertEquals(listOf("Main card", "Car loan"), api.debts().map { it.name })
-        assertEquals("Cover your commitments and send the surplus to Main card.", api.strategyBasic().recommendation)
+        assertEquals("Cover your commitments and use what’s left to pay down Main card.", api.strategyBasic().recommendation)
         assertEquals("Groceries", api.movements().first { it.category == "Food" }.description)
         // Same numbers in both languages.
         assertEquals(api.freeDashboard().monthlyHistory, store(PlanTier.VIP, AppLanguage.SPANISH).freeDashboard().monthlyHistory)

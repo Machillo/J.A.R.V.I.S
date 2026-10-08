@@ -247,7 +247,7 @@ private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) 
                     }
                     if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) {
                         Row(Modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s1), verticalAlignment = Alignment.CenterVertically) {
-                            Caption(tx("Margen del mes", "Monthly margin"))
+                            Caption(tx("Libre después de compromisos", "Left after commitments"))
                             if (status.margin != null) MoneyText(status.margin, style = MaterialTheme.typography.bodySmall) else Caption("—")
                         }
                     }

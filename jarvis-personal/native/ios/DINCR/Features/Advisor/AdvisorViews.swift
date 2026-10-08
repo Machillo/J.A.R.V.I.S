@@ -129,7 +129,7 @@ struct StrategyContent: View {
             FigureRow(label: tx("Ingreso mensual", "Monthly income"), amount: strategy.monthlyIncome)
             FigureRow(label: tx("Gastos esenciales", "Essential expenses"), amount: strategy.essentialExpenses)
             FigureRow(label: tx("Cuotas mínimas", "Minimum payments"), amount: strategy.minimumDebtPayments)
-            FigureRow(label: tx("Margen para decidir", "Margin to decide"), amount: strategy.strategicMargin)
+            FigureRow(label: tx("Libre después de tus compromisos", "Left after your commitments"), amount: strategy.strategicMargin)
         }
         .dincrCard()
         let allocations = (strategy.vipAllocations?.isEmpty == false ? strategy.vipAllocations : strategy.allocations) ?? []
@@ -172,11 +172,11 @@ struct ScenariosView: View {
     var body: some View {
         ScreenScroll(title: tx("Escenarios", "Scenarios")) {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-                Text(tx("Probá cambios sin guardar nada. Usá − para una baja.", "Try changes without saving anything. Use − for a decrease."))
+                Text(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes. Usá − para una baja.", "Try changes without saving anything: DINCR shows how much you’d have left each month. Use − for a decrease."))
                     .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                MoneyField(label: tx("Cambio en ingreso mensual", "Change in monthly income"), text: $income)
-                MoneyField(label: tx("Cambio en gastos mensuales", "Change in monthly expenses"), text: $expenses)
-                MoneyField(label: tx("Dinero extra una vez", "One-time extra money"), text: $extra)
+                MoneyField(label: tx("Cambio mensual de ingresos", "Monthly income change"), text: $income)
+                MoneyField(label: tx("Cambio mensual de gastos", "Monthly expense change"), text: $expenses)
+                MoneyField(label: tx("Dinero extra único", "One-off extra money"), text: $extra)
                 if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 Button(tx("Simular", "Simulate")) { Task { await simulate() } }
                     .buttonStyle(.dincrPrimary(loading: running))
@@ -187,8 +187,8 @@ struct ScenariosView: View {
             if let result {
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                     SectionHeader(title: tx("Resultado", "Result"))
-                    FigureRow(label: tx("Margen actual", "Current margin"), amount: result.current?.strategicMargin)
-                    FigureRow(label: tx("Margen en el escenario", "Margin in the scenario"), amount: result.scenario?.strategicMargin)
+                    FigureRow(label: tx("Te queda libre al mes hoy", "Left each month today"), amount: result.current?.strategicMargin)
+                    FigureRow(label: tx("Te quedaría libre con el cambio", "Left each month with the change"), amount: result.scenario?.strategicMargin)
                     FigureRow(label: tx("Diferencia", "Difference"), amount: result.delta?.strategicMargin)
                 }
                 .dincrCard()
@@ -249,9 +249,7 @@ private struct ReviewContent: View {
         }
         .dincrCard()
         ForEach(Array(review.publicScorecard.enumerated()), id: \.offset) { _, line in
-            InfoRow(label: line.label ?? line.key ?? "",
-                    value: line.explanation ?? [line.current.map { String(format: "%.0f", $0) }, line.unit].compactMap { $0 }.joined(separator: " "))
-                .dincrCard(padding: DincrSpacing.s3)
+            ScoreLineRow(line: line).dincrCard(padding: DincrSpacing.s3)
         }
         if let next = review.nextMonth {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
@@ -262,6 +260,41 @@ private struct ReviewContent: View {
             }
             .dincrCard()
         }
+    }
+}
+
+/// One indicator of the review: its value (money or months) and how it moved since the previous
+/// month; an unknown trend says nothing. Same wording as Android's `ScoreLineRow`.
+private struct ScoreLineRow: View {
+    let line: MonthlyReview.ScoreLine
+
+    var body: some View {
+        let label = line.label ?? line.key ?? ""
+        if let explanation = line.explanation {
+            InfoRow(label: label, value: explanation)
+        } else if line.unit == "CRC" {
+            FigureRow(label: titled(label), amount: line.current.map { Decimal($0) })
+        } else {
+            InfoRow(label: titled(label), value: value)
+        }
+    }
+
+    private func titled(_ label: String) -> String { trend.map { "\(label) · \($0)" } ?? label }
+
+    private var trend: String? {
+        switch line.trend {
+        case "improved": tx("mejoró", "improved")
+        case "declined": tx("empeoró", "got worse")
+        case "unchanged": tx("sin cambios", "no change")
+        default: nil
+        }
+    }
+
+    private var value: String {
+        guard let current = line.current else { return "—" }
+        let number = current.formatted(.number.precision(.fractionLength(0...1)))
+        guard line.unit == "months" else { return number }
+        return current == 1 ? tx("1 mes", "1 month") : tx("\(number) meses", "\(number) months")
     }
 }
 
