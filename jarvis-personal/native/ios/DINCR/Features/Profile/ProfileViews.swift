@@ -3,9 +3,9 @@ import DincrDesign
 import SwiftUI
 import UIKit
 
-/// A Perfil row the subscription does not include (PR 4, P6.4): visible, with the subscription it
+/// A list row the subscription does not include (PR 4, P6.4; Perfil and Movimientos): visible, with the subscription it
 /// needs, and opens Suscripción. The backend still answers 403 to the feature itself.
-private struct LockedProfileRow: View {
+struct LockedListRow: View {
     let title: String
     let symbol: String
     let tier: PlanTier
@@ -70,8 +70,8 @@ struct ProfileHubView: View {
                     NavigationLink { AccountsView() } label: { Label(tx("Cuentas", "Accounts"), systemImage: "building.columns") }
                         .accessibilityIdentifier("profile.accounts")
                 } else {
-                    LockedProfileRow(title: tx("Monitor de correo", "Email Monitor"), symbol: "envelope", tier: .vip, id: "profile.mail")
-                    LockedProfileRow(title: tx("Cuentas", "Accounts"), symbol: "building.columns", tier: .vip, id: "profile.accounts")
+                    LockedListRow(title: tx("Monitor de correo", "Email Monitor"), symbol: "envelope", tier: .vip, id: "profile.mail")
+                    LockedListRow(title: tx("Cuentas", "Accounts"), symbol: "building.columns", tier: .vip, id: "profile.accounts")
                 }
             }
             .dincrRowBackground()
@@ -83,8 +83,8 @@ struct ProfileHubView: View {
                     NavigationLink { CalendarView() } label: { Label(tx("Calendario financiero", "Financial calendar"), systemImage: "calendar") }
                         .accessibilityIdentifier("profile.calendar")
                 } else {
-                    LockedProfileRow(title: tx("Presupuesto", "Budget"), symbol: "chart.pie", tier: .basic, id: "profile.budget")
-                    LockedProfileRow(title: tx("Calendario financiero", "Financial calendar"), symbol: "calendar", tier: .basic, id: "profile.calendar")
+                    LockedListRow(title: tx("Presupuesto", "Budget"), symbol: "chart.pie", tier: .basic, id: "profile.budget")
+                    LockedListRow(title: tx("Calendario financiero", "Financial calendar"), symbol: "calendar", tier: .basic, id: "profile.calendar")
                 }
                 NavigationLink { RecurringView() } label: { Label(tx("Recurrentes", "Recurring"), systemImage: "repeat") }
                     .accessibilityIdentifier("profile.recurring")

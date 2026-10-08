@@ -72,9 +72,10 @@ enum class Destination(val route: String, val icon: ImageVector) {
         /**
          * Screens opened from several tabs (UX-4: Deudas, from Plan and from the shortcuts on Hoy,
          * Movimientos, Salvavidas and DINCR; UX-7: Ingresos y base, from Plan and from Hoy's missing
-         * figures; Tus ahorros, from Metas y ahorros and Salvavidas): they keep the tab they were opened from highlighted.
+         * figures; Tus ahorros, from Metas y ahorros and Salvavidas; §15 PR 6: the mail review, from Perfil and from
+         * Movimientos → Por revisar): they keep the tab they were opened from highlighted.
          */
-        private val SHARED = setOf("debts", "incomeBase", "declaredSavings")
+        private val SHARED = setOf("debts", "incomeBase", "declaredSavings", "mail")
 
         /** The tab a pushed screen belongs to, or null when it is opened from several ([SHARED]). */
         fun owner(route: String?): Destination? = if (route?.substringBefore('/') in SHARED) null else of(route)

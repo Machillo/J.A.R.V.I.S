@@ -43,7 +43,8 @@
   "UX-9",
   "UX-12",
   "UX-13",
-  "PR-4"
+  "PR-4",
+  "PR-6"
  ],
  "fixtures": {
   "ios": {
@@ -844,6 +845,42 @@
       "Analysis"
      ],
      "text": "Monthly review",
+     "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "movements.review",
+   "name": "Movimientos → Por revisar (§15 PR 6): the mail review of detected bank notices, the same screen as Perfil → Correos financieros",
+   "decision": "PR-6",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/gmail/status",
+     "gate": "feature:gmail_automation",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "movements",
+    "id": "movements.review",
+    "locked_label": "Disponible desde VIP"
+   },
+   "android": {
+    "tab": "Movimientos",
+    "text": "Por revisar",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Transactions",
+     "text": "To review",
      "locked_text": "Available from VIP"
     }
    }
