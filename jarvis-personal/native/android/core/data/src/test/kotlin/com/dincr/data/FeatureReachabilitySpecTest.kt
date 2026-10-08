@@ -42,6 +42,8 @@ class FeatureReachabilitySpecTest {
         "profile.mail" to Feature.GMAIL_AUTOMATION, "profile.accounts" to Feature.GMAIL_AUTOMATION,
         // §15 PR 6: the same mail review, from Movimientos → Por revisar.
         "movements.review" to Feature.GMAIL_AUTOMATION,
+        // §15 PR 8: Patrimonio → Cuentas, Conexiones de correo and Deudas.
+        "wealth.accounts" to Feature.GMAIL_AUTOMATION, "wealth.connections" to Feature.GMAIL_AUTOMATION, "wealth.debts" to Feature.DEBTS,
     )
 
     @Test fun planGatesFollowTheSpec() {

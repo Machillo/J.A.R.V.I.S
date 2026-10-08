@@ -20,18 +20,59 @@ struct AnalysisHubView: View {
     }
 }
 
-/// UX-13 — the Patrimonio tab: projections and scenarios (VIP, paused with `vip_intelligence`), the
-/// same screens the retired DINCR tab opened. Only what UX-13 needs: no new figure or calculation.
+/// UX-13 / §15 PR 8 — the Patrimonio tab. Cuentas: the accounts DINCR detected in bank notices and
+/// the mail connections that read them (the existing screens; VIP and the Owner, locked below).
+/// Deudas: how the active debts make up what is owed, from Plan → Deudas' balances (every plan).
+/// Proyecciones and Escenarios (VIP). No net worth figure until P0.9 (K-3), no balance invented.
 struct WealthHubView: View {
     var body: some View {
         ScreenScroll(title: tx("Patrimonio", "Wealth")) {
-            VStack(spacing: DincrSpacing.s2) {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                SectionHeader(title: tx("Cuentas", "Accounts"))
+                // The screens say themselves when the mail switch pauses them (as in Perfil).
+                GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
+                           subtitle: tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"), id: "wealth.accounts") { AccountsView() }
+                GatedEntry(minimum: .vip, flag: nil, symbol: "envelope", title: tx("Conexiones de correo", "Mail connections"),
+                           subtitle: tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices"), id: "wealth.connections") { EmailMonitorView() }
+                SectionHeader(title: tx("Deudas", "Debts"))
+                WealthDebtsCard()
+                SectionHeader(title: tx("Proyecciones", "Projections"))
                 GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "chart.line.uptrend.xyaxis", title: tx("Proyecciones", "Projections"),
                            subtitle: tx("Tus próximos meses", "Your next months"), id: "wealth.projections") { ProjectionsView() }
                 GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "slider.horizontal.3", title: tx("Escenarios", "Scenarios"),
                            subtitle: tx("¿Y si gano o gasto distinto?", "What if I earn or spend differently?"), id: "wealth.scenarios") { ScenariosView() }
             }
         }
+    }
+}
+
+/// §15 PR 8 — what is owed, by debt, from the balances in Plan → Deudas (`DebtComposition`); managed
+/// there. An unknown balance is listed as unknown and no share or total is drawn from it.
+private struct WealthDebtsCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            AsyncContent(load: { try await model.service.debts() }) { debts, _ in
+                let composition = DebtComposition.of(debts)
+                if composition.status == .empty {
+                    Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."))
+                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        .accessibilityIdentifier("wealth.debts.none")
+                } else {
+                    CompositionDonut(title: tx("Lo que debés, por deuda", "What you owe, by debt"), composition: composition)
+                        .accessibilityIdentifier("wealth.debts.composition")
+                }
+            }
+            NavigationLink { DebtsView() } label: {
+                Text(tx("Administrar en Plan › Deudas", "Manage in Plan › Debts")).font(DincrFont.bodySmall.weight(.semibold))
+                    .foregroundStyle(DincrColor.tint).frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("wealth.debts.manage")
+        }
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("wealth.debts")
     }
 }
 
