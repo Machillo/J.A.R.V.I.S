@@ -132,14 +132,17 @@ class PlanRecoveryUiTest {
             .forEach { assertTrue("$it must not be in Plan", !present(it)) }
         // Basic: Aguinaldo and Salvavidas stay visible, locked from VIP.
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
-        // Budget, calendar and recurring live in Perfil → Finanzas.
-        click(tx("Perfil", "Profile"))
-        waitForText(tx("Finanzas", "Finances"))
+        // §15 PR 5/10: Calendario inside Tu plan del mes, Movimientos recurrentes inside Ingresos y base.
+        click(tx("Tu plan del mes", "Your plan for the month"))
         click(tx("Calendario financiero", "Financial calendar"))
         waitForText(tx("Pagos conocidos", "Known payments"))
         back()
+        back()
+        click(tx("Ingresos y base", "Income and base"))
         click(tx("Movimientos recurrentes", "Recurring transactions"))
         waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
+        back()
+        back()
         // UX-13: no DINCR tab; the monthly summary lives in Movimientos → Análisis, the plan in Plan.
         assertTrue("no DINCR tab", !present("DINCR"))
         click(tx("Movimientos", "Transactions"))
@@ -156,8 +159,13 @@ class PlanRecoveryUiTest {
         planRows.forEach { waitForText(it) }
         waitForText(tx("Disponible desde Basic", "Available from Basic"))
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
-        // A locked row opens the subscription screen.
+        // A locked row opens the subscription screen; §15 PR 10 (option A): Tu plan del mes opens its own
+        // locked state first ("Ver suscripciones"), with Presupuesto and Calendario locked inside.
+        click(tx("Aguinaldo", "Aguinaldo"))
+        waitForText(tx("Suscripción actual", "Current subscription"))
+        back()
         click(tx("Tu plan del mes", "Your plan for the month"))
+        click(tx("Ver suscripciones", "See subscriptions"))
         waitForText(tx("Suscripción actual", "Current subscription"))
     }
 
@@ -351,10 +359,9 @@ class PlanRecoveryUiTest {
         // UX-9: registering fixed/recurring commitments is every plan's; budget and calendar stay Basic.
         launch(plan = "free")
         home()
-        click(tx("Perfil", "Profile"))
-        // PR 4: budget and calendar stay Basic, shown locked.
-        waitForText(tx("Calendario financiero", "Financial calendar"))
-        assertTrue("budget and calendar locked", present(tx("Disponible desde Basic", "Available from Basic")))
+        // §15 PR 5/10: Movimientos recurrentes lives in Plan → Ingresos y base (every plan).
+        click(tx("Plan", "Plan"))
+        click(tx("Ingresos y base", "Income and base"))
         click(tx("Movimientos recurrentes", "Recurring transactions"))
         waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
         // Create.

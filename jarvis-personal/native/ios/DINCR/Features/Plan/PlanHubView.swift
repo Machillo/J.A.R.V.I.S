@@ -33,14 +33,14 @@ struct PlanHubView: View {
                 .dincrCard(padding: DincrSpacing.s3)
                 .accessibilityIdentifier("plan.\(item.rawValue)")
         case .locked(let tier):
-            NavigationLink { PlanSettingsView() } label: {
+            NavigationLink { lockedDestination(item) } label: {
                 HubRow(symbol: item.symbol, title: item.title,
                        subtitle: tx("Disponible desde \(PlanLabel.name(tier.rawValue))", "Available from \(PlanLabel.name(tier.rawValue))"), locked: tier)
             }
             .buttonStyle(.plain)
             .dincrCard(padding: DincrSpacing.s3)
             .accessibilityIdentifier("plan.\(item.rawValue)")
-            .accessibilityHint(tx("Abre Suscripción", "Opens Subscription"))
+            .accessibilityHint(item == .strategy ? tx("Abre Tu plan del mes", "Opens Your plan for the month") : tx("Abre Suscripción", "Opens Subscription"))
         case .paused(let flag):
             NavigationLink {
                 ScreenScroll(title: item.title) { FeaturePausedView(message: model.flags.message(flag, language: model.language)) }
@@ -51,6 +51,13 @@ struct PlanHubView: View {
             .dincrCard(padding: DincrSpacing.s3)
             .accessibilityIdentifier("plan.\(item.rawValue)")
         }
+    }
+
+    /// Below its plan a row opens Suscripción; §15 PR 10 (option A): Tu plan del mes opens its own locked
+    /// state instead, so Free sees Presupuesto and Calendario (inside it) locked.
+    @ViewBuilder
+    private func lockedDestination(_ item: PlanHubItem) -> some View {
+        if item == .strategy { PlanStrategyView() } else { PlanSettingsView() }
     }
 
     @ViewBuilder

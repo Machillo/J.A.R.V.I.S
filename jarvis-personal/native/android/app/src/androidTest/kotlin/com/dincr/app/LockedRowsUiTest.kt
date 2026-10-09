@@ -18,10 +18,10 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * PR 4 (P6.4) — Perfil never hides a row the subscription does not include: Presupuesto and Calendario
- * are locked below Basic and open Suscripción. VIP and the Owner (by role) open every row, and the Owner
- * keeps JARVIS. §15 PR 10: Correos and Cuentas left Perfil for Patrimonio (locked there below VIP:
- * `WealthUiTest`). iOS twin: `LockedRowsUITests`.
+ * PR 4 (P6.4) — locked rows instead of hidden ones. §15 PR 10 moved every locked function out of Perfil:
+ * Correos and Cuentas to Patrimonio (`WealthUiTest`), Presupuesto and Calendario to Plan → Tu plan del mes
+ * (`PlanOrganizeUiTest`), Movimientos recurrentes to Plan → Ingresos y base. Perfil keeps none.
+ * iOS twin: `LockedRowsUITests`.
  */
 class LockedRowsUiTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -65,36 +65,16 @@ class LockedRowsUiTest {
     private val fromBasic get() = tx("Disponible desde Basic", "Available from Basic")
     private val current get() = tx("Suscripción actual", "Current subscription")
 
-    @Test fun freeSeesBudgetAndCalendarLockedAndALockedRowOpensSuscripcion() {
-        launch()
-        listOf(budget, calendar, tx("Movimientos recurrentes", "Recurring transactions")).forEach { waitUntil(it) { present(it) } }
-        assertEquals("budget and calendar locked to Basic", 2, count(fromBasic))
-        click(budget)
-        waitUntil("Suscripción") { present(current) }
-    }
-
-    @Test fun basicOpensBudgetAndCalendar() {
-        launch("basic")
-        listOf(budget, calendar).forEach { waitUntil(it) { present(it) } }
-        assertFalse(present(fromBasic) || present(fromVip))
-    }
-
-    @Test fun vipAndOwnerOpenEveryRowAndTheOwnerKeepsJarvis() {
-        for ((plan, role) in listOf("vip" to null, "vip" to "owner")) {
-            launch(plan, role)
-            listOf(budget, calendar).forEach { waitUntil("$it ($role)") { present(it) } }
-            assertFalse("$role: nothing locked", present(fromVip) || present(fromBasic))
-            assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
-        }
-    }
-
-    /** §15 PR 10: Correos and Cuentas live in Patrimonio (and Movimientos → Por revisar); Perfil no longer lists them. */
-    @Test fun perfilNoLongerListsCorreosOrCuentas() {
+    /**
+     * §15 PR 10 (option A): Perfil keeps no locked rows: Presupuesto and Calendario are locked inside Plan →
+     * Tu plan del mes (`PlanOrganizeUiTest`), Correos and Cuentas in Patrimonio (`WealthUiTest`).
+     */
+    @Test fun perfilHasNoLockedRowsLeftAndTheOwnerKeepsJarvis() {
         for ((plan, role) in listOf("free" to null, "basic" to null, "vip" to null, "vip" to "owner")) {
             launch(plan, role)
-            waitUntil(budget) { present(budget) }
-            assertFalse("$plan/$role: Correos", present(mail))
-            assertFalse("$plan/$role: Cuentas", present(accounts))
+            assertFalse("$plan/$role: locked rows", present(fromBasic) || present(fromVip))
+            listOf(budget, calendar, mail, accounts, tx("Movimientos recurrentes", "Recurring transactions")).forEach { assertFalse("$plan/$role: $it", present(it)) }
+            assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
         }
     }
 }

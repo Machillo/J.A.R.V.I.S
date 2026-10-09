@@ -63,22 +63,8 @@ struct ProfileHubView: View {
             // UX-7: the declared situation lives in Plan → Ingresos y base and Tu plan del mes → Ajustes.
             // §15 PR 10: Cuentas and the mail (connections and review) live in Patrimonio → Cuentas /
             // Conexiones de correo and Movimientos → Por revisar; Perfil no longer repeats them.
-            // Finanzas: recurring commitments on every plan (UX-9); budget and calendar from Basic (PR 4:
-            // locked below, as every locked row).
-            Section(tx("Finanzas", "Finances")) {
-                if model.planTier.rank >= Feature.guidedBudget.minimum.rank {
-                    NavigationLink { BudgetView() } label: { Label(tx("Presupuesto", "Budget"), systemImage: "chart.pie") }
-                        .accessibilityIdentifier("profile.budget")
-                    NavigationLink { CalendarView() } label: { Label(tx("Calendario financiero", "Financial calendar"), systemImage: "calendar") }
-                        .accessibilityIdentifier("profile.calendar")
-                } else {
-                    LockedListRow(title: tx("Presupuesto", "Budget"), symbol: "chart.pie", tier: .basic, id: "profile.budget")
-                    LockedListRow(title: tx("Calendario financiero", "Financial calendar"), symbol: "calendar", tier: .basic, id: "profile.calendar")
-                }
-                NavigationLink { RecurringView() } label: { Label(tx("Movimientos recurrentes", "Recurring transactions"), systemImage: "repeat") }
-                    .accessibilityIdentifier("profile.recurring")
-            }
-            .dincrRowBackground()
+            // §15 PR 10 (option A): Presupuesto and Calendario live in Plan → Tu plan del mes, Movimientos
+            // recurrentes in Plan → Ingresos y base; Perfil no longer repeats them.
             Section(tx("Cuenta", "Account")) {
                 // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
                 NavigationLink { PlanSettingsView() } label: { Label(tx("Suscripción", "Subscription"), systemImage: "star") }

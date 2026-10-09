@@ -59,8 +59,8 @@ import kotlinx.coroutines.launch
  * plan; Hoy keeps a shortcut), Ingresos y base (UX-7: the declared income and essential expenses, every plan), Salvavidas and Distribución de dinero (kept as a transitional access
  * until its retirement is approved), each behind its historical plan gate. A row the plan does not
  * include stays visible, locked, and opens the plans screen. The Owner passes every gate by the
- * server role ([Profile.planTier]). Goals live in Hoy; budget, calendar and recurring payments in
- * Perfil → Finanzas.
+ * server role ([Profile.planTier]). Goals live in Hoy; Presupuesto and Calendario inside Tu plan del mes,
+ * Movimientos recurrentes inside Ingresos y base (§15 PR 5 / PR 10).
  */
 @Composable
 fun PlanHubScreen(model: AppModel, nav: Navigator) {
@@ -72,8 +72,9 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
             Column {
                 PlanRow(plan.allows(Feature.GMAIL_AUTOMATION), PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),
                     tx("Estimación con las órdenes de la CCSS", "Estimate from CCSS payroll notices"), nav, "aguinaldo")
+                // §15 PR 10 (option A): locked, it opens its own locked state (Presupuesto and Calendario inside, locked).
                 PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.AutoAwesome, tx("Tu plan del mes", "Your plan for the month"),
-                    tx("Cuánto podés repartir y cómo", "How much you can split, and how"), nav, "strategy")
+                    tx("Cuánto podés repartir y cómo", "How much you can split, and how"), nav, "strategy", lockedRoute = "strategy")
                 PlanRow(plan.allows(Feature.DEBTS), PlanTier.FREE, Icons.Rounded.CreditCard, tx("Deudas", "Debts"),
                     tx("Saldos, cuotas y pagos", "Balances, payments"), nav, "debts")
                 // UX-7: the declared income and essential expenses, every plan (with Metas y ahorros → Tus ahorros it replaces Perfil → Situación).
@@ -89,10 +90,11 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
 }
 
 @Composable
-private fun PlanRow(available: Boolean, minimum: PlanTier, icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, nav: Navigator, route: String) {
+private fun PlanRow(available: Boolean, minimum: PlanTier, icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, nav: Navigator, route: String,
+                    lockedRoute: String = "plans") {
     if (available) NavRow(icon, title, subtitle) { nav.open(route) }
     else NavRow(icon, title, if (minimum == PlanTier.VIP) tx("Disponible desde VIP", "Available from VIP") else tx("Disponible desde Basic", "Available from Basic"),
-        badge = if (minimum == PlanTier.VIP) "VIP" else "Basic") { nav.open("plans") }
+        badge = if (minimum == PlanTier.VIP) "VIP" else "Basic") { nav.open(lockedRoute) }
 }
 
 /** E2–E5 — debts: list with progress, create, edit (Basic+), payment, delete. */

@@ -15,9 +15,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.PieChart
-import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.Key
@@ -83,7 +80,6 @@ fun planName(plan: String?): String = when (plan ?: "free") {
 @Composable
 fun ProfileHubScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
-    val plan = profile?.planTier ?: PlanTier.FREE
     var confirming by remember { mutableStateOf(false) }
     ScreenColumn {
         Text(tx("Perfil", "Profile"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
@@ -103,7 +99,6 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
             // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
             NavRow(Icons.Rounded.Key, "JARVIS", tx("Tu espacio personal", "Your personal space")) { nav.open("jarvis") }
         }
-        FinanceSection(plan, nav)
         DincrCard {
             Column {
                 // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
@@ -123,33 +118,6 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
     }
     if (confirming) ConfirmDialog(tx("¿Cerrar sesión en este dispositivo?", "Sign out on this device?"), tx("Tus datos quedan en tu cuenta.", "Your data stays in your account."),
         tx("Cerrar sesión", "Sign out"), onDismiss = { confirming = false }, onConfirm = { confirming = false; model.signOut() })
-}
-
-/** A Perfil row the subscription does not include (PR 4, P6.4): visible, with the subscription it needs, and opens Suscripción. */
-@Composable
-private fun LockedNavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, tier: PlanTier, nav: Navigator) {
-    val name = planName(tier.wire)
-    NavRow(icon, title, tx("Disponible desde $name", "Available from $name"), badge = name) { nav.open("plans") }
-}
-
-/** Perfil → Finanzas: recurring payments on every plan (UX-9); budget and calendar from Basic (locked below). */
-@Composable
-private fun FinanceSection(plan: PlanTier, nav: Navigator) {
-    SectionTitle(tx("Finanzas", "Finances"))
-    DincrCard {
-        Column {
-            if (plan.allows(com.dincr.data.Feature.GUIDED_BUDGET)) {
-                NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") }
-                NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), tx("Pagos e ingresos del mes", "Payments and income this month")) { nav.open("calendar") }
-            } else {
-                LockedNavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), PlanTier.BASIC, nav)
-                LockedNavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), PlanTier.BASIC, nav)
-            }
-            if (plan.allows(com.dincr.data.Feature.RECURRING_ITEMS)) {
-                NavRow(Icons.Rounded.Repeat, tx("Movimientos recurrentes", "Recurring transactions"), tx("Ingresos y gastos que se repiten", "Income and expenses that repeat")) { nav.open("recurring") }
-            }
-        }
-    }
 }
 
 /** G4, G7, G8, G9 — appearance, legal, data export and account deletion. */

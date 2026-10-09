@@ -115,7 +115,8 @@ class StoreScreenshots {
     @Test fun s06Budget() {
         launch("basic")
         waitForText(today)
-        click(tx("Perfil", "Profile"))
+        click(tx("Plan", "Plan"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
         click(tx("Presupuesto", "Budget"))
         waitForText(tx("Entretenimiento", "Entertainment"))
         capture("06-budget")

@@ -113,8 +113,8 @@ private fun ObservedIncomeNote() {
  */
 /**
  * §15 PR 5 (option A) — "Para organizar tu mes": Presupuesto and Calendario financiero, the existing
- * screens, inside Tu plan del mes (Plan keeps its six entries). Same gate as in Perfil: from Basic,
- * locked below (the plan itself is Basic, so Free does not reach this screen from Plan). iOS: `OrganizeYourMonth`.
+ * screens, inside Tu plan del mes (Plan keeps its six entries). From Basic; §15 PR 10 (option A): Free opens
+ * Tu plan del mes in its locked state and sees both here, locked, opening Suscripción. iOS: `OrganizeYourMonth`.
  */
 @Composable
 private fun OrganizeYourMonth(plan: PlanTier, nav: Navigator) {
@@ -138,15 +138,15 @@ fun StrategyScreen(model: AppModel, nav: Navigator) {
     val (contract, strategy) = rememberStrategy(model)
     LaunchedEffect(Unit) { model.recordScreen("strategy_opened", "strategy") }
     DetailScaffold(tx("Tu plan del mes", "Your plan for the month"), nav::back) {
-        if (contract == null) { LockedStrategy(nav); return@DetailScaffold }
-        LoadContent(strategy) { data ->
+        val profile by model.profile.collectAsStateWithLifecycle()
+        // §15 PR 10 (option A): the locked state keeps the group below, with Presupuesto and Calendario locked.
+        if (contract == null) LockedStrategy(nav) else LoadContent(strategy) { data ->
             when (data) {
                 is StrategyData.Basic -> BasicMonthPlan(data.strategy, nav)
                 is StrategyData.Director -> data.dashboard.strategy?.let { DirectorMonthPlan(it, MonthPlan.of(data.dashboard), nav) }
                     ?: EmptyState(Icons.Rounded.AutoAwesome, tx("Sin plan todavía", "No plan yet"), data.dashboard.content.orEmpty())
             }
         }
-        val profile by model.profile.collectAsStateWithLifecycle()
         if (profile?.planTier == PlanTier.VIP) Box(Modifier.testTag("plan.month.preferences")) {
             // UX-7: the personal minimum (UX-8: the priority is DINCR's recommendation, not a setting).
             DincrCard { NavRow(Icons.Rounded.Tune, tx("Ajustes del plan", "Plan settings"), tx("Mínimo personal por mes", "Personal minimum per month")) { nav.open("planPreferences") } }

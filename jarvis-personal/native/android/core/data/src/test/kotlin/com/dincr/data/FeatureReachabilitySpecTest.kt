@@ -37,8 +37,7 @@ class FeatureReachabilitySpecTest {
         // UX-13: the former DINCR tab's entries, in Movimientos → Análisis, Patrimonio and Hoy.
         "analysis.reports" to Feature.BASIC_REPORTS, "home.attention" to Feature.STRATEGY_VIP,
         "wealth.projections" to Feature.STRATEGY_VIP, "wealth.scenarios" to Feature.STRATEGY_VIP,
-        "analysis.review" to Feature.STRATEGY_VIP, "profile.budget" to Feature.GUIDED_BUDGET,
-        "profile.calendar" to Feature.GUIDED_BUDGET, "profile.recurring" to Feature.RECURRING_ITEMS,
+        "analysis.review" to Feature.STRATEGY_VIP,
         // §15 PR 6: the same mail review, from Movimientos → Por revisar.
         "movements.review" to Feature.GMAIL_AUTOMATION,
         // §15 PR 5: Presupuesto and Calendario inside Tu plan del mes, Movimientos recurrentes inside Ingresos y base.

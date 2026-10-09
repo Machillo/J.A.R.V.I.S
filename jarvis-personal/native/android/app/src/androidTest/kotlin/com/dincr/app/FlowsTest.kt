@@ -248,9 +248,10 @@ class FlowsTest {
     @Test fun basicPlanShowsTheBudget() {
         launch(plan = "basic")
         waitForText(tx("Resultado del mes", "This month’s result"))
-        // Hoy shows the user's own budget left; the budget itself lives in Perfil → Finanzas.
+        // Hoy shows the user's own budget left; the budget itself lives in Plan → Tu plan del mes (§15 PR 5/10).
         assertTrue(compose.onAllNodes(hasTestTag("home.status.budget"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
-        tab(tx("Perfil", "Profile"))
+        tab(tx("Plan", "Plan"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
         click(tx("Presupuesto", "Budget"))
         waitForText(tx("Gastado este mes", "Spent this month"))
         waitForText("Comida")

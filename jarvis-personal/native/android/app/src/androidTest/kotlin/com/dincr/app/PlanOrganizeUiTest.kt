@@ -97,12 +97,25 @@ class PlanOrganizeUiTest {
         waitUntil("back in Plan") { present(income) }
     }
 
-    @Test fun freeKeepsTheMonthLockedAndOpensItsRecurringTransactions() {
+    /** §15 PR 10 (option A): Free opens Tu plan del mes locked and sees Presupuesto and Calendario locked; each opens Suscripción. */
+    @Test fun freeOpensTheMonthLockedWithBudgetAndCalendarLocked() {
         launch()
         click(month)
-        waitUntil("Suscripción") { present(tx("Suscripción actual", "Current subscription")) }
-        assertFalse(tagged("plan.month.budget"))
+        waitUntil("locked month") { present(tx("Ver suscripciones", "See subscriptions")) && tagged("plan.month.budget") && tagged("plan.month.calendar") }
+        assertTrue(present(tx("Para organizar tu mes", "To organize your month")))
+        for (tag in listOf("plan.month.budget", "plan.month.calendar")) {
+            clickTag(tag)
+            waitUntil("Suscripción ($tag)") { present(tx("Suscripción actual", "Current subscription")) }
+            assertFalse("$tag: no paid screen", present(tx("Pagos conocidos", "Known payments")) || present(tx("Gastado este mes", "Spent this month")))
+            back()
+            waitUntil("back in Tu plan del mes") { tagged(tag) }
+        }
         back()
+        waitUntil("back in Plan") { present(income) }
+    }
+
+    @Test fun freeOpensItsRecurringTransactions() {
+        launch()
         click(income)
         clickTag("incomeBase.recurring")
         waitUntil("recurring") { present(tx("Gastos fijos por mes", "Fixed expenses per month")) }
@@ -121,7 +134,19 @@ class PlanOrganizeUiTest {
             waitUntil("recurring ($role)") { tagged("incomeBase.recurring") }
             back()
             tab(tx("Perfil", "Profile"))
-            waitUntil("Perfil") { present(recurring) }
+            waitUntil("Perfil") { present(tx("Suscripción", "Subscription")) }
+            assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
+        }
+    }
+
+    /** §15 PR 10 (option A): Perfil no longer repeats Presupuesto, Calendario or Movimientos recurrentes. */
+    @Test fun perfilNoLongerListsFinanzas() {
+        for ((plan, role) in listOf("free" to null, "basic" to null, "vip" to null, "vip" to "owner")) {
+            launch(plan, role)
+            tab(tx("Perfil", "Profile"))
+            waitUntil("Perfil ($role)") { present(tx("Suscripción", "Subscription")) }
+            listOf(tx("Finanzas", "Finances"), tx("Presupuesto", "Budget"), tx("Calendario financiero", "Financial calendar"), recurring)
+                .forEach { assertFalse("$plan/$role: $it", present(it)) }
             assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
         }
     }
