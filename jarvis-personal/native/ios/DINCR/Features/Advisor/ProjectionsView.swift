@@ -29,6 +29,12 @@ private struct ProjectionsContent: View {
                 Text(ProjectionText.lowConfidence).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
                     .accessibilityIdentifier("projections.lowConfidence")
             }
+            // UX-14 / I09: the same points as lines; the cards below stay as the text alternative.
+            ForEach(ProjectionSeries.of(.complete(points: points, lowConfidence: lowConfidence)), id: \.kind) { item in
+                TrendLineChart(title: ProjectionText.chartTitle(item.kind), series: item.series, color: ProjectionText.chartColor(item.kind))
+                    .dincrCard()
+                    .accessibilityIdentifier("projections.chart.\(item.kind.rawValue)")
+            }
             ForEach(Array(points.enumerated()), id: \.offset) { _, point in
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                     Text(ProjectionText.horizon(point.months ?? 0)).font(DincrFont.title2)
@@ -96,6 +102,22 @@ enum ProjectionText {
     static var lowConfidence: String {
         tx("Confianza baja: todavía no hay ingresos registrados que confirmen tu ingreso.",
            "Low confidence: there is no recorded income yet to confirm your income.")
+    }
+
+    static func chartTitle(_ kind: ProjectionSeries.Kind) -> String {
+        switch kind {
+        case .cash: tx("Efectivo proyectado", "Projected cash")
+        case .debt: tx("Deuda proyectada", "Projected debt")
+        case .netWorth: tx("Patrimonio neto proyectado", "Projected net worth")
+        }
+    }
+
+    static func chartColor(_ kind: ProjectionSeries.Kind) -> Color {
+        switch kind {
+        case .cash: DincrColor.chartIncome
+        case .debt: DincrColor.chartExpense
+        case .netWorth: DincrColor.tint
+        }
     }
 
     static func horizon(_ months: Int) -> String {

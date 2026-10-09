@@ -2,6 +2,7 @@ package com.dincr.app
 
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -104,6 +105,48 @@ class ProjectionsUiTest {
             launch(fixtures = fixtures)
             waitUntil("Hoy loaded ($fixtures)") { tagged("home.debts") }
             assertTrue(fixtures, !present("proyecci"))
+        }
+    }
+
+    // UX-14 / I09 — the charts.
+
+    @Test fun aCompleteProjectionShowsTheChartsAndKeepsTheCards() {
+        for (role in listOf(null, "owner")) {
+            launch()
+            if (role != null) {
+                scenario?.close()
+                val intent = android.content.Intent(androidx.test.core.app.ApplicationProvider.getApplicationContext(), MainActivity::class.java)
+                    .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L)
+                    .putExtra("dincrPlan", "vip").putExtra("dincrRole", role)
+                scenario = androidx.test.core.app.ActivityScenario.launch(intent)
+            }
+            openProjections()
+            listOf("cash", "debt", "netWorth").forEach { kind -> waitUntil("$role chart $kind") { reveal("projections.chart.$kind") } }
+            // TalkBack: the chart says its title and every point.
+            val cash = tx("Efectivo proyectado", "Projected cash")
+            val spoken = compose.onAllNodes(androidx.compose.ui.test.hasContentDescription(cash, substring = true), useUnmergedTree = true)
+                .fetchSemanticsNodes().flatMap { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription).orEmpty() }.joinToString()
+            listOf(tx("1 mes", "1 month"), tx("12 meses", "12 months")).forEach { assertTrue("$role: $it in $spoken", spoken.contains(it)) }
+            // The cards stay as the text alternative.
+            listOf(1, 3, 6, 12).forEach { months -> waitUntil("$role card $months") { reveal("projections.point.$months") } }
+        }
+    }
+
+    @Test fun anIncompleteProjectionShowsNoChart() {
+        launch(fixtures = "EMPTY")
+        openProjections()
+        waitUntil("incomplete") { tagged("projections.incomplete") }
+        listOf("cash", "debt", "netWorth").forEach { assertFalse(it, tagged("projections.chart.$it")) }
+    }
+
+    @Test fun freeAndBasicKeepProjectionsLocked() {
+        for (plan in listOf("free", "basic")) {
+            launch(plan = plan)
+            tab(tx("Patrimonio", "Wealth"))
+            waitUntil("locked ($plan)") { present(tx("Disponible desde VIP", "Available from VIP")) }
+            click(tx("Proyecciones", "Projections"))
+            waitUntil("Suscripción ($plan)") { present(tx("Suscripción actual", "Current subscription")) }
+            assertFalse(tagged("projections.chart.cash"))
         }
     }
 }
