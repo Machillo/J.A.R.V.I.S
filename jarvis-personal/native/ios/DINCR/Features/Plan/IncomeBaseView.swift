@@ -70,6 +70,15 @@ private struct IncomeBaseForm: View {
                 MoneyField(label: tx("Gastos esenciales del mes", "Essential monthly expenses"), text: $essentials)
             }
             ProfileSaveSection(save: save, id: "incomeBase.save") { Task { await submit() } }
+            // §15 PR 5 (option A): the recurring income and expenses, the existing screen (every plan, UX-9).
+            Section {
+                NavigationLink { RecurringView() } label: {
+                    Label(tx("Movimientos recurrentes", "Recurring transactions"), systemImage: "repeat")
+                }
+                .accessibilityIdentifier("incomeBase.recurring")
+            } footer: {
+                Text(tx("Ingresos y gastos que se repiten, con su frecuencia y vencimiento.", "Income and expenses that repeat, with their frequency and due day."))
+            }
         }
         .scrollContentBackground(.hidden)
         .onAppear(perform: prefill)

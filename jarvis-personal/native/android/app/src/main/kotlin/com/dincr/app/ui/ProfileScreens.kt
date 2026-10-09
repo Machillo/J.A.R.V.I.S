@@ -146,7 +146,7 @@ private fun FinanceSection(plan: PlanTier, nav: Navigator) {
                 LockedNavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), PlanTier.BASIC, nav)
             }
             if (plan.allows(com.dincr.data.Feature.RECURRING_ITEMS)) {
-                NavRow(Icons.Rounded.Repeat, tx("Pagos recurrentes", "Recurring payments"), tx("Suscripciones y pagos fijos", "Subscriptions and fixed payments")) { nav.open("recurring") }
+                NavRow(Icons.Rounded.Repeat, tx("Movimientos recurrentes", "Recurring transactions"), tx("Ingresos y gastos que se repiten", "Income and expenses that repeat")) { nav.open("recurring") }
             }
         }
     }

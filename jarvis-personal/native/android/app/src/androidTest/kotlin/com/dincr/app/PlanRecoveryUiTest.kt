@@ -138,7 +138,7 @@ class PlanRecoveryUiTest {
         click(tx("Calendario financiero", "Financial calendar"))
         waitForText(tx("Pagos conocidos", "Known payments"))
         back()
-        click(tx("Pagos recurrentes", "Recurring payments"))
+        click(tx("Movimientos recurrentes", "Recurring transactions"))
         waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
         // UX-13: no DINCR tab; the monthly summary lives in Movimientos → Análisis, the plan in Plan.
         assertTrue("no DINCR tab", !present("DINCR"))
@@ -355,7 +355,7 @@ class PlanRecoveryUiTest {
         // PR 4: budget and calendar stay Basic, shown locked.
         waitForText(tx("Calendario financiero", "Financial calendar"))
         assertTrue("budget and calendar locked", present(tx("Disponible desde Basic", "Available from Basic")))
-        click(tx("Pagos recurrentes", "Recurring payments"))
+        click(tx("Movimientos recurrentes", "Recurring transactions"))
         waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
         // Create.
         compose.onNodeWithContentDescription(tx("Agregar recurrente", "Add recurring")).performClick()

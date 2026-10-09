@@ -75,7 +75,7 @@ struct ProfileHubView: View {
                     LockedListRow(title: tx("Presupuesto", "Budget"), symbol: "chart.pie", tier: .basic, id: "profile.budget")
                     LockedListRow(title: tx("Calendario financiero", "Financial calendar"), symbol: "calendar", tier: .basic, id: "profile.calendar")
                 }
-                NavigationLink { RecurringView() } label: { Label(tx("Recurrentes", "Recurring"), systemImage: "repeat") }
+                NavigationLink { RecurringView() } label: { Label(tx("Movimientos recurrentes", "Recurring transactions"), systemImage: "repeat") }
                     .accessibilityIdentifier("profile.recurring")
             }
             .dincrRowBackground()

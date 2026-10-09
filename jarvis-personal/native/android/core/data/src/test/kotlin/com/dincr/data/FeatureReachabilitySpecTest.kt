@@ -41,6 +41,8 @@ class FeatureReachabilitySpecTest {
         "profile.calendar" to Feature.GUIDED_BUDGET, "profile.recurring" to Feature.RECURRING_ITEMS,
         // §15 PR 6: the same mail review, from Movimientos → Por revisar.
         "movements.review" to Feature.GMAIL_AUTOMATION,
+        // §15 PR 5: Presupuesto and Calendario inside Tu plan del mes, Movimientos recurrentes inside Ingresos y base.
+        "month.budget" to Feature.GUIDED_BUDGET, "month.calendar" to Feature.GUIDED_BUDGET, "incomeBase.recurring" to Feature.RECURRING_ITEMS,
         // §15 PR 8: Patrimonio → Cuentas, Conexiones de correo and Deudas.
         "wealth.accounts" to Feature.GMAIL_AUTOMATION, "wealth.connections" to Feature.GMAIL_AUTOMATION, "wealth.debts" to Feature.DEBTS,
     )
