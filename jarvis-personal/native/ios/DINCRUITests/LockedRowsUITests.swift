@@ -1,8 +1,9 @@
 import XCTest
 
-/// PR 4 (P6.4) — Perfil never hides a row the subscription does not include: Correos and Cuentas are
-/// locked below VIP, Presupuesto and Calendario below Basic; a locked row opens Suscripción. VIP and
-/// the Owner (by role) open every row, and the Owner keeps JARVIS. Android twin: `LockedRowsUiTest`.
+/// PR 4 (P6.4) — Perfil never hides a row the subscription does not include: Presupuesto and
+/// Calendario are locked below Basic and open Suscripción. VIP and the Owner (by role) open every row,
+/// and the Owner keeps JARVIS. §15 PR 10: Correos and Cuentas left Perfil for Patrimonio (locked there
+/// below VIP: `WealthUITests`). Android twin: `LockedRowsUiTest`.
 final class LockedRowsUITests: XCTestCase {
     private func launch(plan: String? = nil, role: String? = nil, english: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
@@ -34,32 +35,36 @@ final class LockedRowsUITests: XCTestCase {
         }
     }
 
-    func testFreeSeesEveryRowLockedAndALockedRowOpensSuscripcion() {
+    func testFreeSeesBudgetAndCalendarLockedAndALockedRowOpensSuscripcion() {
         let app = launch()
-        assertRows(app, locked: ["profile.mail": "Disponible desde VIP", "profile.accounts": "Disponible desde VIP",
-                                 "profile.budget": "Disponible desde Basic", "profile.calendar": "Disponible desde Basic"],
+        assertRows(app, locked: ["profile.budget": "Disponible desde Basic", "profile.calendar": "Disponible desde Basic"],
                    open: ["profile.recurring"], context: "free")
         row("profile.budget", in: app).tap()
         XCTAssertTrue(app.staticTexts["Suscripción actual"].waitForExistence(timeout: 10))
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        row("profile.mail", in: app).tap()
-        XCTAssertTrue(app.staticTexts["Suscripción actual"].waitForExistence(timeout: 10))
     }
 
-    func testBasicHasBudgetAndCalendarAndSeesMailLocked() {
+    func testBasicOpensBudgetAndCalendar() {
         let app = launch(plan: "basic")
-        assertRows(app, locked: ["profile.mail": "Disponible desde VIP", "profile.accounts": "Disponible desde VIP"],
-                   open: ["profile.budget", "profile.calendar", "profile.recurring"], context: "basic")
-        row("profile.accounts", in: app).tap()
-        XCTAssertTrue(app.staticTexts["Suscripción actual"].waitForExistence(timeout: 10))
+        assertRows(app, locked: [:], open: ["profile.budget", "profile.calendar", "profile.recurring"], context: "basic")
     }
 
     func testVipAndOwnerOpenEveryRowAndTheOwnerKeepsJarvis() {
         for (plan, role) in [("vip", nil), (nil, "owner")] as [(String?, String?)] {
             let app = launch(plan: plan, role: role)
-            assertRows(app, locked: [:], open: ["profile.mail", "profile.accounts", "profile.budget", "profile.calendar", "profile.recurring"],
-                       context: role ?? "vip")
+            assertRows(app, locked: [:], open: ["profile.budget", "profile.calendar", "profile.recurring"], context: role ?? "vip")
             XCTAssertEqual(row("profile.jarvis", in: app).exists, role == "owner")
+            app.terminate()
+        }
+    }
+
+    /// §15 PR 10: Correos and Cuentas live in Patrimonio (and Movimientos → Por revisar) for every plan;
+    /// Perfil no longer lists them.
+    func testPerfilNoLongerListsCorreosOrCuentas() {
+        for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), ("vip", "owner")] as [(String?, String?)] {
+            let app = launch(plan: plan, role: role)
+            XCTAssertTrue(row("profile.subscription", in: app).waitForExistence(timeout: 10))
+            XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists, role ?? plan ?? "free")
+            XCTAssertFalse(app.descendants(matching: .any)["profile.accounts"].exists, role ?? plan ?? "free")
             app.terminate()
         }
     }
@@ -67,6 +72,5 @@ final class LockedRowsUITests: XCTestCase {
     func testTheLockedRowSpeaksEnglish() {
         let app = launch(english: true)
         XCTAssertTrue(row("profile.budget", in: app).label.contains("Available from Basic"))
-        XCTAssertTrue(row("profile.mail", in: app).label.contains("Available from VIP"))
     }
 }

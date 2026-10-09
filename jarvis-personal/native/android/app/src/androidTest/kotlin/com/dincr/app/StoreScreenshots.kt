@@ -133,8 +133,8 @@ class StoreScreenshots {
     @Test fun s08Mail() {
         launch("vip")
         waitForText(today)
-        click(tx("Perfil", "Profile"))
-        click(tx("Correos financieros", "Financial emails"))
+        click(tx("Patrimonio", "Wealth"))
+        click(tx("Conexiones de correo", "Mail connections"))
         waitForText(tx("Por revisar", "To review"))
         capture("08-mail")
     }

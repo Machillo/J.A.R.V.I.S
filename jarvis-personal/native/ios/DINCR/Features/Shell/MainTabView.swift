@@ -17,6 +17,7 @@ struct MainTabView: View {
         return Tab(rawValue: args[index + 1]) ?? .home
     }()
     @State private var profilePath = NavigationPath()
+    @State private var wealthPath = NavigationPath()
     @State private var offeringLock = false
 
     var body: some View {
@@ -29,8 +30,7 @@ struct MainTabView: View {
                 .onChange(of: model.pendingRoute) { _, route in
                     guard route == "mail" else { return }
                     model.pendingRoute = nil
-                    selection = .profile
-                    profilePath = NavigationPath([ProfileRoute.mail])
+                    openMailConnections()
                 }
                 .task {
                     // A12 — one-time offer to turn the lock on after signing in.
@@ -39,8 +39,7 @@ struct MainTabView: View {
                     }
                     if model.pendingRoute == "mail" {
                         model.pendingRoute = nil
-                        selection = .profile
-                        profilePath = NavigationPath([ProfileRoute.mail])
+                        openMailConnections()
                     }
                 }
                 .alert(tx("¿Proteger DINCR con bloqueo?", "Protect DINCR with a lock?"), isPresented: $offeringLock) {
@@ -50,6 +49,13 @@ struct MainTabView: View {
                     Text(tx("Pedí tu Face ID, Touch ID o código al abrir DINCR y después de 5 minutos fuera.", "Ask for Face ID, Touch ID or your passcode when opening DINCR and after 5 minutes away."))
                 }
         }
+    }
+
+    /// §15 PR 10: the mail connection's return opens the mail screen in its home, Patrimonio →
+    /// Conexiones de correo (Perfil no longer lists it).
+    private func openMailConnections() {
+        selection = .wealth
+        wealthPath = NavigationPath([ProfileRoute.mail])
     }
 
     /// The Owner's scene (DESIGN.md → Owner identity) comes only from the server role in `/auth/me`.
@@ -71,7 +77,10 @@ struct MainTabView: View {
             NavigationStack { PlanHubView() }
                 .tabItem { Label(tx("Plan", "Plan"), systemImage: "target") }
                 .tag(Tab.plan)
-            NavigationStack { WealthHubView() }
+            NavigationStack(path: $wealthPath) {
+                WealthHubView()
+                    .navigationDestination(for: ProfileRoute.self) { route in ProfileRouteDestination(route: route) }
+            }
                 .tabItem { Label(tx("Patrimonio", "Wealth"), systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(Tab.wealth)
             NavigationStack(path: $profilePath) {
@@ -86,7 +95,8 @@ struct MainTabView: View {
     }
 }
 
-/// Routes of the Profile tab, also opened from the Owner's Today. JARVIS is the Owner's personal
+/// Routes of the Profile tab, also opened from the Owner's Today and (the mail screen, after a mail
+/// connection's return) from Patrimonio. JARVIS is the Owner's personal
 /// space (`Jarvis.isAvailable`); its screens close themselves for any other identity.
 enum ProfileRoute: Hashable {
     case mail

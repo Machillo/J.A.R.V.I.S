@@ -285,8 +285,8 @@ class PlanRecoveryUiTest {
     @Test fun aReviewInCuentasShowsInCorreosAndViceVersa() {
         launch(plan = "vip")
         home()
-        click(tx("Perfil", "Profile"))
-        // "Cuentas" replaces "Cuentas detectadas".
+        // §15 PR 10: Cuentas and Correos live in Patrimonio. "Cuentas" replaces "Cuentas detectadas".
+        click(tx("Patrimonio", "Wealth"))
         assertTrue(!present(tx("Cuentas detectadas", "Detected accounts")))
         click(tx("Cuentas", "Accounts"))
         waitForText("BAC Credomatic")
@@ -300,7 +300,7 @@ class PlanRecoveryUiTest {
         waitForText(tx("Confirmado", "Confirmed"))
         back()
         back()
-        click(tx("Correos financieros", "Financial emails"))
+        click(tx("Conexiones de correo", "Mail connections"))
         waitForText(tx("Por revisar", "To review"))
         waitForText("Tienda en línea")
         assertTrue("confirmed in Cuentas, no longer pending in Correos", !present("Compra en supermercado"))
