@@ -46,7 +46,7 @@ public struct IncomeExpenseChart: View {
             }
             .frame(height: 180)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(language.pick("Ingresos y gastos de los últimos \(months.count) meses", "Income and expenses for the last \(months.count) months"))
+            .accessibilityLabel(title)
             .accessibilityValue(summary)
 
             DisclosureGroup(isExpanded: $showsTable) {
@@ -68,6 +68,13 @@ public struct IncomeExpenseChart: View {
             }
             .tint(DincrColor.tint)
         }
+    }
+
+    private var title: String {
+        if months.count == 1, let month = months.first {
+            return language.pick("Ingresos y gastos de \(shortMonth(month.month))", "Income and expenses for \(shortMonth(month.month))")
+        }
+        return language.pick("Ingresos y gastos de los últimos \(months.count) meses", "Income and expenses for the last \(months.count) months")
     }
 
     private var summary: String {

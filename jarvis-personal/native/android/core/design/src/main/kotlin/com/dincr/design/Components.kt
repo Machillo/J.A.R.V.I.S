@@ -215,9 +215,12 @@ fun CategoryBars(items: List<Pair<String, BigDecimal>>, limit: Int = 5) {
     }
 }
 
-/** Income vs expenses per month: grouped bars in the validated series colors, legend, table. */
+/**
+ * Income vs expenses per month: grouped bars in the validated series colors, legend, table. [title]
+ * is read before the values (as the iOS chart's label).
+ */
 @Composable
-fun IncomeExpenseBars(months: List<Triple<String, BigDecimal, BigDecimal>>) {
+fun IncomeExpenseBars(months: List<Triple<String, BigDecimal, BigDecimal>>, title: String? = null) {
     val c = Dincr.colors
     val language = AppLanguage.current()
     val max = months.flatMap { listOf(it.second, it.third) }.maxOfOrNull { it.toDouble() }?.coerceAtLeast(1.0) ?: 1.0
@@ -229,7 +232,7 @@ fun IncomeExpenseBars(months: List<Triple<String, BigDecimal, BigDecimal>>) {
             Legend(c.chartExpense, language.pick("Gastos", "Expenses"))
         }
         Row(
-            Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = summary },
+            Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = listOfNotNull(title, summary).joinToString(". ") },
             horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom,
         ) {
             months.forEach { (month, income, expenses) ->
