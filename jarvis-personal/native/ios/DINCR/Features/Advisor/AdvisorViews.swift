@@ -5,7 +5,11 @@ import SwiftUI
 /// UX-13 — Movimientos → Análisis: the monthly summary (every plan), reports (Basic+, paused with
 /// `advanced_reports`) and the monthly review (VIP, paused with `vip_intelligence`). The same screens
 /// the retired DINCR tab opened; below its plan a row stays visible, locked, and opens Suscripción.
+/// §15 PR 11: the Owner (role, never a plan) also gets the historical financial analysis, in its
+/// Análisis mode (no health score until P3.7, no net worth until P0.9); JARVIS keeps the full one.
 struct AnalysisHubView: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         ScreenScroll(title: tx("Análisis", "Analysis")) {
             VStack(spacing: DincrSpacing.s2) {
@@ -15,6 +19,15 @@ struct AnalysisHubView: View {
                            subtitle: tx("Comparación con el mes anterior", "Comparison with the previous month"), id: "analysis.reports") { ReportsView() }
                 GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "checklist", title: tx("Revisión del mes", "Monthly review"),
                            subtitle: tx("Cómo te fue y qué sigue", "How it went and what’s next"), id: "analysis.review") { MonthlyReviewView() }
+                if Jarvis.isAvailable(to: model.profile) {
+                    NavigationLink { OwnerAnalysisView(mode: .analysis) } label: {
+                        HubRow(symbol: "chart.pie", title: tx("Análisis financiero", "Financial analysis"),
+                               subtitle: tx("Tu historial: flujo, gasto y cierre del mes", "Your history: cash flow, spending and month end"))
+                    }
+                    .buttonStyle(.plain)
+                    .dincrCard(padding: DincrSpacing.s3)
+                    .accessibilityIdentifier("analysis.owner")
+                }
             }
         }
     }

@@ -46,7 +46,8 @@
   "PR-4",
   "PR-6",
   "PR-8",
-  "PR-10"
+  "PR-10",
+  "PR-11"
  ],
  "fixtures": {
   "ios": {
@@ -954,6 +955,58 @@
      ],
      "text": "Monthly review",
      "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "analysis.owner",
+   "name": "Movimientos → Análisis → Análisis financiero (§15 PR 11): the Owner's historical analysis in its Análisis mode, without the health score (P3.7) or the net worth (P0.9); JARVIS → Análisis financiero keeps the full one",
+   "decision": "PR-11",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/transactions/analysis/summary",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/net-worth",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/engine",
+     "gate": "internal_only",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "movements",
+    "via": [
+     "movements.analysis"
+    ],
+    "id": "analysis.owner"
+   },
+   "android": {
+    "tab": "Movimientos",
+    "via": [
+     "Análisis"
+    ],
+    "text": "Análisis financiero",
+    "en": {
+     "tab": "Transactions",
+     "via": [
+      "Analysis"
+     ],
+     "text": "Financial analysis"
     }
    }
   },

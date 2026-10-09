@@ -1,5 +1,8 @@
 package com.dincr.app.ui
 
+import com.dincr.data.Jarvis
+import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.foundation.layout.Box
 import com.dincr.design.CompositionDonut
 import com.dincr.data.DebtComposition
 import com.dincr.data.Composition
@@ -75,6 +78,11 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
                 } else LockedRow(Icons.Rounded.QueryStats, tx("Reportes", "Reports"), PlanTier.BASIC, nav)
                 if (plan != PlanTier.VIP) LockedRow(Icons.Rounded.Insights, tx("Revisión del mes", "Monthly review"), PlanTier.VIP, nav)
                 else if (vipOn) NavRow(Icons.Rounded.Insights, tx("Revisión del mes", "Monthly review"), tx("Qué cambió y qué sigue", "What changed and what’s next")) { nav.open("review") }
+                // §15 PR 11: the Owner (role, never a plan) also gets the historical financial analysis, in its
+                // Análisis mode (no health score until P3.7, no net worth until P0.9); JARVIS keeps the full one.
+                if (Jarvis.isAvailable(profile)) Box(Modifier.testTag("analysis.owner")) {
+                    NavRow(Icons.Rounded.PieChart, tx("Análisis financiero", "Financial analysis"), tx("Tu historial: flujo, gasto y cierre del mes", "Your history: cash flow, spending and month end")) { nav.open("ownerAnalysis") }
+                }
             }
         }
     }

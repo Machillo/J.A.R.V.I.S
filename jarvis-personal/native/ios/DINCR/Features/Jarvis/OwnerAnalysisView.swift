@@ -6,16 +6,22 @@ import SwiftUI
 /// JARVIS · Análisis financiero (Owner only): the historical web Finanzas tab with the app's own
 /// components. `GET /transactions/analysis/summary` (spending by category, income vs expenses,
 /// expenses by month), `GET /finance/net-worth` and `GET /finance/engine` (health score, month-end
-/// forecast, emergency fund, debt strategy, recommendations). Only `JarvisSectionView` (Owner role)
-/// opens it; every figure is the backend's.
+/// forecast, emergency fund, debt strategy, recommendations). Opened only for the Owner role:
+/// `JarvisSectionView` (the full screen) and, since §15 PR 11, Movimientos → Análisis in the
+/// `.analysis` mode. Every figure is the backend's.
 struct OwnerAnalysisView: View {
+    /// `.jarvis`: every section (JARVIS → Análisis financiero, unchanged). `.analysis`: the same data
+    /// without the health score (canonical score: P3.7) and the net worth (Patrimonio headline: P0.9).
+    enum Mode { case jarvis, analysis }
+
     @Environment(AppModel.self) private var model
+    var mode: Mode = .jarvis
 
     var body: some View {
         ScreenScroll(title: tx("Análisis financiero", "Financial analysis")) {
             AsyncContent(fallback: tx("No pudimos cargar tu análisis.", "We couldn’t load your analysis."),
                          load: { try await model.service.ownerAnalysis() }) { analysis, _ in
-                OwnerAnalysisContent(analysis: analysis)
+                OwnerAnalysisContent(analysis: analysis, mode: mode)
             }
             FinancialDisclaimer()
         }
@@ -24,13 +30,14 @@ struct OwnerAnalysisView: View {
 
 private struct OwnerAnalysisContent: View {
     let analysis: OwnerAnalysis
+    let mode: OwnerAnalysisView.Mode
 
     var body: some View {
         let engine = analysis.engine
         let worth = analysis.netWorth
         let transactions = analysis.transactions
 
-        if let health = engine.health, let score = health.score {
+        if mode == .jarvis, let health = engine.health, let score = health.score {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Salud financiera", "Financial health"))
                 InfoRow(label: OwnerAnalysisText.healthLevel(health.level), value: "\(Int(score.rounded()))/100")
@@ -41,22 +48,24 @@ private struct OwnerAnalysisContent: View {
             .accessibilityIdentifier("jarvis.analysis.health")
         }
 
-        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            SectionHeader(title: tx("Patrimonio", "Net worth"))
-            MoneyText(worth.netWorth, font: DincrFont.displayAmount)
-            FigureRow(label: tx("Activos", "Assets"), amount: worth.assets?.assetsTotal)
-            FigureRow(label: tx("Deudas", "Debts"), amount: worth.liabilities?.debtTotal)
-            FigureRow(label: tx("Cuotas mensuales", "Monthly payments"), amount: worth.liabilities?.monthlyDebtPayments)
-            if let change = worth.change?.amount {
-                FigureRow(label: tx("Cambio desde la última lectura", "Change since the last reading"), amount: change)
+        if mode == .jarvis {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                SectionHeader(title: tx("Patrimonio", "Net worth"))
+                MoneyText(worth.netWorth, font: DincrFont.displayAmount)
+                FigureRow(label: tx("Activos", "Assets"), amount: worth.assets?.assetsTotal)
+                FigureRow(label: tx("Deudas", "Debts"), amount: worth.liabilities?.debtTotal)
+                FigureRow(label: tx("Cuotas mensuales", "Monthly payments"), amount: worth.liabilities?.monthlyDebtPayments)
+                if let change = worth.change?.amount {
+                    FigureRow(label: tx("Cambio desde la última lectura", "Change since the last reading"), amount: change)
+                }
+                if let interpretation = worth.interpretation {
+                    Text(interpretation).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                }
             }
-            if let interpretation = worth.interpretation {
-                Text(interpretation).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
-            }
+            .dincrCard()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("jarvis.analysis.networth")
         }
-        .dincrCard()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("jarvis.analysis.networth")
 
         let flow = transactions.flowMonths()
         if !flow.isEmpty {
@@ -95,6 +104,7 @@ private struct OwnerAnalysisContent: View {
 
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             SectionHeader(title: tx("Cierre del mes", "Month end"))
+                .accessibilityIdentifier("jarvis.analysis.monthEnd")
             FigureRow(label: tx("Saldo proyectado al cierre", "Projected month-end balance"), amount: engine.forecast?.projectedEndBalance)
             if let alert = engine.forecast?.alert?.message {
                 Text(alert).font(DincrFont.caption).foregroundStyle(DincrColor.warning)
