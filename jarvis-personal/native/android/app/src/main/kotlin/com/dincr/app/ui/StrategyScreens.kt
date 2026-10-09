@@ -1,5 +1,8 @@
 package com.dincr.app.ui
 
+import com.dincr.data.Feature
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -108,6 +111,28 @@ private fun ObservedIncomeNote() {
  * computes a figure: [MonthPlan] only reads the response. Distribución de dinero keeps its own
  * screen as a transitional access.
  */
+/**
+ * §15 PR 5 (option A) — "Para organizar tu mes": Presupuesto and Calendario financiero, the existing
+ * screens, inside Tu plan del mes (Plan keeps its six entries). Same gate as in Perfil: from Basic,
+ * locked below (the plan itself is Basic, so Free does not reach this screen from Plan). iOS: `OrganizeYourMonth`.
+ */
+@Composable
+private fun OrganizeYourMonth(plan: PlanTier, nav: Navigator) {
+    SectionTitle(tx("Para organizar tu mes", "To organize your month"))
+    DincrCard {
+        Column {
+            if (plan.allows(Feature.GUIDED_BUDGET)) {
+                Box(Modifier.testTag("plan.month.budget")) { NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") } }
+                Box(Modifier.testTag("plan.month.calendar")) { NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), tx("Pagos e ingresos del mes", "Payments and income this month")) { nav.open("calendar") } }
+            } else {
+                val locked = tx("Disponible desde Basic", "Available from Basic")
+                Box(Modifier.testTag("plan.month.budget")) { NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), locked, badge = "Basic") { nav.open("plans") } }
+                Box(Modifier.testTag("plan.month.calendar")) { NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), locked, badge = "Basic") { nav.open("plans") } }
+            }
+        }
+    }
+}
+
 @Composable
 fun StrategyScreen(model: AppModel, nav: Navigator) {
     val (contract, strategy) = rememberStrategy(model)
@@ -126,6 +151,7 @@ fun StrategyScreen(model: AppModel, nav: Navigator) {
             // UX-7: the personal minimum (UX-8: the priority is DINCR's recommendation, not a setting).
             DincrCard { NavRow(Icons.Rounded.Tune, tx("Ajustes del plan", "Plan settings"), tx("Mínimo personal por mes", "Personal minimum per month")) { nav.open("planPreferences") } }
         }
+        OrganizeYourMonth(profile?.planTier ?: PlanTier.FREE, nav)
         FinancialDisclaimer()
     }
 }

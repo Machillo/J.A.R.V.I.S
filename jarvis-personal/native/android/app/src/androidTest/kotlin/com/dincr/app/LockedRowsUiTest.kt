@@ -67,7 +67,7 @@ class LockedRowsUiTest {
 
     @Test fun freeSeesBudgetAndCalendarLockedAndALockedRowOpensSuscripcion() {
         launch()
-        listOf(budget, calendar, tx("Pagos recurrentes", "Recurring payments")).forEach { waitUntil(it) { present(it) } }
+        listOf(budget, calendar, tx("Movimientos recurrentes", "Recurring transactions")).forEach { waitUntil(it) { present(it) } }
         assertEquals("budget and calendar locked to Basic", 2, count(fromBasic))
         click(budget)
         waitUntil("Suscripción") { present(current) }

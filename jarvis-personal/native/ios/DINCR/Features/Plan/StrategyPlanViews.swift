@@ -25,8 +25,42 @@ struct PlanStrategyView: View {
                 .dincrCard(padding: DincrSpacing.s3)
                 .accessibilityIdentifier("plan.month.preferences")
             }
+            OrganizeYourMonth()
             FinancialDisclaimer()
         }
+    }
+}
+
+/// §15 PR 5 (option A) — "Para organizar tu mes": Presupuesto and Calendario financiero, the existing
+/// screens, inside Tu plan del mes (Plan keeps its six entries). Same gate as in Perfil: from Basic,
+/// locked below (the plan itself is Basic, so Free does not reach this screen from Plan).
+private struct OrganizeYourMonth: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            SectionHeader(title: tx("Para organizar tu mes", "To organize your month"))
+            if model.planTier.allows(.guidedBudget) {
+                entry(symbol: "chart.pie", title: tx("Presupuesto", "Budget"), subtitle: tx("Límites por categoría", "Limits by category"),
+                      id: "plan.month.budget") { BudgetView() }
+                entry(symbol: "calendar", title: tx("Calendario financiero", "Financial calendar"),
+                      subtitle: tx("Pagos e ingresos del mes", "Payments and income this month"), id: "plan.month.calendar") { CalendarView() }
+            } else {
+                entry(symbol: "chart.pie", title: tx("Presupuesto", "Budget"), subtitle: locked, id: "plan.month.budget", locked: true) { PlanSettingsView() }
+                entry(symbol: "calendar", title: tx("Calendario financiero", "Financial calendar"), subtitle: locked,
+                      id: "plan.month.calendar", locked: true) { PlanSettingsView() }
+            }
+        }
+    }
+
+    private var locked: String { tx("Disponible desde Basic", "Available from Basic") }
+
+    private func entry<Destination: View>(symbol: String, title: String, subtitle: String, id: String, locked: Bool = false,
+                                          @ViewBuilder destination: @escaping () -> Destination) -> some View {
+        NavigationLink { destination() } label: { HubRow(symbol: symbol, title: title, subtitle: subtitle, locked: locked ? .basic : nil) }
+            .buttonStyle(.plain)
+            .dincrCard(padding: DincrSpacing.s3)
+            .accessibilityIdentifier(id)
     }
 }
 

@@ -47,7 +47,8 @@
   "PR-6",
   "PR-8",
   "PR-10",
-  "PR-11"
+  "PR-11",
+  "PR-5"
  ],
  "fixtures": {
   "ios": {
@@ -583,6 +584,149 @@
      "tab": "Plan",
      "text": "Money distribution",
      "locked_text": "Available from Basic"
+    }
+   }
+  },
+  {
+   "id": "month.budget",
+   "name": "Plan → Tu plan del mes → Para organizar tu mes → Presupuesto (§15 PR 5, option A; Perfil keeps its access until PR 10)",
+   "decision": "PR-5",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/budget",
+     "gate": "feature:guided_budget",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "via": [
+     "plan.strategy"
+    ],
+    "id": "plan.month.budget"
+   },
+   "android": {
+    "tab": "Plan",
+    "via": [
+     "Tu plan del mes"
+    ],
+    "tag": "plan.month.budget",
+    "en": {
+     "tab": "Plan",
+     "via": [
+      "Your plan for the month"
+     ]
+    }
+   },
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "both",
+     "reason": "Free reaches Tu plan del mes locked (Basic), so the group inside it is not shown; the function stays VISIBLE_LOCKED for Free in Perfil → Finanzas",
+     "resolved_by": "§15 PR 10 closure (retiring Perfil → Finanzas): decide where Free sees it locked in Plan"
+    }
+   ]
+  },
+  {
+   "id": "month.calendar",
+   "name": "Plan → Tu plan del mes → Para organizar tu mes → Calendario financiero (§15 PR 5, option A; Perfil keeps its access until PR 10)",
+   "decision": "PR-5",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/calendar",
+     "gate": "feature:financial_calendar",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "via": [
+     "plan.strategy"
+    ],
+    "id": "plan.month.calendar"
+   },
+   "android": {
+    "tab": "Plan",
+    "via": [
+     "Tu plan del mes"
+    ],
+    "tag": "plan.month.calendar",
+    "en": {
+     "tab": "Plan",
+     "via": [
+      "Your plan for the month"
+     ]
+    }
+   },
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "both",
+     "reason": "Free reaches Tu plan del mes locked (Basic), so the group inside it is not shown; the function stays VISIBLE_LOCKED for Free in Perfil → Finanzas",
+     "resolved_by": "§15 PR 10 closure (retiring Perfil → Finanzas): decide where Free sees it locked in Plan"
+    }
+   ]
+  },
+  {
+   "id": "incomeBase.recurring",
+   "name": "Plan → Ingresos y base → Movimientos recurrentes (§15 PR 5, option A: recurring income and expenses; Perfil keeps its access until PR 10)",
+   "decision": "PR-5",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/recurring",
+     "gate": "feature:recurring_items",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "via": [
+     "plan.incomeBase"
+    ],
+    "id": "incomeBase.recurring"
+   },
+   "android": {
+    "tab": "Plan",
+    "via": [
+     "Ingresos y base"
+    ],
+    "tag": "incomeBase.recurring",
+    "en": {
+     "tab": "Plan",
+     "via": [
+      "Income and base"
+     ]
     }
    }
   },
@@ -1328,10 +1472,10 @@
    },
    "android": {
     "tab": "Perfil",
-    "text": "Pagos recurrentes",
+    "text": "Movimientos recurrentes",
     "en": {
      "tab": "Profile",
-     "text": "Recurring payments"
+     "text": "Recurring transactions"
     }
    }
   },

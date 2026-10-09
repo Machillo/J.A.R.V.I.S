@@ -1,5 +1,9 @@
 package com.dincr.app.ui
 
+import com.dincr.design.DincrCard
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +39,13 @@ fun IncomeBaseScreen(model: AppModel, nav: Navigator) {
     val situation = rememberLoad(model) { model.api.financialSituation() }
     DetailScaffold(tx("Ingresos y base", "Income and base"), nav::back) {
         LoadContent(situation) { s -> IncomeBaseForm(model, s.profile, s.observed?.monthlyIncomeAverage) { situation.replace(it) } }
+        // §15 PR 5 (option A): the recurring income and expenses, the existing screen (every plan, UX-9).
+        DincrCard {
+            Box(Modifier.testTag("incomeBase.recurring")) {
+                NavRow(Icons.Rounded.Repeat, tx("Movimientos recurrentes", "Recurring transactions"),
+                    tx("Ingresos y gastos que se repiten, con su frecuencia y vencimiento.", "Income and expenses that repeat, with their frequency and due day.")) { nav.open("recurring") }
+            }
+        }
     }
 }
 
