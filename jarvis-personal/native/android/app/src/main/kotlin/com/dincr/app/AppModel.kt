@@ -26,13 +26,17 @@ import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
 import com.dincr.data.Pkce
 import com.dincr.data.ProductEvent
+import com.dincr.data.PullRefresh
 import com.dincr.data.Profile
 import com.dincr.data.ReleasePolicy
 import com.dincr.data.ServiceHealth
 import com.dincr.data.SessionManager
+import com.dincr.data.SingleFlight
 import com.dincr.data.SupabaseAuthClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +58,8 @@ sealed interface AppEnvironment {
         val scenario: FakeBackend.Scenario, val plan: PlanTier, val skipLogin: Boolean, val latencyMs: Long = 350,
         /** The role the fake server answers in /auth/me (role-matrix UI tests); never a live session's. */
         val role: FakeBackend.Role = FakeBackend.Role.USER,
+        /** `dincrRefreshFails`: a pull to refresh finds the server unreachable (B17 UI tests). */
+        val identityRefreshFails: Boolean = false,
     ) : AppEnvironment
     data class Unconfigured(val reason: LaunchPolicy.Reason) : AppEnvironment
 
@@ -78,6 +84,7 @@ sealed interface AppEnvironment {
                     // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
                     intent?.getLongExtra("dincrLatencyMs", 350) ?: 350,
                     FakeBackend.Role.entries.firstOrNull { it.wire == intent?.getStringExtra("dincrRole") } ?: FakeBackend.Role.USER,
+                    intent?.getBooleanExtra("dincrRefreshFails", false) ?: false,
                 )
             }
         }
@@ -128,6 +135,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     lateinit var environment: AppEnvironment private set
     lateinit var api: DincrApi private set
+    /** Fixture sessions only: the fake server (B17 UI tests count the reads a pull to refresh makes). */
+    var fixtureBackend: FakeBackend? = null
+        private set
     /** The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the identity is no longer the Owner. */
     val jarvisChat = JarvisChatSession({ message -> api.jarvisChat(message) })
     val appLock = AppLock(application)
@@ -209,7 +219,10 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             }
             is AppEnvironment.Fixtures -> {
                 sessions = SessionManager(null, InMemorySessionStore(if (environment.skipLogin) FIXTURE_SESSION else null))
-                api = DincrApi(ApiClient("https://fixtures.invalid", sessions, FakeBackend(environment.scenario, environment.plan, environment.latencyMs, role = environment.role)))
+                val backend = FakeBackend(environment.scenario, environment.plan, environment.latencyMs, role = environment.role,
+                    identityRefreshFails = environment.identityRefreshFails)
+                fixtureBackend = backend
+                api = DincrApi(ApiClient("https://fixtures.invalid", sessions, backend))
             }
             is AppEnvironment.Unconfigured -> {
                 _phase.value = Phase.Unconfigured(environment.reason)
@@ -267,9 +280,37 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun recheckRelease() = viewModelScope.launch { checkReleasePolicy() }
 
-    suspend fun refreshFlags() {
-        runCatching { api.featureFlags() }.onSuccess { _flags.value = it }
+    /** Returns whether the switches were read; a failed read keeps the last known ones. */
+    suspend fun refreshFlags(): Boolean {
+        val loaded = runCatching { api.featureFlags() }.onSuccess { _flags.value = it }.isSuccess
         runCatching { api.health() }.onSuccess { _health.value = it }
+        return loaded
+    }
+
+    // --- Pull to refresh (B17) ---------------------------------------------------------------------------
+
+    /** One identity-and-switches refresh at a time, whichever tab asked for it. */
+    private val accessRefresh = SingleFlight(viewModelScope)
+
+    /**
+     * B17 — a pull to refresh on Plan, Patrimonio or Perfil: the identity (plan and role) and the
+     * switches read again, plus the tab's own [extra] read (Patrimonio's debts). Nothing on screen is
+     * emptied when it fails: the notice says the information is the previous one. Returns whether
+     * everything was read. iOS: `AppModel.refreshTab`.
+     */
+    suspend fun refreshTab(extra: (suspend () -> Boolean)? = null): Boolean = coroutineScope {
+        val epoch = sessionEpoch
+        val access = async { accessRefresh.run { refreshAccess() } }
+        val more = extra?.invoke() ?: true
+        val ok = access.await() && more
+        if (!ok && epoch == sessionEpoch && _phase.value is Phase.Ready) showNotice(PullRefresh.failureNotice(language))
+        ok
+    }
+
+    private suspend fun refreshAccess(): Boolean = coroutineScope {
+        val flags = async { refreshFlags() }
+        val identity = loadIdentity(keepOnTransient = true)
+        flags.await() && identity
     }
 
     /** Optional update dismissed for this version (stored per latest version). */
@@ -352,12 +393,17 @@ class AppModel(application: Application) : AndroidViewModel(application) {
      */
     private var sessionEpoch = 0
 
-    suspend fun loadIdentity() {
+    /**
+     * Reads the identity and applies it; returns whether it was applied. [keepOnTransient] (a pull
+     * to refresh, B17): a signed-in app that fails for a transient reason (offline, timeout, 5xx)
+     * keeps the user where they were, as iOS does; any other answer moves the gate as always.
+     */
+    suspend fun loadIdentity(keepOnTransient: Boolean = false): Boolean {
         val epoch = sessionEpoch
         if (_profile.value == null) _phase.value = Phase.LoadingIdentity
         try {
             val profile = api.me()
-            if (epoch == sessionEpoch) apply(profile)
+            if (epoch == sessionEpoch) { apply(profile); return true }
         } catch (error: CancellationException) {
             throw error
         } catch (error: AuthException.SignedOut) {
@@ -365,15 +411,19 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         } catch (error: AuthException.SessionChanged) {
             // The session was replaced or closed while loading; its phase is already set.
         } catch (error: ApiError) {
-            if (epoch == sessionEpoch) _phase.value = Phase.IdentityError(error.message, error.code == "account_deletion_pending")
+            val deletionPending = error.code == "account_deletion_pending"
+            val keep = keepOnTransient && _phase.value is Phase.Ready && _profile.value != null && !deletionPending && error.isTransient
+            if (epoch == sessionEpoch && !keep) _phase.value = Phase.IdentityError(error.message, deletionPending)
         } catch (error: Exception) {
             if (epoch == sessionEpoch) _phase.value = Phase.IdentityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."))
         }
+        return false
     }
 
     /** Applies an identity: the Owner boundary, then legal, profile setup and plan, in that order. */
     fun apply(profile: Profile) {
         val previous = _profile.value
+        val wasReady = _phase.value is Phase.Ready
         // Another account, or an account that is no longer the Owner, never sees this chat.
         if (profile.id != previous?.id || !Jarvis.isAvailable(profile)) jarvisChat.reset()
         _profile.value = profile
@@ -389,7 +439,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             IdentityGate.CHOOSE_PLAN -> Phase.ChoosePlan
             IdentityGate.READY -> Phase.Ready
         }
-        if (_phase.value is Phase.Ready) viewModelScope.launch { refreshFlags(); reconcileStore() }
+        // The switches are read on becoming ready (as iOS); a ready app already reads them on resume, in
+        // their loop and on a pull to refresh, so an identity read again does not read them twice.
+        if (_phase.value is Phase.Ready) viewModelScope.launch { if (!wasReady) refreshFlags(); reconcileStore() }
     }
 
     /** `DELETE /auth/me` for an account whose deletion is pending (or requested now), then sign out. */

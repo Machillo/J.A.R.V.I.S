@@ -70,6 +70,8 @@ final class AppModel {
     /// A mail return whose completion failed transiently (offline): retried on resume.
     private var retryMailReturn: MailReturn?
     private var lastIdentityRefresh = Date.distantPast
+    /// One identity-and-switches refresh at a time, whichever tab asked for it (B17).
+    @ObservationIgnored private let accessRefresh = SingleFlight()
     private var releaseChecked = false
 
     init(environment: AppEnvironment = .current()) {
@@ -88,7 +90,9 @@ final class AppModel {
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
             let latency: Duration = ProcessInfo.processInfo.arguments.contains("-DincrDisableAnimations") ? .milliseconds(50) : .milliseconds(300)
-            service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency))
+            // `-DincrRefreshFails`: a pull to refresh finds the server unreachable (B17 UI tests).
+            let refreshFails = ProcessInfo.processInfo.arguments.contains("-DincrRefreshFails")
+            service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency, identityRefreshFails: refreshFails))
         case let .unconfigured(reason):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
@@ -201,29 +205,34 @@ final class AppModel {
 
     // MARK: Identity
 
-    func loadIdentity() async {
+    /// Reads the identity and applies it; returns whether it was applied.
+    @discardableResult
+    func loadIdentity() async -> Bool {
         let epoch = sessionEpoch
         if profile == nil { phase = .loadingIdentity }
         do {
             let loaded = try await service.me()
-            if epoch == sessionEpoch { apply(loaded) }
+            guard epoch == sessionEpoch else { return false }
+            apply(loaded)
+            return true
         } catch AuthError.signedOut {
             if epoch == sessionEpoch { handleSignedOut() }
         } catch AuthError.sessionChanged {
             // The session was replaced or closed while loading; its phase is already set.
         } catch is CancellationError {
-            return
+            return false
         } catch let error as APIError {
-            guard epoch == sessionEpoch else { return }
+            guard epoch == sessionEpoch else { return false }
             let deletionPending = error.code == "account_deletion_pending"
             // A background refresh of a signed-in app (resume) that fails for a transient reason
             // (offline, timeout, 5xx) keeps the user where they were; any other answer moves the gate.
-            if phase == .ready, profile != nil, !deletionPending, error.isTransient { return }
+            if phase == .ready, profile != nil, !deletionPending, error.isTransient { return false }
             phase = .identityError(error.message, deletionPending: deletionPending)
         } catch {
-            guard epoch == sessionEpoch else { return }
+            guard epoch == sessionEpoch else { return false }
             phase = .identityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."), deletionPending: false)
         }
+        return false
     }
 
     func apply(_ profile: Profile) {
@@ -285,11 +294,39 @@ final class AppModel {
         }
     }
 
-    func refreshFlags() async {
+    /// Returns whether the switches were read.
+    @discardableResult
+    func refreshFlags() async -> Bool {
         let epoch = sessionEpoch
         // A failed load keeps the last known flags (or the safe defaults); it never enables anything.
-        if let loaded = try? await service.featureFlags(), epoch == sessionEpoch { flags = loaded }
-        if let loaded = try? await service.health(), epoch == sessionEpoch { health = loaded }
+        let loaded = try? await service.featureFlags()
+        if let loaded, epoch == sessionEpoch { flags = loaded }
+        if let health = try? await service.health(), epoch == sessionEpoch { self.health = health }
+        return loaded != nil
+    }
+
+    // MARK: Pull to refresh (B17)
+
+    /// A pull to refresh on Plan, Patrimonio or Perfil: the identity (plan and role) and the switches
+    /// read again, plus the tab's own `extra` read (Patrimonio's debts). Nothing on screen is emptied
+    /// when it fails: the notice says the information is the previous one. Returns whether everything
+    /// was read. Android: `AppModel.refreshTab`.
+    @discardableResult
+    func refreshTab(_ extra: (@MainActor () async -> Bool)? = nil) async -> Bool {
+        let epoch = sessionEpoch
+        async let access = accessRefresh.run { await self.refreshAccess() }
+        let more = await extra?() ?? true
+        let read = await access
+        let ok = read && more
+        if !ok, epoch == sessionEpoch, phase == .ready { notice = PullRefresh.failureNotice(language) }
+        return ok
+    }
+
+    private func refreshAccess() async -> Bool {
+        async let flags = refreshFlags()
+        let identity = await loadIdentity()
+        let switches = await flags
+        return switches && identity
     }
 
     /// G9 / A6 — the backend schedules the deletion; this device then forgets the session.

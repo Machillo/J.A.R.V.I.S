@@ -37,7 +37,12 @@ struct AnalysisHubView: View {
 /// the mail connections that read them (the existing screens; VIP and the Owner, locked below).
 /// Deudas: how the active debts make up what is owed, from Plan → Deudas' balances (every plan).
 /// Proyecciones and Escenarios (VIP). No net worth figure until P0.9 (K-3), no balance invented.
+/// B17: pulling down reads the plan, the switches and the debts again; a failed read keeps what the
+/// card showed (`PullRefresh`).
 struct WealthHubView: View {
+    @Environment(AppModel.self) private var model
+    @State private var debts: LoadState<[Debt]> = .loading
+
     var body: some View {
         ScreenScroll(title: tx("Patrimonio", "Wealth")) {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
@@ -48,7 +53,7 @@ struct WealthHubView: View {
                 GatedEntry(minimum: .vip, flag: nil, symbol: "envelope", title: tx("Conexiones de correo", "Mail connections"),
                            subtitle: tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices"), id: "wealth.connections") { EmailMonitorView() }
                 SectionHeader(title: tx("Deudas", "Debts"))
-                WealthDebtsCard()
+                WealthDebtsCard(debts: debts) { Task { await loadDebts(refreshing: false) } }
                 SectionHeader(title: tx("Proyecciones", "Projections"))
                 GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "chart.line.uptrend.xyaxis", title: tx("Proyecciones", "Projections"),
                            subtitle: tx("Tus próximos meses", "Your next months"), id: "wealth.projections") { ProjectionsView() }
@@ -56,17 +61,46 @@ struct WealthHubView: View {
                            subtitle: tx("¿Y si gano o gasto distinto?", "What if I earn or spend differently?"), id: "wealth.scenarios") { ScenariosView() }
             }
         }
+        .task { await loadDebts(refreshing: false) }
+        .refreshable { await model.refreshTab { await loadDebts(refreshing: true) } }
+    }
+
+    /// Returns whether the debts were read. A refresh that fails keeps the debts already shown.
+    private func loadDebts(refreshing: Bool) async -> Bool {
+        let epoch = model.currentEpoch
+        let current: [Debt]? = if case .loaded(let value) = debts { value } else { nil }
+        do {
+            let value = try await model.service.debts()
+            if epoch == model.currentEpoch { debts = .loaded(value) }
+            return true
+        } catch is CancellationError {
+            return true
+        } catch {
+            let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar esta información.", "We couldn’t load this information."))
+            if refreshing, let kept = PullRefresh.kept(current, after: .failure(error)) {
+                debts = .loaded(kept)
+            } else if let message {
+                debts = .failed(message)
+            }
+            return false
+        }
     }
 }
 
 /// §15 PR 8 — what is owed, by debt, from the balances in Plan → Deudas (`DebtComposition`); managed
 /// there. An unknown balance is listed as unknown and no share or total is drawn from it.
 private struct WealthDebtsCard: View {
-    @Environment(AppModel.self) private var model
+    let debts: LoadState<[Debt]>
+    let retry: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            AsyncContent(load: { try await model.service.debts() }) { debts, _ in
+            switch debts {
+            case .loading:
+                SkeletonView(rows: 3)
+            case .failed(let message):
+                ErrorStateView(message: message, retry: retry)
+            case .loaded(let debts):
                 let composition = DebtComposition.of(debts)
                 if composition.status == .empty {
                     Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."))

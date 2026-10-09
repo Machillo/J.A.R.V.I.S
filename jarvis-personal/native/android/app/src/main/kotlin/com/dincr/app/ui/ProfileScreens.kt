@@ -76,13 +76,12 @@ fun planName(plan: String?): String = when (plan ?: "free") {
     else -> (plan ?: "").replaceFirstChar { it.uppercase() }
 }
 
-/** G1 — profile hub. */
+/** G1 — profile hub. B17: pulling down reads the identity (name, subscription, role) and the switches again. */
 @Composable
 fun ProfileHubScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     var confirming by remember { mutableStateOf(false) }
-    ScreenColumn {
-        Text(tx("Perfil", "Profile"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
+    RefreshableTab(model, tx("Perfil", "Profile")) {
         DincrCard {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
                 Box(Modifier.size(44.dp).background(Dincr.colors.tintContainer, CircleShape), contentAlignment = Alignment.Center) {

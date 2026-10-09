@@ -25,6 +25,8 @@ class FakeBackend(
     currentDate: LocalDate = LocalDate.now(),
     language: AppLanguage = AppLanguage.current(),
     private val role: Role = Role.USER,
+    /** B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server. */
+    private val identityRefreshFails: Boolean = false,
 ) : HttpTransport {
     /** STORE: the account of the store screenshots ([StoreSample]). */
     enum class Scenario { POPULATED, EMPTY, FAILING, NEW_USER, LEGAL_REQUIRED, CHOOSE_PLAN, STORE }
@@ -56,6 +58,7 @@ class FakeBackend(
     private var mailConnected = (scenario == Scenario.POPULATED || scenario == Scenario.STORE) && plan == PlanTier.VIP
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
+    private var identityReads = 0
     private val planRoutes = FakePlanRoutes(json, today)
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
@@ -75,6 +78,10 @@ class FakeBackend(
         if (request.headers["Authorization"] == null && !request.url.contains("/product-ops/release-policy")) return error(401, "Falta Authorization")
         if (scenario == Scenario.FAILING && !request.url.contains("release-policy")) {
             return error(500, "Ocurrió un error interno. Intentá nuevamente.")
+        }
+        if (request.method == "GET" && request.url.substringBefore("?").endsWith("/auth/me")) {
+            identityReads += 1
+            if (identityRefreshFails && identityReads > 1) return error(503, "Servicio no disponible.")
         }
         val path = request.url.substringAfter("://").substringAfter("/").let { "/" + it.substringBefore("?") }
         val query = request.url.substringAfter("?", "").split("&").filter { it.contains("=") }.associate { it.substringBefore("=") to java.net.URLDecoder.decode(it.substringAfter("="), "UTF-8") }
