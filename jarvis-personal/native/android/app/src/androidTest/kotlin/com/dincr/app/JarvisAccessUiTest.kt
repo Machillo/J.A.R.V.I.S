@@ -65,10 +65,11 @@ class JarvisAccessUiTest {
     @Test fun ownerGetsJarvisWithTheFiveFinalTabs() {
         launch(role = "owner")
         openProfile()
-        // UX-13: the Owner has the five final tabs (no DINCR tab), VIP screens such as the financial emails, and JARVIS in Perfil.
+        // UX-13: the Owner has the five final tabs (no DINCR tab) and JARVIS in Perfil; the financial emails live in
+        // Patrimonio since §15 PR 10 (WealthUiTest checks the Owner opens them).
         listOf(tx("Hoy", "Today"), tx("Movimientos", "Transactions"), "Plan", tx("Patrimonio", "Wealth"), tx("Perfil", "Profile")).forEach { assertTrue(it, present(it)) }
         assertTrue("no DINCR tab", !present("DINCR"))
-        assertTrue(present(tx("Correos financieros", "Financial emails")))
+        assertTrue("no mail row in Perfil", !present(tx("Correos financieros", "Financial emails")))
         click("JARVIS")
         assertTrue(present(tx("Chat", "Chat")))
         click(tx("Memoria", "Memory"))

@@ -61,21 +61,10 @@ struct ProfileHubView: View {
                 .dincrRowBackground()
             }
             // UX-7: the declared situation lives in Plan → Ingresos y base and Tu plan del mes → Ajustes.
-            // PR 4 (P6.4): below its plan a row stays visible, locked, and opens Suscripción.
-            Section {
-                if model.planTier == .vip {
-                    NavigationLink(value: ProfileRoute.mail) { Label(tx("Monitor de correo", "Email Monitor"), systemImage: "envelope") }
-                        .accessibilityIdentifier("profile.mail")
-                    // Cuentas: the detected accounts by bank, with their movements (same review as the monitor).
-                    NavigationLink { AccountsView() } label: { Label(tx("Cuentas", "Accounts"), systemImage: "building.columns") }
-                        .accessibilityIdentifier("profile.accounts")
-                } else {
-                    LockedListRow(title: tx("Monitor de correo", "Email Monitor"), symbol: "envelope", tier: .vip, id: "profile.mail")
-                    LockedListRow(title: tx("Cuentas", "Accounts"), symbol: "building.columns", tier: .vip, id: "profile.accounts")
-                }
-            }
-            .dincrRowBackground()
-            // Finanzas: recurring commitments on every plan (UX-9); budget and calendar from Basic.
+            // §15 PR 10: Cuentas and the mail (connections and review) live in Patrimonio → Cuentas /
+            // Conexiones de correo and Movimientos → Por revisar; Perfil no longer repeats them.
+            // Finanzas: recurring commitments on every plan (UX-9); budget and calendar from Basic (PR 4:
+            // locked below, as every locked row).
             Section(tx("Finanzas", "Finances")) {
                 if model.planTier.rank >= Feature.guidedBudget.minimum.rank {
                     NavigationLink { BudgetView() } label: { Label(tx("Presupuesto", "Budget"), systemImage: "chart.pie") }

@@ -23,10 +23,15 @@ final class JarvisAccessUITests: XCTestCase {
         let app = launch(role: "owner")
         let entry = element("profile.jarvis", in: app)
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
-        // UX-13: the Owner has the five final tabs (no DINCR tab), VIP screens such as the Email Monitor, and JARVIS in Perfil.
+        // UX-13: the Owner has the five final tabs (no DINCR tab), VIP screens such as the mail connections (in
+        // Patrimonio since §15 PR 10), and JARVIS in Perfil.
         for tab in ["Hoy", "Movimientos", "Plan", "Patrimonio", "Perfil"] { XCTAssertTrue(app.tabBars.buttons[tab].exists, tab) }
         XCTAssertFalse(app.tabBars.buttons["DINCR"].exists)
-        XCTAssertTrue(element("profile.mail", in: app).exists)
+        XCTAssertFalse(element("profile.mail", in: app).exists)
+        app.tabBars.buttons["Patrimonio"].tap()
+        XCTAssertTrue(element("wealth.connections", in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(element("wealth.connections", in: app).label.contains("Disponible desde"))
+        app.tabBars.buttons["Perfil"].tap()
         entry.tap()
         let memory = element("jarvis.section.memory", in: app)
         XCTAssertTrue(memory.waitForExistence(timeout: 5))

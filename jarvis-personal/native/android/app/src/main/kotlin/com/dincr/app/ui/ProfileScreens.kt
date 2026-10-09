@@ -15,12 +15,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
-import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Lock
@@ -111,15 +109,8 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
                 // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
                 NavRow(Icons.Rounded.Star, tx("Suscripción", "Subscription"),
                     if (profile?.role == "owner") "DINCR Owner" else planName(profile?.plan) + (if (profile?.isCourtesy == true) tx(" · cortesía", " · courtesy") else "")) { nav.open("plans") }
-                // PR 4 (P6.4): below VIP the rows stay visible, locked, and open Suscripción; with the
-                // mail switch off a VIP still sees them and each screen says it is paused (as on iOS).
-                if (plan == PlanTier.VIP) {
-                    NavRow(Icons.Rounded.Email, tx("Correos financieros", "Financial emails"), tx("Avisos de tu banco para revisar", "Bank notices to review")) { nav.open("mail") }
-                    NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Tus bancos, cuentas y movimientos", "Your banks, accounts and transactions")) { nav.open("accounts") }
-                } else {
-                    LockedNavRow(Icons.Rounded.Email, tx("Correos financieros", "Financial emails"), PlanTier.VIP, nav)
-                    LockedNavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), PlanTier.VIP, nav)
-                }
+                // §15 PR 10: Cuentas and the mail (connections and review) live in Patrimonio → Cuentas /
+                // Conexiones de correo and Movimientos → Por revisar; Perfil no longer repeats them.
                 NavRow(Icons.Rounded.Settings, tx("Ajustes de cuenta", "Account settings"), tx("Apariencia, datos y privacidad", "Appearance, data and privacy")) { nav.open("settings") }
                 NavRow(Icons.Rounded.Lock, tx("Seguridad", "Security"), tx("Bloqueo de la app", "App lock")) { nav.open("security") }
                 NavRow(Icons.Rounded.SupportAgent, tx("Ayuda y soporte", "Help and support"), tx("Reportá un problema o una idea", "Report a problem or an idea")) { nav.open("support") }

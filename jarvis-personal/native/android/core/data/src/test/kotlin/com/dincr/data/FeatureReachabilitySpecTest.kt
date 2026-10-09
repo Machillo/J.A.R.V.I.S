@@ -39,7 +39,6 @@ class FeatureReachabilitySpecTest {
         "wealth.projections" to Feature.STRATEGY_VIP, "wealth.scenarios" to Feature.STRATEGY_VIP,
         "analysis.review" to Feature.STRATEGY_VIP, "profile.budget" to Feature.GUIDED_BUDGET,
         "profile.calendar" to Feature.GUIDED_BUDGET, "profile.recurring" to Feature.RECURRING_ITEMS,
-        "profile.mail" to Feature.GMAIL_AUTOMATION, "profile.accounts" to Feature.GMAIL_AUTOMATION,
         // §15 PR 6: the same mail review, from Movimientos → Por revisar.
         "movements.review" to Feature.GMAIL_AUTOMATION,
         // §15 PR 8: Patrimonio → Cuentas, Conexiones de correo and Deudas.

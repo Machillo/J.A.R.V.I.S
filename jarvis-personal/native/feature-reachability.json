@@ -45,7 +45,8 @@
   "UX-13",
   "PR-4",
   "PR-6",
-  "PR-8"
+  "PR-8",
+  "PR-10"
  ],
  "fixtures": {
   "ios": {
@@ -735,7 +736,7 @@
   },
   {
    "id": "wealth.accounts",
-   "name": "Patrimonio → Cuentas (§15 PR 8): the accounts detected in bank notices, the same screen as Perfil → Cuentas",
+   "name": "Patrimonio → Cuentas (§15 PR 8; PR 10: its only home, Perfil → Cuentas retired): the accounts detected in bank notices",
    "decision": "PR-8",
    "plans": {
     "free": "VISIBLE_LOCKED",
@@ -771,7 +772,7 @@
   },
   {
    "id": "wealth.connections",
-   "name": "Patrimonio → Conexiones de correo (§15 PR 8): the mail connections, the same screen as Perfil → Correos financieros",
+   "name": "Patrimonio → Conexiones de correo (§15 PR 8; PR 10: Perfil → Correos financieros retired): the mail connections and review",
    "decision": "PR-8",
    "plans": {
     "free": "VISIBLE_LOCKED",
@@ -1168,80 +1169,6 @@
     }
    },
    "security_note": "The Owner account is never deletable from the app (canDeleteAccountInApp = !isOwner)"
-  },
-  {
-   "id": "profile.mail",
-   "name": "Perfil → Correos financieros",
-   "decision": "PR-4",
-   "plans": {
-    "free": "VISIBLE_LOCKED",
-    "basic": "VISIBLE_LOCKED",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "target": "P6: Perfil → Conexiones (connect) / Movimientos → Por revisar / Patrimonio → Cuentas",
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/vip/gmail/status",
-     "gate": "feature:gmail_automation",
-     "used_by": [
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "profile",
-    "id": "profile.mail",
-    "locked_label": "Disponible desde VIP"
-   },
-   "android": {
-    "tab": "Perfil",
-    "text": "Correos financieros",
-    "en": {
-     "tab": "Profile",
-     "text": "Financial emails",
-     "locked_text": "Available from VIP"
-    },
-    "locked_text": "Disponible desde VIP"
-   }
-  },
-  {
-   "id": "profile.accounts",
-   "name": "Perfil → Cuentas",
-   "decision": "PR-4",
-   "plans": {
-    "free": "VISIBLE_LOCKED",
-    "basic": "VISIBLE_LOCKED",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "target": "P6: Perfil → Conexiones (connect) / Movimientos → Por revisar / Patrimonio → Cuentas",
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/vip/financial-identity",
-     "gate": "feature:gmail_automation",
-     "used_by": [
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "profile",
-    "id": "profile.accounts",
-    "locked_label": "Disponible desde VIP"
-   },
-   "android": {
-    "tab": "Perfil",
-    "text": "Cuentas",
-    "en": {
-     "tab": "Profile",
-     "text": "Accounts",
-     "locked_text": "Available from VIP"
-    },
-    "locked_text": "Disponible desde VIP"
-   }
   },
   {
    "id": "profile.budget",

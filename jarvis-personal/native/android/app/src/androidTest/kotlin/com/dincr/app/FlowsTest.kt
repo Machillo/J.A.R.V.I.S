@@ -262,8 +262,8 @@ class FlowsTest {
         // next_45_days_minimum is the lowest projected balance, never labelled as the commitments.
         waitForText(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"))
         compose.onAllNodes(hasText(tx("Compromisos próximos 45 días", "Commitments next 45 days")), useUnmergedTree = true).assertCountEquals(0)
-        tab(tx("Perfil", "Profile"))
-        click(tx("Correos financieros", "Financial emails"))
+        tab(tx("Patrimonio", "Wealth"))
+        click(tx("Conexiones de correo", "Mail connections"))
         waitForText("Compra en supermercado")
         // A mailbox the user disconnected earlier (status "disabled") is not listed.
         waitForText("ejemplo@correo.test")

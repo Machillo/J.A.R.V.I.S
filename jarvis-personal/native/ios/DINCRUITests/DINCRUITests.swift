@@ -206,8 +206,9 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["profile.subscription"].waitForExistence(timeout: 5))
         // PR 4: the rows stay visible, locked to the subscription that includes them.
         XCTAssertTrue(app.descendants(matching: .any)["profile.budget"].label.contains("Disponible desde Basic"))
-        XCTAssertTrue(app.descendants(matching: .any)["profile.mail"].label.contains("Disponible desde VIP"))
-        XCTAssertTrue(app.descendants(matching: .any)["profile.accounts"].label.contains("Disponible desde VIP"))
+        // §15 PR 10: Correos and Cuentas live in Patrimonio (locked there below VIP), no longer in Perfil.
+        XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["profile.accounts"].exists)
     }
 
     func testVipHomeShowsSafeToSpend() {
@@ -256,8 +257,8 @@ final class DINCRUITests: XCTestCase {
     /// (gmail.readonly) → consent → Connect Gmail → provider → back to DINCR → connected → sync →
     /// candidates → confirm. Only the provider page is simulated; the real one is DEVICE REQUIRED.
     func testEmailMonitorConnectReviewFlow() {
-        let app = launch("mailOnboarding", extra: ["-DincrTab", "profile"])
-        open("profile.mail", in: app)
+        let app = launch("mailOnboarding", extra: ["-DincrTab", "wealth"])
+        open("wealth.connections", in: app)
         XCTAssertTrue(app.descendants(matching: .any)["mail.readonly"].waitForExistence(timeout: 5))
         let accept = app.buttons["mail.consent.accept"]
         XCTAssertTrue(accept.waitForExistence(timeout: 5))

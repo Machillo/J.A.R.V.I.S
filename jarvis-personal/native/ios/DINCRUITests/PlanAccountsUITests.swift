@@ -264,28 +264,28 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(element("salvavidas.editBalance", in: app).exists)
     }
 
-    // MARK: Cuentas ↔ Correos (one review system)
+    // MARK: Cuentas ↔ Correos (one review system; §15 PR 10: both in Patrimonio)
 
     func testAcceptingInCuentasShowsInTheEmailMonitor() {
-        let app = launch(plan: "vip", tab: "profile")
-        open("profile.accounts", in: app)
+        let app = launch(plan: "vip", tab: "wealth")
+        open("wealth.accounts", in: app)
         open("accounts.bank.bac", in: app)
         open("mail.accept.21", in: app)
         XCTAssertTrue(element("candidate.status.21", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(text("Confirmado", in: app).exists)
         back(app); back(app)
-        open("profile.mail", in: app)
+        open("wealth.connections", in: app)
         XCTAssertTrue(element("mail.correct.22", in: app).waitForExistence(timeout: 10))
         XCTAssertFalse(element("mail.accept.21", in: app).exists, "reviewed in Cuentas: no longer pending in the Email Monitor")
     }
 
     func testRejectingInTheEmailMonitorShowsInCuentas() {
-        let app = launch(plan: "vip", tab: "profile")
-        open("profile.mail", in: app)
+        let app = launch(plan: "vip", tab: "wealth")
+        open("wealth.connections", in: app)
         open("mail.reject.21", in: app)
         XCTAssertTrue(element("mail.notice", in: app).waitForExistence(timeout: 10))
         back(app)
-        open("profile.accounts", in: app)
+        open("wealth.accounts", in: app)
         open("accounts.bank.bac", in: app)
         XCTAssertTrue(element("candidate.status.21", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(text("Descartado", in: app).exists)
@@ -293,8 +293,8 @@ final class PlanAccountsUITests: XCTestCase {
     }
 
     func testAnUnknownBankIsGroupedUnderOtherInstitutions() {
-        let app = launch(plan: "vip", tab: "profile")
-        open("profile.accounts", in: app)
+        let app = launch(plan: "vip", tab: "wealth")
+        open("wealth.accounts", in: app)
         XCTAssertTrue(element("accounts.bank.other", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(text("Otras instituciones", in: app).exists)
         XCTAssertTrue(text("Banco Popular", in: app).exists)
@@ -304,8 +304,8 @@ final class PlanAccountsUITests: XCTestCase {
     /// "Banco Popular" (the account's label) stores its notices as "popular" (the code): its
     /// movements are listed because Cuentas asks with the code.
     func testABankWhoseLabelDiffersFromItsCodeListsItsMovements() {
-        let app = launch(plan: "vip", tab: "profile")
-        open("profile.accounts", in: app)
+        let app = launch(plan: "vip", tab: "wealth")
+        open("wealth.accounts", in: app)
         open("accounts.bank.popular", in: app)
         XCTAssertTrue(element("mail.reject.23", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(text("Museo", in: app).exists)
