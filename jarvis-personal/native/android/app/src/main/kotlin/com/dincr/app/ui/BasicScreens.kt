@@ -1,5 +1,6 @@
 package com.dincr.app.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,8 +45,11 @@ import com.dincr.data.IdempotencyKey
 import com.dincr.data.OpsFlag
 import com.dincr.data.RecurringItem
 import com.dincr.data.RecurringRequest
+import com.dincr.data.SummaryVisuals
 import com.dincr.data.WholeNumberInput
 import com.dincr.design.CategoryBars
+import com.dincr.design.CompositionDonut
+import com.dincr.design.IncomeExpenseBars
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
 import com.dincr.design.DincrPrimaryButton
@@ -69,7 +74,10 @@ fun MonthPicker(month: YearMonth, onChange: (YearMonth) -> Unit, allowFuture: Bo
 fun monthLabel(month: YearMonth): String =
     month.format(java.time.format.DateTimeFormatter.ofPattern(tx("MMMM yyyy", "MMMM yyyy"), if (tx("es", "en") == "es") java.util.Locale.forLanguageTag("es-CR") else java.util.Locale.US)).replaceFirstChar { it.uppercase() }
 
-/** D7 — monthly summary (all plans). */
+/**
+ * D7 — monthly summary (all plans). E04/E05: the month's income vs expenses as bars and its expenses
+ * by category as a donut ([SummaryVisuals]), below the amounts, which stay as the text.
+ */
 @Composable
 fun MonthlySummaryScreen(model: AppModel, nav: Navigator) {
     var month by remember { mutableStateOf(YearMonth.now()) }
@@ -88,8 +96,24 @@ fun MonthlySummaryScreen(model: AppModel, nav: Navigator) {
                 }
             }
             s.topCategory?.let { top -> Section(tx("Donde más gastaste", "Where you spent most")) { AmountLine(top.category ?: tx("Sin categoría", "Uncategorized"), top.amount) } }
-            if (s.categories.isNotEmpty()) Section(tx("Distribución", "Distribution")) {
-                CategoryBars(s.categories.map { (it.category ?: tx("Sin categoría", "Uncategorized")) to (it.amount ?: BigDecimal.ZERO) })
+            Box(Modifier.testTag("summary.flow")) {
+                Section(tx("Ingresos frente a gastos", "Income vs expenses")) {
+                    when (val flow = SummaryVisuals.flow(s)) {
+                        is SummaryVisuals.Flow.Bars -> Box(Modifier.testTag("summary.flow.chart")) {
+                            IncomeExpenseBars(listOf(Triple(shortMonth(flow.month), flow.income, flow.expenses)),
+                                title = tx("Ingresos y gastos de ${shortMonth(flow.month)}", "Income and expenses for ${shortMonth(flow.month)}"))
+                        }
+                        else -> Text(SummaryVisuals.flowNotice(flow).orEmpty(), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2,
+                            modifier = Modifier.testTag("summary.flow.notice"))
+                    }
+                }
+            }
+            // The donut's own legend lists every category with its amount (and share when exact); a
+            // segment opens nothing yet (filtered movements need P5.1).
+            Box(Modifier.testTag("summary.categories")) {
+                Section(tx("Gastos por categoría", "Expenses by category")) {
+                    CompositionDonut(tx("Gastos por categoría", "Expenses by category"), SummaryVisuals.categories(s), showsTotal = false)
+                }
             }
         }
     }

@@ -156,7 +156,8 @@ private struct GatedEntry<Destination: View>: View {
     }
 }
 
-/// PARITY D7 — monthly summary (Free and up).
+/// PARITY D7 — monthly summary (Free and up). E04/E05: the month's income vs expenses as bars and its
+/// expenses by category as a donut (`SummaryVisuals`), below the amounts, which stay as the text.
 struct MonthlySummaryView: View {
     @Environment(AppModel.self) private var model
     @State private var period = Period.current
@@ -176,6 +177,7 @@ private struct SummaryContent: View {
     let summary: MonthlySummary
 
     var body: some View {
+        let flow = SummaryVisuals.flow(summary)
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             FigureRow(label: tx("Ingresos", "Income"), amount: summary.income, sign: .income)
             FigureRow(label: tx("Gastos", "Expenses"), amount: summary.expenses, sign: .expense)
@@ -184,14 +186,29 @@ private struct SummaryContent: View {
             FigureRow(label: tx("Ahorrado", "Saved"), amount: summary.savings)
         }
         .dincrCard()
-        let categories = (summary.categories ?? []).compactMap { item in item.category.map { CategoryAmount(category: $0, amount: item.amount ?? 0) } }
-        if !categories.isEmpty {
-            VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-                SectionHeader(title: tx("En qué se fue el dinero", "Where the money went"))
-                CategoryBars(categories: categories)
+        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            SectionHeader(title: tx("Ingresos frente a gastos", "Income vs expenses"))
+            if case .bars(let month) = flow {
+                IncomeExpenseChart(months: [month])
+                    .accessibilityIdentifier("summary.flow.chart")
+            } else if let notice = SummaryVisuals.flowNotice(flow) {
+                Text(notice).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .accessibilityIdentifier("summary.flow.notice")
             }
-            .dincrCard()
         }
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("summary.flow")
+        // The donut's own legend lists every category with its amount (and share when exact); a
+        // segment opens nothing yet (filtered movements need P5.1).
+        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            SectionHeader(title: tx("Gastos por categoría", "Expenses by category"))
+            CompositionDonut(title: tx("Gastos por categoría", "Expenses by category"), composition: SummaryVisuals.categories(summary),
+                             color: DincrColor.chartExpense, showsTotal: false)
+        }
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("summary.categories")
     }
 }
 
