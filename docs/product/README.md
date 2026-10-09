@@ -14,6 +14,7 @@
 | §1 UX-15 / K-2: health in Patrimonio → Análisis | K-2 fix (#337): no public /100 score; UX-15 stays blocked until P3.7. |
 | §15 PR 4: locked rows in Perfil (Correos, Cuentas, Finanzas) | Applied where these rows live today: Perfil (decision PR-4 in the reachability spec). |
 | §15 PR 10: retire Perfil's Finanzas section and the Correos and Cuentas rows | Partly applied (decision PR-10): Correos and Cuentas left Perfil; they live in Patrimonio → Cuentas / Conexiones de correo and Movimientos → Por revisar. Finanzas (Presupuesto, Calendario, Recurrentes) stays in Perfil: its new home in Plan (§15 PR 5) is not confirmed. |
+| §15 PR 11 / matrix E07, E08: the Owner's analysis in Movimientos → Análisis | Applied as option B (decision PR-11): an Owner-only entry opens the historical analysis in its Análisis mode (income and expenses, expenses by month, spending by category, month end, recommendations) without the health score (J16, P3.7) or the net worth (I01, P0.9). Perfil → JARVIS → Análisis financiero keeps every section. |
 | §15 PR 5: Plan adds Metas y ahorro, Presupuesto, Calendario and Pagos fijos | Not applied. The code keeps those rows outside Plan (Metas on Hoy, Presupuesto, Calendario and Recurrentes in Perfil → Finanzas); this needs a product confirmation before any change. |
 
 Implementation numbering: the commits titled "UX-1" (message kinds, #320) and "UX-2" (visual components, #321) follow §15's PR order, not the decisions UX-1 (onboarding) and UX-2 (Cuentas), which are still pending.

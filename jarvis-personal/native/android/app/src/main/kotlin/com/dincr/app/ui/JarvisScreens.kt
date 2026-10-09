@@ -71,11 +71,12 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
 }
 
 /**
- * Renders JARVIS only for the Owner. The routes are reachable only from the Owner's Profile hub;
- * this also leaves a screen kept on the back stack if the identity stops being the Owner.
+ * Renders JARVIS only for the Owner. The routes are reachable only from the Owner's Profile hub (and,
+ * since §15 PR 11, the Owner's entry in Movimientos → Análisis); this also leaves a screen kept on the
+ * back stack if the identity stops being the Owner.
  */
 @Composable
-private fun OwnerOnly(model: AppModel, nav: Navigator, content: @Composable () -> Unit) {
+fun OwnerOnly(model: AppModel, nav: Navigator, content: @Composable () -> Unit) {
     val profile by model.profile.collectAsStateWithLifecycle()
     if (Jarvis.isAvailable(profile)) content() else LaunchedEffect(Unit) { nav.back() }
 }
