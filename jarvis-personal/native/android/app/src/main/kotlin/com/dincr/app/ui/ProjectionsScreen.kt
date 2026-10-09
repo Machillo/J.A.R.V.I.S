@@ -1,5 +1,7 @@
 package com.dincr.app.ui
 
+import com.dincr.design.TrendLineChart
+import com.dincr.data.ProjectionSeries
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +37,12 @@ fun ProjectionsScreen(model: AppModel, nav: Navigator) {
                     if (state.lowConfidence) {
                         Text(ProjectionText.lowConfidence(), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted,
                             modifier = Modifier.testTag("projections.lowConfidence"))
+                    }
+                    // UX-14 / I09: the same points as lines; the cards below stay as the text alternative.
+                    ProjectionSeries.of(state).forEach { item ->
+                        Column(Modifier.testTag("projections.chart.${item.kind.tag}")) {
+                            DincrCard { TrendLineChart(ProjectionText.chartTitle(item.kind), item.series, ProjectionText.chartColor(item.kind)) }
+                        }
                     }
                     state.points.forEach { p ->
                         Column(Modifier.testTag("projections.point.${p.months ?: 0}")) {
@@ -98,6 +106,18 @@ private object ProjectionText {
         "Low confidence: there is no recorded income yet to confirm your income.",
     )
 
+    @Composable fun chartTitle(kind: ProjectionSeries.Kind) = when (kind) {
+        ProjectionSeries.Kind.CASH -> tx("Efectivo proyectado", "Projected cash")
+        ProjectionSeries.Kind.DEBT -> tx("Deuda proyectada", "Projected debt")
+        ProjectionSeries.Kind.NET_WORTH -> tx("Patrimonio neto proyectado", "Projected net worth")
+    }
+
+    @Composable fun chartColor(kind: ProjectionSeries.Kind) = when (kind) {
+        ProjectionSeries.Kind.CASH -> Dincr.colors.chartIncome
+        ProjectionSeries.Kind.DEBT -> Dincr.colors.chartExpense
+        ProjectionSeries.Kind.NET_WORTH -> Dincr.colors.tint
+    }
+
     @Composable fun horizon(months: Int) = if (months == 1) tx("En 1 mes", "In 1 month") else tx("En $months meses", "In $months months")
 
     @Composable fun explanation(input: ProjectionInput) = when (input) {
@@ -112,4 +132,11 @@ private object ProjectionText {
         ProjectionInput.Destination.DECLARED_SAVINGS -> tx("Completar tus ahorros", "Complete your savings")
         ProjectionInput.Destination.DEBTS -> tx("Revisar deudas", "Review debts")
     }
+}
+
+/** The test tag of a chart, the same names as iOS's identifiers (`cash`, `debt`, `netWorth`). */
+private val ProjectionSeries.Kind.tag: String get() = when (this) {
+    ProjectionSeries.Kind.CASH -> "cash"
+    ProjectionSeries.Kind.DEBT -> "debt"
+    ProjectionSeries.Kind.NET_WORTH -> "netWorth"
 }

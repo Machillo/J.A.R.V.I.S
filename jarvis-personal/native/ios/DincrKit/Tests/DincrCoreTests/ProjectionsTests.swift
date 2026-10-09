@@ -76,4 +76,37 @@ import Testing
         #expect(Projections.state(empty) == .incomplete(missing: [.income, .essentialExpenses, .savings]))
         #expect(empty.debtPlanner?.recommended == nil)
     }
+
+    // UX-14 / I09 — the charts.
+
+    @Test func theChartsUseExactlyTheProjectionPointsInOrder() throws {
+        let series = ProjectionSeries.of(Projections.state(try center(complete)), language: .spanish)
+        #expect(series.map(\.kind) == [.cash, .debt, .netWorth])
+        let cash = try #require(series.first { $0.kind == .cash }).series.points
+        #expect(cash.map(\.period) == ["01", "03", "06", "12"])
+        #expect(cash.map(\.label) == ["1 mes", "3 meses", "6 meses", "12 meses"])
+        #expect(cash.map(\.value) == [850000, 1950000, 3600000, 6900000])
+        #expect(try #require(series.first { $0.kind == .debt }).series.points.map(\.value) == [450000, 350000, 200000, 0])
+        #expect(try #require(series.first { $0.kind == .netWorth }).series.points.map(\.value) == [400000, 1600000, 3400000, 6900000])
+    }
+
+    @Test func anIncompleteProjectionHasNoChart() throws {
+        let state = Projections.state(try center(#"{"projections":[],"projection_status":{"complete":false,"missing":["savings"]}}"#))
+        #expect(ProjectionSeries.of(state).isEmpty)
+        // An older answer without status is not complete either.
+        #expect(ProjectionSeries.of(Projections.state(try center(#"{"projections":[{"months":1,"cash":1,"debt":1,"net_worth":0}]}"#))).isEmpty)
+    }
+
+    @Test func aSeriesWithAMissingValueIsNotDrawnAndNothingIsFilledIn() throws {
+        let json = complete.replacingOccurrences(of: #"{"months":6,"cash":3600000,"#, with: #"{"months":6,"cash":null,"#)
+        let series = ProjectionSeries.of(Projections.state(try center(json)))
+        #expect(series.map(\.kind) == [.debt, .netWorth])  // never a cash of 0 at 6 months
+    }
+
+    @Test func theChartsDoNotChangeTheLowConfidenceLine() throws {
+        let json = complete.replacingOccurrences(of: #""confidence":"medium""#, with: #""confidence":"low""#)
+        guard case .complete(_, let low) = Projections.state(try center(json)) else { Issue.record("not complete"); return }
+        #expect(low)
+        #expect(ProjectionSeries.of(Projections.state(try center(json))).count == 3)
+    }
 }

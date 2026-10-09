@@ -68,4 +68,59 @@ final class ProjectionsUITests: XCTestCase {
             app.terminate()
         }
     }
+
+    // UX-14 / I09 — the charts.
+
+    func testACompleteProjectionShowsTheChartsAndKeepsTheCards() {
+        for role in [nil, "owner"] as [String?] {
+            let app = launch()
+            if role == nil { openProjections(app) } else {
+                app.terminate()
+                let owner = XCUIApplication()
+                owner.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrPlan", "vip",
+                                         "-DincrRole", "owner", "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
+                owner.launch()
+                openProjections(owner)
+                assertCharts(owner, context: "owner")
+                owner.terminate()
+                continue
+            }
+            assertCharts(app, context: "vip")
+            app.terminate()
+        }
+    }
+
+    private func assertCharts(_ app: XCUIApplication, context: String) {
+        for kind in ["cash", "debt", "netWorth"] {
+            XCTAssertTrue(element("projections.chart.\(kind)", in: app).waitForExistence(timeout: 10), "\(context): \(kind)")
+        }
+        // VoiceOver: the chart says its title and every point.
+        let cash = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Efectivo proyectado")).firstMatch
+        XCTAssertTrue(cash.exists, context)
+        let spoken = (cash.value as? String) ?? ""
+        for months in ["1 mes", "3 meses", "6 meses", "12 meses"] { XCTAssertTrue(spoken.contains(months), "\(context): \(months) in \(spoken)") }
+        // The cards stay as the text alternative.
+        for months in [1, 3, 6, 12] {
+            let card = element("projections.point.\(months)", in: app)
+            for _ in 0..<4 where !card.exists { app.swipeUp() }
+            XCTAssertTrue(card.exists, "\(context): card \(months)")
+        }
+    }
+
+    func testAnIncompleteProjectionShowsNoChart() {
+        let app = launch(scenario: "empty")
+        openProjections(app)
+        XCTAssertTrue(element("projections.incomplete", in: app).waitForExistence(timeout: 10))
+        for kind in ["cash", "debt", "netWorth"] { XCTAssertFalse(element("projections.chart.\(kind)", in: app).exists, kind) }
+    }
+
+    func testFreeAndBasicKeepProjectionsLocked() {
+        for plan in ["free", "basic"] {
+            let app = launch(plan: plan, tab: "wealth")
+            let row = element("wealth.projections", in: app)
+            XCTAssertTrue(row.waitForExistence(timeout: 10), plan)
+            XCTAssertTrue(row.label.contains("Disponible desde VIP"), plan)
+            app.terminate()
+        }
+    }
 }

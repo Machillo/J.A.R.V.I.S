@@ -78,4 +78,36 @@ class ProjectionsTest {
         assertEquals(Projections.Incomplete(listOf(ProjectionInput.INCOME, ProjectionInput.ESSENTIAL_EXPENSES, ProjectionInput.SAVINGS)), Projections.state(empty))
         assertNull(empty.debtPlanner?.recommended)
     }
+
+    // UX-14 / I09 — the charts.
+
+    @Test fun theChartsUseExactlyTheProjectionPointsInOrder() {
+        val series = ProjectionSeries.of(Projections.state(center(complete)), AppLanguage.SPANISH)
+        assertEquals(listOf(ProjectionSeries.Kind.CASH, ProjectionSeries.Kind.DEBT, ProjectionSeries.Kind.NET_WORTH), series.map { it.kind })
+        val cash = series.first { it.kind == ProjectionSeries.Kind.CASH }.series.points
+        assertEquals(listOf("01", "03", "06", "12"), cash.map { it.period })
+        assertEquals(listOf("1 mes", "3 meses", "6 meses", "12 meses"), cash.map { it.label })
+        assertEquals(listOf(850000, 1950000, 3600000, 6900000), cash.map { it.value!!.toInt() })
+        assertEquals(listOf(450000, 350000, 200000, 0), series.first { it.kind == ProjectionSeries.Kind.DEBT }.series.points.map { it.value!!.toInt() })
+        assertEquals(listOf(400000, 1600000, 3400000, 6900000), series.first { it.kind == ProjectionSeries.Kind.NET_WORTH }.series.points.map { it.value!!.toInt() })
+    }
+
+    @Test fun anIncompleteProjectionHasNoChart() {
+        assertTrue(ProjectionSeries.of(Projections.state(center("""{"projections":[],"projection_status":{"complete":false,"missing":["savings"]}}"""))).isEmpty())
+        // An older answer without status is not complete either.
+        assertTrue(ProjectionSeries.of(Projections.state(center("""{"projections":[{"months":1,"cash":1,"debt":1,"net_worth":0}]}"""))).isEmpty())
+    }
+
+    @Test fun aSeriesWithAMissingValueIsNotDrawnAndNothingIsFilledIn() {
+        val json = complete.replace("""{"months":6,"cash":3600000,""", """{"months":6,"cash":null,""")
+        val series = ProjectionSeries.of(Projections.state(center(json)))
+        assertEquals("never a cash of 0 at 6 months", listOf(ProjectionSeries.Kind.DEBT, ProjectionSeries.Kind.NET_WORTH), series.map { it.kind })
+    }
+
+    @Test fun theChartsDoNotChangeTheLowConfidenceLine() {
+        val json = complete.replace("\"confidence\":\"medium\"", "\"confidence\":\"low\"")
+        val state = Projections.state(center(json)) as Projections.Complete
+        assertTrue(state.lowConfidence)
+        assertEquals(3, ProjectionSeries.of(state).size)
+    }
 }

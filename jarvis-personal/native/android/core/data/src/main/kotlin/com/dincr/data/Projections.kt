@@ -43,3 +43,37 @@ enum class ProjectionInput(val code: String, val destination: Destination) {
         fun codes(codes: List<String>?): List<ProjectionInput> = codes.orEmpty().mapNotNull { code -> entries.firstOrNull { it.code == code } }
     }
 }
+
+/**
+ * UX-14 / I09 — the charts of Patrimonio → Proyecciones: projected cash, debt and net worth over the
+ * projection's own points (1, 3, 6 and 12 months), exactly as the backend sent them. Nothing is
+ * interpolated or filled in: only a complete projection has series, and a series is drawn only when
+ * every one of its points is known. iOS: `DincrCore.ProjectionSeries`.
+ */
+data class ProjectionSeries(val kind: Kind, val series: TrendSeries) {
+    enum class Kind { CASH, DEBT, NET_WORTH }
+
+    companion object {
+        /** The series to draw for [state], in the order cash, debt, net worth; none when incomplete. */
+        fun of(state: Projections, language: AppLanguage = AppLanguage.current()): List<ProjectionSeries> {
+            if (state !is Projections.Complete) return emptyList()
+            return Kind.entries.mapNotNull { kind ->
+                val values = state.points.map { value(it, kind) }
+                if (values.any { it == null }) return@mapNotNull null
+                ProjectionSeries(kind, TrendSeries(state.points.zip(values).map { (point, value) ->
+                    val months = point.months ?: 0
+                    TrendPoint(String.format(java.util.Locale.ROOT, "%02d", months), label(months, language), value)
+                }))
+            }
+        }
+
+        fun label(months: Int, language: AppLanguage): String =
+            if (months == 1) language.pick("1 mes", "1 month") else language.pick("$months meses", "$months months")
+
+        private fun value(point: CommandCenter.ProjectionPoint, kind: Kind) = when (kind) {
+            Kind.CASH -> point.cash
+            Kind.DEBT -> point.debt
+            Kind.NET_WORTH -> point.netWorth
+        }
+    }
+}
