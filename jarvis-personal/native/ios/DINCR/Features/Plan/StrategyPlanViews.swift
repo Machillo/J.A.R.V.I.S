@@ -32,8 +32,8 @@ struct PlanStrategyView: View {
 }
 
 /// §15 PR 5 (option A) — "Para organizar tu mes": Presupuesto and Calendario financiero, the existing
-/// screens, inside Tu plan del mes (Plan keeps its six entries). Same gate as in Perfil: from Basic,
-/// locked below (the plan itself is Basic, so Free does not reach this screen from Plan).
+/// screens, inside Tu plan del mes (Plan keeps its six entries). From Basic; §15 PR 10 (option A): Free
+/// opens Tu plan del mes in its locked state and sees both here, locked, opening Suscripción.
 private struct OrganizeYourMonth: View {
     @Environment(AppModel.self) private var model
 
@@ -86,7 +86,13 @@ struct StrategyLoader<Content: View>: View {
     var body: some View {
         let source = StrategySource.of(model.profile, flags: model.flags)
         if source == .unavailable {
-            PlanRequiredView(tier: .basic, feature: tx("La estrategia de DINCR", "DINCR’s strategy"))
+            // The same locked state as Android's: what the plan includes and the way to Suscripción.
+            EmptyStateView(symbol: "lock", title: tx("Disponible desde Basic", "Available from Basic"),
+                           message: tx("La estrategia y la distribución de tu dinero llegan con Basic.", "Strategy and money distribution come with Basic.")) {
+                NavigationLink { PlanSettingsView() } label: { Text(tx("Ver suscripciones", "See subscriptions")) }
+                    .buttonStyle(.dincrPrimary)
+                    .accessibilityIdentifier("plan.month.subscriptions")
+            }
         } else {
             AsyncContent(load: { try await model.service.planStrategy(source) }) { strategy, _ in
                 content(strategy)

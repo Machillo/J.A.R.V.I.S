@@ -193,9 +193,10 @@ final class DINCRUITests: XCTestCase {
         let app = launch(extra: ["-DincrPlan", "basic"])
         XCTAssertTrue(app.descendants(matching: .any)["home.status"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["home.status.budget"].exists, "Basic adds the user's own budget left")
-        // The budget lives in Perfil → Finanzas.
-        app.tabBars.buttons["Perfil"].tap()
-        open("profile.budget", in: app)
+        // The budget lives in Plan → Tu plan del mes (§15 PR 5/10).
+        app.tabBars.buttons["Plan"].tap()
+        open("plan.strategy", in: app)
+        open("plan.month.budget", in: app)
         XCTAssertTrue(app.buttons["budget.edit"].waitForExistence(timeout: 5))
     }
 
@@ -204,8 +205,8 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.debts"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Perfil"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.subscription"].waitForExistence(timeout: 5))
-        // PR 4: the rows stay visible, locked to the subscription that includes them.
-        XCTAssertTrue(app.descendants(matching: .any)["profile.budget"].label.contains("Disponible desde Basic"))
+        // §15 PR 10: Presupuesto and Calendario live in Plan → Tu plan del mes (locked there for Free).
+        XCTAssertFalse(app.descendants(matching: .any)["profile.budget"].exists)
         // §15 PR 10: Correos and Cuentas live in Patrimonio (locked there below VIP), no longer in Perfil.
         XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["profile.accounts"].exists)

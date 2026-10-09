@@ -48,7 +48,8 @@
   "PR-8",
   "PR-10",
   "PR-11",
-  "PR-5"
+  "PR-5",
+  "PR-10-A"
  ],
  "fixtures": {
   "ios": {
@@ -589,10 +590,10 @@
   },
   {
    "id": "month.budget",
-   "name": "Plan → Tu plan del mes → Para organizar tu mes → Presupuesto (§15 PR 5, option A; Perfil keeps its access until PR 10)",
-   "decision": "PR-5",
+   "name": "Plan → Tu plan del mes → Para organizar tu mes → Presupuesto (§15 PR 5 option A; PR 10 option A: its only home, Free opens Tu plan del mes locked and sees it locked)",
+   "decision": "PR-10-A",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
@@ -613,7 +614,8 @@
     "via": [
      "plan.strategy"
     ],
-    "id": "plan.month.budget"
+    "id": "plan.month.budget",
+    "locked_label": "Disponible desde Basic"
    },
    "android": {
     "tab": "Plan",
@@ -625,24 +627,18 @@
      "tab": "Plan",
      "via": [
       "Your plan for the month"
-     ]
-    }
-   },
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "both",
-     "reason": "Free reaches Tu plan del mes locked (Basic), so the group inside it is not shown; the function stays VISIBLE_LOCKED for Free in Perfil → Finanzas",
-     "resolved_by": "§15 PR 10 closure (retiring Perfil → Finanzas): decide where Free sees it locked in Plan"
-    }
-   ]
+     ],
+     "locked_text": "Available from Basic"
+    },
+    "locked_text": "Disponible desde Basic"
+   }
   },
   {
    "id": "month.calendar",
-   "name": "Plan → Tu plan del mes → Para organizar tu mes → Calendario financiero (§15 PR 5, option A; Perfil keeps its access until PR 10)",
-   "decision": "PR-5",
+   "name": "Plan → Tu plan del mes → Para organizar tu mes → Calendario financiero (§15 PR 5 option A; PR 10 option A: its only home, Free opens Tu plan del mes locked and sees it locked)",
+   "decision": "PR-10-A",
    "plans": {
-    "free": "HIDDEN_BY_PLAN",
+    "free": "VISIBLE_LOCKED",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
@@ -663,7 +659,8 @@
     "via": [
      "plan.strategy"
     ],
-    "id": "plan.month.calendar"
+    "id": "plan.month.calendar",
+    "locked_label": "Disponible desde Basic"
    },
    "android": {
     "tab": "Plan",
@@ -675,21 +672,15 @@
      "tab": "Plan",
      "via": [
       "Your plan for the month"
-     ]
-    }
-   },
-   "transitional_hidden": [
-    {
-     "plan": "free",
-     "platform": "both",
-     "reason": "Free reaches Tu plan del mes locked (Basic), so the group inside it is not shown; the function stays VISIBLE_LOCKED for Free in Perfil → Finanzas",
-     "resolved_by": "§15 PR 10 closure (retiring Perfil → Finanzas): decide where Free sees it locked in Plan"
-    }
-   ]
+     ],
+     "locked_text": "Available from Basic"
+    },
+    "locked_text": "Disponible desde Basic"
+   }
   },
   {
    "id": "incomeBase.recurring",
-   "name": "Plan → Ingresos y base → Movimientos recurrentes (§15 PR 5, option A: recurring income and expenses; Perfil keeps its access until PR 10)",
+   "name": "Plan → Ingresos y base → Movimientos recurrentes (§15 PR 5 option A: recurring income and expenses; PR 10: its only home)",
    "decision": "PR-5",
    "plans": {
     "free": "AVAILABLE",
@@ -1366,118 +1357,6 @@
     }
    },
    "security_note": "The Owner account is never deletable from the app (canDeleteAccountInApp = !isOwner)"
-  },
-  {
-   "id": "profile.budget",
-   "name": "Perfil → Finanzas → Presupuesto",
-   "decision": "PR-4",
-   "plans": {
-    "free": "VISIBLE_LOCKED",
-    "basic": "AVAILABLE",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "target": "P6: Plan → Presupuesto / Calendario / Recurrentes",
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/basic/budget",
-     "gate": "feature:guided_budget",
-     "used_by": [
-      "basic",
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "profile",
-    "id": "profile.budget",
-    "locked_label": "Disponible desde Basic"
-   },
-   "android": {
-    "tab": "Perfil",
-    "text": "Presupuesto",
-    "locked_text": "Disponible desde Basic",
-    "en": {
-     "tab": "Profile",
-     "text": "Budget",
-     "locked_text": "Available from Basic"
-    }
-   }
-  },
-  {
-   "id": "profile.calendar",
-   "name": "Perfil → Finanzas → Calendario financiero",
-   "decision": "PR-4",
-   "plans": {
-    "free": "VISIBLE_LOCKED",
-    "basic": "AVAILABLE",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "target": "P6: Plan → Presupuesto / Calendario / Recurrentes",
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/basic/calendar",
-     "gate": "feature:financial_calendar",
-     "used_by": [
-      "basic",
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "profile",
-    "id": "profile.calendar",
-    "locked_label": "Disponible desde Basic"
-   },
-   "android": {
-    "tab": "Perfil",
-    "text": "Calendario financiero",
-    "locked_text": "Disponible desde Basic",
-    "en": {
-     "tab": "Profile",
-     "text": "Financial calendar",
-     "locked_text": "Available from Basic"
-    }
-   }
-  },
-  {
-   "id": "profile.recurring",
-   "name": "Perfil → Finanzas → Pagos recurrentes (UX-9: every plan registers, edits and deletes them)",
-   "decision": "UX-9",
-   "plans": {
-    "free": "AVAILABLE",
-    "basic": "AVAILABLE",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "target": "P6: Plan → Presupuesto / Calendario / Recurrentes",
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/basic/recurring",
-     "gate": "feature:recurring_items",
-     "used_by": [
-      "free",
-      "basic",
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "profile",
-    "id": "profile.recurring"
-   },
-   "android": {
-    "tab": "Perfil",
-    "text": "Movimientos recurrentes",
-    "en": {
-     "tab": "Profile",
-     "text": "Recurring transactions"
-    }
-   }
   },
   {
    "id": "profile.jarvis",

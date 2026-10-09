@@ -53,7 +53,9 @@ final class PlanAccountsUITests: XCTestCase {
         let app = launch(tab: "plan")
         XCTAssertTrue(text("Disponible desde Basic", in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(text("Disponible desde VIP", in: app).exists)
+        // §15 PR 10 (option A): Tu plan del mes opens its own locked state, with "Ver suscripciones".
         open("plan.strategy", in: app)
+        open("plan.month.subscriptions", in: app)
         XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10))
     }
 
@@ -106,11 +108,10 @@ final class PlanAccountsUITests: XCTestCase {
         let app = launch(plan: "basic")
         XCTAssertTrue(element("home.debts", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(element("home.goals", in: app).exists)
-        app.tabBars.buttons["Perfil"].tap()
-        for id in ["profile.budget", "profile.calendar", "profile.recurring"] {
-            XCTAssertTrue(element(id, in: app).waitForExistence(timeout: 5), id)
-        }
-        open("profile.calendar", in: app)
+        // §15 PR 5/10: Calendario lives in Plan → Tu plan del mes.
+        app.tabBars.buttons["Plan"].tap()
+        open("plan.strategy", in: app)
+        open("plan.month.calendar", in: app)
         XCTAssertTrue(app.navigationBars["Calendario"].waitForExistence(timeout: 10))
     }
 
@@ -147,11 +148,10 @@ final class PlanAccountsUITests: XCTestCase {
     // MARK: Recurring commitments (UX-9: every plan)
 
     func testFreeCreatesEditsAndDeletesRecurringCommitments() {
-        let app = launch(tab: "profile")
-        XCTAssertTrue(element("profile.recurring", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(element("profile.budget", in: app).label.contains("Disponible desde Basic"), "budget stays Basic (locked)")
-        XCTAssertTrue(element("profile.calendar", in: app).label.contains("Disponible desde Basic"), "calendar stays Basic (locked)")
-        open("profile.recurring", in: app)
+        // §15 PR 5/10: Movimientos recurrentes lives in Plan → Ingresos y base (every plan).
+        let app = launch(tab: "plan")
+        open("plan.incomeBase", in: app)
+        open("incomeBase.recurring", in: app)
 
         // Create.
         let add = app.navigationBars.buttons["Agregar"]

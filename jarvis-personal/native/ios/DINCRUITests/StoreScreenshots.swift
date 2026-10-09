@@ -114,8 +114,9 @@ final class StoreScreenshots: XCTestCase {
 
     func testS06Budget() throws {
         try shoot("06-budget", plan: "basic") { app, l in
-            self.tab(app, l.pick("Perfil", "Profile"))
-            self.open(app, "profile.budget") // Perfil → Finanzas
+            self.tab(app, "Plan")
+            self.open(app, "plan.strategy")
+            self.open(app, "plan.month.budget") // Plan → Tu plan del mes
             self.wait(app, l.pick("Total presupuestado", "Total budgeted"))
             self.wait(app, "budget.edit")
         }

@@ -1,9 +1,9 @@
 import XCTest
 
-/// PR 4 (P6.4) — Perfil never hides a row the subscription does not include: Presupuesto and
-/// Calendario are locked below Basic and open Suscripción. VIP and the Owner (by role) open every row,
-/// and the Owner keeps JARVIS. §15 PR 10: Correos and Cuentas left Perfil for Patrimonio (locked there
-/// below VIP: `WealthUITests`). Android twin: `LockedRowsUiTest`.
+/// PR 4 (P6.4) — locked rows instead of hidden ones. §15 PR 10 moved every locked function out of Perfil:
+/// Correos and Cuentas to Patrimonio (`WealthUITests`), Presupuesto and Calendario to Plan → Tu plan del
+/// mes (`PlanOrganizeUITests`), Movimientos recurrentes to Plan → Ingresos y base. Perfil keeps none.
+/// Android twin: `LockedRowsUiTest`.
 final class LockedRowsUITests: XCTestCase {
     private func launch(plan: String? = nil, role: String? = nil, english: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
@@ -35,42 +35,19 @@ final class LockedRowsUITests: XCTestCase {
         }
     }
 
-    func testFreeSeesBudgetAndCalendarLockedAndALockedRowOpensSuscripcion() {
-        let app = launch()
-        assertRows(app, locked: ["profile.budget": "Disponible desde Basic", "profile.calendar": "Disponible desde Basic"],
-                   open: ["profile.recurring"], context: "free")
-        row("profile.budget", in: app).tap()
-        XCTAssertTrue(app.staticTexts["Suscripción actual"].waitForExistence(timeout: 10))
-    }
-
-    func testBasicOpensBudgetAndCalendar() {
-        let app = launch(plan: "basic")
-        assertRows(app, locked: [:], open: ["profile.budget", "profile.calendar", "profile.recurring"], context: "basic")
-    }
-
-    func testVipAndOwnerOpenEveryRowAndTheOwnerKeepsJarvis() {
-        for (plan, role) in [("vip", nil), (nil, "owner")] as [(String?, String?)] {
+    /// §15 PR 10 (option A): Perfil keeps no locked rows: Presupuesto and Calendario are locked inside Plan →
+    /// Tu plan del mes (`PlanOrganizeUITests`), Correos and Cuentas in Patrimonio (`WealthUITests`).
+    func testPerfilHasNoLockedRowsLeftAndTheOwnerKeepsJarvis() {
+        for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), (nil, "owner")] as [(String?, String?)] {
             let app = launch(plan: plan, role: role)
-            assertRows(app, locked: [:], open: ["profile.budget", "profile.calendar", "profile.recurring"], context: role ?? "vip")
+            XCTAssertTrue(row("profile.subscription", in: app).waitForExistence(timeout: 10))
+            XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Disponible desde")).firstMatch.exists,
+                           role ?? plan ?? "free")
+            for id in ["profile.budget", "profile.calendar", "profile.recurring", "profile.mail", "profile.accounts"] {
+                XCTAssertFalse(app.descendants(matching: .any)[id].exists, "\(role ?? plan ?? "free"): \(id)")
+            }
             XCTAssertEqual(row("profile.jarvis", in: app).exists, role == "owner")
             app.terminate()
         }
-    }
-
-    /// §15 PR 10: Correos and Cuentas live in Patrimonio (and Movimientos → Por revisar) for every plan;
-    /// Perfil no longer lists them.
-    func testPerfilNoLongerListsCorreosOrCuentas() {
-        for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), ("vip", "owner")] as [(String?, String?)] {
-            let app = launch(plan: plan, role: role)
-            XCTAssertTrue(row("profile.subscription", in: app).waitForExistence(timeout: 10))
-            XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists, role ?? plan ?? "free")
-            XCTAssertFalse(app.descendants(matching: .any)["profile.accounts"].exists, role ?? plan ?? "free")
-            app.terminate()
-        }
-    }
-
-    func testTheLockedRowSpeaksEnglish() {
-        let app = launch(english: true)
-        XCTAssertTrue(row("profile.budget", in: app).label.contains("Available from Basic"))
     }
 }

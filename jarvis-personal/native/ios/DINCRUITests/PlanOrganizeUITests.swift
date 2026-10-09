@@ -64,12 +64,32 @@ final class PlanOrganizeUITests: XCTestCase {
         XCTAssertTrue(element("plan.incomeBase", in: app).waitForExistence(timeout: 10), "back in Plan")
     }
 
-    func testFreeKeepsTheMonthLockedAndOpensItsRecurringTransactions() {
+    /// §15 PR 10 (option A): Free opens Tu plan del mes locked and sees Presupuesto and Calendario locked;
+    /// each opens Suscripción, never the paid screen.
+    func testFreeOpensTheMonthLockedWithBudgetAndCalendarLocked() {
         let app = launch()
         open("plan.strategy", in: app)
-        XCTAssertTrue(app.staticTexts["Suscripción actual"].waitForExistence(timeout: 10), "Tu plan del mes stays Basic")
-        XCTAssertFalse(element("plan.month.budget", in: app).exists)
+        XCTAssertTrue(app.navigationBars["Tu plan del mes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Disponible desde Basic"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(element("plan.month.subscriptions", in: app).exists, "Ver suscripciones")
+        for id in ["plan.month.budget", "plan.month.calendar"] {
+            XCTAssertTrue(reveal(id, in: app).label.contains("Disponible desde Basic"), "\(id) locked")
+        }
+        reveal("plan.month.budget", in: app).tap()
+        XCTAssertTrue(app.staticTexts["Suscripción actual"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.navigationBars["Presupuesto"].exists, "no paid screen")
         back(app)
+        reveal("plan.month.calendar", in: app).tap()
+        XCTAssertTrue(app.staticTexts["Suscripción actual"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.navigationBars["Calendario"].exists, "no paid screen")
+        back(app)
+        XCTAssertTrue(app.navigationBars["Tu plan del mes"].waitForExistence(timeout: 10))
+        back(app)
+        XCTAssertTrue(element("plan.incomeBase", in: app).waitForExistence(timeout: 10), "back in Plan")
+    }
+
+    func testFreeOpensItsRecurringTransactions() {
+        let app = launch()
         open("plan.incomeBase", in: app)
         open("incomeBase.recurring", in: app)
         XCTAssertTrue(app.navigationBars["Movimientos recurrentes"].waitForExistence(timeout: 10))
@@ -89,6 +109,18 @@ final class PlanOrganizeUITests: XCTestCase {
             back(app)
             app.tabBars.buttons["Perfil"].tap()
             XCTAssertEqual(element("profile.jarvis", in: app).waitForExistence(timeout: 5), role == "owner")
+            app.terminate()
+        }
+    }
+
+    /// §15 PR 10 (option A): Perfil no longer repeats Presupuesto, Calendario or Movimientos recurrentes.
+    func testPerfilNoLongerListsFinanzas() {
+        for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), ("vip", "owner")] as [(String?, String?)] {
+            let app = launch(plan: plan, role: role, tab: "profile")
+            XCTAssertTrue(element("profile.subscription", in: app).waitForExistence(timeout: 10))
+            for id in ["profile.budget", "profile.calendar", "profile.recurring"] { XCTAssertFalse(element(id, in: app).exists, "\(role ?? plan ?? "free"): \(id)") }
+            XCTAssertEqual(element("profile.jarvis", in: app).exists, role == "owner")
+            XCTAssertEqual(app.tabBars.buttons.count, 5)
             app.terminate()
         }
     }
