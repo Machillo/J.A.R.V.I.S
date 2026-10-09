@@ -93,7 +93,32 @@ data class Goal(
     @SerialName("target_date") val targetDate: String? = null,
     val priority: String? = null,
     val status: String? = null,
-)
+) {
+    /**
+     * What is left to reach the target; never negative. Null when the target or the amount saved is
+     * unknown: an unknown amount saved is not 0 saved. iOS: `Goal.remaining`.
+     */
+    val remaining: Money? get() {
+        val target = targetAmount ?: return null
+        val current = currentAmount ?: return null
+        return (target - current).max(java.math.BigDecimal.ZERO)
+    }
+
+    /** Saved / target, only when both are known and the target is positive ([ProgressValue]). */
+    val progressFraction: Double? get() = ProgressValue.of(currentAmount, targetAmount).fraction
+
+    /**
+     * A contribution is offered until the goal is completed or reached; an unknown remainder does not
+     * hide it (the backend caps a contribution at the goal). iOS: `Goal.canContribute`.
+     */
+    val canContribute: Boolean get() = status != "completed" && (remaining?.let { it.signum() > 0 } ?: true)
+
+    companion object {
+        /** All goals together, saved / target, only when every amount is known ([Debt.knownSum]). */
+        fun overallProgress(goals: List<Goal>): Double? =
+            ProgressValue.of(Debt.knownSum(goals.map { it.currentAmount }), Debt.knownSum(goals.map { it.targetAmount })).fraction
+    }
+}
 
 /** Body of `POST /goals` and `PUT /goals/{id}` (`status` only on edit, which needs Basic). */
 @Serializable
@@ -144,7 +169,10 @@ data class Budget(
     val period: String? = null,
     /** True when the user has no budget yet and the items are DINCR's proposal, not the user's. */
     @SerialName("is_proposal") val isProposal: Boolean? = null,
-)
+) {
+    /** What the categories spent this month, or null when any of them is unknown (never added as 0). */
+    val spentTotal: Money? get() = Debt.knownSum(items.map { it.spent })
+}
 
 @Serializable
 data class BudgetItem(

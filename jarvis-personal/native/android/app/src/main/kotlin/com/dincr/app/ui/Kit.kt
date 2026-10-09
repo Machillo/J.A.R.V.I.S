@@ -68,8 +68,10 @@ import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AuthException
+import com.dincr.data.CategoryTotal
 import com.dincr.data.MoneyFormat
 import com.dincr.data.PullRefresh
+import com.dincr.design.CategoryBars
 import com.dincr.design.Dincr
 import com.dincr.design.ErrorState
 import com.dincr.design.MoneyText
@@ -159,6 +161,23 @@ fun <T> LoadContent(handle: LoadHandle<T>, rows: Int = 4, content: @Composable (
         Load.Loading -> SkeletonBlock(rows = rows)
         is Load.Failed -> ErrorState(s.message, onRetry = handle.reload)
         is Load.Ready -> content(s.value)
+    }
+}
+
+/**
+ * Category bars for amounts that may be unknown: the known ones are drawn (largest first, as
+ * [CategoryBars]); an unknown one is listed by name as "sin dato", never drawn as a 0 bar.
+ */
+@Composable
+fun KnownCategoryBars(split: CategoryTotal.Split, limit: Int = 5) {
+    Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
+        if (split.known.isNotEmpty()) CategoryBars(split.known, limit = limit)
+        split.unknown.forEach { label ->
+            Row(Modifier.fillMaxWidth().testTag("category.unknown").semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text)
+                Text(tx("Sin dato", "No data"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.textMuted)
+            }
+        }
     }
 }
 

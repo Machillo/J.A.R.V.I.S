@@ -1,6 +1,7 @@
 package com.dincr.app.ui
 
 import com.dincr.design.CompositionDonut
+import com.dincr.data.CategoryTotal
 import com.dincr.data.CompositionItem
 import com.dincr.data.Composition
 import androidx.compose.foundation.background
@@ -117,12 +118,14 @@ private fun HealthSection(e: FinancialEngineReport) {
 private fun AnalysisModeSections(a: OwnerAnalysis) {
     val t = a.transactions
     val e = a.engine
-    if (t.monthlyFlow.isNotEmpty()) Column(Modifier.testTag("jarvis.analysis.flow")) {
+    val flow = t.flowMonths()
+    if (flow.isNotEmpty()) Column(Modifier.testTag("jarvis.analysis.flow")) {
         Section(tx("Ingresos y gastos", "Income and expenses")) {
-            IncomeExpenseBars(t.monthlyFlow.takeLast(6).map { Triple(shortMonth(it.month.orEmpty()), it.income ?: BigDecimal.ZERO, it.expenses ?: BigDecimal.ZERO) })
+            IncomeExpenseBars(flow.map { Triple(shortMonth(it.month), it.income, it.expenses) })
         }
     }
-    if (t.expensesByMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(t.expensesByMonth.takeLast(6)) }
+    val byMonth = t.knownExpensesByMonth(6)
+    if (byMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(byMonth) }
     t.spendingBreakdown?.takeIf { it.categories.isNotEmpty() }?.let { b ->
         Column(Modifier.testTag("jarvis.analysis.spending")) {
             Section(tx("Distribución del gasto", "Spending by category")) {
@@ -131,7 +134,8 @@ private fun AnalysisModeSections(a: OwnerAnalysis) {
                 CompositionDonut(tx("Distribución del gasto", "Spending by category"),
                     Composition(rows.mapIndexed { index, (label, total) -> CompositionItem("$index-$label", label, total) }),
                     showsLegend = rows.size > SPENDING_BARS_LIMIT, showsTotal = false)
-                CategoryBars(rows.map { (label, total) -> label to (total ?: BigDecimal.ZERO) }, limit = SPENDING_BARS_LIMIT)
+                // The bars draw known totals only; the donut above already lists an unknown one.
+                CategoryBars(rows.mapNotNull { (label, total) -> total?.let { label to it } }, limit = SPENDING_BARS_LIMIT)
             }
         }
     }
@@ -170,13 +174,15 @@ private fun SpendingSection(t: TransactionAnalysis) {
     t.spendingBreakdown?.takeIf { it.categories.isNotEmpty() }?.let { b ->
         Section(tx("Distribución de gastos", "Spending distribution") + (b.period?.label?.let { " · $it" } ?: "")) {
             AmountLine(tx("Total", "Total"), b.total, emphasize = true)
-            CategoryBars(b.categories.map { (it.category ?: tx("Sin categoría", "Uncategorized")) to (it.total ?: BigDecimal.ZERO) }, limit = 8)
+            KnownCategoryBars(CategoryTotal.split(b.categories.map { CategoryTotal(it.category, it.total) }), limit = 8)
         }
     }
-    if (t.monthlyFlow.isNotEmpty()) Section(tx("Ingresos y gastos", "Income and expenses")) {
-        IncomeExpenseBars(t.monthlyFlow.takeLast(6).map { Triple(shortMonth(it.month.orEmpty()), it.income ?: BigDecimal.ZERO, it.expenses ?: BigDecimal.ZERO) })
+    val flow = t.flowMonths()
+    if (flow.isNotEmpty()) Section(tx("Ingresos y gastos", "Income and expenses")) {
+        IncomeExpenseBars(flow.map { Triple(shortMonth(it.month), it.income, it.expenses) })
     }
-    if (t.expensesByMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(t.expensesByMonth.takeLast(12)) }
+    val byMonth = t.knownExpensesByMonth(12)
+    if (byMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(byMonth) }
 }
 
 /** Expenses per month in calendar order (the bars of the web tab), labelled directly. */

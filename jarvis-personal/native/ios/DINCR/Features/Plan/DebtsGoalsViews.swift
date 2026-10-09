@@ -338,13 +338,16 @@ private struct GoalsContent: View {
                 }
                 .accessibilityElement(children: .combine)
                 if let target = goal.targetAmount, target > 0 {
-                    DincrProgressBar(fraction: NSDecimalNumber(decimal: (goal.currentAmount ?? 0) / target).doubleValue)
+                    // Progress only from a known amount saved: an unknown one is not 0 % saved.
+                    if let fraction = goal.progressFraction {
+                        DincrProgressBar(fraction: fraction).accessibilityIdentifier("goal.progress.\(goal.id)")
+                    }
                     FigureRow(label: tx("Meta", "Target"), amount: target)
                 }
                 if let date = goal.targetDate { InfoRow(label: tx("Fecha objetivo", "Target date"), value: Day.label(date)) }
                 if canWrite {
                     HStack(spacing: DincrSpacing.s2) {
-                        if goal.status != "completed", goal.remaining.map({ $0 > 0 }) ?? true {
+                        if goal.canContribute {
                             Button(tx("Aportar", "Contribute")) { contribute(goal) }
                                 .buttonStyle(.dincrSecondary)
                                 .accessibilityIdentifier("goal.contribute.\(goal.id)")

@@ -88,11 +88,8 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
             if (goals.isEmpty()) EmptyState(Icons.Rounded.Flag, tx("Todavía no tenés metas", "No goals yet"), tx("Definí para qué estás ahorrando y cuánto necesitás.", "Set what you’re saving for and how much you need.")) {
                 DincrPrimaryButton(tx("Crear meta", "Create goal"), { creatingGoal = true })
             }
-            if (goals.isNotEmpty()) {
-                val current = goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }
-                val target = goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }
-                percentOf(current, target)?.let { ProgressLine(it, tx("${(it * 100).toInt()} % del total de tus metas", "${(it * 100).toInt()} % of all your goals")) }
-            }
+            // Only when every goal's amounts are known: an unknown one is never added as 0.
+            Goal.overallProgress(goals)?.let { ProgressLine(it, tx("${(it * 100).toInt()} % del total de tus metas", "${(it * 100).toInt()} % of all your goals")) }
             goals.forEach { goal ->
                 DincrCard {
                     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
@@ -106,7 +103,7 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
                         percentOf(goal.currentAmount, goal.targetAmount)?.let { ProgressLine(it, tx("${Dincr.money.format(goal.currentAmount ?: BigDecimal.ZERO)} ahorrados", "${Dincr.money.format(goal.currentAmount ?: BigDecimal.ZERO)} saved")) }
                         monthlyNeeded(goal)?.let { AmountLine(tx("Necesitás por mes", "You need each month"), it) }
                         Row {
-                            if (goal.status != "completed" && (goal.currentAmount ?: BigDecimal.ZERO) < (goal.targetAmount ?: BigDecimal.ZERO)) TextButton({ contributeGoal = goal }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Aportar", "Contribute"), color = Dincr.colors.tint) }
+                            if (goal.canContribute) TextButton({ contributeGoal = goal }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Aportar", "Contribute"), color = Dincr.colors.tint) }
                             if (advanced) TextButton({ goalForm = goal }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Editar", "Edit"), color = Dincr.colors.tint) }
                             TextButton({ confirm = goal.name.orEmpty() to { model.api.deleteGoal(goal.id) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Eliminar", "Delete"), color = Dincr.colors.negative) }
                         }
@@ -142,7 +139,8 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
     if (creatingPlan || planForm != null) SavingsPlanForm(model, planForm, onDismiss = { creatingPlan = false; planForm = null }) { creatingPlan = false; planForm = null; data.reload(); model.showNotice(it) }
     contributeGoal?.let { goal ->
         AmountDialog(tx("Aportar a «${goal.name.orEmpty()}»", "Contribute to “${goal.name.orEmpty()}”"),
-            tx("Faltan ${Dincr.money.format(((goal.targetAmount ?: BigDecimal.ZERO) - (goal.currentAmount ?: BigDecimal.ZERO)).max(BigDecimal.ZERO))}. Un aporte mayor se ajusta a la meta.", "${Dincr.money.format(((goal.targetAmount ?: BigDecimal.ZERO) - (goal.currentAmount ?: BigDecimal.ZERO)).max(BigDecimal.ZERO))} to go. A larger amount is capped at the goal."),
+            // As iOS: an unknown remainder reads "—", never the whole target or ₡0.
+            (goal.remaining?.let(Dincr.money::format) ?: "—").let { left -> tx("Faltan $left. Un aporte mayor se ajusta a la meta.", "$left to go. A larger amount is capped at the goal.") },
             tx("Aportar", "Contribute"), onDismiss = { contributeGoal = null }) { amount, key ->
             model.load(tx("No pudimos registrar el aporte.", "We couldn’t record the contribution.")) { model.api.contributeToGoal(goal.id, GoalContribution(amount, LocalDate.now().toString()), key) }
                 .fold({ contributeGoal = null; data.reload(); model.showNotice(tx("Aporte registrado", "Contribution recorded")); null }, { if (it is AuthException.SignedOut) null else it.message })
@@ -183,7 +181,7 @@ fun statusLabel(status: String?) = when (status) {
 /** Presentation only: what is left over the months to the target date (at least one). */
 private fun monthlyNeeded(goal: Goal): BigDecimal? {
     val date = goal.targetDate?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() } ?: return null
-    val remaining = (goal.targetAmount ?: return null) - (goal.currentAmount ?: BigDecimal.ZERO)
+    val remaining = goal.remaining ?: return null
     if (remaining.signum() <= 0) return null
     val months = java.time.temporal.ChronoUnit.MONTHS.between(LocalDate.now().withDayOfMonth(1), date.withDayOfMonth(1)).coerceAtLeast(1)
     return remaining.divide(BigDecimal(months), 2, java.math.RoundingMode.HALF_UP)
