@@ -60,14 +60,14 @@ import kotlinx.coroutines.launch
  * until its retirement is approved), each behind its historical plan gate. A row the plan does not
  * include stays visible, locked, and opens the plans screen. The Owner passes every gate by the
  * server role ([Profile.planTier]). Goals live in Hoy; Presupuesto and Calendario inside Tu plan del mes,
- * Movimientos recurrentes inside Ingresos y base (§15 PR 5 / PR 10).
+ * Movimientos recurrentes inside Ingresos y base (§15 PR 5 / PR 10). B17: pulling down reads the plan and the
+ * switches again ([RefreshableTab]), so a changed subscription or pause shows at once.
  */
 @Composable
 fun PlanHubScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val plan = profile?.planTier ?: PlanTier.FREE
-    ScreenColumn {
-        Text(tx("Plan", "Plan"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
+    RefreshableTab(model, tx("Plan", "Plan")) {
         DincrCard {
             Column {
                 PlanRow(plan.allows(Feature.GMAIL_AUTOMATION), PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),

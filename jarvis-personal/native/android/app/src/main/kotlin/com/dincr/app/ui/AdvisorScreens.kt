@@ -4,6 +4,7 @@ import com.dincr.data.Jarvis
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.foundation.layout.Box
 import com.dincr.design.CompositionDonut
+import com.dincr.data.Debt
 import com.dincr.data.DebtComposition
 import com.dincr.data.Composition
 import androidx.compose.ui.unit.dp
@@ -93,14 +94,16 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
  * mail connections that read them (the existing screens; VIP and the Owner, locked below). Deudas:
  * how the active debts make up what is owed, from Plan → Deudas' balances (every plan). Proyecciones
  * and Escenarios (VIP). No net worth figure until P0.9 (K-3), no balance invented. iOS: `WealthHubView`.
+ * B17: pulling down reads the plan, the switches and the debts again; a failed read keeps what the card
+ * showed ([LoadHandle.refresh]).
  */
 @Composable
 fun WealthScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val plan = profile?.planTier ?: PlanTier.FREE
     val vipOn = model.isOn(OpsFlag.VIP_INTELLIGENCE)
-    ScreenColumn {
-        Text(tx("Patrimonio", "Wealth"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
+    val debts = rememberLoad(model) { model.api.debts() }
+    RefreshableTab(model, tx("Patrimonio", "Wealth"), extra = debts.refresh) {
         SectionTitle(tx("Cuentas", "Accounts"))
         DincrCard {
             Column {
@@ -115,7 +118,7 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
             }
         }
         SectionTitle(tx("Deudas", "Debts"))
-        WealthDebtsCard(model, nav)
+        WealthDebtsCard(debts, nav)
         SectionTitle(tx("Proyecciones", "Projections"))
         if (plan == PlanTier.VIP && !vipOn) FeaturePaused(model, OpsFlag.VIP_INTELLIGENCE)
         DincrCard {
@@ -137,8 +140,7 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
  * there. An unknown balance is listed as unknown and no share or total is drawn from it.
  */
 @Composable
-private fun WealthDebtsCard(model: AppModel, nav: Navigator) {
-    val debts = rememberLoad(model) { model.api.debts() }
+private fun WealthDebtsCard(debts: LoadHandle<List<Debt>>, nav: Navigator) {
     DincrCard {
         Column(Modifier.testTag("wealth.debts")) {
             LoadContent(debts) { list ->

@@ -9,7 +9,8 @@ import SwiftUI
 /// Distribución de dinero (kept as a transitional access until its retirement is
 /// approved). A row the plan does not include stays visible, locked ("Disponible desde Basic/VIP"),
 /// and opens the plans screen; a row paused by an operational switch says so. Goals are on Home;
-/// budget, calendar and recurring items in Profile → Finanzas.
+/// budget, calendar and recurring items in Profile → Finanzas. B17: pulling down reads the plan and
+/// the switches again (`AppModel.refreshTab`), so a changed subscription or pause shows at once.
 struct PlanHubView: View {
     @Environment(AppModel.self) private var model
 
@@ -21,6 +22,7 @@ struct PlanHubView: View {
                 }
             }
         }
+        .refreshable { await model.refreshTab() }
     }
 
     @ViewBuilder

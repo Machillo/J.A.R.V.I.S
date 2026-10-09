@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,11 +50,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -64,6 +69,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AuthException
 import com.dincr.data.MoneyFormat
+import com.dincr.data.PullRefresh
 import com.dincr.design.Dincr
 import com.dincr.design.ErrorState
 import com.dincr.design.MoneyText
@@ -81,8 +87,12 @@ import kotlinx.coroutines.launch
 /** Content width on large screens (readable line length). */
 val ContentMaxWidth = 640.dp
 
-/** A screen's backend data: loading, failed with a message, or ready. */
-class LoadHandle<T>(state: androidx.compose.runtime.State<Load<T>>, val reload: () -> Unit, val replace: (T) -> Unit) {
+/**
+ * A screen's backend data: loading, failed with a message, or ready. [refresh] (B17) reads again
+ * and returns whether it could; when it can't, what was ready stays on screen ([PullRefresh.kept]).
+ */
+class LoadHandle<T>(state: androidx.compose.runtime.State<Load<T>>, val reload: () -> Unit, val replace: (T) -> Unit,
+                    val refresh: suspend () -> Boolean = { true }) {
     val state: Load<T> by state
 }
 
@@ -100,7 +110,46 @@ fun <T> rememberLoad(model: AppModel, vararg keys: Any?, fallback: String = tx("
             .onSuccess { state.value = Load.Ready(it) }
             .onFailure { if (it !is AuthException.SignedOut) state.value = Load.Failed(it.message ?: fallback) }
     }
-    return remember(state) { LoadHandle(state, reload = { generation += 1 }, replace = { state.value = Load.Ready(it) }) }
+    val read by rememberUpdatedState(block)
+    return remember(state) {
+        LoadHandle(state, reload = { generation += 1 }, replace = { state.value = Load.Ready(it) }, refresh = {
+            val result = model.load(fallback) { read() }
+            val current = (state.value as? Load.Ready<T>)?.value
+            when (val kept = PullRefresh.kept(current, result)) {
+                null -> result.exceptionOrNull()?.takeIf { it !is AuthException.SignedOut }?.let { state.value = Load.Failed(it.message ?: fallback) }
+                else -> state.value = Load.Ready(kept)
+            }
+            result.isSuccess
+        })
+    }
+}
+
+/**
+ * B17 — a tab that reads again when pulled down (Plan, Patrimonio, Perfil): the platform's
+ * indicator while [AppModel.refreshTab] runs, one refresh at a time, and the same refresh as a
+ * TalkBack action on the tab's title. Hoy and Movimientos keep their own. iOS: `.refreshable`.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RefreshableTab(model: AppModel, title: String, extra: (suspend () -> Boolean)? = null, content: @Composable ColumnScope.() -> Unit) {
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val refresh = {
+        if (!refreshing) {
+            refreshing = true
+            scope.launch { try { model.refreshTab(extra) } finally { refreshing = false } }
+        }
+    }
+    val action = tx("Actualizar", "Refresh")
+    PullToRefreshBox(refreshing, onRefresh = refresh, modifier = Modifier.fillMaxSize().testTag("tab.refresh")) {
+        ScreenColumn {
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text, modifier = Modifier.semantics {
+                heading()
+                customActions = listOf(CustomAccessibilityAction(action) { refresh(); true })
+            })
+            content()
+        }
+    }
 }
 
 /** Skeleton while loading, inline error with retry on failure, [content] when ready. */

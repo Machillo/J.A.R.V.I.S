@@ -61,6 +61,9 @@ public actor FixtureBackend: HTTPTransport {
     private var jarvisAsksGoalName = false
     private var jarvisClarifying = false
     public private(set) var requests: [URLRequest] = []
+    /// B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server.
+    let identityRefreshFails: Bool
+    private var identityReads = 0
 
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
     /// app still learns the role only from `/auth/me`, exactly as with the real backend.
@@ -71,8 +74,9 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
-                today: Date = .now, language: AppLanguage = .current) {
+                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false) {
         self.scenario = scenario
+        self.identityRefreshFails = identityRefreshFails
         self.latency = latency
         self.language = language
         // STORE images must not depend on the capture day.
@@ -166,6 +170,10 @@ public actor FixtureBackend: HTTPTransport {
         }
         if scenario == .failing && path != "/product-ops/release-policy" {
             return reply(500, Self.errorBody("Ocurrió un error interno. Intentá nuevamente."))
+        }
+        if method == "GET" && path == "/auth/me" {
+            identityReads += 1
+            if identityRefreshFails && identityReads > 1 { return reply(503, Self.errorBody("Servicio no disponible.")) }
         }
         // Like core/idempotency.py: the same key replays the stored answer; another body is a 409.
         let key = ["POST", "PUT", "PATCH"].contains(method) ? request.value(forHTTPHeaderField: "X-Idempotency-Key") : nil

@@ -31,7 +31,8 @@ struct LockedListRow: View {
     }
 }
 
-/// PARITY G1 — the Profile hub.
+/// PARITY G1 — the Profile hub. B17: pulling down reads the identity (name, subscription, role) and
+/// the switches again (`AppModel.refreshTab`).
 struct ProfileHubView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("dincr.appearance") private var appearance = Appearance.system.rawValue
@@ -106,6 +107,7 @@ struct ProfileHubView: View {
         .scrollContentBackground(.hidden)
         .dincrScreenBackground()
         .navigationTitle(tx("Perfil", "Profile"))
+        .refreshable { await model.refreshTab() }
         .sheet(item: $exportFile) { file in ShareSheet(items: [file.url]) }
         .confirmationDialog(tx("¿Cerrar sesión en este dispositivo?", "Sign out on this device?"), isPresented: $confirmingSignOut, titleVisibility: .visible) {
             Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { Task { await model.signOut() } }
