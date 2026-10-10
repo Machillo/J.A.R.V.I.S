@@ -72,7 +72,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | SEC-03 | Plan gate on the server | FBV | COMPLETED_AND_VERIFIED | `require_feature` (`auth/saas.py:344-374`); route-gate inventory test | — | — | — | — |
 | SEC-04 | A paid subscription needs a known end | BV | COMPLETED_AND_VERIFIED | #351, `tests/test_subscription_end_required_pg.py` | PRE-MERGE read-only counts (in #351) | — | — | — |
 | SEC-05 | Background mail uses the same entitlement as the interactive routes | V | COMPLETED_AND_VERIFIED | #351 | — | — | — | — |
-| SEC-06 | Tenancy (account + workspace) | FBVO | IMPLEMENTED_NOT_VERIFIED (full audit) | Users services filter by workspace; OAuth bound to the session (`user_product/mail_oauth.py:336-356`) | A systematic review of every Users query | P0 | No | No |
+| SEC-06 | Tenancy (account + workspace) | FBVO | COMPLETED_AND_VERIFIED for the Users interactive paths (audit 2026-10-09: no HIGH); defense in depth for mail candidates in #355 | Users services filter by workspace; OAuth bound to the session (`user_product/mail_oauth.py:336-356`) | A systematic review of every Users query | P0 | No | No |
 | SEC-07 | Read purity (GETs don't write) | FBV | COMPLETED_AND_VERIFIED for Users | `tests/test_get_routes_are_read_only.py`. Exceptions are Owner-only (P0.2b currency alerts UPDATE, P5.2c snapshots, P0.2c radar) | Owner exceptions are tracked as Owner P0 | P0 (O) | No | O |
 | SEC-08 | Idempotency of financial writes | FBV | COMPLETED_AND_VERIFIED | `core/idempotency.py` (movements, debts, payments, goals, savings, budget, recurring); `core/test_idempotency_atomicity.py`; both apps send `X-Idempotency-Key` | — | — | — | — |
 | SEC-09 | Repeated confirmation of a mail candidate | V | COMPLETED_AND_VERIFIED | `FOR UPDATE` plus `already_reviewed` (`user_product/gmail_service.py:508-531`) | — | — | — | — |
@@ -172,12 +172,24 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | NAT-06 | Physical device pass | NOT_IMPLEMENTED | — | Human | P0 |
 | NAT-07 | Store screenshots after UX-13 | NOT_IMPLEMENTED | `store-assets/` predates the five tabs | Regenerate | P1 |
 
+## 3.10 Findings recorded during execution (not yet changed)
+
+| Finding | Where | Next |
+|---|---|---|
+| The public store entitlement treats a missing end as active | `product_ops/store_billing.py` `_public_state` (`entitlement_end is None or …`) | Small backend PR (same rule as #351) |
+| Android treated `grace` (not the backend's `grace_period`) as live, so a subscription in grace could start a second purchase | `core/data/.../OpsModels.kt` | Fixed in the BIL-03 PR |
+| The data export includes the Owner's internal notes on the user's own support tickets | `auth/data_export.py` (`feedback_reports.owner_notes`) | Decision: export them or not |
+| `uq_accounts_primary_email_ci` exists only in `database/schema.sql`, not in `migrations/` | the legacy `users` mapping by email relies on it | Read-only production check |
+| VIP command center timeline adds an unknown debt payment as 0 to its projected balance | `user_product/vip_service.py` timeline | Formula decision (residual of DEB-03) |
+| Android Hoy was not refreshed by a swipe from the screen root in tests (the B17 test counted the start-up reload) | `PullToRefreshUiTest` | Fixed in the NAT-02/03 PR (swipe on the refresh box) |
+
 ## 4. Blockers that need Kenneth
 
 | ID | What is needed | Blocks |
 |---|---|---|
 | BLK-PRICE | Approve a new terms version with VIP ₡5.990 (the terms text quotes ₡4.990) | BIL-04 |
-| BLK-ANNUAL | Annual prices and discount | BIL-05 |
+| BLK-ANNUAL | Annual prices and discount. Note: the backend catalog already names annual product ids and a placeholder price (`FINVA_*_ANNUAL_CRC`); do not create annual store products until approved | BIL-05 |
+| BLK-TRIAL | A 7-day free trial is declared in the store catalog (`FINVA_STORE_TRIAL_DAYS`, default 7) and is not approved; trials are set on the store products | BIL-01..03 |
 | BLK-PROMO | Launch promotion: keep, end or adjust | BIL-06 |
 | BLK-MAIL | Gmail restricted-scope verification and the annual CASA assessment; which plan gets mail detection; the list of validated banks | MOV-04, MOV-05 |
 | BLK-HEALTH | Health formula, weights and thresholds | ANA-05 |
@@ -204,6 +216,9 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | Master record | `v1/master-execution-doc` | #352 | open | docs only |
 | SEC-01 server-side legal acceptance | `v1/sec-01-legal-gate` | #353 | open, ready for review | backend 2,743 (+7 PG gate tests; 5 fail on `main`) |
 | DEB-03 unknown monthly payment | `v1/deb-03-unknown-monthly-payment` | #354 | open; **PRE-MERGE GATE: migration 20261010120000 applied first + label** | backend 2,748 (+12 PG tests; 7 fail on `main`); iOS kit 322, Android core 306 |
+| SEC-06 candidate scope (defense in depth) | `v1/sec-06-candidate-scope` | #355 | open, ready for review | backend 2,739 (+3 PG tests; the real review path on `main` loads another workspace's candidate) |
+| NAT-02/03 keep content on failed refresh, Android resume | `v1/nat-02-03-keep-content` | (in progress) | tests passing; full iOS suite running | Android KeepContent 3/3 + B17 5/5 (one false positive fixed); iOS 2/2 + B17 4/4; mutations caught on both |
+| BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | (in progress) | code + unit tests; UI tests pending | DincrKit StoreModels 5/5; Android `isLive` parity fix |
 
 ## 7. How to resume
 
