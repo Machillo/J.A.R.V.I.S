@@ -67,7 +67,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 
 | ID | Function | Plans | State | Evidence | Missing | Pri | Mig | Dec |
 |---|---|---|---|---|---|---|---|---|
-| SEC-01 | Server-side legal acceptance | FBV | NOT_IMPLEMENTED | Only `/auth/me` reports it (`auth/saas.py:172`); no route checks it | A middleware gate with an allowlist for auth, acceptance, export, deletion and support | P0 | No | No |
+| SEC-01 | Server-side legal acceptance | FBV | IMPLEMENTED_NOT_VERIFIED (#353, not in `main`) | Only `/auth/me` reports it (`auth/saas.py:172`); no route checks it | A middleware gate with an allowlist for auth, acceptance, export, deletion and support | P0 | No | No |
 | SEC-02 | Owner identity only from the server role | O | COMPLETED_AND_VERIFIED | `auth/owner_role.py:89-106`; `tests/test_no_runtime_ddl.py:267-279` | — | — | — | — |
 | SEC-03 | Plan gate on the server | FBV | COMPLETED_AND_VERIFIED | `require_feature` (`auth/saas.py:344-374`); route-gate inventory test | — | — | — | — |
 | SEC-04 | A paid subscription needs a known end | BV | COMPLETED_AND_VERIFIED | #351, `tests/test_subscription_end_required_pg.py` | PRE-MERGE read-only counts (in #351) | — | — | — |
@@ -110,7 +110,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 |---|---|---|---|---|---|---|---|---|
 | DEB-01 | Create, list and delete | FBV | COMPLETED_AND_VERIFIED | `user_product/service.py`; native debts screens | — | — | — | — |
 | DEB-02 | Edit | BV (Free can't) | PARTIALLY_IMPLEMENTED | `PUT` requires `strategy_basic` (`user_product/routes.py:103`); proposal P-1 / P2.1 says representing your own reality is never charged | Free edit | P0 | No | **Yes** (confirm P2.1) |
-| DEB-03 | Unknown monthly payment ≠ 0 | FBV | BLOCKED_BY_MIGRATION | `float(payload.monthly_payment or 0)` (`user_product/service.py:274,370`); column `NOT NULL` (`database/schema.sql:70`) | Nullable column + provenance (as #329 did for the interest rate) + code. The migration is prepared, never run | P0 | **Yes** | No |
+| DEB-03 | Unknown monthly payment ≠ 0 | FBV | BLOCKED_BY_MIGRATION (code + migration in #354; migration not run) | `float(payload.monthly_payment or 0)` (`user_product/service.py:274,370`); column `NOT NULL` (`database/schema.sql:70`) | Nullable column + provenance (as #329 did for the interest rate) + code. The migration is prepared, never run | P0 | **Yes** | No |
 | DEB-04 | Interest rate known/unknown | FBV | COMPLETED_AND_VERIFIED | #328/#329 | — | — | — | — |
 | DEB-05 | Payment (partial) | FBV | COMPLETED_AND_VERIFIED | `POST /finance/debts/{id}/payments`, idempotent, capped at the balance | — | — | — | — |
 | DEB-06 | Extra payment as its own type | FBV | NOT_IMPLEMENTED | — | Payment type or tag | P1 | Maybe | No |
@@ -201,7 +201,9 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 
 | Block | Branch | PR | State | Tests |
 |---|---|---|---|---|
-| Master record | `v1/master-execution-doc` | (this PR) | open | docs only |
+| Master record | `v1/master-execution-doc` | #352 | open | docs only |
+| SEC-01 server-side legal acceptance | `v1/sec-01-legal-gate` | #353 | open, ready for review | backend 2,743 (+7 PG gate tests; 5 fail on `main`) |
+| DEB-03 unknown monthly payment | `v1/deb-03-unknown-monthly-payment` | #354 | open; **PRE-MERGE GATE: migration 20261010120000 applied first + label** | backend 2,748 (+12 PG tests; 7 fail on `main`); iOS kit 322, Android core 306 |
 
 ## 7. How to resume
 
