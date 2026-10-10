@@ -34,8 +34,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
+import com.dincr.data.PullRefresh
 import com.dincr.data.HomeDestination
 import com.dincr.data.HomeInput
 import com.dincr.data.HomeNext
@@ -100,7 +103,21 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
         loadHomeToday(model, tier, mailReview)
     }
     val agenda = if (owner) rememberLoad(model, fallback = tx("No pudimos cargar tu agenda.", "We couldn’t load your calendar.")) { model.api.jarvisUpcomingEvents() } else null
-    PullToRefreshBox(false, onRefresh = { home.reload(); agenda?.reload() }, modifier = Modifier.fillMaxSize().padding(padding)) {
+    // NAT-03 (B17): a refresh of the public Hoy shows the indicator, and when it fails it keeps what Hoy
+    // shows and says so in the app notice (iOS: HomeView). The Owner's Hoy keeps its own behavior.
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    fun refreshHome() {
+        if (refreshing) return
+        refreshing = true
+        scope.launch {
+            try {
+                if (!home.refresh() && home.state is Load.Ready) model.showNotice(PullRefresh.failureNotice())
+            } finally { refreshing = false }
+        }
+    }
+    PullToRefreshBox(refreshing, onRefresh = { if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
+        modifier = Modifier.fillMaxSize().padding(padding).testTag("home.refresh")) {
         ScreenColumn {
             if (owner && agenda != null) {
                 OwnerJarvisSpace(profile?.firstName.orEmpty(), agenda, nav)
@@ -109,7 +126,7 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
                     color = Dincr.colors.text, modifier = Modifier.padding(top = DincrSpacing.s2).semantics { heading() })
             }
             Column(Modifier.testTag(if (owner) "owner.home" else "home.today"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
-                LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = home.reload) }
+                LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = if (owner) home.reload else { { refreshHome() } }) }
             }
         }
     }

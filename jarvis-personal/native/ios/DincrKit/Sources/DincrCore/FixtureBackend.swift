@@ -61,9 +61,13 @@ public actor FixtureBackend: HTTPTransport {
     private var jarvisAsksGoalName = false
     private var jarvisClarifying = false
     public private(set) var requests: [URLRequest] = []
-    /// B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server.
+    /// B17 / NAT-03 UI tests: a read again (a pull to refresh) of the identity, Hoy's main source or
+    /// the movement list answers like an unreachable server; the first read of each works.
     let identityRefreshFails: Bool
     private var identityReads = 0
+    static let refreshedSources: Set<String> = ["/auth/me", "/user-product/free/dashboard", "/user-product/basic/dashboard",
+                                                "/user-product/vip/command-center", "/user-product/free/movements"]
+    private var sourceReads: [String: Int] = [:]
 
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
     /// app still learns the role only from `/auth/me`, exactly as with the real backend.
@@ -171,9 +175,10 @@ public actor FixtureBackend: HTTPTransport {
         if scenario == .failing && path != "/product-ops/release-policy" {
             return reply(500, Self.errorBody("Ocurrió un error interno. Intentá nuevamente."))
         }
-        if method == "GET" && path == "/auth/me" {
-            identityReads += 1
-            if identityRefreshFails && identityReads > 1 { return reply(503, Self.errorBody("Servicio no disponible.")) }
+        if method == "GET" && Self.refreshedSources.contains(path) {
+            sourceReads[path, default: 0] += 1
+            if path == "/auth/me" { identityReads += 1 }
+            if identityRefreshFails && sourceReads[path, default: 0] > 1 { return reply(503, Self.errorBody("Servicio no disponible.")) }
         }
         // Like core/idempotency.py: the same key replays the stored answer; another body is a 409.
         let key = ["POST", "PUT", "PATCH"].contains(method) ? request.value(forHTTPHeaderField: "X-Idempotency-Key") : nil
