@@ -545,7 +545,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             )
             conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
             if candidate.get("resolution_reason") == "paired_owned_transfer" and candidate.get("related_candidate_id"):
-                resolve_candidate(conn, int(candidate["related_candidate_id"]))
+                resolve_candidate(conn, int(candidate["related_candidate_id"]), account_id=account_id, workspace_id=workspace_id)
             release_cross_source_duplicates(conn, candidate_id=candidate_id, account_id=account_id, workspace_id=workspace_id)
             conn.commit()
             return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
@@ -889,11 +889,12 @@ def _insert_finva_candidate(
         conn, candidate_id=candidate_id, candidate=candidate,
         workspace_id=str(connection["workspace_id"]),
     )
-    resolution = resolve_candidate(conn, candidate_id)
+    scope = {"account_id": str(connection["account_id"]), "workspace_id": str(connection["workspace_id"])}
+    resolution = resolve_candidate(conn, candidate_id, **scope)
     if gmail_message_id and legacy_transaction_for_message(
         conn, workspace_id=str(connection["workspace_id"]), provider_message_id=gmail_message_id,
     ):
-        resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution)
+        resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution, **scope)
     return resolution
 
 

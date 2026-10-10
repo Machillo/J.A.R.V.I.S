@@ -272,7 +272,7 @@ def release_cross_source_duplicates(conn, *, candidate_id: int, account_id: str,
             (released_id, account_id, workspace_id),
         )
     for released_id in released:
-        resolve_candidate(conn, released_id)
+        resolve_candidate(conn, released_id, account_id=account_id, workspace_id=workspace_id)
     return len(released)
 
 
@@ -350,11 +350,16 @@ def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int 
     return matches[0] if len(matches) == 1 else None
 
 
-def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
-    """Resolve semantic duplicates and own-account transfers conservatively."""
+def resolve_candidate(conn, candidate_id: int, *, account_id: str, workspace_id: str) -> dict[str, Any]:
+    """Resolve semantic duplicates and own-account transfers conservatively.
+
+    The candidate is read and written only inside the caller's account and workspace (SEC-06): an
+    id from elsewhere finds nothing, even if a stored link (`related_candidate_id`) ever pointed
+    across workspaces.
+    """
     row = conn.execute(
-        """SELECT * FROM finva_email_candidates WHERE id=%s FOR UPDATE""",
-        (candidate_id,),
+        """SELECT * FROM finva_email_candidates WHERE id=%s AND account_id=%s AND workspace_id=%s FOR UPDATE""",
+        (candidate_id, account_id, workspace_id),
     ).fetchone()
     if not row:
         return {"status": "missing"}
@@ -366,8 +371,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
             """UPDATE finva_email_candidates
                SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
                    resolution_reason=%s,updated_at=NOW()
-               WHERE id=%s""",
-            (fingerprint, same_row_id, SAME_STATEMENT_ROW_REASON, candidate_id),
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (fingerprint, same_row_id, SAME_STATEMENT_ROW_REASON, candidate_id, account_id, workspace_id),
         )
         return {"status": "duplicate", "related_candidate_id": same_row_id}
     duplicate = None
@@ -385,8 +390,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
             """UPDATE finva_email_candidates
                SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
                    resolution_reason='same_semantic_movement',updated_at=NOW()
-               WHERE id=%s""",
-            (fingerprint, duplicate_id, candidate_id),
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (fingerprint, duplicate_id, candidate_id, account_id, workspace_id),
         )
         return {"status": "duplicate", "related_candidate_id": duplicate_id}
 
@@ -396,8 +401,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
             """UPDATE finva_email_candidates
                SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
                    resolution_reason=%s,updated_at=NOW()
-               WHERE id=%s""",
-            (fingerprint, cross_id, cross_reason, candidate_id),
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (fingerprint, cross_id, cross_reason, candidate_id, account_id, workspace_id),
         )
         return {"status": "duplicate", "related_candidate_id": cross_id}
     possible_match_id = cross_id if cross_reason == POSSIBLE_MATCH_REASON else None
@@ -422,10 +427,10 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
                movement_direction=CASE WHEN %s THEN 'internal' ELSE %s END,
                category=CASE WHEN %s THEN 'Movimiento interno' ELSE %s END,
                related_candidate_id=%s,resolution_reason=%s,updated_at=NOW()
-           WHERE id=%s""",
+           WHERE id=%s AND account_id=%s AND workspace_id=%s""",
         (
             fingerprint, is_internal, is_internal, base_type, is_internal, base_direction,
-            is_internal, base_category, pair_id or possible_match_id, reason, candidate_id,
+            is_internal, base_category, pair_id or possible_match_id, reason, candidate_id, account_id, workspace_id,
         ),
     )
     if pair_id:
@@ -450,5 +455,5 @@ def reevaluate_workspace_candidates(conn, *, account_id: str, workspace_id: str)
         (account_id, workspace_id),
     ).fetchall()
     for row in rows:
-        resolve_candidate(conn, int(row["id"]))
+        resolve_candidate(conn, int(row["id"]), account_id=account_id, workspace_id=workspace_id)
     return len(rows)

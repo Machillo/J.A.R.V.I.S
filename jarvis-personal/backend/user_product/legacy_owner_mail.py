@@ -40,14 +40,15 @@ def legacy_transaction_for_message(conn, *, workspace_id: str, provider_message_
     return int(row["id"]) if row else None
 
 
-def mark_legacy_duplicate(conn, *, candidate_id: int, resolution: dict[str, Any]) -> dict[str, Any]:
-    """Resolve a still-pending candidate as already imported by the legacy reader."""
+def mark_legacy_duplicate(conn, *, candidate_id: int, resolution: dict[str, Any], account_id: str, workspace_id: str) -> dict[str, Any]:
+    """Resolve a still-pending candidate as already imported by the legacy reader (only inside the
+    caller's account and workspace, SEC-06)."""
     if resolution.get("status") != "pending":
         return resolution
     conn.execute(
         """UPDATE finva_email_candidates
            SET status='duplicate',resolution_reason=%s,updated_at=NOW()
-           WHERE id=%s AND status='pending' AND transaction_id IS NULL""",
-        (LEGACY_REASON, candidate_id),
+           WHERE id=%s AND account_id=%s AND workspace_id=%s AND status='pending' AND transaction_id IS NULL""",
+        (LEGACY_REASON, candidate_id, account_id, workspace_id),
     )
     return {"status": "duplicate", "resolution_reason": LEGACY_REASON}

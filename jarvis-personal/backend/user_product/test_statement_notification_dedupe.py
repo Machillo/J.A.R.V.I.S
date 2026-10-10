@@ -51,8 +51,9 @@ class Conn:
         scoped = lambda account, workspace: [c for c in rows.values() if (c["account_id"], c["workspace_id"]) == (account, workspace)]
         if q.startswith("SAVEPOINT") or q.startswith("RELEASE") or q.startswith("ROLLBACK"):
             return _rows([])
-        if q.startswith("SELECT * FROM finva_email_candidates WHERE id=%s FOR UPDATE"):
-            return _rows([rows[params[0]]] if params[0] in rows else [])
+        if q.startswith("SELECT * FROM finva_email_candidates WHERE id=%s AND account_id=%s AND workspace_id=%s FOR UPDATE"):
+            c = rows.get(params[0])
+            return _rows([c] if c and (c["account_id"], c["workspace_id"]) == params[1:] else [])  # SEC-06: scoped
         if q.startswith("SELECT id FROM finva_email_candidates WHERE account_id=%s AND workspace_id=%s AND source_record_key=%s"):
             account, workspace, key, own = params
             return _rows(sorted(({"id": c["id"]} for c in scoped(account, workspace) if c.get("source_record_key") == key and c["id"] < own), key=lambda r: r["id"])[:1])
@@ -92,16 +93,20 @@ class Conn:
         if "FROM account_balances" in q or "JOIN account_balances" in q:
             return _rows([])  # no confirmed own accounts in these scenarios
         if q.startswith("UPDATE finva_email_candidates SET semantic_fingerprint=%s,status='duplicate'"):
+            assert q.endswith("WHERE id=%s AND account_id=%s AND workspace_id=%s"), q  # SEC-06: scoped write
             if "resolution_reason=%s" in q:
-                fingerprint, related, reason, candidate_id = params
+                fingerprint, related, reason, candidate_id, account, workspace = params
             else:
-                (fingerprint, related, candidate_id), reason = params, "same_semantic_movement"
-            rows[candidate_id].update(semantic_fingerprint=fingerprint, status="duplicate", related_candidate_id=related, resolution_reason=reason)
+                (fingerprint, related, candidate_id, account, workspace), reason = params, "same_semantic_movement"
+            if (rows[candidate_id]["account_id"], rows[candidate_id]["workspace_id"]) == (account, workspace):
+                rows[candidate_id].update(semantic_fingerprint=fingerprint, status="duplicate", related_candidate_id=related, resolution_reason=reason)
             return _rows([])
         if q.startswith("UPDATE finva_email_candidates SET semantic_fingerprint=%s,is_internal_transfer=%s"):
-            fingerprint, internal, _i, base_type, _i2, _direction, _i3, _category, related, reason, candidate_id = params
-            rows[candidate_id].update(semantic_fingerprint=fingerprint, is_internal_transfer=internal,
-                                      related_candidate_id=related, resolution_reason=reason)
+            assert q.endswith("WHERE id=%s AND account_id=%s AND workspace_id=%s"), q  # SEC-06: scoped write
+            fingerprint, internal, _i, base_type, _i2, _direction, _i3, _category, related, reason, candidate_id, account, workspace = params
+            if (rows[candidate_id]["account_id"], rows[candidate_id]["workspace_id"]) == (account, workspace):
+                rows[candidate_id].update(semantic_fingerprint=fingerprint, is_internal_transfer=internal,
+                                          related_candidate_id=related, resolution_reason=reason)
             return _rows([])
         if q.startswith("SELECT id FROM finva_email_candidates WHERE account_id=%s AND workspace_id=%s AND related_candidate_id=%s"):
             assert "AND (resolution_reason IN (%s,%s,%s) OR (resolution_reason='same_semantic_movement' AND source_type<>(SELECT" in q
@@ -167,7 +172,7 @@ def add(db, *, source="email", provider="gmail", description="AUTOMERCADO ESCAZU
         "raw_payload": {"transaction_type": transaction_type, "movement_direction": "out", "category": "Compras"},
     }
     with db.connect() as conn:
-        result = resolution.resolve_candidate(conn, candidate_id)
+        result = resolution.resolve_candidate(conn, candidate_id, account_id=ACCOUNT, workspace_id=workspace)
         conn.commit()
     return candidate_id, result
 
