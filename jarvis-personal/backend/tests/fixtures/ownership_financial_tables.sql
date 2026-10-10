@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS debts (
     monthly_payment NUMERIC(14, 2) NOT NULL,
     interest_rate NUMERIC(8, 4),
     interest_rate_known BOOLEAN,  -- 20261006120000
+    monthly_payment_known BOOLEAN,  -- 20261010120000
     term_months INTEGER,
     payment_day INTEGER,
     start_date DATE,
