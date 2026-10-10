@@ -171,7 +171,12 @@ data class StoreEntitlement(
     @SerialName("pending_plan") val pendingPlan: String? = null,
     @SerialName("product_id") val productId: String? = null,
 ) {
-    val isLive: Boolean get() = provider in setOf("google", "apple") && status in setOf("active", "trialing", "grace")
+    /** A store subscription the server counts as live (`product_ops.store_billing.ACTIVE_STATES`). iOS: `StoreEntitlement.isLive`. */
+    val isLive: Boolean get() = provider in setOf("google", "apple") && status in LIVE_STATUSES
+
+    companion object {
+        val LIVE_STATUSES = setOf("trialing", "active", "grace_period")
+    }
 }
 
 @Serializable
