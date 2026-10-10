@@ -3,6 +3,7 @@ import XCTest
 /// PLN-04 — Plan → Metas y ahorro: a savings plan can be edited on iOS as on Android (name, monthly
 /// amount, saved, dates, status). The form opens with the plan's figures and the list shows the
 /// change. Fixture data only (plan 44, "Vacaciones").
+@MainActor
 final class SavingsPlanEditUITests: XCTestCase {
     private func element(_ id: String, in app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }
 
