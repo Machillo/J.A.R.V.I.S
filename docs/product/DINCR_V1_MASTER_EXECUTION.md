@@ -114,7 +114,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | DEB-04 | Interest rate known/unknown | FBV | COMPLETED_AND_VERIFIED | #328/#329 | — | — | — | — |
 | DEB-05 | Payment (partial) | FBV | COMPLETED_AND_VERIFIED | `POST /finance/debts/{id}/payments`, idempotent, capped at the balance | — | — | — | — |
 | DEB-06 | Extra payment as its own type | FBV | NOT_IMPLEMENTED | — | Payment type or tag | P1 | Maybe | No |
-| DEB-07 | Payment history and reversal | FBV | NOT_IMPLEMENTED | Proposal G12 → P2.2a/b, P2.6 | Ledger of payments | P0 | Yes | No |
+| DEB-07 | Payment history and reversal | FBV | PARTIALLY_IMPLEMENTED (history in #363; reversal DEB-07b not started) | Proposal G12 → P2.2a/b, P2.6 | Ledger of payments | P0 | Yes | No |
 | DEB-08 | Due vs paid (installments never assumed paid) | FBV | COMPLETED_AND_VERIFIED (reads) | #307: reads never apply installments; `apply_due_installments` is an explicit command | K-4 redesign for automation | P1 | Maybe | Yes (K-4) |
 | DEB-09 | Payoff plan / calendar | BV | PARTIALLY_IMPLEMENTED (waits for #354: the strategy engine reads an unknown payment/balance as 0) | Endpoint exists with no client (proposal G13) | Client screens | P1 | No | No |
 
@@ -125,7 +125,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | PLN-01 | Budgets by category | BV | COMPLETED_AND_VERIFIED | `basic_service.py`; Plan → Tu plan del mes → Presupuesto | Canonical categories (P0.10/P2.9); proposed limits from unknown income are 0 (`basic_service.py:70-73`) | P1 | No | No |
 | PLN-02 | Recurring / fixed items | FBV | COMPLETED_AND_VERIFIED | UX-9 (#332); Plan → Ingresos y base → Movimientos recurrentes | Full edit (P2.4) | P1 | No | No |
 | PLN-03 | Financial calendar | BV | COMPLETED_AND_VERIFIED | `/basic/calendar`; Plan → Tu plan del mes | — | — | — | — |
-| PLN-04 | Savings goals | FBV | PARTIALLY_IMPLEMENTED (iOS savings-plan edit in progress: `v1/pln-04-ios-savings-edit`; Free edit waits for BLK-P21) | Free can't edit (`routes.py:123`, P2.1); iOS savings-plan edit missing (P2.5) | Free edit (needs the P2.1 decision), iOS edit | P1 | No | Yes (P2.1) |
+| PLN-04 | Savings goals | FBV | PARTIALLY_IMPLEMENTED (iOS savings-plan edit in #365; Free edit waits for BLK-P21) | Free can't edit (`routes.py:123`, P2.1); iOS savings-plan edit missing (P2.5) | Free edit (needs the P2.1 decision), iOS edit | P1 | No | Yes (P2.1) |
 | PLN-05 | Emergency fund (Salvavidas) | V | PARTIALLY_IMPLEMENTED | VIP only, read-only on both apps; G18 → P3.4 for Free/Basic | Plan mapping | P1 | No | Yes |
 | PLN-06 | Budget alerts | V | PARTIALLY_IMPLEMENTED | Para atender is VIP; Free/Basic are hidden (`home.attention` transitional) | Decision on Free/Basic alerts | P1 | No | Yes |
 | PLN-07 | Monthly summary and comparison | FBV | COMPLETED_AND_VERIFIED | Resumen (#349), Reportes (B+) | iOS/Android text parity (Resumen, Reportes) | P1 | No | No |
@@ -155,7 +155,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 |---|---|---|---|---|---|---|---|---|
 | BIL-01 | Store verification on the server | BV | IMPLEMENTED_NOT_VERIFIED | `product_ops/store_verification.py`, `store_apple.py`, `store_google.py`; switch `DINCR_STORE_VERIFICATION_ENABLED` off | Sandbox purchases with test accounts | P0 | No | No |
 | BIL-02 | Google Play Billing in the app | BV | IMPLEMENTED_NOT_VERIFIED | Android `StoreBilling`; flag `store_billing` off | Play-signed build, license testers | P0 | No | No |
-| BIL-03 | StoreKit in the app | BV | NOT_IMPLEMENTED | iOS shows "Las suscripciones desde el App Store llegan en una próxima versión" (`ProfileViews.swift:249`) | StoreKit 2 purchase/restore, server verification | P0 | No | No |
+| BIL-03 | StoreKit in the app | BV | IMPLEMENTED_NOT_VERIFIED (#362; sandbox purchase pending) | iOS shows "Las suscripciones desde el App Store llegan en una próxima versión" (`ProfileViews.swift:249`) | StoreKit 2 purchase/restore, server verification | P0 | No | No |
 | BIL-04 | VIP price ₡5.990 | V | BLOCKED_BY_DECISION | ₡4.990 in `product_ops/service.py:27`, `product_ops/store_billing.py:20`, `frontend/landing/config.json:9`, **the terms** (`frontend/landing/legal-en.mjs:19`, `frontend/src/pages/PublicInfoPage.jsx:47`), native fixtures | A new terms version (legal change) together with the price | P0 | Maybe | **Yes** |
 | BIL-05 | Annual plans | BV | BLOCKED_BY_DECISION | `store_billing.py:21` placeholder `FINVA_VIP_ANNUAL_CRC` 49900 (not approved) | Annual prices and discount | P0 | No | **Yes** |
 | BIL-06 | Launch promotion (VIP free until 2027-01-01) | BV | BLOCKED_BY_DECISION | `product_ops/service.py:23-24,424-457` | Keep, end or adjust for a commercial launch | P0 | No | **Yes** |
@@ -224,9 +224,11 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | PLN-01 guided budget never proposes from an unknown income | `v1/pln-budget-unknown-income` | #358 | open, ready for review | +7 tests (4 fail on `main`; the 3 known cases pass on both) |
 | PLN-07 monthly summary: unknown savings / no goals | `v1/summary-unknown-savings` | #359 | open, ready for review | backend 2,741 (+5; 3 fail on `main`) |
 | NAT-02/03 keep content on failed refresh, Android resume | `v1/nat-02-03-keep-content` | #360 | open, ready for review | iOS DincrKit 322, UI 119 (1 known flake, passes on rerun); Android unit 306, UI 116, 320×640 14; mutations caught on both |
-| BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | (in progress) | code + unit + UI tests; full iOS suite pending | DincrKit StoreModels 5/5; UI 3/3; Android unit 307 (`StoreEntitlementTest` fails on `main`) |
+| BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | #362 | open; sandbox purchase needs physical validation | DincrKit 327; Android unit 307 (`StoreEntitlementTest` fails on `main`); iOS full UI 125/128, the 3 failures happened while the Mac slept (controlled rerun pending) |
 | SEC-12 per-account write cap (429 + Retry-After) | `v1/sec-12-write-rate-limit` | #361 | open, ready for review | backend 2,746 (+10; 4 app-level fail on `main`) |
-| DEB-07a debt payment history (read-only) | `v1/deb-07a-payment-history` | (in progress) | backend + iOS + Android done; full suites running | backend 2,740 (4 new fail on `main`); Android UI 1/1, mutation caught |
+| DEB-07a debt payment history (read-only) | `v1/deb-07a-payment-history` | #363 | open, ready for review | backend 2,740 (4 new fail on `main`); Android unit 308, UI 114, 320×640; mutation caught; iOS targeted run pending |
+| SEC-01 apps: reload identity on `legal_acceptance_required` | `v1/sec-01-native-legal-reload` | #364 | open, ready for review | Android unit 309, UI 114, mutation caught; iOS kit 3/3, targeted UI + mutation pending |
+| PLN-04 iOS savings-plan edit | `v1/pln-04-ios-savings-edit` | #365 | open, ready for review | DincrKit 2/2; iOS targeted UI + mutation pending |
 
 ## 7. How to resume
 
