@@ -88,7 +88,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 |---|---|---|---|---|---|---|---|---|
 | MOV-01 | Manual entry, edit and delete | FBV | COMPLETED_AND_VERIFIED | `user_product/free_service.py`; iOS `MovementsView.swift`, Android `MovementsScreen.kt` | — | — | — | — |
 | MOV-02 | Type filter faithful to the movement type | FBV | PARTIALLY_IMPLEMENTED (depends on P0.3a canonical ledger types; not started) | Android classifies debts with a regex (`MovementsScreen.kt:82`); iOS has no Deudas filter | P0.3a/b/c ledger types | P1 | Maybe | No |
-| MOV-03 | Category, account and period filters | FBV | NOT_IMPLEMENTED | Proposal D04 → P5.1 | A backend analysis endpoint | P1 | No | No |
+| MOV-03 | Category, account and period filters | FBV | NOT_IMPLEMENTED (pending decision: only mail-imported movements carry an account; how manual ones answer an account filter is undocumented) | Proposal D04 → P5.1 | A backend analysis endpoint | P1 | No | No |
 | MOV-04 | Mail detection (Gmail/Outlook) with confirmation | V | COMPLETED_AND_VERIFIED (code) | `user_product/gmail_service.py`, `microsoft_mail.py`; candidates stay pending until reviewed | Gmail restricted-scope verification + annual CASA (`docs/security/google-oauth-verification.md:240`) | P0 | No | **Yes** (CASA, which plan) |
 | MOV-05 | Validated Costa Rican bank formats | V | PARTIALLY_IMPLEMENTED | Onboarding offers 8 institutions; the parser reads 3 (proposal B3) | Parsers per validated bank, with synthetic fixtures | P0 | No | Yes (bank list) |
 | MOV-06 | Mail duplicate prevention | V | COMPLETED_AND_VERIFIED | `email_monitor/deduplication.py`, `user_product/candidate_resolution.py` | — | — | — | — |
@@ -125,7 +125,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | PLN-01 | Budgets by category | BV | COMPLETED_AND_VERIFIED | `basic_service.py`; Plan → Tu plan del mes → Presupuesto | Canonical categories (P0.10/P2.9); proposed limits from unknown income are 0 (`basic_service.py:70-73`) | P1 | No | No |
 | PLN-02 | Recurring / fixed items | FBV | COMPLETED_AND_VERIFIED | UX-9 (#332); Plan → Ingresos y base → Movimientos recurrentes | Full edit (P2.4) | P1 | No | No |
 | PLN-03 | Financial calendar | BV | COMPLETED_AND_VERIFIED | `/basic/calendar`; Plan → Tu plan del mes | — | — | — | — |
-| PLN-04 | Savings goals | FBV | PARTIALLY_IMPLEMENTED | Free can't edit (`routes.py:123`, P2.1); iOS savings-plan edit missing (P2.5) | Free edit (needs the P2.1 decision), iOS edit | P1 | No | Yes (P2.1) |
+| PLN-04 | Savings goals | FBV | PARTIALLY_IMPLEMENTED (iOS savings-plan edit in progress: `v1/pln-04-ios-savings-edit`; Free edit waits for BLK-P21) | Free can't edit (`routes.py:123`, P2.1); iOS savings-plan edit missing (P2.5) | Free edit (needs the P2.1 decision), iOS edit | P1 | No | Yes (P2.1) |
 | PLN-05 | Emergency fund (Salvavidas) | V | PARTIALLY_IMPLEMENTED | VIP only, read-only on both apps; G18 → P3.4 for Free/Basic | Plan mapping | P1 | No | Yes |
 | PLN-06 | Budget alerts | V | PARTIALLY_IMPLEMENTED | Para atender is VIP; Free/Basic are hidden (`home.attention` transitional) | Decision on Free/Basic alerts | P1 | No | Yes |
 | PLN-07 | Monthly summary and comparison | FBV | COMPLETED_AND_VERIFIED | Resumen (#349), Reportes (B+) | iOS/Android text parity (Resumen, Reportes) | P1 | No | No |
