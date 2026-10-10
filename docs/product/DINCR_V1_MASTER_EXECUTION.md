@@ -165,8 +165,8 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | ID | Function | State | Evidence | Missing | Pri |
 |---|---|---|---|---|---|
 | NAT-01 | Five-tab navigation and plan locks, iOS = Android | COMPLETED_AND_VERIFIED | `native/feature-reachability.json` walkers on both platforms | — | — |
-| NAT-02 | Android resume: a transient failure moves the app to the identity-error screen | PARTIALLY_IMPLEMENTED | Android `AppModel.kt` `onForeground` → `loadIdentity()`; iOS keeps the user | Use the transient rule on resume (B17 finding) | P1 |
-| NAT-03 | A failed refresh keeps content on Hoy and Movimientos | PARTIALLY_IMPLEMENTED | iOS `HomeView.swift:61-62`, Android `MovementsScreen.kt:106`, both platforms | Keep content (B17 finding) | P1 |
+| NAT-02 | Android resume: a transient failure moves the app to the identity-error screen | IMPLEMENTED_NOT_VERIFIED (#360) | Android `AppModel.kt` `onForeground` → `loadIdentity()`; iOS keeps the user | Use the transient rule on resume (B17 finding) | P1 |
+| NAT-03 | A failed refresh keeps content on Hoy and Movimientos | IMPLEMENTED_NOT_VERIFIED (#360) | iOS `HomeView.swift:61-62`, Android `MovementsScreen.kt:106`, both platforms | Keep content (B17 finding) | P1 |
 | NAT-04 | Release signing on both platforms | NOT_IMPLEMENTED | No `signingConfigs`; iOS has no team (`native/RELEASE_IDENTITY.md:105-111`) | Human setup | P0 |
 | NAT-05 | Crash reporting | NOT_IMPLEMENTED | None on either app | Provider decision (cost, privacy) | P0 |
 | NAT-06 | Physical device pass | NOT_IMPLEMENTED | — | Human | P0 |
@@ -221,8 +221,9 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | V1-1 recorded (CLAUDE.md, native RELEASE_IDENTITY/README) | `v1/docs-native-is-official` | #357 | open, ready for review | engineering guards 5/5 |
 | PLN-01 guided budget never proposes from an unknown income | `v1/pln-budget-unknown-income` | #358 | open, ready for review | +7 tests (4 fail on `main`; the 3 known cases pass on both) |
 | PLN-07 monthly summary: unknown savings / no goals | `v1/summary-unknown-savings` | #359 | open, ready for review | backend 2,741 (+5; 3 fail on `main`) |
-| NAT-02/03 keep content on failed refresh, Android resume | `v1/nat-02-03-keep-content` | (in progress) | tests passing; full iOS suite running | Android KeepContent 3/3 + B17 5/5 (one false positive fixed); iOS 2/2 + B17 4/4; mutations caught on both |
-| BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | (in progress) | code + unit tests; UI tests pending | DincrKit StoreModels 5/5; Android `isLive` parity fix |
+| NAT-02/03 keep content on failed refresh, Android resume | `v1/nat-02-03-keep-content` | #360 | open, ready for review | iOS DincrKit 322, UI 119 (1 known flake, passes on rerun); Android unit 306, UI 116, 320×640 14; mutations caught on both |
+| BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | (in progress) | code + unit + UI tests; full iOS suite pending | DincrKit StoreModels 5/5; UI 3/3; Android unit 307 (`StoreEntitlementTest` fails on `main`) |
+| DEB-07a debt payment history (read-only) | `v1/deb-07a-payment-history` | (in progress) | backend + iOS + Android done; full suites running | backend 2,740 (4 new fail on `main`); Android UI 1/1, mutation caught |
 
 ## 7. How to resume
 
