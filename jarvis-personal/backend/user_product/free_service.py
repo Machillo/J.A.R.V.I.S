@@ -100,11 +100,14 @@ def get_free_monthly_summary(period: str | None = None) -> dict:
         profile = conn.execute("SELECT liquid_savings FROM financial_profiles WHERE account_id=%s AND workspace_id=%s", (account_id,workspace_id)).fetchone()
     balance = round(totals["income"]-totals["expenses"]-totals["debt_paid"],2)
     target, current = _money(goals["target"]), _money(goals["current"])
+    # UNKNOWN ≠ 0: savings nobody declared are unknown (not ₡0), and without a goal target there is no
+    # progress to report (not 0 %).
+    savings = profile.get("liquid_savings") if profile else None
     return {
         "period": start.strftime("%Y-%m"), **totals, "balance": balance,
         "top_category": categories[0] if categories else None, "categories": categories,
-        "savings": _money(profile["liquid_savings"] if profile else 0),
-        "goals": {"current":current,"target":target,"progress":round(current/target*100,1) if target else 0},
+        "savings": None if savings is None else _money(savings),
+        "goals": {"current":current,"target":target,"progress":round(current/target*100,1) if target else None},
     }
 
 
