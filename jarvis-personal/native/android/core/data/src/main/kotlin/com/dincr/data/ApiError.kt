@@ -77,6 +77,8 @@ class ApiError(
         }
 
         const val FEATURE_UNAVAILABLE_CODE = "feature_temporarily_unavailable"
+        /** The server's legal gate (`auth/legal.py`): the current terms are not accepted yet. */
+        const val LEGAL_ACCEPTANCE_REQUIRED_CODE = "legal_acceptance_required"
 
         fun offline(language: AppLanguage) = ApiError(Kind.OFFLINE, message = language.pick("Sin conexión. Revisá tu internet e intentá de nuevo.", "You’re offline. Check your connection and try again."))
         fun timeout(language: AppLanguage) = ApiError(Kind.TIMEOUT, message = language.pick("La solicitud tardó demasiado. Volvé a intentarlo.", "The request took too long. Please try again."))
