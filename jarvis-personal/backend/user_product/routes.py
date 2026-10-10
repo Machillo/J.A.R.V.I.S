@@ -14,7 +14,7 @@ from backend.user_product.service import (
     create_user_transaction, delete_expense, delete_income, delete_user_debt, delete_user_goal, delete_user_transaction,
     get_financial_situation, get_strategy_basic, get_strategy_vip, get_user_finance_summary,
     list_expenses, list_income, list_user_debts, list_user_goals, list_user_transactions,
-    pay_user_debt, simulate_strategy_vip, update_expense, update_financial_situation, update_income,
+    list_user_debt_payments, pay_user_debt, simulate_strategy_vip, update_expense, update_financial_situation, update_income,
     update_user_debt, update_user_goal, contribute_user_goal, create_savings_plan,
     delete_savings_plan, contribute_savings_plan, list_savings_plans, update_savings_plan,
 )
@@ -109,6 +109,10 @@ def debts_delete(debt_id: int):
 @router.post("/finance/debts/{debt_id}/payments")
 def debt_payment(debt_id: int, request: DebtPaymentRequest):
     require_feature("debts"); return pay_user_debt(debt_id, request.amount)
+
+@router.get("/finance/debts/{debt_id}/payments")
+def debt_payments_list(debt_id: int):
+    require_feature("debts"); return list_user_debt_payments(debt_id)
 
 @router.get("/goals")
 def goals_list():

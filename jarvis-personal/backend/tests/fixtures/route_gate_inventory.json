@@ -1738,6 +1738,14 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/user-product/finance/debts/{debt_id}/payments",
+  "gates": [
+   "feature:debts"
+  ],
+  "user_get": "allowed"
+ },
+ {
   "method": "POST",
   "path": "/user-product/finance/debts/{debt_id}/payments",
   "gates": [

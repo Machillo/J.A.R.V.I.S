@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -107,6 +108,7 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
     var creating by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf<Debt?>(null) }
     var deleting by remember { mutableStateOf<Debt?>(null) }
+    var history by remember { mutableStateOf<Debt?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { model.recordScreen("debts_opened", "debts") }
@@ -127,13 +129,14 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
                         AmountLine(tx("Cuotas del mes", "Monthly payments"), Debt.knownSum(list.map { it.monthlyPayment }))
                     }
                 }
-                list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }) }
+                list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }, onHistory = { history = debt }) }
             }
         }
     }
     if (creating || editing != null) DebtForm(model, editing, advanced, onDismiss = { creating = false; editing = null }) {
         creating = false; editing = null; debts.reload(); model.showNotice(it)
     }
+    history?.let { debt -> DebtPaymentsDialog(model, debt) { history = null } }
     paying?.let { debt ->
         AmountDialog(tx("Registrar pago", "Record payment"), tx("Pendiente: ${Dincr.money.format(debt.remainingAmount ?: BigDecimal.ZERO)}. Un pago mayor se ajusta al saldo.", "Outstanding: ${Dincr.money.format(debt.remainingAmount ?: BigDecimal.ZERO)}. A larger payment is capped at the balance."),
             tx("Registrar", "Record"), onDismiss = { paying = null }) { amount, key ->
@@ -157,7 +160,7 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
 }
 
 @Composable
-private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: () -> Unit, onDelete: () -> Unit) {
+private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: () -> Unit, onDelete: () -> Unit, onHistory: () -> Unit) {
     DincrCard {
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -171,6 +174,8 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
             debt.knownProgressPercent?.let { ProgressLine(it / 100.0, tx("${it.toInt()} % pagado", "${it.toInt()} % paid")) }
             debt.monthlyPayment?.let { AmountLine(tx("Cuota mensual", "Monthly payment"), it) }
             debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateLabel(it)) }
+            // DEB-07a: the payments recorded for this debt (read-only, every plan).
+            TextButton(onHistory, modifier = Modifier.heightIn(min = 48.dp).testTag("debt.history.${debt.id}")) { Text(tx("Ver pagos", "See payments"), color = Dincr.colors.tint) }
             Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                 // A payment on a paid-off debt would record a zero payment: not offered.
                 if ((debt.remainingAmount ?: BigDecimal.ZERO).signum() > 0) TextButton(onPay, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Registrar pago", "Record payment"), color = Dincr.colors.tint) }
@@ -179,6 +184,31 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
             }
         }
     }
+}
+
+/** DEB-07a — the payments recorded in DINCR for one debt, newest first (iOS: `DebtPaymentsSheet`). */
+@Composable
+private fun DebtPaymentsDialog(model: AppModel, debt: Debt, onDismiss: () -> Unit) {
+    val payments = rememberLoad(model, debt.id) { model.api.debtPayments(debt.id) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Cerrar", "Close"), color = Dincr.colors.tint) } },
+        title = { Text(tx("Pagos registrados", "Recorded payments")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                Text(debt.name.orEmpty(), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
+                LoadContent(payments, rows = 2) { list ->
+                    if (list.isEmpty()) androidx.compose.foundation.layout.Box(Modifier.testTag("debt.payments.empty")) {
+                        Caption(tx("Todavía no registraste pagos de esta deuda en DINCR.", "You haven’t recorded payments for this debt in DINCR yet."))
+                    }
+                    else Column(Modifier.testTag("debt.payments.list")) {
+                        list.forEach { payment -> AmountLine(payment.paymentDate?.let(::dateLabel) ?: "—", payment.amount) }
+                    }
+                }
+                Caption(tx("Aparecen los pagos registrados con «Registrar pago».", "Payments recorded with “Record payment” appear here."))
+            }
+        },
+    )
 }
 
 fun debtTypeLabel(type: String?) = when (type) {

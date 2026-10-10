@@ -58,6 +58,14 @@ public struct DebtPaymentResult: Decodable, Sendable, Equatable {
 }
 
 /// A row of `GET /user-product/goals`.
+/// DEB-07a — one payment recorded in DINCR for a debt (`GET /finance/debts/{id}/payments`), newest
+/// first: the date and the amount actually applied. Android: `DebtPayment`.
+public struct DebtPayment: Decodable, Sendable, Equatable, Identifiable {
+    public let id: Int
+    public let paymentDate: String?
+    public let amount: Decimal?
+}
+
 public struct Goal: Decodable, Sendable, Equatable, Identifiable {
     public let id: Int
     public let name: String?

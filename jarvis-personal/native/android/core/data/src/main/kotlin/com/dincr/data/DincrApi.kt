@@ -73,6 +73,8 @@ class DincrApi(private val client: ApiClient) {
     suspend fun createDebt(request: DebtRequest, key: String): Debt = client.send("POST", "/user-product/finance/debts", request.checked(), key)
     suspend fun updateDebt(id: Long, request: DebtRequest, key: String): Debt = client.send("PUT", "/user-product/finance/debts/$id", request.checked(), key)
     suspend fun deleteDebt(id: Long): Acknowledgement = client.send("DELETE", "/user-product/finance/debts/$id")
+    /** DEB-07a — the payments recorded in DINCR for this debt, newest first (read-only). */
+    suspend fun debtPayments(id: Long): List<DebtPayment> = client.get("/user-product/finance/debts/$id/payments")
     suspend fun payDebt(id: Long, amount: java.math.BigDecimal, key: String): DebtPaymentResult =
         client.send("POST", "/user-product/finance/debts/$id/payments", AmountRequest(amount), key)
 
