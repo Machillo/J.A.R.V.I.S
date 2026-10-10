@@ -38,7 +38,8 @@ final class DebtPaymentsUITests: XCTestCase {
         tap("debt.history.31", in: app)
         let list = element("debt.payments.list", in: app)
         XCTAssertTrue(list.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "10.000")).firstMatch.exists,
+        // Amounts are read out ungrouped ("10000 colones"), as every MoneyText.
+        XCTAssertTrue(list.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "10000 colones")).firstMatch.exists,
                       "the amount applied")
         XCTAssertFalse(element("debt.payments.empty", in: app).exists)
     }
