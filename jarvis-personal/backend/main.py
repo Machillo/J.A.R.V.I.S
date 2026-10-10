@@ -29,6 +29,7 @@ from backend.finance.daily_history_routes import router as financial_history_rou
 from backend.finance.investment_center import router as investment_center_router
 from backend.finance.business_center import router as business_center_router
 from backend.auth.current_user import require_owner, reset_current_user, set_current_user
+from backend.auth.legal import acceptance_required, acceptance_required_detail
 from backend.auth.service import authenticate_access_token
 from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
@@ -319,6 +320,25 @@ async def auth_middleware(request: Request, call_next):
             },
             headers={**cors_headers, "X-Request-ID": request_id},
         )
+    # SEC-01: a commercial user acts only after accepting the current Terms and Privacy Policy
+    # (backend/auth/legal.py lists what stays open before it). The Owner is unchanged.
+    try:
+        must_accept = await run_in_threadpool(acceptance_required, user, request.method, request.url.path)
+    except Exception as exc:
+        # Unknown is not "accepted": without an answer the request does not run (the app retries).
+        logger.error("Legal acceptance check failed id=%s error=%s", request_id, _safe_exception_summary(exc))
+        ops.report("auth", "legal_check_unavailable", "error", method=request.method, status=503,
+                   error_class=type(exc).__name__, request_id=request_id)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "No pudimos verificar tu sesión en este momento. Intentá de nuevo."},
+            headers={**cors_headers, "X-Request-ID": request_id, "Retry-After": "2"},
+        )
+    if must_accept:
+        with use_language(language_for_request(request.url.path, request.headers.get("accept-language"))):
+            detail = acceptance_required_detail()
+        return JSONResponse(status_code=403, content={"detail": detail},
+                            headers={**cors_headers, "X-Request-ID": request_id})
     context_token = set_current_user(user)
     idempotency_key = request.headers.get("X-Idempotency-Key", "").strip()
     idempotency_account = str(user.get("account_id") or "")
