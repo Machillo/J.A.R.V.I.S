@@ -404,6 +404,13 @@ public actor FixtureBackend: HTTPTransport {
         case ("POST", "contributions"?):
             savings[index]["saved_amount"] = number((decimal(savings[index]["saved_amount"]) ?? 0) + (decimal(body["amount"]) ?? 0))
             return ok(savings[index])
+        case ("PUT", nil):
+            // Like `update_savings_plan`: every field is replaced; the id stays.
+            var plan = body
+            plan["id"] = planID
+            plan["status"] = body["status"] ?? "active"
+            savings[index] = plan
+            return ok(plan)
         case ("DELETE", nil):
             savings.remove(at: index)
             return ok(["status": "ok", "id": planID])
