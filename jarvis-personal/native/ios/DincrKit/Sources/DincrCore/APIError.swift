@@ -22,6 +22,8 @@ public struct APIError: Error, Sendable, Equatable {
     }
 
     public static let featureUnavailableCode = "feature_temporarily_unavailable"
+    /// The server's legal gate (`auth/legal.py`): the current terms are not accepted yet.
+    public static let legalAcceptanceRequiredCode = "legal_acceptance_required"
 
     public let kind: Kind
     public let status: Int

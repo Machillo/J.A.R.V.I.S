@@ -92,7 +92,10 @@ final class AppModel {
             let latency: Duration = ProcessInfo.processInfo.arguments.contains("-DincrDisableAnimations") ? .milliseconds(50) : .milliseconds(300)
             // `-DincrRefreshFails`: a pull to refresh finds the server unreachable (B17 UI tests).
             let refreshFails = ProcessInfo.processInfo.arguments.contains("-DincrRefreshFails")
-            service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency, identityRefreshFails: refreshFails))
+            // `-DincrLegalLapses`: the terms change while the app is open (SEC-01 UI tests).
+            let legalLapses = ProcessInfo.processInfo.arguments.contains("-DincrLegalLapses")
+            service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency,
+                                                            identityRefreshFails: refreshFails, legalLapses: legalLapses))
         case let .unconfigured(reason):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
@@ -355,6 +358,9 @@ final class AppModel {
             return nil
         case let error as APIError:
             if error.kind == .featureUnavailable { Task { await refreshFlags() } }
+            // SEC-01: the server's legal gate refused the call (the terms changed while the app was
+            // open). Reading the identity again moves the gate to the acceptance screen.
+            if error.code == APIError.legalAcceptanceRequiredCode { Task { await loadIdentity() } }
             return error.message
         default:
             return fallback
