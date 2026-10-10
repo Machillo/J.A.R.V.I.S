@@ -1,7 +1,7 @@
 """Shared test isolation for the backend suite."""
 import pytest
 
-from backend.core import database
+from backend.core import database, write_limit
 
 
 @pytest.fixture(autouse=True)
@@ -10,3 +10,10 @@ def _no_connection_leaks_between_tests():
     database.close_idle_connections()
     yield
     database.close_idle_connections()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_write_limit():
+    """The SEC-12 write window is per process: each test starts with none of the earlier writes."""
+    write_limit.limiter.clear()
+    yield
