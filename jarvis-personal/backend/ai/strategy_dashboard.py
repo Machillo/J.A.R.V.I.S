@@ -13,6 +13,7 @@ from backend.finance.service import get_debts, get_financial_summary, calculate_
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
+from backend.user_product.debt_payments import with_known_payments
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import load_income_baseline
 from backend.user_product.strategy_engine import missing_rates_warning
@@ -1265,12 +1266,12 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
     with get_connection() as conn:
         # Debts as the user stored them (no import repair), active and paid off (for progress).
         debts = [dict(row) for row in conn.execute(
-            """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,interest_rate_known
+            """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,monthly_payment_known,interest_rate,interest_rate_known
                FROM debts WHERE workspace_id=%s ORDER BY id""",
             (workspace_id,),
         ).fetchall()]
-        # Known rates only: None = unknown, never 0% (backend/user_product/debt_rates.py).
-        debts = with_known_rates(debts)
+        # Known rates and payments only: None = unknown, never 0 (debt_rates.py, debt_payments.py).
+        debts = with_known_payments(with_known_rates(debts))
         income_policy = load_income_baseline(conn, account_id=account_id, workspace_id=workspace_id, today=today)
         month = _ledger_totals(conn, workspace_id, month_start, _next_month(month_start))
         recurring = [dict(row) for row in conn.execute(

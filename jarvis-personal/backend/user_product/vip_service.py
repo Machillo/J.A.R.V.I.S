@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
+from backend.user_product.debt_payments import with_known_payments
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import imported_income_by_month, income_baseline
 from backend.user_product.basic_service import (
@@ -102,12 +103,12 @@ def get_vip_command_center() -> dict:
     with get_connection() as conn:
         recurring_ready = _basic_tables_ready(conn, "finva_recurring_items")
         profile = _profile(conn, account_id, workspace_id)
-        # Known rates only (None = unknown, never 0%: debt_rates.py).
-        debts = with_known_rates([dict(row) for row in conn.execute(
-            """SELECT id,name,remaining_amount,total_amount,monthly_payment,interest_rate,interest_rate_known,debt_type,
+        # Known rates and payments only (None = unknown, never 0: debt_rates.py, debt_payments.py).
+        debts = with_known_payments(with_known_rates([dict(row) for row in conn.execute(
+            """SELECT id,name,remaining_amount,total_amount,monthly_payment,monthly_payment_known,interest_rate,interest_rate_known,debt_type,
                       payment_day,next_payment_date FROM debts WHERE workspace_id=%s AND remaining_amount>0 ORDER BY id""",
             (workspace_id,),
-        ).fetchall()])
+        ).fetchall()]))
         goals = [dict(row) for row in conn.execute(
             """SELECT id,name,target_amount,current_amount,target_date,priority FROM financial_goals
                WHERE workspace_id=%s AND status='active' ORDER BY target_date NULLS LAST,id""",

@@ -153,7 +153,7 @@ def test_an_older_client_saving_other_fields_never_confirms_an_unknown_rate(monk
     monkeypatch.setattr(service, "mark_applied", lambda _c: None)
     service.update_user_debt(5, _payload(name="Otro nombre", interest_rate=0))
     update = next(params for sql, params in conn.calls if sql.startswith("UPDATE debts"))
-    assert (update[5], update[6]) == (None, False)
+    assert (update[6], update[7]) == (None, False)  # interest_rate, interest_rate_known (after the monthly payment pair)
 
 
 def test_the_owner_editor_never_confirms_an_unknown_rate_from_a_zero(monkeypatch):
