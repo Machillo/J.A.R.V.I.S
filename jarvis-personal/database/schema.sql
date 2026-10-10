@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS debts (
     interest_rate NUMERIC(8, 4),
     -- TRUE: given/confirmed (0 = real 0%); FALSE: unknown; NULL: historical, not verified (20261006120000).
     interest_rate_known BOOLEAN,
+    -- TRUE: given (0 = real 0); FALSE: unknown, the 0 is a placeholder; NULL: historical, read as stored (20261010120000).
+    monthly_payment_known BOOLEAN,
     term_months INTEGER,
     payment_day INTEGER,
     start_date DATE,
