@@ -74,9 +74,9 @@ def _public_state(row):
         except ValueError:
             trial_end = None
     entitlement_end = trial_end if row["status"] == "trialing" else period_end
-    active = row["status"] in ACTIVE_STATES and (
-        entitlement_end is None or entitlement_end > datetime.now(timezone.utc)
-    )
+    # An unknown end is never "forever": without one the subscription is not active (the same rule as
+    # product_ops.service.has_store_entitlement, which decides access).
+    active = row["status"] in ACTIVE_STATES and entitlement_end is not None and entitlement_end > datetime.now(timezone.utc)
     return {
         "plan": row["plan_code"] if active else "free",
         "entitlement": row["plan_code"] if active else "free",

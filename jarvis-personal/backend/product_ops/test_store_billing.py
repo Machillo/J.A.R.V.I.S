@@ -65,6 +65,17 @@ def test_expired_period_returns_free_even_if_status_was_active():
     assert _public_state(_row(end_delta_days=-1))["entitlement"] == "free"
 
 
+def test_a_subscription_without_a_known_end_is_not_active():
+    # The app's view of the store subscription follows has_store_entitlement (#351): unknown ≠ forever.
+    row = _row()
+    row["current_period_end"] = None
+    assert _public_state(row)["entitlement"] == "free"
+    assert _public_state(row)["plan"] == "free"
+    trial = _row(status="trialing")
+    trial["current_period_end"] = None
+    assert _public_state(trial)["entitlement"] == "free", "a trial without a known end is not active either"
+
+
 def test_expired_and_revoked_return_free():
     assert _public_state(_row(status="expired"))["entitlement"] == "free"
     assert _public_state(_row(status="revoked"))["entitlement"] == "free"
