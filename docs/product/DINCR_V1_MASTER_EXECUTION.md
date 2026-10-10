@@ -78,7 +78,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | SEC-09 | Repeated confirmation of a mail candidate | V | COMPLETED_AND_VERIFIED | `FOR UPDATE` plus `already_reviewed` (`user_product/gmail_service.py:508-531`) | — | — | — | — |
 | SEC-10 | Legal acceptance IP | FBV | PARTIALLY_IMPLEMENTED | `auth/legal.py:35` takes the first `X-Forwarded-For` value, which the client controls | Use the proxy-appended address (needs the Render proxy chain confirmed) | P1 | No | No |
 | SEC-11 | Owner bridge (12-hour session from an API key) | O | IMPLEMENTED_NOT_VERIFIED | `auth/owner_bridge.py:71-91`; checks `allowed_users`, not `accounts.role` | Documented risk; not changed (Owner) | P1 (O) | No | O |
-| SEC-12 | Rate limiting / abuse controls | FBV | NOT_IMPLEMENTED | `docs/operations/observability.md:159` | A per-account limit on write routes (V1-14) | P1 | No | No |
+| SEC-12 | Rate limiting / abuse controls | FBV | IMPLEMENTED_NOT_VERIFIED (#361) | `docs/operations/observability.md:159` | A per-account limit on write routes (V1-14) | P1 | No | No |
 | SEC-13 | Single-owner roles in the database | O | BLOCKED_BY_MIGRATION | PR #319 | Kenneth's authorization after #318 is verified in production | P0 | Yes | Yes |
 | SEC-14 | Web lab restricted to the Owner (K-6) | — | BLOCKED_BY_DECISION | `frontend/README.md`; K-6 | A production config change | P1 | No | Yes |
 
@@ -87,7 +87,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | ID | Function | Plans | State | Evidence | Missing | Pri | Mig | Dec |
 |---|---|---|---|---|---|---|---|---|
 | MOV-01 | Manual entry, edit and delete | FBV | COMPLETED_AND_VERIFIED | `user_product/free_service.py`; iOS `MovementsView.swift`, Android `MovementsScreen.kt` | — | — | — | — |
-| MOV-02 | Type filter faithful to the movement type | FBV | PARTIALLY_IMPLEMENTED | Android classifies debts with a regex (`MovementsScreen.kt:82`); iOS has no Deudas filter | P0.3a/b/c ledger types | P1 | Maybe | No |
+| MOV-02 | Type filter faithful to the movement type | FBV | PARTIALLY_IMPLEMENTED (depends on P0.3a canonical ledger types; not started) | Android classifies debts with a regex (`MovementsScreen.kt:82`); iOS has no Deudas filter | P0.3a/b/c ledger types | P1 | Maybe | No |
 | MOV-03 | Category, account and period filters | FBV | NOT_IMPLEMENTED | Proposal D04 → P5.1 | A backend analysis endpoint | P1 | No | No |
 | MOV-04 | Mail detection (Gmail/Outlook) with confirmation | V | COMPLETED_AND_VERIFIED (code) | `user_product/gmail_service.py`, `microsoft_mail.py`; candidates stay pending until reviewed | Gmail restricted-scope verification + annual CASA (`docs/security/google-oauth-verification.md:240`) | P0 | No | **Yes** (CASA, which plan) |
 | MOV-05 | Validated Costa Rican bank formats | V | PARTIALLY_IMPLEMENTED | Onboarding offers 8 institutions; the parser reads 3 (proposal B3) | Parsers per validated bank, with synthetic fixtures | P0 | No | Yes (bank list) |
@@ -116,7 +116,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | DEB-06 | Extra payment as its own type | FBV | NOT_IMPLEMENTED | — | Payment type or tag | P1 | Maybe | No |
 | DEB-07 | Payment history and reversal | FBV | NOT_IMPLEMENTED | Proposal G12 → P2.2a/b, P2.6 | Ledger of payments | P0 | Yes | No |
 | DEB-08 | Due vs paid (installments never assumed paid) | FBV | COMPLETED_AND_VERIFIED (reads) | #307: reads never apply installments; `apply_due_installments` is an explicit command | K-4 redesign for automation | P1 | Maybe | Yes (K-4) |
-| DEB-09 | Payoff plan / calendar | BV | PARTIALLY_IMPLEMENTED | Endpoint exists with no client (proposal G13) | Client screens | P1 | No | No |
+| DEB-09 | Payoff plan / calendar | BV | PARTIALLY_IMPLEMENTED (waits for #354: the strategy engine reads an unknown payment/balance as 0) | Endpoint exists with no client (proposal G13) | Client screens | P1 | No | No |
 
 ### 3.5 Planning (V1-11)
 
@@ -181,6 +181,8 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | The data export includes the Owner's internal notes on the user's own support tickets | `auth/data_export.py` (`feedback_reports.owner_notes`) | Decision: export them or not |
 | `uq_accounts_primary_email_ci` exists only in `database/schema.sql`, not in `migrations/` | the legacy `users` mapping by email relies on it | Read-only production check |
 | VIP command center timeline adds an unknown debt payment as 0 to its projected balance | `user_product/vip_service.py` timeline | Formula decision (residual of DEB-03) |
+| `calculate_debt_strategies` turns an unknown monthly payment or balance into 0 (`_as_float`) | `finance/strategic_engine.py` | A client for `/vip/debt-strategies` (DEB-09) waits for #354 (DEB-03) and its engine follow-up |
+| A movement has no canonical type (debt payment, transfer…); Android's Deudas filter is a regex | `user_product/free_service.py` `list_free_movements` | MOV-02 waits for P0.3a (canonical ledger types) |
 | Android Hoy was not refreshed by a swipe from the screen root in tests (the B17 test counted the start-up reload) | `PullToRefreshUiTest` | Fixed in the NAT-02/03 PR (swipe on the refresh box) |
 
 ## 4. Blockers that need Kenneth
@@ -223,6 +225,7 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | PLN-07 monthly summary: unknown savings / no goals | `v1/summary-unknown-savings` | #359 | open, ready for review | backend 2,741 (+5; 3 fail on `main`) |
 | NAT-02/03 keep content on failed refresh, Android resume | `v1/nat-02-03-keep-content` | #360 | open, ready for review | iOS DincrKit 322, UI 119 (1 known flake, passes on rerun); Android unit 306, UI 116, 320×640 14; mutations caught on both |
 | BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | (in progress) | code + unit + UI tests; full iOS suite pending | DincrKit StoreModels 5/5; UI 3/3; Android unit 307 (`StoreEntitlementTest` fails on `main`) |
+| SEC-12 per-account write cap (429 + Retry-After) | `v1/sec-12-write-rate-limit` | #361 | open, ready for review | backend 2,746 (+10; 4 app-level fail on `main`) |
 | DEB-07a debt payment history (read-only) | `v1/deb-07a-payment-history` | (in progress) | backend + iOS + Android done; full suites running | backend 2,740 (4 new fail on `main`); Android UI 1/1, mutation caught |
 
 ## 7. How to resume
