@@ -55,11 +55,11 @@ def test_marks_duplicate_and_links_original_candidate():
         _Result(one={"id": 4, "status": "pending", "related_candidate_id": None}),  # root of the match
         _Result(),
     ])
-    result = resolve_candidate(connection, 9)
+    result = resolve_candidate(connection, 9, account_id="account-a", workspace_id="workspace-a")
     assert result == {"status": "duplicate", "related_candidate_id": 4}
     query, params = connection.calls[-1]
     assert "status='duplicate'" in query
-    assert params[-2:] == (4, 9)
+    assert params[-4:] == (4, 9, "account-a", "workspace-a")  # the write is scoped (SEC-06)
 
 
 def test_marks_internal_only_when_two_distinct_confirmed_accounts_match():
@@ -67,12 +67,12 @@ def test_marks_internal_only_when_two_distinct_confirmed_accounts_match():
         _Result(one=_candidate(external_reference=None)), _Result(one=None), _Result(rows=[]),
         _Result(one={"id": 11}), _Result(one={"id": 22}), _Result(),
     ])
-    result = resolve_candidate(connection, 9)
+    result = resolve_candidate(connection, 9, account_id="account-a", workspace_id="workspace-a")
     assert result == {"status": "internal_transfer"}
     query, params = connection.calls[-1]
     assert "transaction_type=CASE" in query
     assert params[1] is True
-    assert params[-2:] == ("confirmed_owned_endpoints", 9)
+    assert params[-4:] == ("confirmed_owned_endpoints", 9, "account-a", "workspace-a")
 
 
 def test_links_one_possible_cross_source_match_without_auto_rejecting():
@@ -84,11 +84,11 @@ def test_links_one_possible_cross_source_match_without_auto_rejecting():
                        "amount": 25000, "currency": "CRC", "original_amount": None, "original_currency": None}]),
         _Result(one=None), _Result(one=None), _Result(),
     ])
-    result = resolve_candidate(connection, 9)
+    result = resolve_candidate(connection, 9, account_id="account-a", workspace_id="workspace-a")
     assert result == {"status": "pending"}
     query, params = connection.calls[-1]
     assert "related_candidate_id=%s" in query
-    assert params[-3:] == (4, "possible_cross_source_match", 9)
+    assert params[-5:] == (4, "possible_cross_source_match", 9, "account-a", "workspace-a")
 
 
 def test_opposite_owned_notifications_pair_with_distinct_accounts_and_close_times():
@@ -134,10 +134,10 @@ def test_resolving_second_bank_notice_links_both_without_financial_transaction()
         _Result(one=candidate), _Result(one=None), _Result(rows=[]), _Result(one={"id": 11}),
         _Result(rows=[other]), _Result(), _Result(),
     ])
-    assert resolve_candidate(connection, 9) == {"status": "internal_transfer"}
+    assert resolve_candidate(connection, 9, account_id="account-a", workspace_id="workspace-a") == {"status": "internal_transfer"}
     query, params = connection.calls[-2]
     assert "is_internal_transfer=%s" in query
-    assert params[-3:] == (10, "paired_owned_transfer", 9)
+    assert params[-5:] == (10, "paired_owned_transfer", 9, "account-a", "workspace-a")
     query, params = connection.calls[-1]
     assert "related_candidate_id=%s" in query
     assert params == (9, 10, "account-a", "workspace-a")
