@@ -217,6 +217,10 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | SEC-01 server-side legal acceptance | `v1/sec-01-legal-gate` | #353 | open, ready for review | backend 2,743 (+7 PG gate tests; 5 fail on `main`) |
 | DEB-03 unknown monthly payment | `v1/deb-03-unknown-monthly-payment` | #354 | open; **PRE-MERGE GATE: migration 20261010120000 applied first + label** | backend 2,748 (+12 PG tests; 7 fail on `main`); iOS kit 322, Android core 306 |
 | SEC-06 candidate scope (defense in depth) | `v1/sec-06-candidate-scope` | #355 | open, ready for review | backend 2,739 (+3 PG tests; the real review path on `main` loads another workspace's candidate) |
+| Store public state needs a known end (follow-up of #351) | `v1/bil-public-state-end` | #356 | open, ready for review | backend 2,737 (+1; fails on `main`) |
+| V1-1 recorded (CLAUDE.md, native RELEASE_IDENTITY/README) | `v1/docs-native-is-official` | #357 | open, ready for review | engineering guards 5/5 |
+| PLN-01 guided budget never proposes from an unknown income | `v1/pln-budget-unknown-income` | #358 | open, ready for review | +7 tests (4 fail on `main`; the 3 known cases pass on both) |
+| PLN-07 monthly summary: unknown savings / no goals | `v1/summary-unknown-savings` | #359 | open, ready for review | backend 2,741 (+5; 3 fail on `main`) |
 | NAT-02/03 keep content on failed refresh, Android resume | `v1/nat-02-03-keep-content` | (in progress) | tests passing; full iOS suite running | Android KeepContent 3/3 + B17 5/5 (one false positive fixed); iOS 2/2 + B17 4/4; mutations caught on both |
 | BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | (in progress) | code + unit tests; UI tests pending | DincrKit StoreModels 5/5; Android `isLive` parity fix |
 
