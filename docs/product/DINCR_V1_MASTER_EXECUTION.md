@@ -224,11 +224,11 @@ Approved by Kenneth on 2026-10-09 (V1 closing brief) and in the V1 master prompt
 | PLN-01 guided budget never proposes from an unknown income | `v1/pln-budget-unknown-income` | #358 | open, ready for review | +7 tests (4 fail on `main`; the 3 known cases pass on both) |
 | PLN-07 monthly summary: unknown savings / no goals | `v1/summary-unknown-savings` | #359 | open, ready for review | backend 2,741 (+5; 3 fail on `main`) |
 | NAT-02/03 keep content on failed refresh, Android resume | `v1/nat-02-03-keep-content` | #360 | open, ready for review | iOS DincrKit 322, UI 119 (1 known flake, passes on rerun); Android unit 306, UI 116, 320×640 14; mutations caught on both |
-| BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | #362 | open; sandbox purchase needs physical validation | DincrKit 327; Android unit 307 (`StoreEntitlementTest` fails on `main`); iOS full UI 125/128, the 3 failures happened while the Mac slept (controlled rerun pending) |
+| BIL-03 StoreKit (iOS) | `v1/bil-03-storekit` | #362 | open; sandbox purchase needs physical validation | DincrKit 327; Android unit 307 (`StoreEntitlementTest` fails on `main`); iOS full UI 125/128 overnight; the 3 sleep-time failures pass in a controlled rerun; StoreSubscription 3/3 |
 | SEC-12 per-account write cap (429 + Retry-After) | `v1/sec-12-write-rate-limit` | #361 | open, ready for review | backend 2,746 (+10; 4 app-level fail on `main`) |
-| DEB-07a debt payment history (read-only) | `v1/deb-07a-payment-history` | #363 | open, ready for review | backend 2,740 (4 new fail on `main`); Android unit 308, UI 114, 320×640; mutation caught; iOS targeted run pending |
-| SEC-01 apps: reload identity on `legal_acceptance_required` | `v1/sec-01-native-legal-reload` | #364 | open, ready for review | Android unit 309, UI 114, mutation caught; iOS kit 3/3, targeted UI + mutation pending |
-| PLN-04 iOS savings-plan edit | `v1/pln-04-ios-savings-edit` | #365 | open, ready for review | DincrKit 2/2; iOS targeted UI + mutation pending |
+| DEB-07a debt payment history (read-only) | `v1/deb-07a-payment-history` | #363 | open, ready for review | backend 2,740 (4 new fail on `main`); Android unit 308, UI 114, 320×640; mutation caught; iOS kit 324, DebtPayments UI pass |
+| SEC-01 apps: reload identity on `legal_acceptance_required` | `v1/sec-01-native-legal-reload` | #364 | open, ready for review | Android unit 309, UI 114; iOS kit 325, LegalGate UI pass; mutations caught on both |
+| PLN-04 iOS savings-plan edit | `v1/pln-04-ios-savings-edit` | #365 | open, ready for review | DincrKit 324; SavingsPlanEdit UI pass; mutation caught |
 
 ## 7. How to resume
 
