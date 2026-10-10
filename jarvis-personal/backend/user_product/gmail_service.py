@@ -181,10 +181,11 @@ def _has_active_vip_access(conn, account_id: str) -> bool:
 
     Interactive routes enforce the same entitlement through ``require_feature``.
     This database-level check also protects OAuth callbacks, Pub/Sub delivery and
-    maintenance jobs, where no authenticated user context exists.
+    maintenance jobs, where no authenticated user context exists. As there, a paid
+    self-service VIP counts only with a live App Store / Google Play subscription.
     """
     row = conn.execute(
-        """SELECT 1
+        """SELECT s.access_source
            FROM account_subscriptions s
            JOIN plans p ON p.id=s.plan_id
            WHERE s.account_id=%s
@@ -197,7 +198,13 @@ def _has_active_vip_access(conn, account_id: str) -> bool:
            LIMIT 1""",
         (account_id,),
     ).fetchone()
-    return bool(row)
+    if not row:
+        return False
+    if row.get("access_source") == "self_service":
+        from backend.product_ops.service import has_store_entitlement
+
+        return has_store_entitlement(conn, account_id, "vip")
+    return True
 
 
 def _google_config() -> tuple[str, str, str]:
@@ -1356,7 +1363,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         conn.commit()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT c.id,c.granted_scopes
+            """SELECT c.id,c.account_id,c.granted_scopes
                FROM finva_gmail_connections c
                JOIN account_subscriptions s ON s.account_id=c.account_id
                JOIN plans p ON p.id=s.plan_id
@@ -1369,6 +1376,8 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
                  )
                ORDER BY c.id"""
         ).fetchall()
+        # The same entitlement as every other path (a paid VIP needs a live store subscription).
+        rows = [row for row in rows if _has_active_vip_access(conn, str(row["account_id"]))]
     completed = 0
     reconnect = 0
     failed = 0
@@ -1416,7 +1425,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
     email = str(notification.get("emailAddress") or "").lower()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT c.id
+            """SELECT c.id,c.account_id
                FROM finva_gmail_connections c
                JOIN account_subscriptions s ON s.account_id=c.account_id
                JOIN plans p ON p.id=s.plan_id
@@ -1430,6 +1439,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
                  )""",
             (email, GMAIL_SCOPE),
         ).fetchall()
+        rows = [row for row in rows if _has_active_vip_access(conn, str(row["account_id"]))]
     if not rows:
         return {"status": "ignored"}
     completed = 0

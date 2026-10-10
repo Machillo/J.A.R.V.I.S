@@ -495,6 +495,7 @@ def has_store_entitlement(conn, account_id: str, plan_code: str | None = None) -
     Live means trialing until ``trial_ends_at``, or active / in grace until
     ``current_period_end``. The store verification writer (``store_state``) stores the
     grace end in ``current_period_end`` while in grace, so this stays the only reader.
+    A subscription without a known end is not live: an unknown end is never "forever".
     """
     if not tables_exist(conn, ["store_subscriptions"]):
         return False
@@ -502,7 +503,7 @@ def has_store_entitlement(conn, account_id: str, plan_code: str | None = None) -
         """SELECT 1 FROM store_subscriptions
            WHERE account_id=%s AND provider = ANY(%s::text[]) AND status = ANY(%s::text[])
              AND (%s::text IS NULL OR plan_code=%s)
-             AND COALESCE(CASE WHEN status='trialing' THEN trial_ends_at END, current_period_end, 'infinity'::timestamptz) > NOW()""",
+             AND COALESCE(CASE WHEN status='trialing' THEN trial_ends_at END, current_period_end) > NOW()""",
         (account_id, list(ENTITLING_STORES), list(STORE_ENTITLED_STATES), plan_code, plan_code),
     ).fetchone())
 
