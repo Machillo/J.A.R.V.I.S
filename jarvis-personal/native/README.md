@@ -17,11 +17,14 @@ in `docs/native/PARITY_MATRIX.md`.
   tested in CI on a macOS runner (unit tests and XCUITest in a simulator); it has not run on a
   device yet (MAC/DEVICE REQUIRED list in the PR and `RELEASE_IDENTITY.md`).
 
-## Status: RC, not yet the store app
+## Status: the official store apps (V1-1), release still pending
 
-- DINCR in the stores is still the **Capacitor app** (`jarvis-personal/frontend`, native shells
-  `frontend/ios-dincr` and `frontend/android`). The native apps never modify it.
-- Taking the store identity is a pending human decision: see [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md)
+- **Decided:** these native apps are DINCR's official store apps; Capacitor is not the store client
+  (V1-1, `docs/product/DINCR_V1_MASTER_EXECUTION.md`).
+- Until the native release ships, the build in the stores (if any) is still the **Capacitor app**
+  (`jarvis-personal/frontend`, native shells `frontend/ios-dincr` and `frontend/android`). The native
+  apps never modify it.
+- Taking the store identity still needs the release steps in [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md)
   (signing, versionCode, mail return URL, billing, iOS 15 vs 17, session not migrated).
 - Android has two flavors: `dincr` (`com.dincr.app`, the redirect the Capacitor app already uses)
   and `nativedev` (`com.dincr.app.nativedev`, side-by-side, fixtures or a development project).
