@@ -9,7 +9,18 @@ import kotlinx.serialization.Serializable
 // identity reads is [StrategyContract] (CLAUDE.md §4.A).
 
 @Serializable
-data class CategoryTotal(val category: String? = null, val amount: Money? = null)
+data class CategoryTotal(val category: String? = null, val amount: Money? = null) {
+    /** Rows split into the ones with a known amount (drawn) and the ones without (listed as "sin dato"). */
+    data class Split(val known: List<Pair<String, Money>>, val unknown: List<String>)
+
+    companion object {
+        /** An unknown amount is never drawn as a 0 bar; a row without a name is "Sin categoría". */
+        fun split(rows: List<CategoryTotal>, language: AppLanguage = AppLanguage.current()): Split {
+            fun label(row: CategoryTotal) = row.category?.takeIf { it.isNotEmpty() } ?: language.pick("Sin categoría", "Uncategorized")
+            return Split(rows.mapNotNull { row -> row.amount?.let { label(row) to it } }, rows.filter { it.amount == null }.map(::label))
+        }
+    }
+}
 
 /** `GET /user-product/free/monthly-summary?period=YYYY-MM`. */
 @Serializable

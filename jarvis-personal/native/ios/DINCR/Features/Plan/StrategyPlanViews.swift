@@ -524,7 +524,8 @@ private struct DashboardDistribution: View {
                         }
                         MoneyText(item.amount, font: DincrFont.amount)
                     }
-                    DincrProgressBar(fraction: (item.percentage ?? 0) / 100)
+                    // An unknown share draws no bar (as Android), never an empty one.
+                    if let percentage = item.percentage { DincrProgressBar(fraction: percentage / 100) }
                 }
                 .accessibilityElement(children: .combine)
             }

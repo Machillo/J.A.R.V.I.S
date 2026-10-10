@@ -72,11 +72,19 @@ public struct Goal: Decodable, Sendable, Equatable, Identifiable {
         self.targetDate = targetDate; self.priority = priority; self.status = status
     }
 
-    /// What is left to reach the target; never negative. Nil when the target is unknown.
+    /// What is left to reach the target; never negative. Nil when the target or the amount saved is
+    /// unknown: an unknown amount saved is not 0 saved. Android: `Goal.remaining`.
     public var remaining: Decimal? {
-        guard let targetAmount else { return nil }
-        return max(0, targetAmount - (currentAmount ?? 0))
+        guard let targetAmount, let currentAmount else { return nil }
+        return max(0, targetAmount - currentAmount)
     }
+
+    /// Saved / target, only when both are known and the target is positive (`ProgressValue`).
+    public var progressFraction: Double? { ProgressValue(current: currentAmount, target: targetAmount).fraction }
+
+    /// A contribution is offered until the goal is completed or reached; an unknown remainder does
+    /// not hide it (the backend caps a contribution at the goal).
+    public var canContribute: Bool { status != "completed" && (remaining.map { $0 > 0 } ?? true) }
 }
 
 /// `POST /goals/{id}/contributions`.
@@ -253,6 +261,13 @@ public struct Budget: Decodable, Sendable, Equatable {
         public let spent: Decimal?
         public var id: String { category }
         public init(category: String, monthlyLimit: Decimal?, spent: Decimal?) { self.category = category; self.monthlyLimit = monthlyLimit; self.spent = spent }
+
+        /// Spent / limit, only when both are known and the limit is positive: an unknown amount is
+        /// never drawn as an empty or a full bar. Android: `percentOf(spent, monthlyLimit)`.
+        public var usage: ProgressValue? {
+            let value = ProgressValue(current: spent, target: monthlyLimit)
+            return value.fraction == nil ? nil : value
+        }
     }
     public let items: [Item]?
     public let totalBudgeted: Decimal?

@@ -41,6 +41,7 @@ import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.BudgetLimit
 import com.dincr.data.BudgetUpdate
+import com.dincr.data.CategoryTotal
 import com.dincr.data.IdempotencyKey
 import com.dincr.data.OpsFlag
 import com.dincr.data.RecurringItem
@@ -139,7 +140,8 @@ fun BudgetScreen(model: AppModel, nav: Navigator) {
     }) {
         LoadContent(budget) { b ->
             if (!editing) {
-                val spent = b.items.sumOf { it.spent ?: BigDecimal.ZERO }
+                // Null (shown "—") when a category's amount spent is unknown: never added as 0.
+                val spent = b.spentTotal
                 DincrCard {
                     Column {
                         AmountLine(tx("Gastado este mes", "Spent this month"), spent, emphasize = true)
@@ -367,7 +369,7 @@ fun ReportsScreen(model: AppModel, nav: Navigator) {
                 }
             }
             if (r.categories.isNotEmpty()) Section(tx("Gastos por categoría", "Expenses by category")) {
-                CategoryBars(r.categories.map { (it.category ?: tx("Sin categoría", "Uncategorized")) to (it.amount ?: BigDecimal.ZERO) })
+                KnownCategoryBars(CategoryTotal.split(r.categories))
             }
         }
     }

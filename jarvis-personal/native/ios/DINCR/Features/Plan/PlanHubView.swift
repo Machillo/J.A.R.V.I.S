@@ -203,7 +203,9 @@ struct AmountSheet: View {
             let remaining = goal.remaining.map { format.string($0) } ?? "—"
             return tx("Faltan \(remaining). Un aporte mayor se ajusta a la meta.", "\(remaining) to go. A larger amount is capped at the goal.")
         case .save(let plan):
-            return tx("Ahorrado: \(format.string(plan.savedAmount ?? 0)).", "Saved: \(format.string(plan.savedAmount ?? 0)).")
+            // An unknown amount saved is said so, never shown as ₡0.
+            let saved = plan.savedAmount.map { format.string($0) } ?? "—"
+            return tx("Ahorrado: \(saved).", "Saved: \(saved).")
         }
     }
 

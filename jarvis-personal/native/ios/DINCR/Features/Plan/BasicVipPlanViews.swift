@@ -46,20 +46,22 @@ private struct BudgetContent: View {
                            message: tx("Definí cuánto querés gastar por categoría y DINCR te avisa cuando te acercás.", "Set how much you want to spend per category and DINCR tells you when you get close.")) { EmptyView() }
         }
         ForEach(items) { item in
-            let limit = item.monthlyLimit ?? 0
-            let spent = item.spent ?? 0
+            // An unknown limit or amount spent shows "—" and draws no bar: never ₡0 or an empty bar.
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack {
                     Text(CategoryStyle.label(item.category)).font(DincrFont.body.weight(.semibold))
                     Spacer()
-                    MoneyText(spent, font: DincrFont.bodySmall.monospacedDigit())
+                    MoneyText(item.spent, font: DincrFont.bodySmall.monospacedDigit())
                     Text("/").foregroundStyle(DincrColor.textMuted)
-                    MoneyText(limit, font: DincrFont.bodySmall.monospacedDigit())
+                    MoneyText(item.monthlyLimit, font: DincrFont.bodySmall.monospacedDigit())
                 }
                 .accessibilityElement(children: .combine)
-                DincrProgressBar(fraction: limit > 0 ? NSDecimalNumber(decimal: spent / limit).doubleValue : 0, isOver: spent > limit && limit > 0)
-                if spent > limit && limit > 0 {
-                    Text(tx("Pasaste el límite", "Over the limit")).font(DincrFont.caption).foregroundStyle(DincrColor.negative)
+                if let usage = item.usage, let fraction = usage.fraction {
+                    DincrProgressBar(fraction: fraction, isOver: usage.isOver)
+                        .accessibilityIdentifier("budget.usage.\(item.category)")
+                    if usage.isOver {
+                        Text(tx("Pasaste el límite", "Over the limit")).font(DincrFont.caption).foregroundStyle(DincrColor.negative)
+                    }
                 }
             }
             .dincrCard()

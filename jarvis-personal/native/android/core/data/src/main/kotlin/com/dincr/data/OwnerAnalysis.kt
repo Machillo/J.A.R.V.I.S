@@ -46,6 +46,16 @@ data class TransactionAnalysis(
 
     @Serializable
     data class MonthTotal(val month: String? = null, val total: Money? = null)
+
+    /** The last [count] months with both income and expenses known (a month is never drawn as 0). iOS: `flowMonths`. */
+    fun flowMonths(count: Int = 6): List<MonthTotals> =
+        monthlyFlow.mapNotNull { point ->
+            val month = point.month?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            MonthTotals(month, point.income ?: return@mapNotNull null, point.expenses ?: return@mapNotNull null, balance = point.monthlyBalance)
+        }.takeLast(count)
+
+    /** The last [count] months whose expenses are known. iOS: `OwnerAnalysisView` filters the same way. */
+    fun knownExpensesByMonth(count: Int): List<MonthTotal> = expensesByMonth.filter { !it.month.isNullOrEmpty() && it.total != null }.takeLast(count)
 }
 
 /** `GET /finance/net-worth` (`finance/service.py get_net_worth_report`). */
