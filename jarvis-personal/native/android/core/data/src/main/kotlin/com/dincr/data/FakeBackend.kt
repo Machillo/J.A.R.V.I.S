@@ -45,6 +45,8 @@ class FakeBackend(
     private var profile = sampleProfile(plan)
     private val movements = mutableListOf<Movement>()
     private val debts = mutableListOf<Debt>()
+    /** DEB-07a: the payments recorded per debt in this session (newest last). */
+    private val debtPayments = mutableMapOf<Long, MutableList<DebtPayment>>()
     private val goals = mutableListOf<Goal>()
     private val savings = mutableListOf<SavingsPlan>()
     private val recurring = mutableListOf<RecurringItem>()
@@ -305,8 +307,11 @@ class FakeBackend(
                 val index = debts.indexOfFirst { it.id == idAt(3) }
                 if (index < 0) return error(404, "Deuda no encontrada.")
                 val remaining = debts[index].remainingAmount ?: BigDecimal.ZERO
+                if (method == "GET") return ok(debtPayments[debts[index].id].orEmpty().reversed())
                 val paid = (money("amount") ?: BigDecimal.ZERO).min(remaining)
                 debts[index] = debts[index].copy(remainingAmount = remaining - paid)
+                // As the backend: each payment leaves a record the history lists (DEB-07a).
+                debtPayments.getOrPut(debts[index].id) { mutableListOf() }.add(DebtPayment(id(), today.toString(), paid))
                 ok("""{"status":"OK","debt_id":${debts[index].id},"payment_amount":$paid,"new_remaining_amount":${remaining - paid}}""")
             }
 

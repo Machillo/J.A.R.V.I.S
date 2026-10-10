@@ -61,6 +61,8 @@ public actor FixtureBackend: HTTPTransport {
     private var jarvisAsksGoalName = false
     private var jarvisClarifying = false
     public private(set) var requests: [URLRequest] = []
+    /// DEB-07a: the payments recorded per debt in this session (newest last).
+    private var debtPayments: [Int: [[String: Any]]] = [:]
     /// B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server.
     let identityRefreshFails: Bool
     private var identityReads = 0
@@ -364,7 +366,11 @@ public actor FixtureBackend: HTTPTransport {
             let remaining = decimal(debts[index]["remaining_amount"]) ?? 0
             let paid = min(decimal(body["amount"]) ?? 0, remaining)
             debts[index]["remaining_amount"] = number(remaining - paid)
+            // As the backend: each payment leaves a record the history lists (DEB-07a).
+            debtPayments[debtID, default: []].append(["id": nextId(), "payment_date": day(0), "amount": number(paid)])
             return ok(["status": "OK", "debt_id": debtID, "payment_amount": number(paid), "new_remaining_amount": number(remaining - paid)])
+        case ("GET", "payments"?):
+            return ok(Array((debtPayments[debtID] ?? []).reversed()))
         case ("DELETE", nil):
             debts.remove(at: index)
             return ok(["status": "ok", "id": debtID])
