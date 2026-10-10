@@ -67,10 +67,19 @@ def _profile(conn, account_id: str, workspace_id: str) -> dict:
     return dict(row) if row else {}
 
 
-def _estimated_income(profile: dict) -> float:
+def _estimated_income(profile: dict) -> float | None:
+    """The declared monthly income, or None when it is unknown (no profile, or a missing figure).
+
+    A declared 0 is a known 0. Unknown is never 0: a budget proposed from an unknown income would
+    present ₡0 limits as if they were DINCR's advice.
+    """
     if profile.get("income_type") == "fixed":
-        return _money(profile.get("fixed_monthly_salary"))
-    return round(_money(profile.get("hourly_rate")) * _money(profile.get("hours_per_day")) * _money(profile.get("work_days_per_week")) * 52 / 12, 2)
+        salary = profile.get("fixed_monthly_salary")
+        return None if salary is None else _money(salary)
+    parts = [profile.get("hourly_rate"), profile.get("hours_per_day"), profile.get("work_days_per_week")]
+    if not profile or any(part is None for part in parts):
+        return None
+    return round(_money(parts[0]) * _money(parts[1]) * _money(parts[2]) * 52 / 12, 2)
 
 
 def _ledger_totals(conn, workspace_id: str, start: date, end: date) -> dict:
@@ -145,19 +154,26 @@ def get_guided_budget() -> dict:
             SELECT category,amount FROM expenses WHERE workspace_id=%s AND created_at >= %s AND created_at < %s
             UNION ALL SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date::date >= %s AND transaction_date::date < %s
         ) q GROUP BY category""",(workspace_id,current,_next_month(current),workspace_id,current,_next_month(current))).fetchall()
-    income += recurring_income
+    # Unknown income (nothing declared and no recurring income) stays unknown: no amount available and
+    # no proposed limits, never ₡0. The user's own limits are shown as saved.
+    if income is None and recurring_income == 0:
+        income = None
+    else:
+        income = (income or 0) + recurring_income
     fixed = debts + recurring_expenses
-    distributable = max(income-fixed,0)
+    distributable = None if income is None else max(income-fixed,0)
     proposed = [
-        {"category":"Comida","monthly_limit":round(distributable*.45,2)},
-        {"category":"Transporte","monthly_limit":round(distributable*.20,2)},
-        {"category":"Personal","monthly_limit":round(distributable*.15,2)},
-        {"category":"Ahorro y metas","monthly_limit":round(distributable*.15,2)},
-        {"category":"Otros","monthly_limit":round(distributable*.05,2)},
+        {"category":category,"monthly_limit":None if distributable is None else round(distributable*share,2)}
+        for category, share in (("Comida",.45),("Transporte",.20),("Personal",.15),("Ahorro y metas",.15),("Otros",.05))
     ]
     chosen = [dict(row) for row in items] or proposed
     spent = {row["category"]:_money(row["amount"]) for row in actual}
-    return {"income":income,"debt_minimums":debts,"recurring_expenses":recurring_expenses,"available_for_categories":round(distributable,2),"is_proposal":not bool(items),"items":[{**row,"spent":spent.get(row["category"],0),"remaining":round(_money(row["monthly_limit"])-spent.get(row["category"],0),2)} for row in chosen],"total_budgeted":round(sum(_money(row["monthly_limit"]) for row in chosen),2)}
+    limits = [row["monthly_limit"] for row in chosen]
+    return {"income":income,"debt_minimums":debts,"recurring_expenses":recurring_expenses,
+            "available_for_categories":None if distributable is None else round(distributable,2),"is_proposal":not bool(items),
+            "items":[{**row,"spent":spent.get(row["category"],0),
+                      "remaining":None if row["monthly_limit"] is None else round(_money(row["monthly_limit"])-spent.get(row["category"],0),2)} for row in chosen],
+            "total_budgeted":None if any(limit is None for limit in limits) else round(sum(_money(limit) for limit in limits),2)}
 
 
 def save_guided_budget(payload) -> dict:
