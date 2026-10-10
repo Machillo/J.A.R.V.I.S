@@ -663,8 +663,10 @@ def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outc
 
     from backend.user_product import gmail_service
 
-    rows = [{"id": index + 1, "granted_scopes": []} for index in range(len(outcomes))]
+    rows = [{"id": index + 1, "account_id": f"account-{index + 1}", "granted_scopes": []} for index in range(len(outcomes))]
     monkeypatch.setenv("FINVA_GMAIL_CRON_SECRET", "cron-secret-value")
+    # Entitlement has its own PostgreSQL tests (test_subscription_end_required_pg); here every row is entitled.
+    monkeypatch.setattr(gmail_service, "_has_active_vip_access", lambda conn, account_id: True)
     monkeypatch.setattr(gmail_service, "get_connection", lambda: _MaintenanceConn(rows))
     monkeypatch.setattr(gmail_service.mail_oauth, "discard_stale_flows", lambda conn: None)
     monkeypatch.setattr(gmail_service, "end_unentitled_mail_connections", lambda conn: 0)

@@ -133,8 +133,9 @@ class FakeConnection:
             assert vault_owner.get(params[0], params[1]) == params[1], "a token deleted on behalf of another account"
             vault.pop(params[0], None)
             return self._rows([])
-        if q.startswith("SELECT 1 FROM account_subscriptions"):
-            return self._rows([{"allowed": 1}] if params[0] in self.db.vip else [])
+        if q.startswith("SELECT s.access_source FROM account_subscriptions"):
+            # A VIP here holds a grant that is not a store subscription (the store path has its own PG tests).
+            return self._rows([{"access_source": "courtesy"}] if params[0] in self.db.vip else [])
         if q.startswith("SELECT id,account_id,status,refresh_token_secret_id,mailbox_key,mailbox_email FROM finva_gmail_connections WHERE status<>'disabled'"):
             account, workspace, key, emails, display, scope = params
             return self._rows(c for c in sorted(connections.values(), key=lambda c: c["id"])
