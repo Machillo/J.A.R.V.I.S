@@ -38,7 +38,7 @@ from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.mail_sync_analytics import observe_mail_sync
 from backend.user_product.legacy_owner_mail import legacy_transaction_for_message, mark_legacy_duplicate
-from backend.user_product import mail_oauth
+from backend.user_product import mail_oauth, owner_mail_automation
 from backend.user_product.mail_copy import localized_parse_reason
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
@@ -404,11 +404,12 @@ def list_gmail_emails(
 
 def _create_candidate_transaction(
     conn, candidate: dict[str, Any], values: dict[str, Any], money: dict[str, Any], *, owner: bool = False,
+    note: str | None = None,
 ) -> int:
     # `money` comes from candidate_currency.transaction_amounts: never the reviewed amount as is.
     category = normalize_category(values["category"], values["transaction_type"], owner=owner)
     source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
-    note = (
+    note = note or (
         "Confirmado por el usuario desde un estado de cuenta."
         if candidate.get("source_type") == "statement"
         else "Confirmado por el usuario desde un correo bancario."
@@ -894,6 +895,11 @@ def _insert_finva_candidate(
         conn, workspace_id=str(connection["workspace_id"]), provider_message_id=gmail_message_id,
     ):
         resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution)
+    if resolution.get("status") == "pending":
+        # Owner only (stored records): the learned rules may save the movement (owner_mail_automation).
+        owner = owner_account_context(conn, connection["account_id"], connection["workspace_id"])
+        if owner and owner_mail_automation.auto_save(conn, candidate_id):
+            resolution = {**resolution, "status": "auto_saved"}
     return resolution
 
 
@@ -1193,15 +1199,21 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100, t
 
 def _run_sync_connection(connection_id: int, service=None, max_results: int = 100) -> dict[str, Any]:
     connection, token = _connection_with_token(connection_id)
+    # The Owner reads only the current month and runs no history scan (owner_mail_automation).
+    with get_connection() as conn:
+        owner = owner_account_context(conn, connection.get("account_id"), connection.get("workspace_id"))
     try:
         service = service or _credentials(token)
-        initial_sync = not connection.get("initial_scan_completed_at")
+        initial_sync = not owner and not connection.get("initial_scan_completed_at")
         next_initial_page = None
         if initial_sync:
             financial_messages, next_initial_page = _list_message_page(
                 service, _initial_scan_query(_connection_import_since(connection)),
                 page_token=connection.get("initial_scan_page_token"), limit=50,
             )
+        elif owner:
+            since = owner_mail_automation.window_since(connection, _connection_import_since(connection))
+            financial_messages = _list_message_refs(service, _initial_scan_query(since), max_results)
         else:
             financial_messages = _list_message_refs(service, _recent_query(connection), max_results)
         payroll_messages = _list_message_refs(service, _aguinaldo_gmail_query(), 100)

@@ -23,7 +23,8 @@ from fastapi.responses import RedirectResponse
 
 from backend.core.database import get_connection
 from backend.email_monitor.gmail_content import plain_text_from_html
-from backend.user_product import mail_oauth
+from backend.finance.category_catalog import owner_account_context
+from backend.user_product import mail_oauth, owner_mail_automation
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
     FINVA_QUERY, _connection_import_since, _has_active_vip_access, _initial_scan_scope,
@@ -360,12 +361,17 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
         if not _has_active_vip_access(conn, str(connection["account_id"])):
             raise HTTPException(status_code=403, detail="La lectura de correo requiere VIP.")
         token = _vault_read(conn, str(connection["refresh_token_secret_id"]), str(connection["account_id"]))
+        # The Owner reads only the current month and runs no history scan (owner_mail_automation).
+        owner = owner_account_context(conn, connection.get("account_id"), connection.get("workspace_id"))
     connection = dict(connection)
     access_token = _refresh(connection, token)
-    initial = not connection.get("initial_scan_completed_at")
+    initial = not owner and not connection.get("initial_scan_completed_at")
     chosen = _connection_import_since(connection)
-    # Later syncs keep the recent window but never reach before the chosen date.
-    since = chosen if initial else max(chosen, date.today() - timedelta(days=45))
+    if owner:
+        since = owner_mail_automation.window_since(connection, chosen)
+    else:
+        # Later syncs keep the recent window but never reach before the chosen date.
+        since = chosen if initial else max(chosen, date.today() - timedelta(days=45))
     results = []
     page = connection.get("initial_scan_page_token") if initial else None
     max_pages = 1 if initial else 10
@@ -407,7 +413,9 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
                  initial_scan_completed_at=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
                  updated_at=NOW() WHERE id=%s AND status<>'disabled'""",
             # A reconnection that widened the history while this sync ran keeps its reset.
-            (connection.get("import_since"), page if initial else None, initial and not page,
+            # The Owner runs no history scan: its stored cursor is kept as it is.
+            (connection.get("import_since"),
+             connection.get("initial_scan_page_token") if owner else (page if initial else None), initial and not page,
              connection.get("import_since"), connection_id),
         )
         conn.commit()
