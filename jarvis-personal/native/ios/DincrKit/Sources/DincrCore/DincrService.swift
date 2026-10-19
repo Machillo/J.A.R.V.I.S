@@ -29,6 +29,21 @@ public struct DincrService: Sendable {
 
     public func billingCatalog() async throws -> BillingCatalog { try await client.get("/product-ops/billing/catalog") }
 
+    // App Store subscriptions (BIL-03, `StoreModels.swift`). The backend answers 503 to all of them
+    // while store verification is switched off.
+    public func storeCatalog() async throws -> StoreCatalog { try await client.get("/product-ops/billing/store/catalog") }
+
+    public func storeEntitlement() async throws -> StoreEntitlement { try await client.get("/product-ops/billing/store/entitlement") }
+
+    public func storeCustomerToken() async throws -> StoreCustomerToken {
+        try await client.send("POST", "/product-ops/billing/store/customer-token")
+    }
+
+    /// Sends the transaction as Apple signed it (JWS); the backend verifies the signature.
+    public func verifyAppleTransaction(signed: String) async throws -> StoreVerification {
+        try await client.send("POST", "/product-ops/billing/store/apple/transactions", body: AppleTransactionRequest(signedTransaction: signed))
+    }
+
     public func choosePlan(_ request: PlanChangeRequest) async throws -> PlanChangeResult {
         try await client.send("POST", "/auth/plan", body: request)
     }

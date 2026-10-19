@@ -64,6 +64,9 @@ public actor FixtureBackend: HTTPTransport {
     /// B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server.
     let identityRefreshFails: Bool
     private var identityReads = 0
+    /// BIL-03 UI tests: the `store_billing` switch is on, and the store routes answer as the backend
+    /// does with store verification enabled (catalog, entitlement, customer token).
+    let storeBillingOn: Bool
 
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
     /// app still learns the role only from `/auth/me`, exactly as with the real backend.
@@ -74,9 +77,10 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
-                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false) {
+                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, storeBillingOn: Bool = false) {
         self.scenario = scenario
         self.identityRefreshFails = identityRefreshFails
+        self.storeBillingOn = storeBillingOn
         self.latency = latency
         self.language = language
         // STORE images must not depend on the capture day.
@@ -231,7 +235,16 @@ public actor FixtureBackend: HTTPTransport {
             profile["subscription"] = ["plan": "free", "plan_name": "Free", "status": "active", "access_source": "self_service"]
             return ok(["status": "ok", "plan": "free", "profile": profile])
         // Operations
-        case ("GET", "/product-ops/feature-flags"): return ok(["flags": OpsFlag.allCases.map { ["flag_key": $0.rawValue, "enabled": $0 != .storeBilling] }])
+        case ("GET", "/product-ops/feature-flags"): return ok(["flags": OpsFlag.allCases.map { ["flag_key": $0.rawValue, "enabled": $0 != .storeBilling || storeBillingOn] }])
+        // BIL-03: the store routes as the backend answers them (store_billing.store_catalog and entitlement).
+        // The product ids are the backend's defaults; prices come only from the store.
+        case ("GET", "/product-ops/billing/store/catalog"):
+            return ok(["currency": "CRC", "plans": ["basic", "vip"].map { ["code": $0, "monthly": ["product_id": "finva.\($0).monthly"],
+                                                                                 "annual": ["product_id": "finva.\($0).annual"]] }])
+        case ("GET", "/product-ops/billing/store/entitlement"):
+            return ok(["plan": "free", "entitlement": "free", "status": "free", "provider": NSNull()])
+        case ("POST", "/product-ops/billing/store/customer-token"):
+            return ok(["token": "6f1c2b9e-0d4a-4f7e-9a51-2c8d7e3b4a10"])
         case ("GET", "/product-ops/health"): return ok(["status": "operational", "active_incidents": 0])
         case ("GET", "/product-ops/release-policy"): return ok(["platform": "ios", "status": "current", "required": false, "active": false])
         case ("GET", "/product-ops/feedback"): return ok(tickets)
