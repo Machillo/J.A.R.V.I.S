@@ -1197,6 +1197,42 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100, t
     return observe_mail_sync("gmail", trigger, lambda: _run_sync_connection(connection_id, service, max_results))
 
 
+def already_processed(connection_id: int, message_ids: list[str]) -> set[str]:
+    """Messages this connection already recorded with a final result, skipped before their content is read.
+
+    A 'failed' message is read again (a parser fix recovers it) and a statement whose document
+    is missing is completed by ``_ingest_message_once``; every other status is final. Frequent
+    syncs (push, maintenance) then cost one query instead of downloading every recent message.
+    """
+    if not message_ids:
+        return set()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT provider_message_id FROM finva_email_messages
+               WHERE connection_id=%s AND provider_message_id = ANY(%s)
+                 AND status NOT IN ('failed','statement')""",
+            (connection_id, list(message_ids)),
+        ).fetchall() or []
+    return {str(row["provider_message_id"]) for row in rows}
+
+
+WATCH_RENEW_BEFORE = timedelta(days=1)
+
+
+def _renew_watch_if_due(connection: dict[str, Any], service) -> None:
+    """Gmail drops a watch after 7 days: renew it when it is missing or ends within a day."""
+    expiration = connection.get("watch_expiration")
+    if isinstance(expiration, str):
+        try:
+            expiration = datetime.fromisoformat(expiration.replace("Z", "+00:00"))
+        except ValueError:
+            expiration = None
+    if isinstance(expiration, datetime) and expiration.tzinfo is None:
+        expiration = expiration.replace(tzinfo=timezone.utc)
+    if expiration is None or expiration - datetime.now(timezone.utc) < WATCH_RENEW_BEFORE:
+        _start_watch(int(connection["id"]), service, suppress_errors=True)
+
+
 def _run_sync_connection(connection_id: int, service=None, max_results: int = 100) -> dict[str, Any]:
     connection, token = _connection_with_token(connection_id)
     # The Owner reads only the current month and runs no history scan (owner_mail_automation).
@@ -1206,23 +1242,32 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
         service = service or _credentials(token)
         initial_sync = not owner and not connection.get("initial_scan_completed_at")
         next_initial_page = None
+        history_messages: list[dict[str, Any]] = []
         if initial_sync:
-            financial_messages, next_initial_page = _list_message_page(
+            history_messages, next_initial_page = _list_message_page(
                 service, _initial_scan_query(_connection_import_since(connection)),
                 page_token=connection.get("initial_scan_page_token"), limit=50,
             )
-        elif owner:
+        # Every sync reads the newest messages as well: a history scan still in progress must
+        # never hold back what just arrived (push, maintenance and manual syncs alike). The
+        # Owner's window is the current month, never the 45-day window (owner_mail_automation).
+        if owner:
             since = owner_mail_automation.window_since(connection, _connection_import_since(connection))
-            financial_messages = _list_message_refs(service, _initial_scan_query(since), max_results)
+            recent_query = _initial_scan_query(since)
         else:
-            financial_messages = _list_message_refs(service, _recent_query(connection), max_results)
+            recent_query = _recent_query(connection)
+        recent_messages = _list_message_refs(service, recent_query, max_results)
         payroll_messages = _list_message_refs(service, _aguinaldo_gmail_query(), 100)
         messages = {
             item["id"]: item
-            for item in [*financial_messages, *payroll_messages]
+            for item in [*recent_messages, *history_messages, *payroll_messages]
             if item.get("id")
         }
-        results = [_process_message(service, connection, item["id"]) for item in messages.values()]
+        done = already_processed(connection_id, list(messages))
+        results = ["duplicate"] * len(done) + [
+            _process_message(service, connection, message_id) for message_id in messages if message_id not in done
+        ]
+        _renew_watch_if_due(connection, service)
     except Exception as exc:
         message = str(exc).lower()
         if "invalid_grant" in message or "token has been expired" in message or "revoked" in message:
@@ -1400,10 +1445,8 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
                 from backend.user_product.microsoft_mail import sync_connection
                 sync_connection(connection_id, trigger="maintenance")
             else:
-                _, token = _connection_with_token(connection_id)
-                service = _credentials(token)
-                _start_watch(connection_id, service, suppress_errors=True)
-                _sync_connection(connection_id, service=service, max_results=100, trigger="maintenance")
+                # The sync renews the Gmail watch when it is missing or about to end.
+                _sync_connection(connection_id, max_results=100, trigger="maintenance")
             completed += 1
         except Exception as exc:
             if isinstance(exc, HTTPException) and exc.status_code == 409:

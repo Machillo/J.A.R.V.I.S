@@ -171,6 +171,7 @@ def test_sync_only_issues_graph_gets_and_never_modifies_mail(monkeypatch):
     monkeypatch.setattr(mail, "_has_active_vip_access", lambda *_a: True)
     monkeypatch.setattr(mail, "_vault_read", lambda *_a: "refresh-secret")
     monkeypatch.setattr(mail, "_refresh", lambda *_a: "access-secret")
+    monkeypatch.setattr(mail, "already_processed", lambda *_a: set())
     ingested = []
     monkeypatch.setattr(mail, "_ingest_message", lambda conn, message_id, **kw: ingested.append((conn, message_id, kw)) or "pending")
 

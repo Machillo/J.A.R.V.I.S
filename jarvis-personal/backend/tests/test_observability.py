@@ -671,19 +671,18 @@ def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outc
     monkeypatch.setattr(gmail_service.mail_oauth, "discard_stale_flows", lambda conn: None)
     monkeypatch.setattr(gmail_service, "end_unentitled_mail_connections", lambda conn: 0)
     monkeypatch.setattr(gmail_service, "apply_gmail_retention", lambda: {})
-    monkeypatch.setattr(gmail_service, "_credentials", lambda token: object())
     monkeypatch.setattr(gmail_service, "_start_watch", lambda *a, **k: None)
-    monkeypatch.setattr(gmail_service, "_sync_connection", lambda *a, **k: {})
 
-    def token(connection_id):
+    # Each connection is synced once; the sync reads its token (409 = reconnect) and renews its watch.
+    def sync(connection_id, **_kwargs):
         outcome = outcomes[connection_id - 1]
         if outcome == "reauth":
             raise HTTPException(409, "reconnect")
         if outcome == "boom":
             raise RuntimeError("provider")
-        return {}, "t"
+        return {}
 
-    monkeypatch.setattr(gmail_service, "_connection_with_token", token)
+    monkeypatch.setattr(gmail_service, "_sync_connection", sync)
     beats = []
     monkeypatch.setattr(gmail_service.observability, "heartbeat", lambda job, ok, **k: beats.append((job, ok)))
     monkeypatch.setattr(gmail_service.observability, "report", lambda *a, **k: None)
