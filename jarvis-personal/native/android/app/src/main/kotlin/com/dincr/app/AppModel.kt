@@ -247,7 +247,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 refreshFlags()
                 reconcileStore()
                 val now = System.currentTimeMillis()
-                if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity() }
+                // NAT-02: a transient failure on resume keeps the user where they were (as iOS); any
+                // other answer moves the gate as always.
+                if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity(keepOnTransient = true) }
             }
         }
         startFlagLoop()

@@ -59,6 +59,12 @@ class FakeBackend(
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
     private var identityReads = 0
+    /**
+     * NAT-03 UI tests: set while the app runs (Android re-reads Hoy at start when the flags arrive, so
+     * a read count can't stand for "a pull"). While true, Hoy's main source and the movement list answer
+     * like an unreachable server.
+     */
+    @Volatile var refreshedSourcesUnreachable: Boolean = false
     private val planRoutes = FakePlanRoutes(json, today)
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
@@ -82,6 +88,11 @@ class FakeBackend(
         if (request.method == "GET" && request.url.substringBefore("?").endsWith("/auth/me")) {
             identityReads += 1
             if (identityRefreshFails && identityReads > 1) return error(503, "Servicio no disponible.")
+        }
+        if (request.method == "GET" && refreshedSourcesUnreachable && REFRESHED_SOURCES.any { request.url.substringBefore("?").endsWith(it) }) {
+            // 500, not 503: still a transient server error for the app, but not retried with a backoff
+            // delay, which Compose's test dispatcher never advances for a screen's own coroutine scope.
+            return error(500, "Ocurrió un error interno. Intentá nuevamente.")
         }
         val path = request.url.substringAfter("://").substringAfter("/").let { "/" + it.substringBefore("?") }
         val query = request.url.substringAfter("?", "").split("&").filter { it.contains("=") }.associate { it.substringBefore("=") to java.net.URLDecoder.decode(it.substringAfter("="), "UTF-8") }
@@ -655,6 +666,9 @@ class FakeBackend(
     )
 
     private companion object {
+        /** Hoy's main sources and the movement list ([refreshedSourcesUnreachable]). */
+        val REFRESHED_SOURCES = listOf("/user-product/free/dashboard", "/user-product/basic/dashboard",
+            "/user-product/vip/command-center", "/user-product/free/movements")
         const val PROMOTION = """{"code":"launch-free-2026","active":true,"ends_at":"2027-01-01T06:00:00Z","message":"Basic y VIP gratis hasta el 31 de diciembre de 2026."}"""
         val PLANS = """[{"code":"free","name":"Free","tagline":"Ordená lo esencial","features":["Ingresos y gastos","Deudas","Metas"],"regular_price_crc":0,"promotion":null},""" +
             """{"code":"basic","name":"Basic","tagline":"Planificá tu mes","features":["Presupuesto guiado","Calendario financiero","Pagos recurrentes","Estrategia básica"],"regular_price_crc":2990,"promotion":$PROMOTION},""" +
