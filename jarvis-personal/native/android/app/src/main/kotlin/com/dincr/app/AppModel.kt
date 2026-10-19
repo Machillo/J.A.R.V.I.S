@@ -201,6 +201,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         Result.failure(error)
     } catch (error: ApiError) {
         if (error.kind == ApiError.Kind.FEATURE_UNAVAILABLE) viewModelScope.launch { refreshFlags() }
+        // SEC-01: the server's legal gate refused the call (the terms changed while the app was
+        // open). Reading the identity again moves the gate to the acceptance screen.
+        if (error.code == ApiError.LEGAL_ACCEPTANCE_REQUIRED_CODE) viewModelScope.launch { loadIdentity() }
         Result.failure(error)
     } catch (error: Exception) {
         Result.failure(IllegalStateException(fallback))

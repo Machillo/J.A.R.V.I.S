@@ -59,6 +59,13 @@ class FakeBackend(
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
     private var identityReads = 0
+    /**
+     * SEC-01 UI tests: the terms change while the app is open. The next write meets the server's
+     * legal gate (403 `legal_acceptance_required`) and the identity asks for acceptance again; once
+     * accepted, writes run as before.
+     */
+    @Volatile var legalLapses: Boolean = false
+    private var legalGateClosed = false
     private val planRoutes = FakePlanRoutes(json, today)
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
@@ -84,6 +91,12 @@ class FakeBackend(
             if (identityRefreshFails && identityReads > 1) return error(503, "Servicio no disponible.")
         }
         val path = request.url.substringAfter("://").substringAfter("/").let { "/" + it.substringBefore("?") }
+        if (request.method != "GET" && "${request.method} $path" !in OPEN_BEFORE_ACCEPTANCE && (legalLapses || legalGateClosed)) {
+            legalLapses = false
+            legalGateClosed = true
+            profile = profile.copy(legal = profile.legal?.copy(required = true))
+            return HttpResponse(403, LEGAL_REQUIRED)
+        }
         val query = request.url.substringAfter("?", "").split("&").filter { it.contains("=") }.associate { it.substringBefore("=") to java.net.URLDecoder.decode(it.substringAfter("="), "UTF-8") }
         val body = request.body?.takeIf { it.isNotBlank() }?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
         // Like core/idempotency.py: the same key replays the stored answer; another body is a 409.
@@ -218,6 +231,7 @@ class FakeBackend(
             }
             path == "/auth/legal/accept" -> {
                 profile = profile.copy(legal = profile.legal?.copy(required = false))
+                legalGateClosed = false
                 ok("""{"status":"accepted","required":false,"terms_version":"2026-09-23-v3","privacy_version":"2026-09-25-v4"}""")
             }
             path == "/auth/plans" -> ok(PLANS)
@@ -655,6 +669,9 @@ class FakeBackend(
     )
 
     private companion object {
+        /** The writes the server's legal gate lets through before acceptance (`auth/legal.py`). */
+        val OPEN_BEFORE_ACCEPTANCE = setOf("DELETE /auth/me", "POST /auth/legal/accept", "POST /product-ops/feedback")
+        const val LEGAL_REQUIRED = """{"detail":{"code":"legal_acceptance_required","message":"Antes de continuar, aceptá los Términos y la Política de Privacidad vigentes."}}"""
         const val PROMOTION = """{"code":"launch-free-2026","active":true,"ends_at":"2027-01-01T06:00:00Z","message":"Basic y VIP gratis hasta el 31 de diciembre de 2026."}"""
         val PLANS = """[{"code":"free","name":"Free","tagline":"Ordená lo esencial","features":["Ingresos y gastos","Deudas","Metas"],"regular_price_crc":0,"promotion":null},""" +
             """{"code":"basic","name":"Basic","tagline":"Planificá tu mes","features":["Presupuesto guiado","Calendario financiero","Pagos recurrentes","Estrategia básica"],"regular_price_crc":2990,"promotion":$PROMOTION},""" +

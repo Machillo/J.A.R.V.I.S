@@ -64,6 +64,11 @@ public actor FixtureBackend: HTTPTransport {
     /// B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server.
     let identityRefreshFails: Bool
     private var identityReads = 0
+    /// SEC-01 UI tests: the terms change while the app is open. The next write meets the server's
+    /// legal gate (403 `legal_acceptance_required`) and the identity asks for acceptance again; once
+    /// accepted, writes run as before.
+    private var legalLapses: Bool
+    private var legalGateClosed = false
 
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
     /// app still learns the role only from `/auth/me`, exactly as with the real backend.
@@ -74,9 +79,10 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
-                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false) {
+                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, legalLapses: Bool = false) {
         self.scenario = scenario
         self.identityRefreshFails = identityRefreshFails
+        self.legalLapses = legalLapses
         self.latency = latency
         self.language = language
         // STORE images must not depend on the capture day.
@@ -175,6 +181,14 @@ public actor FixtureBackend: HTTPTransport {
             identityReads += 1
             if identityRefreshFails && identityReads > 1 { return reply(503, Self.errorBody("Servicio no disponible.")) }
         }
+        if method != "GET", !Self.openBeforeAcceptance.contains("\(method) \(path)"), legalLapses || legalGateClosed {
+            legalLapses = false
+            legalGateClosed = true
+            var legal = profile["legal"] as? [String: Any] ?? [:]
+            legal["required"] = true
+            profile["legal"] = legal
+            return reply(403, Self.legalRequiredBody)
+        }
         // Like core/idempotency.py: the same key replays the stored answer; another body is a 409.
         let key = ["POST", "PUT", "PATCH"].contains(method) ? request.value(forHTTPHeaderField: "X-Idempotency-Key") : nil
         if let key, let stored = replays[key] {
@@ -220,6 +234,7 @@ public actor FixtureBackend: HTTPTransport {
                 return error(409, "Las versiones legales cambiaron.")
             }
             profile["legal"] = legal.merging(["required": false, "accepted_at": "2026-09-29T12:00:00Z"]) { $1 }
+            legalGateClosed = false
             return ok(["status": "accepted", "required": false])
         case ("GET", "/auth/plans"): return ok(Self.plans)
         case ("GET", "/product-ops/billing/catalog"):
@@ -776,6 +791,12 @@ public actor FixtureBackend: HTTPTransport {
 
     func ok(_ value: Any) -> Answer { (200, value) }
     func error(_ status: Int, _ detail: String) -> Answer { (status, ["detail": detail]) }
+    /// The writes the server's legal gate lets through before acceptance (`auth/legal.py`).
+    static let openBeforeAcceptance: Set<String> = ["DELETE /auth/me", "POST /auth/legal/accept", "POST /product-ops/feedback"]
+    static let legalRequiredBody = (try? JSONSerialization.data(withJSONObject: ["detail": [
+        "code": "legal_acceptance_required",
+        "message": "Antes de continuar, aceptá los Términos y la Política de Privacidad vigentes.",
+    ]])) ?? Data()
     static func errorBody(_ detail: String) -> Data { (try? JSONSerialization.data(withJSONObject: ["detail": detail])) ?? Data() }
 
     func needs(_ tier: PlanTier) -> Answer? {
