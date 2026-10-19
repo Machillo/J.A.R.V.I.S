@@ -27,7 +27,7 @@ from backend.user_product import mail_oauth
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
     FINVA_QUERY, _connection_import_since, _has_active_vip_access, _initial_scan_scope,
-    _ingest_message, _vault_create, _vault_delete, _vault_read,
+    _ingest_message, _vault_create, _vault_delete, _vault_read, already_processed,
 )
 
 logger = logging.getLogger(__name__)
@@ -349,6 +349,26 @@ def sync_connection(connection_id: int, max_results: int = 100, trigger: str = "
     return observe_mail_sync("microsoft", trigger, lambda: _run_sync_connection(connection_id, max_results))
 
 
+def _list_refs(access_token: str, since: date, page: str | None, *, max_pages: int, limit: int) -> tuple[list[tuple[str, str]], str | None]:
+    """(message id, sender) of approved bank senders, newest first, and the next page link."""
+    refs: list[tuple[str, str]] = []
+    for _ in range(max_pages):
+        response = _graph_get(access_token, page or "/me/messages", None if page else {
+            "$filter": f"receivedDateTime ge {since:%Y-%m-%d}T00:00:00-06:00",  # Costa Rica midnight
+            "$select": "id,from,receivedDateTime",
+            "$top": "50", "$orderby": "receivedDateTime desc",
+        })
+        for message in response.get("value", []):
+            message_id = message.get("id")
+            sender = ((message.get("from") or {}).get("emailAddress") or {}).get("address", "")
+            if message_id and _sender_allowed(sender):
+                refs.append((message_id, sender))
+        page = response.get("@odata.nextLink")
+        if not page or len(refs) >= limit:
+            break
+    return refs, page
+
+
 def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
     with get_connection() as conn:
         connection = conn.execute(
@@ -364,40 +384,36 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
     access_token = _refresh(connection, token)
     initial = not connection.get("initial_scan_completed_at")
     chosen = _connection_import_since(connection)
-    # Later syncs keep the recent window but never reach before the chosen date.
-    since = chosen if initial else max(chosen, date.today() - timedelta(days=45))
-    results = []
-    page = connection.get("initial_scan_page_token") if initial else None
-    max_pages = 1 if initial else 10
-    for _ in range(max_pages):
-        response = _graph_get(access_token, page or "/me/messages", None if page else {
-            "$filter": f"receivedDateTime ge {since:%Y-%m-%d}T00:00:00-06:00",  # Costa Rica midnight
-            "$select": "id,from,receivedDateTime",
-            "$top": "50", "$orderby": "receivedDateTime desc",
+    # The recent window never reaches before the chosen date.
+    recent_since = max(chosen, date.today() - timedelta(days=45))
+    page = None
+    refs: list[tuple[str, str]] = []
+    if initial:
+        # One page of the history scan per sync, from the chosen date.
+        history, page = _list_refs(access_token, chosen, connection.get("initial_scan_page_token"), max_pages=1, limit=max_results)
+        refs += history
+    # Every sync reads the newest messages as well: a history scan still in progress must
+    # never hold back what just arrived.
+    recent, _ = _list_refs(access_token, recent_since, None, max_pages=10, limit=max_results)
+    refs += recent
+    messages = dict(refs)  # one entry per message, first sender kept
+    done = already_processed(connection_id, list(messages))
+    results = ["duplicate"] * len(done)
+    for message_id, sender in messages.items():
+        if message_id in done:
+            continue
+        # A fetch failure raises and keeps the scan cursor so the message is retried;
+        # an ingestion failure never raises (it is recorded as 'failed').
+        full = _graph_get(access_token, f"/me/messages/{quote(message_id, safe='')}", {
+            "$select": "id,subject,from,receivedDateTime,body,hasAttachments",
         })
-        for message in response.get("value", []):
-            message_id = message.get("id")
-            sender = ((message.get("from") or {}).get("emailAddress") or {}).get("address", "")
-            if not message_id or not _sender_allowed(sender):
-                continue
-            try:
-                full = _graph_get(access_token, f"/me/messages/{quote(message_id, safe='')}", {
-                    "$select": "id,subject,from,receivedDateTime,body,hasAttachments",
-                })
-                attachment_text, names = _attachments(access_token, message_id) if full.get("hasAttachments") else ("", [])
-                results.append(_ingest_message(
-                    connection, message_id, subject=full.get("subject") or "", sender=sender,
-                    body=_message_text((full.get("body") or {}).get("content") or ""),
-                    attachment_text=attachment_text, attachment_names=names,
-                    received_at=full.get("receivedDateTime"),
-                ))
-            except Exception:
-                # A fetch failure keeps the scan cursor so the message is retried;
-                # an ingestion failure never reaches here (it is recorded as 'failed').
-                raise
-        page = response.get("@odata.nextLink")
-        if not page or initial or len(results) >= max_results:
-            break
+        attachment_text, names = _attachments(access_token, message_id) if full.get("hasAttachments") else ("", [])
+        results.append(_ingest_message(
+            connection, message_id, subject=full.get("subject") or "", sender=sender,
+            body=_message_text((full.get("body") or {}).get("content") or ""),
+            attachment_text=attachment_text, attachment_names=names,
+            received_at=full.get("receivedDateTime"),
+        ))
     with get_connection() as conn:
         conn.execute(
             """UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_success_at=NOW(),
