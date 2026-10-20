@@ -18,8 +18,8 @@ movement in Por revisar.
 - ``auto_save``: a pending movement candidate is saved as a transaction, through the same
   transaction and event writers as a manual confirmation, when the learned rules allow it. It
   stays pending (for review) whenever anything is uncertain: no matching rule, low confidence,
-  another currency, an internal transfer or one side of a transfer, a possible match from another
-  source, a statement row, no Owner identity for the event, a transaction of the same amount
+  another currency, an internal transfer, a transfer whose rule does not name both accounts, a
+  possible match from another source, a statement row, no Owner identity for the event, a transaction of the same amount
   within a day (possibly the same movement already recorded) or any error while saving. One
   save at a time per workspace, so two mailboxes with the same notice cannot both save it.
 """
@@ -41,6 +41,49 @@ def window_since(connection: dict[str, Any], chosen: date, today: date | None = 
     """First day of mail the Owner's syncs read: the current month, never before the chosen date."""
     current = today or datetime.now(mail_oauth.CR_TZ).date()
     return max(chosen, current.replace(day=1))
+
+
+def _account_ownership(conn, workspace_id: str, reference: Any) -> str | None:
+    """'own' / 'counterparty' for an account the Owner's private profile knows, by its last 4 digits."""
+    digits = "".join(ch for ch in str(reference or "") if ch.isdigit())
+    if len(digits) < 4:
+        return None
+    row = conn.execute(
+        """SELECT ownership FROM email_financial_accounts
+           WHERE workspace_id=%s AND account_last4=%s AND active=TRUE LIMIT 1""",
+        (workspace_id, digits[-4:]),
+    ).fetchone()
+    return str(row["ownership"]) if row else None
+
+
+def _owner_direction(conn, workspace_id: str, candidate: dict[str, Any]) -> str:
+    """The movement's direction; when the notice does not say it, the Owner's known accounts do.
+
+    The retired reader's parser gave a transfer from an own account to a third party the direction
+    'out' (and the reverse 'in'); the standard pipeline leaves it 'unknown', which no learned rule
+    with a direction can match. Two own accounts (an internal transfer) keep 'unknown'.
+    """
+    direction = str(candidate.get("movement_direction") or "unknown")
+    if direction != "unknown":
+        return direction
+    origin = _account_ownership(conn, workspace_id, candidate.get("source_account_reference"))
+    destination = _account_ownership(conn, workspace_id, candidate.get("destination_account_reference"))
+    if origin == "own" and destination == "counterparty":
+        return "out"
+    if origin == "counterparty" and destination == "own":
+        return "in"
+    return direction
+
+
+def _rule_pins_both_accounts(conn, workspace_id: str, ruled: dict[str, Any]) -> bool:
+    if not ruled.get("personal_rule_id"):
+        return False
+    row = conn.execute(
+        """SELECT origin_account_key,destination_account_key FROM email_classification_rules
+           WHERE id=%s AND workspace_id=%s""",
+        (int(ruled["personal_rule_id"]), workspace_id),
+    ).fetchone()
+    return bool(row and row["origin_account_key"] and row["destination_account_key"])
 
 
 def _near_duplicate(conn, workspace_id: str, transaction_date: Any, amount: Any) -> bool:
@@ -84,8 +127,8 @@ def auto_save(conn, candidate_id: int) -> str | None:
             or candidate.get("source_type") == "statement" or not candidate.get("legacy_allowed_user_id")):
         return None
     # Uncertain for the resolver: a possible match from another source (its statement copy, the
-    # other mailbox) or one side of a transfer whose pair may still arrive. A human decides.
-    if candidate.get("resolution_reason") or candidate.get("related_candidate_id") or _transfer_like(candidate):
+    # other mailbox). A human decides.
+    if candidate.get("resolution_reason") or candidate.get("related_candidate_id"):
         return None
     native_currency, native_amount = native_money(candidate)
     if native_currency != "CRC":
@@ -94,7 +137,7 @@ def auto_save(conn, candidate_id: int) -> str | None:
         "email_kind": "movement",
         "description": candidate["description"],
         "raw_description": candidate["description"],
-        "movement_direction": candidate.get("movement_direction"),
+        "movement_direction": _owner_direction(conn, str(candidate["workspace_id"]), candidate),
         "origin_account": candidate.get("source_account_reference"),
         "destination_account": candidate.get("destination_account_reference"),
         "transaction_type": candidate["transaction_type"],
@@ -103,6 +146,10 @@ def auto_save(conn, candidate_id: int) -> str | None:
     })
     if (ruled.get("email_kind") != "movement" or not ruled.get("auto_commit_allowed")
             or float(ruled.get("confidence") or 0) < AUTO_COMMIT_CONFIDENCE):
+        return None
+    # A transfer is saved only when the learned rule names both of its accounts (as the retired
+    # reader's rules did): one side of an unknown transfer whose pair may still arrive waits.
+    if _transfer_like(candidate) and not _rule_pins_both_accounts(conn, str(candidate["workspace_id"]), ruled):
         return None
     # One automatic save at a time per workspace: two mailboxes syncing the same bank notice in
     # parallel must see each other's transaction (the lock ends with the caller's transaction).

@@ -12,6 +12,7 @@ import com.dincr.data.AuthException
 import com.dincr.data.AuthSession
 import com.dincr.data.DincrApi
 import com.dincr.data.FakeBackend
+import com.dincr.data.Feature
 import com.dincr.data.FeatureFlags
 import com.dincr.data.HandledReturns
 import com.dincr.data.IdentityGate
@@ -248,6 +249,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 reconcileStore()
                 val now = System.currentTimeMillis()
                 if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity() }
+                syncOnReturn()
             }
         }
         startFlagLoop()
@@ -441,7 +443,40 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         }
         // The switches are read on becoming ready (as iOS); a ready app already reads them on resume, in
         // their loop and on a pull to refresh, so an identity read again does not read them twice.
-        if (_phase.value is Phase.Ready) viewModelScope.launch { if (!wasReady) refreshFlags(); reconcileStore() }
+        if (_phase.value is Phase.Ready) viewModelScope.launch {
+            if (!wasReady) refreshFlags()
+            reconcileStore()
+            if (!wasReady) syncOnReturn()
+        }
+    }
+
+    // --- New mail on return ----------------------------------------------------------------------------
+
+    private val _dataGeneration = MutableStateFlow(0)
+
+    /**
+     * Bumped each time the app starts or comes back: Hoy, Movimientos and the mail review read again
+     * (keeping what they show if a read fails), so movements the scheduled sync or this sync found
+     * appear without a manual refresh. iOS: `AppModel.dataGeneration`.
+     */
+    val dataGeneration: StateFlow<Int> = _dataGeneration.asStateFlow()
+    private var lastReturnSync = 0L
+
+    /**
+     * Reads the connected mailboxes (where mail is part of the plan and switched on), then asks the
+     * visible screens to read again. A failure or no mailbox changes nothing on screen.
+     */
+    suspend fun syncOnReturn() {
+        val now = System.currentTimeMillis()
+        // Fixtures: every return reads again (UI tests do not wait a minute).
+        if (_phase.value !is Phase.Ready || (!isFixtures && now - lastReturnSync < RETURN_SYNC_INTERVAL_MS)) return
+        lastReturnSync = now
+        val epoch = sessionEpoch
+        val plan = _profile.value?.planTier ?: PlanTier.FREE
+        if (plan.allows(Feature.GMAIL_AUTOMATION) && isOn(OpsFlag.GMAIL_AUTOMATION)) {
+            runCatching { api.syncMail() }
+        }
+        if (epoch == sessionEpoch && _phase.value is Phase.Ready) _dataGeneration.value += 1
     }
 
     /** `DELETE /auth/me` for an account whose deletion is pending (or requested now), then sign out. */
@@ -531,6 +566,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val IDENTITY_THROTTLE_MS = 15_000L
+        /** At most one new-mail read per minute when the app comes back (iOS: `returnSyncInterval`). */
+        const val RETURN_SYNC_INTERVAL_MS = 60_000L
         const val FLAG_REFRESH_MS = 60_000L
         /** Synthetic session for fixture mode only (never sent anywhere real). */
         val FIXTURE_SESSION = AuthSession("fixture-access", "fixture-refresh", Long.MAX_VALUE / 2, "fixture-user")
