@@ -48,7 +48,9 @@ class MailOnReturnUiTest {
         val tab = tx("Movimientos", "Transactions")
         waitUntil("tab") { compose.onAllNodes(hasText(tab) and isSelectable()).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasText(tab) and isSelectable()).onFirst().performSemanticsAction(SemanticsActions.OnClick)
-        waitUntil("the movements") { present("Salario quincenal") }
+        // The screen's search field is always on screen; list rows outside it are not composed
+        // (LazyColumn), so a seeded row further down cannot stand for "the list is open".
+        waitUntil("the movements") { present(tx("Buscar movimientos", "Search transactions")) }
     }
     /** To the background long enough for the process lifecycle to notice, then back. */
     private fun leaveAndReturn() {
@@ -60,7 +62,7 @@ class MailOnReturnUiTest {
 
     @Test fun aPurchaseThatArrivedWhileAwayAppearsWhenTheAppComesBack() {
         openMovements("vip")
-        Thread.sleep(1_000)  // the launch sync has run; nothing new yet
+        Thread.sleep(1_500)  // the launch sync has run; nothing new yet
         backend().mailArrives = true
         assertFalse("not there before the notice arrives", present(FAKE_ARRIVED_MOVEMENT))
         leaveAndReturn()
