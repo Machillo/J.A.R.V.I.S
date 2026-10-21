@@ -136,7 +136,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
             bottomBar = {
                 if (!expanded) NavigationBar(containerColor = Dincr.colors.surface) {
                     Destination.entries.forEach { d ->
-                        NavigationBarItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label, maxLines = 1) })
+                        NavigationBarItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label, maxLines = 1) }, colors = dincrNavBarItemColors())
                     }
                 }
             },

@@ -18,6 +18,7 @@
     "test:vip-unknown-contract": "node scripts/test-vip-unknown-contract.mjs",
     "test:theme": "node scripts/test-theme.mjs",
     "test:design-tokens": "node scripts/test-design-tokens.mjs",
+    "test:brand": "node scripts/test-brand-name.mjs",
     "test:debts-in-transactions": "node scripts/test-debts-in-transactions.mjs",
     "test:debt-rate-unknown": "node scripts/test-debt-rate-unknown.mjs",
     "test:unified-movements": "node scripts/test-unified-movements.mjs",

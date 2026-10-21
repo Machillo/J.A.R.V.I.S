@@ -1,5 +1,7 @@
 package com.dincr.app.ui
 
+import com.dincr.design.DincrTonalButton
+import com.dincr.design.DincrPillButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,7 +9,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -146,10 +147,14 @@ fun CandidateCard(candidate: MailCandidate, busy: Boolean, message: String?, onA
                 null -> Unit
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
-            Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
-                if (!candidate.needsRate && !candidate.cannotConvert) TextButton(onAccept, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Confirmar", "Confirm"), color = Dincr.colors.tint) }
-                if (!candidate.cannotConvert) TextButton(onCorrect, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Corregir", "Correct"), color = Dincr.colors.tint) }
-                TextButton(onReject, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Descartar", "Dismiss"), color = Dincr.colors.negative) }
+            // DINCR 3.0: the completing action filled, the correction tonal, dismissing outlined.
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.padding(top = DincrSpacing.s1),
+                horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2),
+            ) {
+                if (!candidate.needsRate && !candidate.cannotConvert) DincrPillButton(tx("Confirmar", "Confirm"), onAccept, enabled = !busy)
+                if (!candidate.cannotConvert) DincrTonalButton(tx("Corregir", "Correct"), onCorrect, enabled = !busy)
+                DincrPillButton(tx("Descartar", "Dismiss"), onReject, enabled = !busy, quiet = true, destructive = true)
             }
         }
     }
