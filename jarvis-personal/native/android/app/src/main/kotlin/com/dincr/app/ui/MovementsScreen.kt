@@ -123,11 +123,11 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(DincrRadius.full),
                             colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                                 unfocusedContainerColor = Dincr.colors.surface, focusedContainerColor = Dincr.colors.surface,
-                                unfocusedBorderColor = Dincr.colors.line, focusedBorderColor = Dincr.colors.tint))
+                                unfocusedBorderColor = Dincr.colors.fieldBorder, focusedBorderColor = Dincr.colors.tint))
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                             MovementFilter.entries.forEach { f ->
                                 FilterChip(filter == f, { filter = f }, modifier = Modifier.heightIn(min = 48.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(DincrRadius.full),
-                                    colors = dincrChipColors(), border = null, label = {
+                                    colors = dincrChipColors(), border = null, leadingIcon = dincrChipCheck(filter == f), label = {
                                     Text(when (f) { MovementFilter.ALL -> tx("Todos", "All"); MovementFilter.INCOME -> tx("Ingresos", "Income"); MovementFilter.EXPENSE -> tx("Gastos", "Expenses"); MovementFilter.DEBT -> tx("Deudas", "Debts") })
                                 })
                             }

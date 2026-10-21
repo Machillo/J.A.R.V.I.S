@@ -45,11 +45,21 @@ public enum DincrFont {
     public static let amount = Font.body.weight(.semibold).monospacedDigit()
 }
 
+private struct OnHeroKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 private struct DecorativeMotionKey: EnvironmentKey {
     static let defaultValue = true
 }
 
 public extension EnvironmentValues {
+    /// True inside a hero card (`dincrHeroCard`), where tracks and fills use the hero's own steps.
+    var dincrOnHero: Bool {
+        get { self[OnHeroKey.self] }
+        set { self[OnHeroKey.self] = newValue }
+    }
+
     /// Off in UI tests (and anywhere a looping animation must not run); Reduce Motion also stops it.
     var dincrDecorativeMotion: Bool {
         get { self[DecorativeMotionKey.self] }
@@ -119,13 +129,14 @@ private struct DincrHeroCardModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if owner {
-            content.dincrCard(padding: padding)
+            content.dincrCard()
         } else {
             // The background is resolved in the outer scheme; only the content switches to dark roles.
             content
                 .padding(padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .environment(\.colorScheme, .dark)
+                .environment(\.dincrOnHero, true)
                 .background(
                     LinearGradient(colors: [DincrColor.hero, DincrColor.hero2], startPoint: .topLeading, endPoint: .bottomTrailing),
                     in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous)

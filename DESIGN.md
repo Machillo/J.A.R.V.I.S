@@ -395,11 +395,12 @@ in text.
 ### Buttons
 
 - **Primary** (filled tint): one per screen or sheet; the action that completes the task.
-- **Pill actions** (DINCR 3.0, `DincrPillButton` / `DincrTonalButton`): inline actions on a row,
-  as in the mail review — the completing action filled (Confirmar), the correction tonal
-  (Corregir), dismissing outlined in `negative` (Descartar). Same labels, conditions and order as
-  before; ≥ 48 dp.
-- **Chips** are tonal (`surface-2`), without outline; the selected one uses the tint container.
+- **Pill actions** (DINCR 3.0, Android `DincrPillButton` / `DincrTonalButton`): inline actions on
+  a row, as in the mail review — the completing action filled (Confirmar), the correction tonal
+  (Corregir), dismissing outlined in `negative` (Descartar); ≥ 48 dp. iOS keeps `.dincrPrimary` /
+  `.dincrSecondary` and the system destructive button there.
+- **Chips** (Android) are tonal (`surface-2`), without outline; the selected one uses the tint
+  container **and a check icon**, so the selection never depends on color alone.
 - **Secondary** (tint container): alternatives. **Text**: low-emphasis actions, cancel.
 - **Destructive** (filled negative): only inside a confirmation; the first surface shows a text
   button in negative color.

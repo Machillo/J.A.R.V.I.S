@@ -144,7 +144,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
             Row(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
                 if (expanded) NavigationRail(containerColor = Dincr.colors.surface) {
                     Destination.entries.forEach { d ->
-                        NavigationRailItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label) })
+                        NavigationRailItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label) }, colors = dincrNavRailItemColors())
                     }
                 }
                 Column(Modifier.weight(1f).statusBarsPadding()) {

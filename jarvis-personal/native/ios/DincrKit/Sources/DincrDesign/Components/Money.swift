@@ -60,8 +60,14 @@ public struct MoneyRow: View {
                 .font(.system(size: DincrIconSize.md, weight: .medium))
                 .foregroundStyle(kind == .income ? (owner ? OwnerColor.positive : DincrColor.positive) : (owner ? OwnerColor.text2 : DincrColor.text2))
                 .frame(width: 42, height: 42)
-                .background(owner ? OwnerColor.surface2 : (kind == .income ? DincrColor.positiveContainer : DincrColor.surface2),
-                            in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
+                .background {
+                    if owner {
+                        Circle().fill(OwnerColor.surface2)
+                    } else {
+                        RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous)
+                            .fill(kind == .income ? DincrColor.positiveContainer : DincrColor.surface2)
+                    }
+                }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)

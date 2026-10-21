@@ -7,7 +7,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.PaddingValues
@@ -98,13 +97,13 @@ fun DincrHeroCard(modifier: Modifier = Modifier, content: @Composable () -> Unit
 
 /** An amount with a sign for movements, tabular digits and a spoken description. Unknown → "—". */
 @Composable
-fun MoneyText(amount: BigDecimal?, modifier: Modifier = Modifier, sign: MoneyFormat.Sign = MoneyFormat.Sign.NONE, style: TextStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), currency: String? = null, color: Color? = null) {
+fun MoneyText(amount: BigDecimal?, modifier: Modifier = Modifier, sign: MoneyFormat.Sign = MoneyFormat.Sign.NONE, style: TextStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), currency: String? = null) {
     val format = Dincr.money
     val spoken = amount?.let { format.spoken(it, sign, currencyOverride = currency) } ?: AppLanguage.current().pick("sin dato", "no data")
     Text(
         text = amount?.let { format.format(it, sign, currency) } ?: "—",
         style = style.merge(TabularNums),
-        color = color ?: if (sign == MoneyFormat.Sign.INCOME) Dincr.colors.positive else Dincr.colors.text,
+        color = if (sign == MoneyFormat.Sign.INCOME) Dincr.colors.positive else Dincr.colors.text,
         maxLines = 1,
         modifier = modifier.semantics { contentDescription = spoken },
     )

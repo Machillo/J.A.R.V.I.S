@@ -1,5 +1,6 @@
 package com.dincr.app.ui
 
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -358,6 +359,7 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -
             options.forEach { (value, text) ->
                 FilterChip(
                     selected = value == selected, onClick = { onSelect(value) }, label = { Text(text) },
+                    leadingIcon = dincrChipCheck(value == selected),
                     modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(DincrRadius.full),
                     colors = dincrChipColors(), border = null,
                 )
@@ -367,8 +369,9 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -
 }
 
 /**
- * DINCR 3.0 chips: tonal, no outline; the selected one in the tint container. Assistive
- * technologies get the selected state from the chip itself.
+ * DINCR 3.0 chips: tonal, no outline; the selected one in the tint container with a check
+ * ([dincrChipCheck]), so the selection never depends on color alone (the two fills differ mostly
+ * in hue). Assistive technologies get the selected state from the chip itself.
  */
 @Composable
 fun dincrChipColors() = FilterChipDefaults.filterChipColors(
@@ -377,9 +380,20 @@ fun dincrChipColors() = FilterChipDefaults.filterChipColors(
     selectedLeadingIconColor = Dincr.colors.onTintContainer,
 )
 
-/** Bottom bar / rail item colors: the tint container marks the current tab, label always shown. */
+/** The selected chip's check (WCAG 1.4.1: the state is shown by shape, not only by color). */
+fun dincrChipCheck(selected: Boolean): (@Composable () -> Unit)? =
+    if (selected) { { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) } } else null
+
+/** Bottom bar item colors: the tint container marks the current tab, label always shown. */
 @Composable
 fun dincrNavBarItemColors() = androidx.compose.material3.NavigationBarItemDefaults.colors(
+    selectedIconColor = Dincr.colors.onTintContainer, selectedTextColor = Dincr.colors.text, indicatorColor = Dincr.colors.tintContainer,
+    unselectedIconColor = Dincr.colors.textMuted, unselectedTextColor = Dincr.colors.textMuted,
+)
+
+/** Navigation rail item colors (large screens), matching [dincrNavBarItemColors]. */
+@Composable
+fun dincrNavRailItemColors() = androidx.compose.material3.NavigationRailItemDefaults.colors(
     selectedIconColor = Dincr.colors.onTintContainer, selectedTextColor = Dincr.colors.text, indicatorColor = Dincr.colors.tintContainer,
     unselectedIconColor = Dincr.colors.textMuted, unselectedTextColor = Dincr.colors.textMuted,
 )

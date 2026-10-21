@@ -4,10 +4,15 @@ The product is **DINCR**, written exactly like that. FINVA is a historical inter
 document inventories every remaining occurrence of the legacy name (`FINVA`, `Finva`, `finva`) on
 `main` as of 2026-10-21 (base `15edcd0d`), classifies it, and says why it stays or how it can move.
 
-Guard: `npm run test:brand` (`frontend/scripts/test-brand-name.mjs`, in CI) fails when the legacy
-name reaches a string the native apps can show, a localized resource, the store copy or the
-landing. The web app's copy is guarded by `test-i18n.mjs` (`INTERNAL_PERSONA`). Both guards catch
-any case of the name; comments are history and are not copy.
+Guards:
+- `npm run test:brand` (`frontend/scripts/test-brand-name.mjs`, in CI) fails when the legacy name,
+  in any case, reaches a string literal of the native apps, a localized resource, a manifest, an
+  `Info.plist`, an `.xcconfig` or Gradle setting (native apps and Capacitor shells), the store copy
+  or the landing (sources and build). The only exceptions are the technical tokens of C7 and C9,
+  each allowed only in the files that need it.
+- The web app's copy is guarded by `test-i18n.mjs` (`INTERNAL_PERSONA`: `FINVA` and `Finva` in
+  visible text).
+Comments are history, not copy, and are not checked.
 
 ## Summary
 
@@ -48,7 +53,7 @@ Counts come from `git grep -i finva` with a context classifier; a line can hold 
 | C2 code identifiers | 140 | 42 | `FinvaOnboarding`, `FinvaFormSheet`, `FinvaApiError` | Component and class names. Never shown. | Yes, in the same dedicated rename PR (no behavior change). |
 | C3 storage keys and DOM events | 291 | 15 | `finva:app-lock:<id>`, `finva:api-error` | Keys already stored on users' devices (app lock, first-run, operation queue). Renaming without a migration resets app lock and loses queued offline operations. | Only with a read-old/write-new migration in the client; events can be renamed freely with their listeners. |
 | C4 database | 510 | 70 | `finva_gmail_connections`, `finva_email_candidates`, `transactions.source = 'finva'` | Production tables, columns and stored values; RLS, functions and history depend on them. | No as part of this cleanup. A rename is a production migration (human gate, `migration-gate-acknowledged`). |
-| C5 env vars, secrets, headers | 29 | 8 | `FINVA_GMAIL_CLIENT_ID`, `X-Finva-Cron-Secret` | Names configured in Render and GitHub secrets. | Only by accepting both names first, then changing production config (human gate). The Microsoft mail settings already accept a DINCR name. |
+| C5 env vars, secrets, headers | 29 | 8 | `FINVA_GMAIL_CLIENT_ID`, `X-Finva-Cron-Secret` | Names configured in Render and GitHub secrets. | Only by accepting both names first, then changing production config (human gate). The Microsoft mail settings already accept unprefixed names (`MICROSOFT_CLIENT_ID`, …) besides `FINVA_MICROSOFT_*`. |
 | C6 paths and modules | 64 | 18 | `src/products/finva/` | Folder of the public app's modules. | Yes, in the dedicated rename PR. |
 | C7 mail OAuth return scheme | 23 | 11 | `com.finva.app://gmail/callback` | **The one that can leak outside the code**: the backend sends this URL to the browser after Gmail/Outlook consent. Every app claims it so the return reaches DINCR. | Staged plan below; needs production configuration (human gate). |
 | C8 store product ids | 6 | 1 | `finva.vip.monthly` (backend defaults) | Defaults overridden by environment variables; store product ids are fixed once created and are not shown to users (the stores show the product's title). | Decide the final ids before the products are created in the consoles (`native/RELEASE_IDENTITY.md` step 3); then change the defaults. |
