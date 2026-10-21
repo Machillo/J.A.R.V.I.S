@@ -100,12 +100,15 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var deleting by remember { mutableStateOf(false) }
-    suspend fun load() {
+    suspend fun load(keepOnFailure: Boolean = false) {
         model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.api.movements() }
             .onSuccess { state = Load.Ready(it) }
-            .onFailure { if (it !is AuthException.SignedOut) state = Load.Failed(it.message.orEmpty()) }
+            .onFailure { if (it !is AuthException.SignedOut && !(keepOnFailure && state is Load.Ready)) state = Load.Failed(it.message.orEmpty()) }
     }
     LaunchedEffect(Unit) { load() }
+    // New mail on return (AppModel.syncOnReturn): read again, keeping the list if it fails.
+    val dataGeneration by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(dataGeneration) { if (dataGeneration > 0) load(keepOnFailure = true) }
     val plan = profile?.planTier ?: PlanTier.FREE
 
     Box(Modifier.fillMaxSize().padding(padding)) {

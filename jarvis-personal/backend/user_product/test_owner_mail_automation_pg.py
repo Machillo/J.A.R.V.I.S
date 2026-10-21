@@ -155,28 +155,39 @@ class _Conn:
 
 
 def _rule(db, *, pattern="supermercado sintetico", action="classify", allow=True, description="Supermercado",
-          category="Comida", transaction_type="expense"):
+          category="Comida", transaction_type="expense", match_mode="contains", direction=None,
+          origin_key=None, destination_key=None):
     db.execute(
         """INSERT INTO email_classification_rules(user_id,workspace_id,name,concept_pattern,action,allow_auto_commit,
-               output_description,category,transaction_type)
-           VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-        (LEGACY, WS, f"rule-{uuid.uuid4().hex[:6]}", pattern, action, allow, description, category, transaction_type),
+               output_description,category,transaction_type,match_mode,direction,origin_account_key,destination_account_key)
+           VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (LEGACY, WS, f"rule-{uuid.uuid4().hex[:6]}", pattern, action, allow, description, category, transaction_type,
+         match_mode, direction, origin_key, destination_key),
+    )
+    db.commit()
+
+
+def _account(db, key, last4, ownership):
+    db.execute(
+        """INSERT INTO email_financial_accounts(user_id,workspace_id,account_key,institution,account_last4,ownership,display_name)
+           VALUES(%s,%s,%s,'Banco sintético',%s,%s,%s)""",
+        (LEGACY, WS, key, last4, ownership, key),
     )
     db.commit()
 
 
 def _candidate(db, *, description="COMPRA SUPERMERCADO SINTETICO", amount=12500, currency="CRC",
                original_currency=None, internal=False, source_type="gmail", status="pending", day=DAY,
-               transaction_type="expense", resolution_reason=None):
+               transaction_type="expense", resolution_reason=None, direction="out", origin=None, destination=None):
     message = db.one("INSERT INTO finva_email_messages(connection_id,account_id,workspace_id) VALUES(1,%s,%s) RETURNING id", (ACC, WS))
     row = db.one(
         """INSERT INTO finva_email_candidates(email_message_id,account_id,workspace_id,transaction_date,description,amount,
                currency,original_amount,original_currency,transaction_type,movement_direction,confidence,category,bank,
-               is_internal_transfer,source_type,status,resolution_reason)
-           VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'out',0.9,'Otros','BAC',%s,%s,%s,%s) RETURNING id""",
+               is_internal_transfer,source_type,status,resolution_reason,source_account_reference,destination_account_reference)
+           VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0.9,'Otros','BAC',%s,%s,%s,%s,%s,%s) RETURNING id""",
         (message["id"], ACC, WS, day, description, amount, currency,
-         amount if original_currency else None, original_currency, transaction_type, internal, source_type, status,
-         resolution_reason),
+         amount if original_currency else None, original_currency, transaction_type, direction, internal, source_type,
+         status, resolution_reason, origin, destination),
     )
     db.commit()
     return int(row["id"])
@@ -343,3 +354,67 @@ def test_two_mailboxes_saving_the_same_notice_at_once_save_it_once(db):
         assert db.one("SELECT status FROM finva_email_candidates WHERE id=%s", (second,))["status"] == "pending"
     finally:
         other.raw.close()
+
+
+
+def _rent_rule(db, direction="out"):
+    """The shape of the Owner's real auto-commit rules: an exact concept between two named accounts."""
+    _account(db, "own-main", "1234", "own")
+    _account(db, "landlord", "5678", "counterparty")
+    origin, destination = ("own-main", "landlord") if direction == "out" else ("landlord", "own-main")
+    _rule(db, pattern="PAGO SINTETICO", match_mode="exact", direction=direction, description="Alquiler",
+          category="Vivienda", transaction_type="expense" if direction == "out" else "income",
+          origin_key=origin, destination_key=destination)
+
+
+def test_a_transfer_matching_a_rule_that_names_both_accounts_is_saved_with_the_rules_type(db):
+    """Production case: the standard pipeline gives the notice type 'transfer' and direction 'unknown';
+    the Owner's own account → a third party is 'out', as the retired reader read it."""
+    _rent_rule(db)
+    candidate_id = _candidate(db, description="PAGO SINTETICO", amount=350000, transaction_type="transfer",
+                              direction="unknown", origin="****1234", destination="CR00000000000000005678")
+    assert owner_mail_automation.auto_save(db, candidate_id) == "auto_saved"
+    db.commit()
+    tx = db.one("SELECT t.* FROM transactions t JOIN finva_email_candidates c ON c.transaction_id=t.id WHERE c.id=%s", (candidate_id,))
+    assert (tx["description"], tx["transaction_type"], tx["category"], float(tx["amount"])) == ("Alquiler", "expense", "Vivienda", 350000)
+
+
+def test_the_second_notice_of_the_same_movement_is_not_saved_twice(db):
+    """The bank sends a transfer notice and a debit notice for one payment: one transaction only."""
+    _rent_rule(db)
+    first = _candidate(db, description="PAGO SINTETICO", amount=350000, transaction_type="transfer",
+                       direction="unknown", origin="****1234", destination="CR00000000000000005678")
+    assert owner_mail_automation.auto_save(db, first) == "auto_saved"
+    db.commit()
+    second = _candidate(db, description="PAGO SINTETICO", amount=350000, transaction_type="transfer",
+                        direction="unknown", origin="****1234", destination="CR00000000000000005678")
+    assert owner_mail_automation.auto_save(db, second) is None
+    assert _count(db, "transactions") == 1
+
+
+def test_an_incoming_transfer_from_a_known_third_party_gets_direction_in(db):
+    _rent_rule(db, direction="in")
+    candidate_id = _candidate(db, description="PAGO SINTETICO", amount=80000, transaction_type="transfer",
+                              direction="unknown", origin="CR00000000000000005678", destination="****1234")
+    assert owner_mail_automation.auto_save(db, candidate_id) == "auto_saved"
+
+
+@pytest.mark.parametrize(("origin", "destination"), [
+    ("****1234", "****9999"),   # destination unknown to the Owner's profile: direction stays unknown
+    (None, None),               # no accounts in the notice
+])
+def test_a_transfer_whose_accounts_do_not_match_the_rule_waits(db, origin, destination):
+    _rent_rule(db)
+    candidate_id = _candidate(db, description="PAGO SINTETICO", amount=350000, transaction_type="transfer",
+                              direction="unknown", origin=origin, destination=destination)
+    assert owner_mail_automation.auto_save(db, candidate_id) is None
+    assert _count(db, "transactions") == 0
+
+
+def test_a_transfer_between_two_own_accounts_is_never_saved(db):
+    _rent_rule(db)
+    _account(db, "own-savings", "4321", "own")
+    candidate_id = _candidate(db, description="PAGO SINTETICO", amount=350000, transaction_type="transfer",
+                              direction="unknown", origin="****1234", destination="****4321")
+    assert owner_mail_automation.auto_save(db, candidate_id) is None
+    assert _count(db, "transactions") == 0

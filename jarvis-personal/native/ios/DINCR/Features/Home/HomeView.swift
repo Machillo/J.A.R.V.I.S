@@ -48,9 +48,11 @@ private struct PublicHomeView: View {
         .navigationTitle(tx("Hola, \(model.profile?.firstName ?? "")", "Hi, \(model.profile?.firstName ?? "")"))
         .refreshable { await load(tier) }
         .task(id: tier) { await load(tier) }
+        // New mail on return (AppModel.syncOnReturn): read again, keeping the screen if it fails.
+        .onChange(of: model.dataGeneration) { _, _ in Task { await load(tier, keepOnFailure: true) } }
     }
 
-    private func load(_ tier: HomeToday.Tier) async {
+    private func load(_ tier: HomeToday.Tier, keepOnFailure: Bool = false) async {
         let epoch = model.currentEpoch
         do {
             let home = try await HomeTodayLoader.load(model, tier: tier)
@@ -58,6 +60,7 @@ private struct PublicHomeView: View {
         } catch is CancellationError {
             return
         } catch {
+            if keepOnFailure, case .loaded = state { return }
             if let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar tu resumen.", "We couldn’t load your overview.")) {
                 state = .failed(message)
             }

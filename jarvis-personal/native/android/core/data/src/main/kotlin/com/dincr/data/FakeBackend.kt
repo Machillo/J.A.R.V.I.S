@@ -12,6 +12,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
+/** The movement a bank notice adds when [FakeBackend.mailArrives] is on (mail recovery UI tests). */
+const val FAKE_ARRIVED_MOVEMENT = "Compra detectada por correo"
+
 /**
  * An in-memory DINCR backend behind the HTTP transport, for Debug demos and UI tests only
  * (`LaunchPolicy` never selects it in a Release build). The real [ApiClient] and [DincrApi] run
@@ -59,6 +62,12 @@ class FakeBackend(
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
     private var identityReads = 0
+    /**
+     * Mail recovery UI tests: a bank notice arrives after launch, so the next mail sync finds a new
+     * movement (as the scheduled sync or the Owner's learned rules would record it).
+     */
+    @Volatile var mailArrives: Boolean = false
+    private var mailArrived = false
     private val planRoutes = FakePlanRoutes(json, today)
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
@@ -491,9 +500,15 @@ class FakeBackend(
             path == "/user-product/vip/gmail/consent" -> ok("""{"status":"accepted"}""")
             path == "/user-product/vip/gmail/connect" || path == "/user-product/vip/mail/microsoft/connect" -> ok("""{"authorization_url":"https://accounts.example.test/authorize?state=demo"}""")
             path == "/user-product/vip/mail/oauth/complete" -> { mailConnected = true; ok("""{"status":"connected","provider":"gmail"}""") }
-            path == "/user-product/vip/gmail/sync" -> if (!mailConnected) error(404, "No hay un correo conectado.") else ok(
+            path == "/user-product/vip/gmail/sync" -> if (!mailConnected) error(404, "No hay un correo conectado.") else {
+                if (mailArrives && !mailArrived) {
+                    mailArrived = true
+                    movements += Movement("transaction:9001", 9001, "transaction", today.toString(), FAKE_ARRIVED_MOVEMENT, BigDecimal(8750), "expense", "Comida", "", false)
+                }
+                ok(
                 """{"status":"ok","connections":1,"failed_connections":[],"scan_scope":"year_to_date","initial_scan_complete":true,""" +
                     """"found":3,"auto_saved":1,"pending":${candidates.count { it.isPending }},"payroll_reports":0,"duplicates":0}""")
+            }
             path == "/user-product/vip/gmail" && method == "DELETE" -> { mailConnected = false; ok("""{"status":"disconnected"}""") }
             // One candidate store for Email Monitor and Cuentas; the same filters as list_gmail_emails.
             path == "/user-product/vip/gmail/emails" -> ok(MailCandidateList("ok", candidates.filter { c ->

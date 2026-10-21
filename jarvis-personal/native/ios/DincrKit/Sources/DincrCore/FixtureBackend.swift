@@ -31,6 +31,11 @@ public actor FixtureBackend: HTTPTransport {
     // Internal (not private): `FixtureBackend+Plan.swift` serves the Plan, Cuentas and analysis routes.
     var profile: [String: Any]
     var movements: [[String: Any]] = []
+    /// Mail recovery UI tests: a bank notice arrives after launch, so the second mail sync finds a
+    /// new movement (as the scheduled sync or the Owner's learned rules would record it).
+    let mailArrives: Bool
+    private var mailSyncs = 0
+    public static let arrivedMovementDescription = "Compra detectada por correo"
     var debts: [[String: Any]] = []
     private var goals: [[String: Any]] = []
     private var savings: [[String: Any]] = []
@@ -74,9 +79,10 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
-                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false) {
+                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, mailArrives: Bool = false) {
         self.scenario = scenario
         self.identityRefreshFails = identityRefreshFails
+        self.mailArrives = mailArrives
         self.latency = latency
         self.language = language
         // STORE images must not depend on the capture day.
@@ -558,6 +564,12 @@ public actor FixtureBackend: HTTPTransport {
         case ("POST", "/user-product/vip/gmail/sync"):
             guard mailConnected else { return error(404, "Primero conectá Gmail.") }
             if candidates.isEmpty { candidates = Self.sampleCandidates(today: today) }
+            mailSyncs += 1
+            if mailArrives && mailSyncs == 2 {
+                movements.append(["movement_id": "transaction:9001", "source_id": 9001, "origin": "transaction", "transaction_date": day(0),
+                                  "description": Self.arrivedMovementDescription, "amount": 8_750, "transaction_type": "expense",
+                                  "category": "Comida", "notes": "", "editable": false])
+            }
             return ok(["status": "ok", "connections": 1, "failed_connections": [Int](), "scan_scope": "year_to_date", "initial_scan_complete": true,
                        "found": candidates.count, "auto_saved": 0, "pending": pendingCount(), "payroll_reports": 0, "duplicates": 0])
         case ("DELETE", "/user-product/vip/gmail"):

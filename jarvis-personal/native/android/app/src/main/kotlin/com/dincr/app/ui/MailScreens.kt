@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AppLanguage
@@ -59,6 +61,9 @@ fun MailScreen(model: AppModel, nav: Navigator) {
     }
     // The browser returns here after connecting: reload whenever the app comes back.
     LifecycleResumeEffect(Unit) { data.reload(); onPauseOrDispose { } }
+    // New mail on return (AppModel.syncOnReturn): the review list reads again.
+    val dataGeneration by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(dataGeneration) { if (dataGeneration > 0) data.refresh() }
     val reviewer = rememberCandidateReviewer(model) { data.reload() }
     var syncing by remember { mutableStateOf(false) }
     var disconnect by remember { mutableStateOf<MailStatus.Connection?>(null) }

@@ -81,6 +81,7 @@ private struct MailMonitorContent: View {
         .refreshable { await load() }
         .task(id: generation) { await load() }
         .onChange(of: model.mailOutcome) { _, _ in generation += 1 }
+        .onChange(of: model.dataGeneration) { _, _ in generation += 1 }
         .sheet(item: $scopeSheet) { provider in
             ScopeSheet(provider: provider) { scope in Task { await connect(provider, scope: scope) } }
         }
