@@ -92,9 +92,6 @@ const pairs = [
   // VIP plan badge.
   ["vip", "vip-container", TEXT],
   ["text", "vip-container", TEXT],
-  // Hero card (the screen's main figure) and the facts panel inside it: figure, supporting text
-  // and the accent (income sign, progress, small labels) are all text.
-  ...["hero", "hero-2"].flatMap((bg) => ["on-hero", "on-hero-2", "hero-accent"].map((fg) => [fg, bg, TEXT])),
 ];
 // Tokens with no contrast obligation, with the reason. Everything else must be in a pair.
 const exempt = {
@@ -122,17 +119,6 @@ for (const scheme of ["", "dark-"]) {
       weakest = { margin: ratio / minimum, text: `${scheme + fg} on ${scheme + bg} ${ratio.toFixed(2)}:1 (min ${minimum})` };
     }
     if (ratio < minimum) failures.push(`${scheme + fg} (${a}) on ${scheme + bg} (${b}) is ${ratio.toFixed(2)}:1, needs ${minimum}:1`);
-  }
-  // Inside a hero card the nested components use the dark scheme's roles (heroPalette in the
-  // apps), in both schemes: every text and status role must read on the hero surfaces.
-  for (const surface of ["hero", "hero-2"]) {
-    for (const fg of ["text-2", "text-muted", "tint", "positive", "negative", "warning", "info", "vip"]) {
-      const [a, b] = [colors[`dark-${fg}`], colors[scheme + surface]];
-      if (!a || !b) continue; // reported by the counterpart check below
-      const ratio = contrast(a, b);
-      checked += 1;
-      if (ratio < TEXT) failures.push(`hero: dark-${fg} (${a}) on ${scheme + surface} (${b}) is ${ratio.toFixed(2)}:1, needs ${TEXT}:1`);
-    }
   }
   // Chart series must be distinguishable from each other, not only from the background.
   for (let i = 0; i < charts.length; i += 1) {

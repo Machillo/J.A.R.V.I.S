@@ -6,12 +6,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.border
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,12 +29,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,35 +56,15 @@ import java.math.BigDecimal
 /** Tabular digits for every amount. */
 val TabularNums = TextStyle(fontFeatureSettings = "tnum")
 
-/** Card surface: tonal with a hairline edge, no shadow (DESIGN.md → Elevation & Depth). */
+/** Card surface: tonal, no shadow (DESIGN.md → Elevation & Depth). */
 @Composable
 fun DincrCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(DincrRadius.lg)
     Box(
         modifier
             .fillMaxWidth()
-            .background(Dincr.colors.surface, shape)
-            .border(1.dp, Dincr.colors.line, shape)
+            .background(Dincr.colors.surface, RoundedCornerShape(DincrRadius.lg))
             .padding(DincrSpacing.s4),
     ) { content() }
-}
-
-/**
- * The screen's main figure (DESIGN.md → Hero card): deep ink surface, white figure, the accent for
- * small labels. One per screen at most; everything else is a [DincrCard].
- */
-@Composable
-fun DincrHeroCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val c = Dincr.colors
-    Box(
-        modifier
-            .fillMaxWidth()
-            .background(Brush.linearGradient(listOf(c.hero, c.hero2)), RoundedCornerShape(DincrRadius.lg))
-            .padding(DincrSpacing.s5),
-    ) {
-        val hero = heroPalette(c)
-        CompositionLocalProvider(LocalDincrPalette provides hero, LocalContentColor provides hero.text) { content() }
-    }
 }
 
 /** An amount with a sign for movements, tabular digits and a spoken description. Unknown → "—". */
@@ -114,12 +86,11 @@ fun MoneyText(amount: BigDecimal?, modifier: Modifier = Modifier, sign: MoneyFor
 fun MoneyRow(title: String, subtitle: String, amount: BigDecimal, kind: MovementKind, icon: ImageVector, readOnly: Boolean, modifier: Modifier = Modifier, currency: String? = null) {
     val colors = Dincr.colors
     Row(modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = DincrSpacing.s2), verticalAlignment = Alignment.CenterVertically) {
-        val income = kind == MovementKind.INCOME
-        Box(Modifier.size(42.dp).background(if (income) colors.positiveContainer else colors.surface2, RoundedCornerShape(DincrRadius.md)), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = if (income) colors.positive else colors.text2, modifier = Modifier.size(20.dp))
+        Box(Modifier.size(40.dp).background(colors.surface2, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = if (kind == MovementKind.INCOME) colors.positive else colors.text2, modifier = Modifier.size(20.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), color = colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (readOnly) Icon(Icons.Rounded.Lock, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp).padding(end = 2.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textMuted)
@@ -141,42 +112,6 @@ fun DincrPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = M
     ) {
         if (loading) CircularProgressIndicator(Modifier.size(20.dp), color = Dincr.colors.onTint, strokeWidth = 2.dp)
         else Text(text, style = MaterialTheme.typography.titleMedium)
-    }
-}
-
-/** Tonal button: the second action next to a primary one (DESIGN.md → button-secondary). */
-@Composable
-fun DincrTonalButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    Button(
-        onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp),
-        shape = RoundedCornerShape(DincrRadius.full), contentPadding = PaddingValues(horizontal = DincrSpacing.s4),
-        colors = ButtonDefaults.buttonColors(containerColor = Dincr.colors.tintContainer, contentColor = Dincr.colors.onTintContainer,
-            disabledContainerColor = Dincr.colors.surface2, disabledContentColor = Dincr.colors.textMuted),
-    ) { Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
-}
-
-/**
- * Compact pill for an inline action (a review row's Confirmar): filled tint by default, outlined
- * when [quiet]; [destructive] uses the negative color.
- */
-@Composable
-fun DincrPillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, quiet: Boolean = false, destructive: Boolean = false) {
-    val c = Dincr.colors
-    val shape = RoundedCornerShape(DincrRadius.full)
-    if (quiet) {
-        OutlinedButton(
-            onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), shape = shape,
-            contentPadding = PaddingValues(horizontal = DincrSpacing.s4),
-            border = BorderStroke(1.dp, if (destructive) c.negative else c.fieldBorder),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = if (destructive) c.negative else c.text),
-        ) { Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
-    } else {
-        Button(
-            onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), shape = shape,
-            contentPadding = PaddingValues(horizontal = DincrSpacing.s4),
-            colors = ButtonDefaults.buttonColors(containerColor = if (destructive) c.negative else c.tint, contentColor = c.onTint,
-                disabledContainerColor = c.surface2, disabledContentColor = c.textMuted),
-        ) { Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
     }
 }
 
@@ -216,11 +151,9 @@ private fun Bar(width: Int, height: Int) {
 fun EmptyState(icon: ImageVector, title: String, message: String, action: (@Composable () -> Unit)? = null) {
     DincrCard {
         Column(Modifier.fillMaxWidth().padding(DincrSpacing.s2), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
-            Box(Modifier.size(56.dp).background(Dincr.colors.tintContainer, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = Dincr.colors.tint, modifier = Modifier.size(28.dp))
-            }
-            Text(title, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, textAlign = TextAlign.Center)
-            Text(message, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2, textAlign = TextAlign.Center)
+            Icon(icon, contentDescription = null, tint = Dincr.colors.tint, modifier = Modifier.size(32.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
             action?.let { Spacer(Modifier.height(DincrSpacing.s1)); it() }
         }
     }
@@ -276,9 +209,7 @@ fun CategoryBars(items: List<Pair<String, BigDecimal>>, limit: Int = 5) {
                     Text(label, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text)
                     MoneyText(amount, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                 }
-                Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(8.dp).background(Dincr.colors.surface2, CircleShape)) {
-                    Box(Modifier.fillMaxWidth((amount.toDouble() / top).toFloat().coerceIn(0.02f, 1f)).height(8.dp).background(Dincr.colors.chartExpense, CircleShape))
-                }
+                Box(Modifier.padding(top = 6.dp).fillMaxWidth((amount.toDouble() / top).toFloat().coerceIn(0.02f, 1f)).height(6.dp).background(Dincr.colors.chartExpense, CircleShape))
             }
         }
     }

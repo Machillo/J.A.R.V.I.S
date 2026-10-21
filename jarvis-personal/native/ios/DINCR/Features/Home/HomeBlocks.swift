@@ -154,7 +154,7 @@ private struct HomeStatusCard: View {
                     .accessibilityIdentifier("\(idPrefix).status.pending")
                 }
             }
-            .dincrHeroCard()
+            .dincrCard()
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("\(idPrefix).status")
