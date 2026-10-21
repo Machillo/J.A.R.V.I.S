@@ -261,7 +261,9 @@ retired.
   use the **dark scheme's roles** in both schemes (Android `heroPalette`, iOS dark color scheme in
   `dincrHeroCard`), so income, expense, status and progress keep their meaning and contrast. The
   contrast gate checks every one of those roles on both hero surfaces.
-- `hero-accent`: small labels and highlights on the hero only.
+- `hero-accent`: small labels and highlights on the hero only (the Perfil avatar).
+- Where it is used: Hoy → Estado de hoy (the main figure) and Perfil → the account header. A screen
+  without a backend figure keeps a normal card; the hero never invents or computes a value.
 
 ### Neutral
 

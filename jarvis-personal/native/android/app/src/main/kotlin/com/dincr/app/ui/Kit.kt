@@ -218,7 +218,7 @@ fun DetailScaffold(title: String, onBack: () -> Unit, actions: @Composable () ->
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, modifier = modifier.semantics { heading() })
+    Text(text, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, modifier = modifier.padding(top = DincrSpacing.s2).semantics { heading() })
 }
 
 /** Label on the left, amount on the right (tabular). */

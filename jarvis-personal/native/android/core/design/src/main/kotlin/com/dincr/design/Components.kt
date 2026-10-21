@@ -306,10 +306,11 @@ fun IncomeExpenseBars(months: List<Triple<String, BigDecimal, BigDecimal>>, titl
         ) {
             months.forEach { (month, income, expenses) ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(Modifier.height(136.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Box(Modifier.widthIn(min = 12.dp).width(14.dp).fillMaxHeightFraction(income.toDouble() / max).background(c.chartIncome, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
-                        Box(Modifier.width(14.dp).fillMaxHeightFraction(expenses.toDouble() / max).background(c.chartExpense, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
+                    Row(Modifier.height(136.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Box(Modifier.widthIn(min = 12.dp).width(16.dp).fillMaxHeightFraction(income.toDouble() / max).background(c.chartIncome, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
+                        Box(Modifier.width(16.dp).fillMaxHeightFraction(expenses.toDouble() / max).background(c.chartExpense, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
                     }
+                    Box(Modifier.width(38.dp).height(1.dp).background(c.lineStrong))
                     Text(month, style = MaterialTheme.typography.labelSmall, color = c.textMuted, modifier = Modifier.padding(top = 4.dp))
                 }
             }

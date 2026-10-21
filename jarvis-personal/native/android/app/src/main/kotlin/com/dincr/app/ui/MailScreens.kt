@@ -1,5 +1,10 @@
 package com.dincr.app.ui
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,8 +83,11 @@ fun MailScreen(model: AppModel, nav: Navigator) {
                     Column {
                         status.visibleConnections.forEach { c ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.padding(end = 12.dp).size(40.dp).background(Dincr.colors.tintContainer, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                                    Icon(androidx.compose.material.icons.Icons.Rounded.MarkEmailRead, contentDescription = null, tint = Dincr.colors.tint, modifier = Modifier.size(20.dp))
+                                }
                                 Column(Modifier.weight(1f)) {
-                                    Text(c.email ?: tx("Correo conectado", "Connected mail"), style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text)
+                                    Text(c.email ?: tx("Correo conectado", "Connected mail"), style = MaterialTheme.typography.bodyLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = Dincr.colors.text)
                                     Caption(listOfNotNull(if (c.provider == "microsoft") "Outlook" else "Gmail", c.importSince?.let { tx("desde ", "since ") + dateLabel(it) }).joinToString(" · "))
                                 }
                                 TextButton({ disconnect = c }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Desconectar", "Disconnect"), color = Dincr.colors.negative) }
