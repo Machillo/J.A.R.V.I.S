@@ -338,10 +338,10 @@ import Testing
 
     /// A transfer is never styled or corrected as spending by default. Android: `MailContractTest`.
     @Test func aTransferIsNeitherSpendingNorIncomeUntilTheUserSays() {
-        func card(_ type: String?, reason: String? = nil, internal: Bool? = false) -> MailCandidate {
+        func card(_ type: String?, reason: String? = nil, isInternal: Bool? = false) -> MailCandidate {
             MailCandidate(candidateId: 1, bank: "BAC", description: "Aviso", amount: 45, currency: "CRC", accountBaseCurrency: "CRC",
                           transactionDate: "2026-10-20", transactionType: type, category: nil, reviewStatus: "pending",
-                          resolutionReason: reason, isInternalTransfer: internal)
+                          resolutionReason: reason, isInternalTransfer: isInternal)
         }
         #expect(card("income").amountSign == .income)
         #expect(card("expense").amountSign == .expense && card("debt_payment").amountSign == .expense)
@@ -350,7 +350,7 @@ import Testing
         for type in ["transfer", "internal_transfer", nil, ""] { #expect(card(type).correctionType == "transfer") }
         #expect(card("transfer", reason: "possible_existing_transaction").resolutionNote == .alreadyInHistory)
         #expect(card("transfer", reason: "possible_cross_source_match").resolutionNote == .possibleMatch)
-        #expect(card("transfer", reason: "paired_owned_transfer", internal: true).resolutionNote == .pairedOwnTransfer)
+        #expect(card("transfer", reason: "paired_owned_transfer", isInternal: true).resolutionNote == .pairedOwnTransfer)
         #expect(card("transfer", reason: "paired_owned_transfer").resolutionNote == nil)
         #expect(card("transfer", reason: "same_semantic_movement").resolutionNote == nil)
     }
