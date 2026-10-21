@@ -1,54 +1,59 @@
 ---
-name: DINCR 2.0
+name: DINCR 3.0
 description: Calm, trustworthy personal finance for iOS and Android — one identity, native on each platform.
-version: 2.0.0
+version: 3.0.0
 colors:
   # Light scheme
-  bg: "#F5F7FA"
+  bg: "#F2F5F9"
   surface: "#FFFFFF"
-  surface-2: "#EDF1F6"
+  surface-2: "#E8EDF4"
   line: "#DCE3EC"
-  line-strong: "#C3CEDC"
-  field-border: "#7A889E"
-  focus-ring: "#0B6E68"
-  scrim: "#0B1526"
-  text: "#0B1526"
-  text-2: "#46546A"
-  text-muted: "#5B6980"
-  tint: "#0B6E68"
-  tint-pressed: "#085B56"
-  tint-container: "#D5F0EC"
+  line-strong: "#C2CCDA"
+  field-border: "#6F7E96"
+  focus-ring: "#0A6B5C"
+  scrim: "#081324"
+  text: "#0A1628"
+  text-2: "#3F4D66"
+  text-muted: "#56647C"
+  tint: "#0A6B5C"
+  tint-pressed: "#075447"
+  tint-container: "#D2F0E7"
   on-tint: "#FFFFFF"
-  on-tint-container: "#053B37"
-  positive: "#08734F"
-  positive-container: "#D8F3E6"
-  negative: "#B4233F"
-  negative-container: "#FBE0E5"
-  warning: "#9A5800"
-  warning-container: "#FCEBCF"
-  info: "#0B5C8E"
-  info-container: "#DDEEFA"
-  vip: "#8A5A00"
-  vip-container: "#F7EBCF"
-  chart-income: "#008C7A"
+  on-tint-container: "#03372E"
+  positive: "#07724E"
+  positive-container: "#D7F2E5"
+  negative: "#B3233D"
+  negative-container: "#FBE1E6"
+  warning: "#965500"
+  warning-container: "#FCEBCE"
+  info: "#0A5A8C"
+  info-container: "#DCEDF9"
+  vip: "#845600"
+  vip-container: "#F6EACD"
+  chart-income: "#0A8C76"
   chart-expense: "#5B63C9"
+  hero: "#0C1C36"
+  hero-2: "#17294A"
+  on-hero: "#FFFFFF"
+  on-hero-2: "#B8C6DC"
+  hero-accent: "#6FE3CB"
   # Dark scheme
-  dark-bg: "#0A1220"
-  dark-surface: "#111B2C"
-  dark-surface-2: "#182438"
-  dark-line: "#24324A"
-  dark-line-strong: "#34445F"
-  dark-field-border: "#65758F"
-  dark-focus-ring: "#3CCFBF"
+  dark-bg: "#070E1A"
+  dark-surface: "#0F1A2B"
+  dark-surface-2: "#172539"
+  dark-line: "#22324A"
+  dark-line-strong: "#33445F"
+  dark-field-border: "#6A7A94"
+  dark-focus-ring: "#45D3BC"
   dark-scrim: "#000000"
-  dark-text: "#EEF3F9"
+  dark-text: "#EDF2F9"
   dark-text-2: "#B3C0D2"
-  dark-text-muted: "#93A2B8"
-  dark-tint: "#3CCFBF"
-  dark-tint-pressed: "#2DB5A6"
-  dark-tint-container: "#0E3A38"
-  dark-on-tint: "#04201D"
-  dark-on-tint-container: "#BFF2EB"
+  dark-text-muted: "#94A3B9"
+  dark-tint: "#45D3BC"
+  dark-tint-pressed: "#33B9A4"
+  dark-tint-container: "#0C3A34"
+  dark-on-tint: "#03201B"
+  dark-on-tint-container: "#C0F2E8"
   dark-positive: "#4ADE9A"
   dark-positive-container: "#0D3524"
   dark-negative: "#FF8A9B"
@@ -61,6 +66,11 @@ colors:
   dark-vip-container: "#3A2C0C"
   dark-chart-income: "#23A897"
   dark-chart-expense: "#7A80E0"
+  dark-hero: "#11264A"
+  dark-hero-2: "#1A3360"
+  dark-on-hero: "#FFFFFF"
+  dark-on-hero-2: "#BACAE3"
+  dark-hero-accent: "#6FE3CB"
 typography:
   # Native apps use the platform text styles (Dynamic Type / sp). Sizes are the default
   # (100%) size; they scale with the user's setting. Money uses tabular figures.
@@ -213,7 +223,7 @@ components:
     padding: "24px 16px"
 ---
 
-# Design System: DINCR 2.0
+# Design System: DINCR 3.0
 
 Normative tokens are in the frontmatter above. The full behavioral specification (motion, haptics,
 states, accessibility, charts, platform mapping, copy) is in
@@ -222,14 +232,14 @@ states, accessibility, charts, platform mapping, copy) is in
 
 ## Overview
 
-DINCR 2.0 is a **Restrained**, content-first system for an *Operate* product: people check what they
+DINCR 3.0 is a **Restrained**, content-first system for an *Operate* product: people check what they
 have, record what happened and decide the next step. Physical scene: a phone in one hand, on a bus
 at 7 a.m. or on the couch at 10 p.m. — so light and dark are both first-class and **follow the
 system setting by default**, with an in-app override.
 
-The identity lives in three places and nowhere else: a single deep-teal **tint** (actions, current
-selection, focus), **tabular money figures** set large and calm, and a **voice** that states money
-facts plainly. Everything else is the platform: SwiftUI and Material 3 components, system type,
+The identity lives in four places and nowhere else: a single jade **tint** (actions, current
+selection, focus), the deep-ink **hero card** that carries each screen's main figure, **tabular
+money figures** set large and calm, and a **voice** that states money facts plainly. Everything else is the platform: SwiftUI and Material 3 components, system type,
 system navigation. The previous generation's glow gradients, glass cards and per-plan re-skins are
 retired.
 
@@ -241,6 +251,17 @@ retired.
   tabs and chips, focus rings, progress toward a user goal. Never decoration, never a background
   wash.
 - **Tint container**: tonal secondary actions and selected chips.
+
+### Hero (DINCR 3.0)
+
+- `hero` → `hero-2`: the deep-ink surface (a diagonal gradient between the two) of the **hero
+  card**, the one card per screen that carries the main figure (Hoy → Estado de hoy). It is a
+  surface, not a decoration: never behind lists, forms or warnings.
+- Inside it, text uses `on-hero` (the figure) and `on-hero-2` (supporting), and nested components
+  use the **dark scheme's roles** in both schemes (Android `heroPalette`, iOS dark color scheme in
+  `dincrHeroCard`), so income, expense, status and progress keep their meaning and contrast. The
+  contrast gate checks every one of those roles on both hero surfaces.
+- `hero-accent`: small labels and highlights on the hero only.
 
 ### Neutral
 
@@ -349,7 +370,8 @@ medium/large top app bar).
 
 ## Elevation & Depth
 
-- Depth is **tonal**: `bg` < `surface` < `surface-2`. Cards and lists do not cast shadows.
+- Depth is **tonal**: `bg` < `surface` < `surface-2`. Cards and lists do not cast shadows; a card
+  carries a 1 px `line` edge so it reads on `bg` in bright light. The hero card has no edge.
 - Only floating elements cast a shadow: sheets, menus, snackbars, the bottom bar on scroll. One
   shadow: y 8, blur 24, `#0B1526` at 12% (light) / `#000000` at 40% (dark).
 - Blur and translucency come only from system materials (iOS bar and sheet materials, Android none).
@@ -363,7 +385,7 @@ medium/large top app bar).
 | md | 14 | buttons, banners |
 | lg | 20 | cards, grouped list sections |
 | sheet | 28 | bottom sheets, dialogs (Android extra-large) |
-| full | 999 | chips, badges, avatar |
+| full | 999 | chips, badges, avatar, inline action pills, the Movimientos search field |
 
 iOS uses continuous ("squircle") corners. No progress rings; progress is a linear bar with its value
 in text.
@@ -373,6 +395,12 @@ in text.
 ### Buttons
 
 - **Primary** (filled tint): one per screen or sheet; the action that completes the task.
+- **Pill actions** (DINCR 3.0, Android `DincrPillButton` / `DincrTonalButton`): inline actions on
+  a row, as in the mail review — the completing action filled (Confirmar), the correction tonal
+  (Corregir), dismissing outlined in `negative` (Descartar); ≥ 48 dp. iOS keeps `.dincrPrimary` /
+  `.dincrSecondary` and the system destructive button there.
+- **Chips** (Android) are tonal (`surface-2`), without outline; the selected one uses the tint
+  container **and a check icon**, so the selection never depends on color alone.
 - **Secondary** (tint container): alternatives. **Text**: low-emphasis actions, cancel.
 - **Destructive** (filled negative): only inside a confirmation; the first surface shows a text
   button in negative color.
