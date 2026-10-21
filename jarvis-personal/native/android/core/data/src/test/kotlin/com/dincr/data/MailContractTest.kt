@@ -82,9 +82,19 @@ class MailContractTest {
     }
 
     /** Raw `resolution_reason` codes never reach the user; only the known ones become a note. */
+    /** A transfer or an unknown type never starts the correction as an expense. iOS: `EmailMonitorTests`. */
+    @Test fun theCorrectionStartsFromANeutralTypeUnlessTheNoticeIsClear() {
+        fun type(value: String?) = MailCandidate(candidateId = 1, transactionType = value).correctionType
+        assertEquals("expense", type("expense"))
+        assertEquals("income", type("income"))
+        assertEquals("debt_payment", type("debt_payment"))
+        listOf("transfer", "internal_transfer", null, "").forEach { assertEquals("transfer", type(it)) }
+    }
+
     @Test fun resolutionReasonsMapToNotesNotCodes() {
         fun note(reason: String?, internal: Boolean? = null) = MailCandidate(candidateId = 1, resolutionReason = reason, isInternalTransfer = internal).resolutionNote
         assertEquals(MailCandidate.ResolutionNote.POSSIBLE_MATCH, note("possible_cross_source_match"))
+        assertEquals(MailCandidate.ResolutionNote.ALREADY_IN_HISTORY, note("possible_existing_transaction"))
         assertEquals(MailCandidate.ResolutionNote.PAIRED_OWN_TRANSFER, note("paired_owned_transfer", true))
         assertEquals(MailCandidate.ResolutionNote.OWN_ACCOUNTS, note("confirmed_owned_endpoints", true))
         assertNull(note("same_semantic_movement"))
