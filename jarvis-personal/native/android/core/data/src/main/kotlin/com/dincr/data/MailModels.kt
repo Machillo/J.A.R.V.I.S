@@ -134,13 +134,23 @@ data class MailCandidate(
      */
     val resolutionNote: ResolutionNote? get() = when {
         resolutionReason == "possible_cross_source_match" -> ResolutionNote.POSSIBLE_MATCH
+        resolutionReason == "possible_existing_transaction" -> ResolutionNote.ALREADY_IN_HISTORY
         isInternalTransfer != true -> null
         resolutionReason == "paired_owned_transfer" -> ResolutionNote.PAIRED_OWN_TRANSFER
         resolutionReason == "confirmed_owned_endpoints" -> ResolutionNote.OWN_ACCOUNTS
         else -> null
     }
 
-    enum class ResolutionNote { POSSIBLE_MATCH, PAIRED_OWN_TRANSFER, OWN_ACCOUNTS }
+    enum class ResolutionNote { POSSIBLE_MATCH, ALREADY_IN_HISTORY, PAIRED_OWN_TRANSFER, OWN_ACCOUNTS }
+
+    /**
+     * The type the correction sheet starts from. A transfer (own or not) and an unknown type start as
+     * a transfer, which counts as neither income nor expense: never as an expense by default.
+     */
+    val correctionType: String get() = when (transactionType) {
+        "expense", "income", "debt_payment" -> transactionType
+        else -> "transfer"
+    }
 
     companion object {
         val CONVERTIBLE = setOf("CRC", "USD")

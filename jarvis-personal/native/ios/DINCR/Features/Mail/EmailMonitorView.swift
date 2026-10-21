@@ -393,6 +393,16 @@ struct CandidateCard: View {
     let correct: () -> Void
     let reject: () -> Void
 
+    /// Same wording as Android's `CandidateReview` notes.
+    static func text(for note: MailCandidate.ResolutionNote) -> String {
+        switch note {
+        case .possibleMatch: tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR lo deja para tu revisión en vez de descartarlo solo.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of dismissing it on its own.")
+        case .alreadyInHistory: tx("Ya tenés un movimiento con este monto en esas fechas. Revisá tu historial antes de confirmarlo para no contarlo dos veces.", "You already have a movement with this amount around these dates. Check your history before confirming it so it isn’t counted twice.")
+        case .pairedOwnTransfer: tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, no se suma a ingresos ni gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming won’t add income or expense.")
+        case .ownAccounts: tx("Ambas cuentas son de las que confirmaste como tuyas. Al confirmar, no se registra como ingreso ni gasto.", "Both accounts are ones you confirmed as yours. Confirming won’t record income or expense.")
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             HStack(alignment: .firstTextBaseline) {
@@ -403,7 +413,7 @@ struct CandidateCard: View {
                         .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                 }
                 Spacer()
-                MoneyText(candidate.nativeAmount, sign: candidate.transactionType == "income" ? .income : .expense, currency: candidate.nativeCurrency)
+                MoneyText(candidate.nativeAmount, sign: candidate.amountSign, currency: candidate.nativeCurrency)
             }
             .accessibilityElement(children: .combine)
             if !candidate.isPending {
@@ -417,6 +427,10 @@ struct CandidateCard: View {
                 } else if candidate.needsRate {
                     Text(tx("Está en \(candidate.nativeCurrency ?? ""). Tocá Corregir e indicá tu tipo de cambio.", "It’s in \(candidate.nativeCurrency ?? ""). Tap Correct and enter your exchange rate."))
                         .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
+                }
+                if let note = candidate.resolutionNote {
+                    Text(Self.text(for: note)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .accessibilityIdentifier("candidate.note.\(candidate.candidateId ?? 0)")
                 }
                 HStack(spacing: DincrSpacing.s2) {
                     if !candidate.needsRate && !candidate.cannotConvert {
@@ -496,7 +510,7 @@ struct CorrectionSheet: View {
         guard description.isEmpty else { return }
         description = candidate.description ?? ""
         amount = candidate.nativeAmount.map(model.moneyFormat.inputText) ?? ""
-        type = ["expense", "income", "debt_payment", "transfer"].contains(candidate.transactionType ?? "") ? candidate.transactionType! : "expense"
+        type = candidate.correctionType
         category = candidate.category ?? "general"
         if let day = candidate.transactionDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { date = parsed }
     }

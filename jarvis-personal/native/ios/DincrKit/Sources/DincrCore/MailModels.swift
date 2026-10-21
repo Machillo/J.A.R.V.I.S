@@ -183,6 +183,42 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
 
     public var isPending: Bool { reviewStatus == "pending" }
 
+    /// How the amount is styled: only a notice read as income or spending gets a sign. A transfer may be
+    /// the user's own money moving, so it stays neutral (Android: `CandidateReview` amount sign).
+    public var amountSign: MoneyFormat.Sign {
+        switch transactionType {
+        case "income": .income
+        case "expense", "debt_payment": .expense
+        default: .none
+        }
+    }
+
+    /// The type the correction sheet starts from. A transfer (own or not) and an unknown type start as a
+    /// transfer, which counts as neither income nor expense: never as an expense by default.
+    public var correctionType: String {
+        switch transactionType {
+        case "expense", "income", "debt_payment": transactionType ?? "transfer"
+        default: "transfer"
+        }
+    }
+
+    /// What `resolution_reason` means for the user (Android: `MailCandidate.resolutionNote`). The field is
+    /// an internal code: only the reasons a pending notice can carry get a note.
+    public enum ResolutionNote: Sendable { case possibleMatch, alreadyInHistory, pairedOwnTransfer, ownAccounts }
+    public var resolutionNote: ResolutionNote? {
+        switch resolutionReason {
+        case "possible_cross_source_match": return .possibleMatch
+        case "possible_existing_transaction": return .alreadyInHistory
+        default: break
+        }
+        guard isInternalTransfer == true else { return nil }
+        switch resolutionReason {
+        case "paired_owned_transfer": return .pairedOwnTransfer
+        case "confirmed_owned_endpoints": return .ownAccounts
+        default: return nil
+        }
+    }
+
     /// Another convertible currency than the account's: accepting needs the user's own rate.
     public var needsRate: Bool {
         guard let native = nativeCurrency else { return false }
