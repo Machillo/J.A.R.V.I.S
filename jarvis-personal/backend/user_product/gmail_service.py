@@ -1460,8 +1460,10 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     syncable = len(rows) - reconnect
     run_ok = syncable == 0 or failed < syncable
     observability.heartbeat("gmail_maintenance", ok=run_ok, error_class=None if run_ok else "all_connections_failed")
-    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect,
-            "ended_without_plan": ended, "retention": retention}
+    # Counts only (never which mailbox): "partial" when a mailbox that could sync did not, so the
+    # scheduler can tell a full run from one that silently skipped a mailbox.
+    return {"status": "partial" if failed else "ok", "connections": len(rows), "completed": completed,
+            "reconnect": reconnect, "failed": failed, "ended_without_plan": ended, "retention": retention}
 
 
 def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, Any]:

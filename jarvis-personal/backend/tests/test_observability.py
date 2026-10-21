@@ -652,13 +652,13 @@ class _MaintenanceConn:
         pass
 
 
-@pytest.mark.parametrize(("outcomes", "ok"), [
-    (["reauth", "reauth", "reauth"], True),   # only reconnects needed: the job ran fine
-    (["boom", "boom", "reauth"], False),      # everything that could sync failed
-    (["boom", "ok", "reauth"], True),         # partial failure: reported per connection, run ok
-    ([], True),
+@pytest.mark.parametrize(("outcomes", "ok", "status", "failed"), [
+    (["reauth", "reauth", "reauth"], True, "ok", 0),   # only reconnects needed: the job ran fine
+    (["boom", "boom", "reauth"], False, "partial", 2),  # everything that could sync failed
+    (["boom", "ok", "reauth"], True, "partial", 1),     # partial failure: the run is ok, the answer says so
+    ([], True, "ok", 0),
 ])
-def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outcomes, ok):
+def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outcomes, ok, status, failed):
     from fastapi import HTTPException
 
     from backend.user_product import gmail_service
@@ -686,5 +686,8 @@ def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outc
     beats = []
     monkeypatch.setattr(gmail_service.observability, "heartbeat", lambda job, ok, **k: beats.append((job, ok)))
     monkeypatch.setattr(gmail_service.observability, "report", lambda *a, **k: None)
-    gmail_service.gmail_maintenance("cron-secret-value")
+    result = gmail_service.gmail_maintenance("cron-secret-value")
     assert beats == [("gmail_maintenance", ok)]
+    # A mailbox that failed is never hidden behind "ok": the scheduler sees it in the counts.
+    assert (result["status"], result["failed"]) == (status, failed)
+    assert result["completed"] + result["reconnect"] + result["failed"] == result["connections"]

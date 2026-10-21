@@ -8,7 +8,7 @@ name: Mail maintenance
 # push: this schedule is how its new mail arrives. Nothing called this endpoint, so new mail
 # stopped appearing after the first sync. This workflow is its scheduler.
 #
-# Inactive until the Owner configures both:
+# Needs both (a scheduled run without them fails, so a missing setting is never a green no-op):
 #   - repository variable DINCR_BACKEND_URL       (already used by Financial history)
 #   - repository secret   DINCR_GMAIL_CRON_SECRET (the value of the backend's FINVA_GMAIL_CRON_SECRET)
 # The secret is sent only in the X-Finva-Cron-Secret header and never printed. The response
@@ -36,8 +36,9 @@ jobs:
       - name: POST /user-product/vip/gmail/maintenance
         run: |
           if [ -z "$BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "::notice::Mail maintenance not configured (set the DINCR_BACKEND_URL variable and the DINCR_GMAIL_CRON_SECRET secret)."
-            exit 0
+            # A scheduled run that cannot reach the backend reads no mail: fail instead of a green no-op.
+            echo "::error::Mail maintenance not configured (set the DINCR_BACKEND_URL variable and the DINCR_GMAIL_CRON_SECRET secret)."
+            exit 1
           fi
           code=000
           # Retry only transient failures (network error, a cold start or gateway timeout).
@@ -54,8 +55,10 @@ jobs:
               python3 - <<'PY'
           import json, sys
           data = json.load(open("body.json"))
-          counts = {key: data.get(key) for key in ("status", "connections", "completed", "reconnect", "ended_without_plan")}
+          counts = {key: data.get(key) for key in ("status", "connections", "completed", "reconnect", "failed", "ended_without_plan")}
           print(counts)
+          if data.get("failed"):
+              print(f"::warning::{data['failed']} connected mailbox(es) could not be read this run; see the backend logs (error class only).")
           syncable = (data.get("connections") or 0) - (data.get("reconnect") or 0)
           if syncable > 0 and not data.get("completed"):
               print("::error::No connected mailbox could be read; see the backend logs (error class only).")
