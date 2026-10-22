@@ -667,6 +667,10 @@ def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outc
     monkeypatch.setenv("FINVA_GMAIL_CRON_SECRET", "cron-secret-value")
     # Entitlement has its own PostgreSQL tests (test_subscription_end_required_pg); here every row is entitled.
     monkeypatch.setattr(gmail_service, "_has_active_vip_access", lambda conn, account_id: True)
+    # The plan rule mail reading returns to once it reopens (Owner-only during the launch, proven in
+    # test_mail_monitor_owner_only_pg.py): reading for VIP with the gmail_automation switch on.
+    monkeypatch.setattr(gmail_service, "MAIL_READING_OWNER_ONLY", False)
+    monkeypatch.setattr(gmail_service, "load_feature_flags", lambda: {"gmail_automation": {"enabled": True}})
     monkeypatch.setattr(gmail_service, "get_connection", lambda: _MaintenanceConn(rows))
     monkeypatch.setattr(gmail_service.mail_oauth, "discard_stale_flows", lambda conn: None)
     monkeypatch.setattr(gmail_service, "end_unentitled_mail_connections", lambda conn: 0)
