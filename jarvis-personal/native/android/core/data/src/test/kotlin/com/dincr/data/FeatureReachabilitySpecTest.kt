@@ -32,7 +32,7 @@ class FeatureReachabilitySpecTest {
 
     /** Each spec entry whose plan gate lives in core/data, with the feature that gates it. */
     private val gated = mapOf(
-        "plan.aguinaldo" to Feature.GMAIL_AUTOMATION, "plan.strategy" to Feature.STRATEGY_BASIC, "plan.debts" to Feature.DEBTS,
+        "plan.strategy" to Feature.STRATEGY_BASIC, "plan.debts" to Feature.DEBTS,
         "plan.salvavidas" to Feature.STRATEGY_VIP, "plan.distribution" to Feature.STRATEGY_BASIC,
         // UX-13: the former DINCR tab's entries, in Movimientos → Análisis, Patrimonio and Hoy.
         "analysis.reports" to Feature.BASIC_REPORTS, "home.attention" to Feature.STRATEGY_VIP,
@@ -43,8 +43,20 @@ class FeatureReachabilitySpecTest {
         // §15 PR 5: Presupuesto and Calendario inside Tu plan del mes, Movimientos recurrentes inside Ingresos y base.
         "month.budget" to Feature.GUIDED_BUDGET, "month.calendar" to Feature.GUIDED_BUDGET, "incomeBase.recurring" to Feature.RECURRING_ITEMS,
         // §15 PR 8: Patrimonio → Cuentas, Conexiones de correo and Deudas.
-        "wealth.accounts" to Feature.GMAIL_AUTOMATION, "wealth.connections" to Feature.GMAIL_AUTOMATION, "wealth.debts" to Feature.DEBTS,
+        "wealth.accounts" to Feature.GMAIL_AUTOMATION, "wealth.debts" to Feature.DEBTS,
     )
+
+    /** L-1: reading mail (Conexiones de correo, the aguinaldo from CCSS notices) is the Owner's alone. */
+    @Test fun mailReadingIsTheOwnersAlone() {
+        listOf("wealth.connections", "plan.aguinaldo").forEach { id ->
+            assertEquals(id, "AVAILABLE", state(id, "owner"))
+            listOf("free", "basic", "vip").forEach { assertEquals("$id $it", "OWNER_ONLY", state(id, it)) }
+        }
+        fun profile(role: String, plan: String?) =
+            Profile(id = 1, role = role, planSelected = true, profileSetupCompleted = true, subscription = plan?.let { Profile.Subscription(plan = it, status = "active") })
+        assertTrue(profile("owner", null).canReadMail)
+        listOf("free", "basic", "vip").forEach { assertFalse(it, profile("user", it).canReadMail) }
+    }
 
     @Test fun planGatesFollowTheSpec() {
         gated.forEach { (id, feature) ->

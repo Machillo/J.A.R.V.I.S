@@ -239,7 +239,8 @@ def vip_salvavidas_update(request: SalvavidasUpdateRequest):
 
 @router.get("/vip/aguinaldo")
 def vip_aguinaldo():
-    require_feature("aguinaldo")
+    # Estimated from CCSS notices in the mailbox: Owner-only while mail reading is (L-1).
+    require_feature("aguinaldo"); require_mail_reading()
     if not gmail_status().get("connected"):
         raise HTTPException(status_code=409, detail="Debes sincronizar tu email para calcular el aguinaldo.")
     return calculate_aguinaldo()

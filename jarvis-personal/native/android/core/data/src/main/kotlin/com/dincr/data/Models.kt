@@ -93,6 +93,12 @@ data class Profile(
     val hasUnsupportedRole: Boolean get() = !role.isNullOrEmpty() && role != "user" && role != "owner"
     /** The Owner account is never deleted from the public app (DELETE /auth/me would remove it). */
     val canDeleteAccountInApp: Boolean get() = !isOwner
+    /**
+     * Reading a mailbox (connect, sync, the aguinaldo from CCSS notices) is the Owner's alone during
+     * the launch; the backend refuses everyone else (require_mail_reading). What was already imported
+     * stays reviewable, and a connected mailbox can always be disconnected. iOS: `Profile.canReadMail`.
+     */
+    val canReadMail: Boolean get() = isOwner
     val plan: String get() = subscription?.plan?.lowercase() ?: "free"
     /** What the app offers; the backend still decides every request. Only the server's role elevates Owner. */
     val planTier: PlanTier get() = if (isOwner) PlanTier.VIP else PlanTier.from(plan)

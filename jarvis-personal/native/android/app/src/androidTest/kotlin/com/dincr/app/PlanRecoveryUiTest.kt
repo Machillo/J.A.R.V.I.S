@@ -112,7 +112,8 @@ class PlanRecoveryUiTest {
 
     private fun home() = waitForText(tx("Hoy", "Today"))
 
-    private val planRows get() = listOf(tx("Aguinaldo", "Aguinaldo"), tx("Tu plan del mes", "Your plan for the month"), tx("Deudas", "Debts"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
+    // The aguinaldo is read from mail: an Owner-only row during the launch, absent for every plan.
+    private val planRows get() = listOf(tx("Tu plan del mes", "Your plan for the month"), tx("Deudas", "Debts"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
 
     @Test fun planHasExactlyItsRowsAndTheRelocatedScreensAreReachable() {
         launch(plan = "basic")
@@ -130,8 +131,9 @@ class PlanRecoveryUiTest {
         planRows.forEach { waitForText(it) }
         listOf(tx("Metas y ahorros", "Goals and savings"), tx("Presupuesto", "Budget"), tx("Cuántos meses te cubre", "How many months it covers"))
             .forEach { assertTrue("$it must not be in Plan", !present(it)) }
-        // Basic: Aguinaldo and Salvavidas stay visible, locked from VIP.
+        // Basic: Salvavidas stays visible, locked from VIP; no Aguinaldo row.
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
+        assertTrue("no Aguinaldo for Basic", !present(tx("Aguinaldo", "Aguinaldo")))
         // §15 PR 5/10: Calendario inside Tu plan del mes, Movimientos recurrentes inside Ingresos y base.
         click(tx("Tu plan del mes", "Your plan for the month"))
         click(tx("Calendario financiero", "Financial calendar"))
@@ -161,7 +163,8 @@ class PlanRecoveryUiTest {
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
         // A locked row opens the subscription screen; §15 PR 10 (option A): Tu plan del mes opens its own
         // locked state first ("Ver suscripciones"), with Presupuesto and Calendario locked inside.
-        click(tx("Aguinaldo", "Aguinaldo"))
+        assertTrue("no Aguinaldo for Free", !present(tx("Aguinaldo", "Aguinaldo")))
+        click(tx("Salvavidas", "Emergency fund"))
         waitForText(tx("Suscripción actual", "Current subscription"))
         back()
         click(tx("Tu plan del mes", "Your plan for the month"))
@@ -308,14 +311,16 @@ class PlanRecoveryUiTest {
         waitForText(tx("Confirmado", "Confirmed"))
         back()
         back()
-        click(tx("Conexiones de correo", "Mail connections"))
-        waitForText(tx("Por revisar", "To review"))
+        // A VIP reviews imported notices from Movimientos → Por revisar (mail reading is the Owner's).
+        click(tx("Movimientos", "Transactions"))
+        click(tx("Por revisar", "To review"))
         waitForText("Tienda en línea")
         assertTrue("confirmed in Cuentas, no longer pending in Correos", !present("Compra en supermercado"))
         // Dismiss in Correos → Cuentas shows it dismissed.
         click(tx("Descartar", "Dismiss"))
         waitForGone("Tienda en línea")
         back()
+        click(tx("Patrimonio", "Wealth"))
         click(tx("Cuentas", "Accounts"))
         click("BAC Credomatic")
         waitForText("Tienda en línea")

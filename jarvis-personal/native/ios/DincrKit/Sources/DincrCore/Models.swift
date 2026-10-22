@@ -93,6 +93,11 @@ public struct Profile: Decodable, Sendable, Equatable {
     public var hasUnsupportedRole: Bool { guard let role, !role.isEmpty else { return false }; return role != "user" && role != "owner" }
     /// The Owner account is never deleted from the public app (DELETE /auth/me would remove it).
     public var canDeleteAccountInApp: Bool { !isOwner }
+    /// Reading a mailbox (connect, sync, the aguinaldo from CCSS notices) is the Owner's alone during
+    /// the launch; the backend refuses everyone else (`require_mail_reading`). What was already
+    /// imported stays reviewable, and a connected mailbox can always be disconnected.
+    /// Android: `Profile.canReadMail`.
+    public var canReadMail: Bool { isOwner }
     public var plan: String { subscription?.plan ?? "free" }
     /// What the app offers; the backend still decides every request. Only the server's role
     /// elevates Owner: a plan code alone never does.

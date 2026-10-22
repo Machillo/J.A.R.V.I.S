@@ -50,8 +50,11 @@ struct WealthHubView: View {
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
                            subtitle: tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"), id: "wealth.accounts") { AccountsView() }
-                GatedEntry(minimum: .vip, flag: nil, symbol: "envelope", title: tx("Conexiones de correo", "Mail connections"),
-                           subtitle: tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices"), id: "wealth.connections") { EmailMonitorView() }
+                // Reading mail is the Owner's alone during the launch: no row, not even locked, for anyone else.
+                if model.canReadMail {
+                    GatedEntry(minimum: .vip, flag: nil, symbol: "envelope", title: tx("Conexiones de correo", "Mail connections"),
+                               subtitle: tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices"), id: "wealth.connections") { EmailMonitorView() }
+                }
                 SectionHeader(title: tx("Deudas", "Debts"))
                 WealthDebtsCard(debts: debts) { Task { await loadDebts(refreshing: false) } }
                 SectionHeader(title: tx("Proyecciones", "Projections"))

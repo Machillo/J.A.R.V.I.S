@@ -27,8 +27,10 @@ struct PlanHubView: View {
 
     @ViewBuilder
     private func row(_ item: PlanHubItem) -> some View {
-        let availability = item.availability(tier: model.planTier, flags: model.flags)
+        let availability = item.availability(tier: model.planTier, flags: model.flags, canReadMail: model.canReadMail)
         switch availability {
+        case .hidden:
+            EmptyView()
         case .available:
             NavigationLink { destination(item) } label: { HubRow(symbol: item.symbol, title: item.title, subtitle: item.subtitle) }
                 .buttonStyle(.plain)

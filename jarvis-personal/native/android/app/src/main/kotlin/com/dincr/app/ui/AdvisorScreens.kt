@@ -110,9 +110,11 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 if (plan != PlanTier.VIP) {
                     LockedRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), PlanTier.VIP, nav)
-                    LockedRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), PlanTier.VIP, nav)
                 } else {
                     NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices")) { nav.open("accounts") }
+                }
+                // Reading mail is the Owner's alone during the launch (Profile.canReadMail).
+                if (profile?.canReadMail == true) {
                     NavRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices")) { nav.open("mail") }
                 }
             }
@@ -285,7 +287,7 @@ fun AguinaldoScreen(model: AppModel, nav: Navigator) {
             if (a == null) {
                 EmptyState(Icons.Rounded.AutoAwesome, tx("Conectá tu correo", "Connect your mail"),
                     tx("El aguinaldo se estima con las órdenes patronales de la CCSS que llegan a tu correo.", "The aguinaldo is estimated from the CCSS payroll notices in your mail.")) {
-                    if (model.isOn(OpsFlag.GMAIL_AUTOMATION)) DincrPrimaryButton(tx("Conectar correo", "Connect mail"), { nav.open("mail") })
+                    if (model.isOn(OpsFlag.GMAIL_AUTOMATION) && model.profile.value?.canReadMail == true) DincrPrimaryButton(tx("Conectar correo", "Connect mail"), { nav.open("mail") })
                 }
             } else {
                 DincrCard {
@@ -302,7 +304,7 @@ fun AguinaldoScreen(model: AppModel, nav: Navigator) {
             }
         }
         // Syncing reads the mailbox: offered only while mail automation is on.
-        if (model.isOn(OpsFlag.GMAIL_AUTOMATION)) DincrPrimaryButton(tx("Sincronizar y recalcular", "Sync and recalculate"), loading = syncing, onClick = {
+        if (model.isOn(OpsFlag.GMAIL_AUTOMATION) && model.profile.value?.canReadMail == true) DincrPrimaryButton(tx("Sincronizar y recalcular", "Sync and recalculate"), loading = syncing, onClick = {
             syncing = true
             scope.launch {
                 model.load(tx("No pudimos sincronizar tu correo.", "We couldn’t sync your mail.")) { model.api.syncMail() }

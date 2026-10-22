@@ -1991,9 +1991,10 @@
   "method": "GET",
   "path": "/user-product/vip/aguinaldo",
   "gates": [
-   "feature:aguinaldo"
+   "feature:aguinaldo",
+   "mail_reading:verified_owner"
   ],
-  "user_get": "allowed"
+  "user_get": "denied"
  },
  {
   "method": "GET",

@@ -169,6 +169,8 @@ OWNER_ONLY_ROUTES = [
      "complete_mail_connection"),
     ("vip_microsoft_connect", lambda: routes.vip_microsoft_connect(None), "begin_microsoft_connection"),
     ("vip_gmail_sync", lambda: routes.vip_gmail_sync(), "sync_current_gmail"),
+    # The aguinaldo is estimated from CCSS notices in the mailbox (L-1).
+    ("vip_aguinaldo", lambda: routes.vip_aguinaldo(), "calculate_aguinaldo"),
 ]
 
 
@@ -211,14 +213,13 @@ def test_the_verified_owner_keeps_connecting(pg, monkeypatch):
         reset_current_user(token)
 
 
-def test_cuentas_and_the_aguinaldo_no_longer_share_the_mail_key():
+def test_cuentas_no_longer_shares_the_mail_key():
     import inspect
 
     assert 'require_feature("financial_accounts")' in inspect.getsource(routes.vip_financial_identity)
     assert 'require_feature("financial_accounts")' in inspect.getsource(routes.vip_financial_identity_declare)
     assert 'require_feature("financial_accounts")' in inspect.getsource(routes.vip_financial_identity_confirm)
-    assert 'require_feature("aguinaldo")' in inspect.getsource(routes.vip_aguinaldo)
-    for function in (routes.vip_financial_identity, routes.vip_aguinaldo, routes.vip_gmail_emails,
+    for function in (routes.vip_financial_identity, routes.vip_gmail_emails,
                      routes.vip_gmail_candidate_accept, routes.vip_gmail_candidate_reject, routes.vip_gmail_status):
         assert "require_mail_reading" not in inspect.getsource(function)  # reviewing imported data stays VIP
 

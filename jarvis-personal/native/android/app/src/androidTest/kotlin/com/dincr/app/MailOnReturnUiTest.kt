@@ -20,9 +20,10 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Mail recovery — when the app comes back to the foreground it reads the connected mailboxes (VIP and
- * the Owner) and Movimientos reads again: a purchase notice that arrived meanwhile appears without
- * pulling to refresh. Free and Basic have no mail and never call the sync. iOS twin:
+ * Mail recovery — when the app comes back to the foreground it reads the connected mailboxes and
+ * Movimientos reads again: a purchase notice that arrived meanwhile appears without pulling to
+ * refresh. Reading mail is the Owner's alone during the launch (L-1): a VIP's app, like Free and
+ * Basic, never calls the sync. iOS twin:
  * `MailOnReturnUITests`. FakeBackend only ([FakeBackend.mailArrives]).
  */
 class MailOnReturnUiTest {
@@ -41,9 +42,10 @@ class MailOnReturnUiTest {
         scenario!!.onActivity { found = ViewModelProvider(it)[AppModel::class.java].fixtureBackend }
         return found!!
     }
-    private fun openMovements(plan: String) {
+    private fun openMovements(plan: String, role: String? = null) {
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
             .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
+        role?.let { intent.putExtra("dincrRole", it) }
         scenario = ActivityScenario.launch(intent)
         val tab = tx("Movimientos", "Transactions")
         waitUntil("tab") { compose.onAllNodes(hasText(tab) and isSelectable()).fetchSemanticsNodes().isNotEmpty() }
@@ -61,13 +63,22 @@ class MailOnReturnUiTest {
     private fun syncCalls() = backend().requests.count { it.method == "POST" && it.url.substringBefore("?").endsWith("/vip/gmail/sync") }
 
     @Test fun aPurchaseThatArrivedWhileAwayAppearsWhenTheAppComesBack() {
-        openMovements("vip")
+        openMovements("vip", role = "owner")
         Thread.sleep(1_500)  // the launch sync has run; nothing new yet
         backend().mailArrives = true
         assertFalse("not there before the notice arrives", present(FAKE_ARRIVED_MOVEMENT))
         leaveAndReturn()
         waitUntil("the purchase on return, without a pull to refresh") { present(FAKE_ARRIVED_MOVEMENT) }
         assertTrue(syncCalls() >= 2)
+    }
+
+    @Test fun aVipsAppNeverReadsMailOnReturn() {
+        openMovements("vip")
+        backend().mailArrives = true
+        leaveAndReturn()
+        Thread.sleep(1_500)
+        assertTrue("no mailbox read for a VIP during the launch", syncCalls() == 0)
+        assertFalse(present(FAKE_ARRIVED_MOVEMENT))
     }
 
     @Test fun freeHasNoMailAndNeverCallsTheSync() {
