@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -58,6 +59,7 @@ import com.dincr.design.EmptyState
 import com.dincr.design.MoneyText
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.YearMonth
 import kotlinx.coroutines.launch
 
@@ -234,6 +236,8 @@ private fun eventKind(kind: String?) = when (kind) {
 @Composable
 fun RecurringScreen(model: AppModel, nav: Navigator) {
     val list = rememberLoad(model) { model.api.recurring() }
+    val profile by model.profile.collectAsStateWithLifecycle()
+    val owner = profile?.isOwner == true
     var creating by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<RecurringItem?>(null) }
     var deleting by remember { mutableStateOf<RecurringItem?>(null) }
@@ -245,6 +249,7 @@ fun RecurringScreen(model: AppModel, nav: Navigator) {
     }) {
         LoadContent(list) { l ->
             DincrCard { Column { AmountLine(tx("Gastos fijos por mes", "Fixed expenses per month"), l.monthlyExpenses, emphasize = true); InfoLine(tx("Activos", "Active"), l.items.count { it.isActive == true }.toString()) } }
+            if (owner) OwnerUpcoming(model)
             if (l.items.isEmpty()) EmptyState(Icons.Rounded.Repeat, tx("Sin pagos recurrentes", "No recurring payments"), tx("Agregá suscripciones, alquiler o servicios para planificar mejor.", "Add subscriptions, rent or utilities to plan better.")) {
                 DincrPrimaryButton(tx("Agregar", "Add"), { creating = true })
             }
@@ -254,7 +259,8 @@ fun RecurringScreen(model: AppModel, nav: Navigator) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(item.name.orEmpty(), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
-                                Caption(listOfNotNull(item.category, frequencyLabel(item.frequency), item.dueDay?.let { tx("día $it", "day $it") }).joinToString(" · "))
+                                Caption(listOfNotNull(item.category, frequencyLabel(item.frequency), item.dueDay?.let { tx("día $it", "day $it") },
+                                    item.nextDueDate?.takeIf { item.autoRecord == true }?.let { tx("se registra el $it", "recorded on $it") }).joinToString(" · "))
                             }
                             MoneyText(item.amount, sign = if (item.itemType == "income") com.dincr.data.MoneyFormat.Sign.INCOME else com.dincr.data.MoneyFormat.Sign.NONE)
                         }
@@ -282,8 +288,8 @@ fun RecurringScreen(model: AppModel, nav: Navigator) {
             }
         }
     }
-    if (creating) RecurringForm(model, onDismiss = { creating = false }) { creating = false; list.reload(); model.showNotice(it) }
-    editing?.let { item -> RecurringForm(model, item, onDismiss = { editing = null }) { editing = null; list.reload(); model.showNotice(it) } }
+    if (creating) RecurringForm(model, owner = owner, onDismiss = { creating = false }) { creating = false; list.reload(); model.showNotice(it) }
+    editing?.let { item -> RecurringForm(model, item, owner, onDismiss = { editing = null }) { editing = null; list.reload(); model.showNotice(it) } }
     deleting?.let { item ->
         ConfirmDialog(tx("¿Eliminar «${item.name.orEmpty()}»?", "Delete “${item.name.orEmpty()}”?"), tx("No se puede deshacer.", "This can’t be undone."), tx("Eliminar", "Delete"), busy = busy, onDismiss = { deleting = null }, onConfirm = {
             busy = true
@@ -304,7 +310,7 @@ fun frequencyLabel(frequency: String?) = when (frequency) {
 
 /** Creates a recurring payment, or edits one ([editing]: every field, its active state kept). */
 @Composable
-private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
+private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, owner: Boolean = false, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
     val format = Dincr.money
     var name by remember { mutableStateOf(editing?.name.orEmpty()) }
     var amount by remember { mutableStateOf(editing?.amount?.let(format::inputText).orEmpty()) }
@@ -312,6 +318,9 @@ private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, onDis
     var type by remember { mutableStateOf(editing?.itemType ?: "expense") }
     var frequency by remember { mutableStateOf(editing?.frequency ?: "monthly") }
     var day by remember { mutableStateOf(editing?.dueDay?.toString().orEmpty()) }
+    var auto by remember { mutableStateOf(editing?.autoRecord == true) }
+    var next by remember { mutableStateOf(editing?.nextDueDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }) }
+    var start by remember { mutableStateOf(editing?.startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }) }
     var errors by remember { mutableStateOf(mapOf<String, String>()) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -322,12 +331,17 @@ private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, onDis
         if (name.isBlank()) found["name"] = tx("Escribí un nombre.", "Enter a name.")
         val amountValue = AmountInput.parse(amount, format.separators).also { if (it == null) found["amount"] = tx("Escribí un monto mayor que cero.", "Enter an amount above zero.") }
         val dayValue = if (day.isBlank()) null else WholeNumberInput.parse(day, 1..31).also { if (it == null) found["day"] = tx("Entre 1 y 31.", "1 to 31.") }
+        val automatic = owner && type == "income" && auto
+        if (automatic && next == null) found["next"] = tx("Elegí la próxima fecha.", "Choose the next date.")
         errors = found
         if (found.isNotEmpty() || amountValue == null) return@FormSheet
         saving = true; error = null
         scope.launch {
             model.load(tx("No pudimos guardarlo.", "We couldn’t save it.")) {
-                val request = RecurringRequest(name.trim(), amountValue, category.trim().ifEmpty { "general" }, type, frequency, dayValue, editing?.isActive ?: true)
+                // Users never send the automation fields; the Owner sends them only as set here.
+                val request = RecurringRequest(name.trim(), amountValue, category.trim().ifEmpty { "general" }, type, frequency, dayValue, editing?.isActive ?: true,
+                    startDate = start?.toString()?.takeIf { automatic }, nextDueDate = next?.toString()?.takeIf { automatic },
+                    autoRecord = if (owner) automatic else null)
                 if (editing == null) model.api.createRecurring(request, key) else model.api.updateRecurring(editing.id, request, key)
             }.onSuccess { onSaved(if (editing == null) tx("Pago recurrente agregado", "Recurring payment added") else tx("Pago recurrente actualizado", "Recurring payment updated")) }.onFailure { if (it !is AuthException.SignedOut) error = it.message }
             saving = false
@@ -339,6 +353,7 @@ private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, onDis
         ChoiceChips(listOf("expense" to tx("Gasto", "Expense"), "income" to tx("Ingreso", "Income")), type, { type = it }, tx("Tipo", "Type"))
         ChoiceChips(listOf("weekly", "biweekly", "monthly", "quarterly", "annual").map { it to frequencyLabel(it) }, frequency, { frequency = it }, tx("Frecuencia", "Frequency"))
         FormField(tx("Día de pago (opcional)", "Due day (optional)"), day, { day = it }, errors["day"], KeyboardType.Number)
+        if (owner && type == "income") OwnerAutomationFields(auto, { auto = it }, next, { next = it }, start, { start = it }, errors["next"])
     }
 }
 

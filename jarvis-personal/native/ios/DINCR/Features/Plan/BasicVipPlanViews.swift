@@ -208,6 +208,7 @@ struct RecurringView: View {
         ScreenScroll(title: tx("Movimientos recurrentes", "Recurring transactions")) {
             WritesPausedBanner()
             if let notice { StatusBanner(tone: .info, title: notice, message: "") }
+            if model.profile?.isOwner == true { OwnerUpcomingSection() }
             AsyncContent(load: { try await model.service.recurring() }) { list, _ in
                 RecurringContent(list: list, canWrite: model.flags.isEnabled(.financialWrites),
                                  toggle: { item in Task { await toggle(item) } }, edit: { item in editing = item }, delete: { item in deleting = item })
@@ -271,7 +272,9 @@ private struct RecurringContent: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name ?? "").font(DincrFont.body.weight(.semibold))
-                        Text([RecurringForm.label(item.frequency), item.dueDay.map { tx("día \($0)", "day \($0)") }].compactMap { $0 }.joined(separator: " · "))
+                        Text([RecurringForm.label(item.frequency), item.dueDay.map { tx("día \($0)", "day \($0)") },
+                              item.autoRecord == true ? item.nextDueDate.map { tx("se registra el \($0)", "recorded on \($0)") } : nil]
+                            .compactMap { $0 }.joined(separator: " · "))
                             .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                     }
                     Spacer()
@@ -306,6 +309,10 @@ private struct RecurringForm: View {
     @State private var income = false
     @State private var frequency = "monthly"
     @State private var day = ""
+    @State private var auto = false
+    @State private var next = Date.now
+    @State private var hasStart = false
+    @State private var start = Date.now
     @State private var error: String?
     @State private var saving = false
     @State private var key = IdempotencyKey.new()
@@ -337,6 +344,7 @@ private struct RecurringForm: View {
                     ForEach(RecurringRequest.frequencies, id: \.self) { Text(Self.label($0) ?? $0).tag($0) }
                 }
                 TextField(tx("Día (1–31, opcional)", "Day (1–31, optional)"), text: $day).keyboardType(.numberPad)
+                if isOwner && income { OwnerAutomationSection(auto: $auto, next: $next, hasStart: $hasStart, start: $start) }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
             .navigationTitle(editing == nil ? tx("Nuevo recurrente", "New recurring item") : tx("Editar recurrente", "Edit recurring item"))
@@ -358,7 +366,12 @@ private struct RecurringForm: View {
         income = editing.itemType == "income"
         frequency = editing.frequency ?? "monthly"
         day = editing.dueDay.map(String.init) ?? ""
+        auto = editing.autoRecord == true
+        if let value = editing.nextDueDate, let parsed = MovementEditor.dayFormatter.date(from: String(value.prefix(10))) { next = parsed }
+        if let value = editing.startDate, let parsed = MovementEditor.dayFormatter.date(from: String(value.prefix(10))) { start = parsed; hasStart = true }
     }
+
+    private var isOwner: Bool { model.profile?.isOwner == true }
 
     private func save() async {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -366,8 +379,13 @@ private struct RecurringForm: View {
         guard let value = AmountInput.parse(amount, separators: model.moneyFormat.separators) else { error = model.moneyFormat.amountHint; return }
         let dueDay = day.isEmpty ? nil : Int(day)
         if !day.isEmpty && !(1...31).contains(dueDay ?? 0) { error = tx("El día va de 1 a 31.", "The day goes from 1 to 31."); return }
+        // Users never send the automation fields; the Owner sends them only as set here.
+        let automatic = isOwner && income && auto
         let request = RecurringRequest(name: trimmed, amount: value, category: category.isEmpty ? "general" : category, itemType: income ? "income" : "expense",
-                                       frequency: frequency, dueDay: dueDay, isActive: editing?.isActive ?? true)
+                                       frequency: frequency, dueDay: dueDay, isActive: editing?.isActive ?? true,
+                                       startDate: automatic && hasStart ? MovementEditor.dayFormatter.string(from: start) : nil,
+                                       nextDueDate: automatic ? MovementEditor.dayFormatter.string(from: next) : nil,
+                                       autoRecord: isOwner ? automatic : nil)
         saving = true; error = nil
         defer { saving = false }
         let epoch = model.currentEpoch

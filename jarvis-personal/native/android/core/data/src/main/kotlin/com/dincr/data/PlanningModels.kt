@@ -206,9 +206,18 @@ data class RecurringItem(
     val frequency: String? = null,
     @SerialName("due_day") val dueDay: Int? = null,
     @SerialName("is_active") val isActive: Boolean? = null,
+    /** Owner automation: recorded on each due date (Costa Rica) when [autoRecord]. */
+    @SerialName("start_date") val startDate: String? = null,
+    @SerialName("next_due_date") val nextDueDate: String? = null,
+    @SerialName("financial_account_id") val financialAccountId: Long? = null,
+    @SerialName("auto_record") val autoRecord: Boolean? = null,
 )
 
-/** Body of `POST /basic/recurring` and `PUT /basic/recurring/{id}`: only the editable fields. */
+/**
+ * Body of `POST /basic/recurring` and `PUT /basic/recurring/{id}`: only the editable fields.
+ * The automation fields travel only when set (null is omitted), so a pause or an edit that does
+ * not touch them keeps what the server stores.
+ */
 @Serializable
 data class RecurringRequest(
     val name: String,
@@ -218,7 +227,30 @@ data class RecurringRequest(
     val frequency: String,
     @SerialName("due_day") val dueDay: Int? = null,
     @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("start_date") val startDate: String? = null,
+    @SerialName("next_due_date") val nextDueDate: String? = null,
+    @SerialName("auto_record") val autoRecord: Boolean? = null,
 )
+
+/** `GET /finance/recurring/upcoming` (Owner only): recorded entries and expected ones, never mixed. */
+@Serializable
+data class RecurringUpcoming(
+    val date: String? = null,
+    val incomes: List<Entry> = emptyList(),
+    val installments: List<Entry> = emptyList(),
+) {
+    @Serializable
+    data class Entry(
+        val name: String? = null,
+        @SerialName("due_date") val dueDate: String? = null,
+        val amount: Money? = null,
+        /** `expected`, or what already happened: `recorded`, `already_recorded`, `paid`. */
+        val status: String? = null,
+        val automatic: Boolean? = null,
+    ) {
+        val isExpected: Boolean get() = status == "expected"
+    }
+}
 
 /** `GET /user-product/financial-situation`. */
 @Serializable

@@ -212,6 +212,11 @@ public struct DincrService: Sendable {
         let _: Acknowledgement = try await client.send("DELETE", "/user-product/basic/recurring/\(id)")
     }
 
+    /// Owner only (`/finance` is the Owner's router): next recurring incomes and debt installments.
+    public func recurringUpcoming(days: Int = 45) async throws -> RecurringUpcoming {
+        try await client.get("/finance/recurring/upcoming", query: [URLQueryItem(name: "days", value: String(days))])
+    }
+
     public func report(period: String) async throws -> MonthReport {
         try await client.get("/user-product/basic/reports", query: [URLQueryItem(name: "period", value: period)])
     }
