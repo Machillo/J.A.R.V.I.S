@@ -11,6 +11,10 @@ kept, and so its future effects (deterioration history signals, strategy history
   - the Owner workspace: the stored, allowlisted Owner identity (`is_verified_owner_account`);
 - the strategy, only for the verified Owner. VIP reads computed the strategy without storing
   it, so the job stores none for them: no new personal data.
+- the verified Owner's scheduled entries, first: the recurring incomes and debt installments due
+  on the Costa Rica date, each recorded once (`finance/recurring_automation.py`,
+  `finance/service.apply_due_installments`). It is this job's explicit command (CLAUDE.md §4C);
+  no VIP or other account ever gets it.
 
 DINCR's identities are Free, Basic, VIP and the single Owner: any account that is not the
 verified Owner is eligible only through its own VIP plan, exactly like any VIP.
@@ -36,6 +40,8 @@ from backend.core.database import get_connection
 from backend.core.i18n import DEFAULT_LANGUAGE, reset_dincr_users, set_dincr_users, use_language
 from backend.core.time import costa_rica_today
 from backend.finance.deterioration import record_daily_health_snapshot
+from backend.finance.recurring_automation import materialize_recurring_incomes
+from backend.finance.service import apply_due_installments
 
 logger = logging.getLogger(__name__)
 
@@ -94,14 +100,37 @@ def eligible_workspaces(conn) -> list[dict[str, Any]]:
     return eligible
 
 
+def _run_owner_automation(identity: dict[str, Any], today: date) -> dict[str, int]:
+    """The verified Owner's scheduled entries for `today` (Costa Rica): due recurring incomes and
+    debt installments, each recorded once (both commands are idempotent and Owner-gated).
+
+    The authorized automation of CLAUDE.md §4C: a command of this POST job, never a read. A
+    failure is logged by class only and never blocks the day's observation.
+    """
+    counts = {"recurring_incomes": 0, "debt_installments": 0, "automation_failed": 0}
+    if identity["role"] != "owner":
+        return counts
+    for key, command in (("recurring_incomes", materialize_recurring_incomes), ("debt_installments", apply_due_installments)):
+        try:
+            result = command(identity["workspace_id"], dry_run=False, today=today)
+        except Exception as exc:  # no financial data in the log
+            counts["automation_failed"] += 1
+            logger.warning("Owner automation failed step=%s error=%s", key, type(exc).__name__)
+            continue
+        entries = result.get("occurrences") if key == "recurring_incomes" else result.get("installments")
+        counts[key] = sum(1 for entry in entries or [] if entry.get("status", "recorded") == "recorded")
+    return counts
+
+
 def _record_workspace(identity: dict[str, Any], today: date) -> dict[str, Any]:
-    """Health observation, then strategy, for one workspace, inside its own identity."""
+    """Owner automation, then health observation, then strategy, for one workspace, inside its own identity."""
     token = set_current_user(identity)
     # The text context of the app the data belongs to: the public DINCR app for a VIP (as
     # its /user-product reads), the internal one for the Owner.
     users_token = set_dincr_users(identity["role"] == "user")
     try:
         with use_language(DEFAULT_LANGUAGE):
+            automation = _run_owner_automation(identity, today)
             health = record_daily_health_snapshot(today)
             persistence = (_persist_strategy(compute_advisor_strategy())
                            if identity["role"] in STRATEGY_HISTORY_ROLES else {"changed": False, "persisted": False})
@@ -109,7 +138,7 @@ def _record_workspace(identity: dict[str, Any], today: date) -> dict[str, Any]:
         reset_dincr_users(users_token)
         reset_current_user(token)
     return {"health": health["health"], "strategy_changed": bool(persistence.get("changed")),
-            "strategy_persisted": bool(persistence.get("persisted"))}
+            "strategy_persisted": bool(persistence.get("persisted")), "automation": automation}
 
 
 def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
@@ -127,7 +156,8 @@ def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
         if not (acquired or {}).get("acquired"):
             return {"status": "ALREADY_RUNNING", "date": day.isoformat()}
         workspaces = eligible_workspaces(guard)
-        counts = {"eligible": len(workspaces), "recorded": 0, "strategy_changed": 0, "failed": 0}
+        counts = {"eligible": len(workspaces), "recorded": 0, "strategy_changed": 0, "failed": 0,
+                  "recurring_incomes": 0, "debt_installments": 0, "automation_failed": 0}
         for identity in workspaces:
             try:
                 result = contextvars.copy_context().run(_record_workspace, identity, day)
@@ -137,4 +167,6 @@ def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
                 continue
             counts["recorded"] += 1
             counts["strategy_changed"] += int(result["strategy_changed"])
+            for key, value in result["automation"].items():
+                counts[key] += value
     return {"status": "OK", "date": day.isoformat(), **counts}

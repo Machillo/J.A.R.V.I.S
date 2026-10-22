@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from backend.finance.strategies import get_all_strategies
+from backend.finance.recurring_automation import materialize_recurring_incomes, upcoming_schedule
 from backend.finance.strategy_rules import get_strategy_report, select_recommended_strategy
 from backend.finance.allocation_engine import calculate_allocation_plan
 from backend.finance.evaluators import evaluate_loan, evaluate_installment_purchase
@@ -243,6 +244,19 @@ def debts_apply_due_installments(dry_run: bool = True):
     ``dry_run`` (default true) returns the plan and writes nothing; reads never apply installments.
     """
     return apply_due_installments(dry_run=dry_run)
+
+
+@router.get("/recurring/upcoming")
+def recurring_upcoming(days: int = 45):
+    """Read-only: the next recurring incomes and debt installments, recorded or expected (Owner)."""
+    return upcoming_schedule(days)
+
+
+@router.post("/recurring/apply-due")
+def recurring_apply_due(dry_run: bool = True):
+    """Explicit command: record recurring incomes already due, once each (Owner). The daily job
+    runs it; ``dry_run`` (default true) returns the plan and writes nothing."""
+    return materialize_recurring_incomes(dry_run=dry_run)
 
 @router.delete("/debts/{debt_id}")
 def remove_debt(debt_id: int):

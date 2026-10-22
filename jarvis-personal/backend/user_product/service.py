@@ -9,7 +9,9 @@ from backend.auth.current_user import get_current_account_id, get_current_user_i
 from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
-from backend.finance.service import get_payroll_events
+from backend.core.time import costa_rica_today
+from backend.finance.debt_automation import schedule_automation_enabled
+from backend.finance.service import apply_monthly_payment_to_debt, get_payroll_events
 from backend.finance.category_catalog import manual_expense_category, normalize_category, expense_type_for_category
 from backend.user_product.basic_service import _require_basic_tables
 from backend.user_product.debt_rates import UNKNOWN_RATE_SQL, known_interest_rate, rate_for_create, rate_for_update, with_known_rates
@@ -298,6 +300,8 @@ def pay_user_debt(debt_id: int, amount: float):
     payment = max(float(amount or 0), 0)
     if payment <= 0:
         raise HTTPException(status_code=400, detail="El pago debe ser mayor que cero.")
+    if schedule_automation_enabled():
+        return _pay_owner_debt(debt_id, payment)
     with get_connection() as conn:
         debt = conn.execute(
             # Locked: a concurrent payment waits and then reads the reduced balance.
@@ -325,6 +329,23 @@ def pay_user_debt(debt_id: int, amount: float):
         conn.commit()
     return {"status": "OK", "debt_id": debt_id, "payment_amount": applied, "new_remaining_amount": new_remaining}
 
+
+
+def _pay_owner_debt(debt_id: int, payment: float) -> dict:
+    """The verified Owner's debts follow their installment schedule (finance/debt_automation.py).
+
+    A payment registered from the app goes through the same amortization command as the Owner's
+    other payments: it splits interest, fees and principal, records the installment in
+    debt_payments, and never charges an installment the daily automation already recorded (nor
+    lets the automation record it again).
+    """
+    result = apply_monthly_payment_to_debt(debt_id, payment, payment_date=costa_rica_today().isoformat())
+    if result.get("status") == "ERROR":
+        message = result.get("message") or "No pudimos registrar el pago."
+        raise HTTPException(status_code=404 if "no encontrada" in message.lower() else 400, detail=message)
+    return {"status": "OK", "debt_id": debt_id, "payment_amount": result.get("payment_amount"),
+            "new_remaining_amount": result.get("new_remaining_amount"), "installment_number": result.get("installment_number"),
+            "message": result.get("message")}
 
 
 def list_user_debts():

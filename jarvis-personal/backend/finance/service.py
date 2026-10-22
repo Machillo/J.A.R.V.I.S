@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.core.database import get_connection
+from backend.core.time import costa_rica_today
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.finance import balance_movements, payroll_receipts
 from backend.finance.debt_automation import schedule_automation_enabled
@@ -394,7 +395,7 @@ def _payment_breakdown_with_extra(
     return actual_payment, principal, round(interest, 2), round(fee, 2), round(extra_principal, 2)
 
 
-def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = True) -> dict[str, Any]:
+def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = True, today: date | None = None) -> dict[str, Any]:
     """Explicit command: record each scheduled installment that is already due, once.
 
     Never called from a read. The start date, first installment, payment day and
@@ -410,7 +411,7 @@ def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = T
     if not schedule_automation_enabled():
         raise HTTPException(status_code=403, detail="Solo el Owner aplica cuotas programadas.")
     workspace_id = workspace_id or get_current_workspace_id()
-    today = date.today()
+    today = today or costa_rica_today()  # DINCR's day (America/Costa_Rica), never the server's
     plan: list[dict[str, Any]] = []
     updated: list[int] = []
     with get_connection() as conn:

@@ -11,6 +11,7 @@ from backend.auth.current_user import get_current_account_id, get_current_worksp
 from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
 from backend.core.i18n import tx
+from backend.finance.recurring_automation import automation_values
 from backend.core.schema_state import tables_exist
 
 
@@ -181,7 +182,7 @@ def save_guided_budget(payload) -> dict:
 def list_recurring_items() -> dict:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        rows=conn.execute("SELECT id,name,amount,category,item_type,frequency,due_day,is_active,created_at FROM finva_recurring_items WHERE workspace_id=%s ORDER BY is_active DESC,due_day NULLS LAST,id DESC",(workspace_id,)).fetchall() if _basic_tables_ready(conn, "finva_recurring_items") else []
+        rows=conn.execute("SELECT id,name,amount,category,item_type,frequency,due_day,is_active,start_date,next_due_date,financial_account_id,auto_record,created_at FROM finva_recurring_items WHERE workspace_id=%s ORDER BY is_active DESC,due_day NULLS LAST,id DESC",(workspace_id,)).fetchall() if _basic_tables_ready(conn, "finva_recurring_items") else []
     items=[]
     for row in rows:
         item=dict(row); item["monthly_amount"]=_monthly_equivalent(_money(item["amount"]),item["frequency"]); item["annual_amount"]=round(item["monthly_amount"]*12,2); items.append(item)
@@ -192,8 +193,11 @@ def create_recurring_item(payload) -> dict:
     account_id,workspace_id=get_current_account_id(),get_current_workspace_id()
     with get_connection() as conn:
         _require_basic_tables(conn, "finva_recurring_items")
-        row=conn.execute("""INSERT INTO finva_recurring_items(account_id,workspace_id,name,amount,category,item_type,frequency,due_day,is_active)
-          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,name,amount,category,item_type,frequency,due_day,is_active""",(account_id,workspace_id,payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active)).fetchone()
+        auto=automation_values(conn,workspace_id,payload)
+        row=conn.execute("""INSERT INTO finva_recurring_items(account_id,workspace_id,name,amount,category,item_type,frequency,due_day,is_active,
+          start_date,next_due_date,financial_account_id,auto_record)
+          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,name,amount,category,item_type,frequency,due_day,is_active,start_date,next_due_date,financial_account_id,auto_record""",(account_id,workspace_id,payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active,
+          auto["start_date"],auto["next_due_date"],auto["financial_account_id"],auto["auto_record"])).fetchone()
         mark_applied(conn)
         conn.commit()
     return row
@@ -203,8 +207,14 @@ def update_recurring_item(item_id:int,payload) -> dict:
     workspace_id=get_current_workspace_id()
     with get_connection() as conn:
         _require_basic_tables(conn, "finva_recurring_items")
-        row=conn.execute("""UPDATE finva_recurring_items SET name=%s,amount=%s,category=%s,item_type=%s,frequency=%s,due_day=%s,is_active=%s,updated_at=NOW()
-          WHERE id=%s AND workspace_id=%s RETURNING id,name,amount,category,item_type,frequency,due_day,is_active""",(payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active,item_id,workspace_id)).fetchone()
+        # Locked: the daily automation reads the same row; recorded history never changes here.
+        current=conn.execute("SELECT is_active,start_date,next_due_date,financial_account_id,auto_record FROM finva_recurring_items WHERE id=%s AND workspace_id=%s FOR UPDATE",(item_id,workspace_id)).fetchone()
+        if not current: raise HTTPException(status_code=404,detail="Recurrente no encontrado.")
+        auto=automation_values(conn,workspace_id,payload,dict(current))
+        row=conn.execute("""UPDATE finva_recurring_items SET name=%s,amount=%s,category=%s,item_type=%s,frequency=%s,due_day=%s,is_active=%s,
+          start_date=%s,next_due_date=%s,financial_account_id=%s,auto_record=%s,updated_at=NOW()
+          WHERE id=%s AND workspace_id=%s RETURNING id,name,amount,category,item_type,frequency,due_day,is_active,start_date,next_due_date,financial_account_id,auto_record""",(payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active,
+          auto["start_date"],auto["next_due_date"],auto["financial_account_id"],auto["auto_record"],item_id,workspace_id)).fetchone()
         if not row: raise HTTPException(status_code=404,detail="Recurrente no encontrado.")
         mark_applied(conn)
         conn.commit()
