@@ -101,7 +101,7 @@ final class PullToRefreshUITests: XCTestCase {
         element("profile.subscription", in: app).tap()
         XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10))
         app.tabBars.buttons["Plan"].tap()
-        XCTAssertTrue(element("plan.aguinaldo", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("plan.strategy", in: app).waitForExistence(timeout: 10))
         pull(app)
         sleep(1)
         app.tabBars.buttons["Perfil"].tap()
