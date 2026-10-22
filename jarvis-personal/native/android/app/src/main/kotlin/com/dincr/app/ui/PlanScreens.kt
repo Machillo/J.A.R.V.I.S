@@ -70,7 +70,8 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
     RefreshableTab(model, tx("Plan", "Plan")) {
         DincrCard {
             Column {
-                PlanRow(plan.allows(Feature.GMAIL_AUTOMATION), PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),
+                // The aguinaldo is read from CCSS notices in the mailbox: Owner-only while reading is (Profile.canReadMail).
+                if (profile?.canReadMail == true) PlanRow(true, PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),
                     tx("Estimación con las órdenes de la CCSS", "Estimate from CCSS payroll notices"), nav, "aguinaldo")
                 // §15 PR 10 (option A): locked, it opens its own locked state (Presupuesto and Calendario inside, locked).
                 PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.AutoAwesome, tx("Tu plan del mes", "Your plan for the month"),

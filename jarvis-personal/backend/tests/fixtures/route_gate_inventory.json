@@ -1991,9 +1991,10 @@
   "method": "GET",
   "path": "/user-product/vip/aguinaldo",
   "gates": [
-   "feature:gmail_automation"
+   "feature:aguinaldo",
+   "mail_reading:verified_owner"
   ],
-  "user_get": "allowed"
+  "user_get": "denied"
  },
  {
   "method": "GET",
@@ -2023,7 +2024,7 @@
   "method": "GET",
   "path": "/user-product/vip/financial-identity",
   "gates": [
-   "feature:gmail_automation"
+   "feature:financial_accounts"
   ],
   "user_get": "allowed"
  },
@@ -2031,14 +2032,14 @@
   "method": "POST",
   "path": "/user-product/vip/financial-identity/accounts",
   "gates": [
-   "feature:gmail_automation"
+   "feature:financial_accounts"
   ]
  },
  {
   "method": "PUT",
   "path": "/user-product/vip/financial-identity/accounts/{account_balance_id}",
   "gates": [
-   "feature:gmail_automation"
+   "feature:financial_accounts"
   ]
  },
  {
@@ -2088,14 +2089,16 @@
   "method": "POST",
   "path": "/user-product/vip/gmail/connect",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
   "method": "POST",
   "path": "/user-product/vip/gmail/consent",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
@@ -2140,7 +2143,8 @@
   "method": "POST",
   "path": "/user-product/vip/gmail/sync",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
@@ -2210,14 +2214,16 @@
   "method": "POST",
   "path": "/user-product/vip/mail/microsoft/connect",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
   "method": "POST",
   "path": "/user-product/vip/mail/oauth/complete",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {

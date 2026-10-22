@@ -42,6 +42,7 @@ from backend.user_product.gmail_service import (
     gmail_status,
     list_gmail_emails,
     process_gmail_push,
+    require_mail_reading,
     review_gmail_candidate,
     sync_current_gmail,
 )
@@ -238,7 +239,8 @@ def vip_salvavidas_update(request: SalvavidasUpdateRequest):
 
 @router.get("/vip/aguinaldo")
 def vip_aguinaldo():
-    require_feature("gmail_automation")
+    # Estimated from CCSS notices in the mailbox: Owner-only while mail reading is (L-1).
+    require_feature("aguinaldo"); require_mail_reading()
     if not gmail_status().get("connected"):
         raise HTTPException(status_code=409, detail="Debes sincronizar tu email para calcular el aguinaldo.")
     return calculate_aguinaldo()
@@ -251,13 +253,13 @@ def vip_gmail_status():
 def vip_gmail_connect(request: MailConnectRequest | None = None, accept_language: str | None = Header(default=None)):
     # No body (older app versions) keeps the previous current-year window, and their
     # Accept-Language (the app's own language) sets the language of Google's screens.
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     body = request or MailConnectRequest()
     return begin_gmail_connection(body.import_scope, locale=oauth_locale(body.locale, accept_language))
 
 @router.post("/vip/gmail/consent")
 def vip_gmail_consent(request: GmailConsentRequest):
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     return accept_gmail_consent(accepted=request.accepted, version=request.version)
 
 @router.get("/vip/gmail/callback")
@@ -269,7 +271,7 @@ def vip_gmail_callback(code: str | None = None, state: str | None = None, error:
 @router.post("/vip/mail/oauth/complete")
 def vip_mail_oauth_complete(request: MailConnectionCompleteRequest, background_tasks: BackgroundTasks):
     # Authenticated: only the DINCR session that started the flow can attach the mailbox.
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     result = complete_mail_connection(request.flow, request.completion)
     if result["provider"] == "gmail":
         background_tasks.add_task(capture_backend_event, "gmail_connected")
@@ -277,7 +279,7 @@ def vip_mail_oauth_complete(request: MailConnectionCompleteRequest, background_t
 
 @router.post("/vip/mail/microsoft/connect")
 def vip_microsoft_connect(request: MailConnectRequest | None = None):
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     return begin_microsoft_connection((request or MailConnectRequest()).import_scope)
 
 @router.get("/vip/mail/microsoft/callback")
@@ -286,7 +288,7 @@ def vip_microsoft_callback(code: str | None = None, state: str | None = None, er
 
 @router.post("/vip/gmail/sync")
 def vip_gmail_sync():
-    require_feature("gmail_automation"); return sync_current_gmail()
+    require_feature("gmail_automation"); require_mail_reading(); return sync_current_gmail()
 
 @router.get("/vip/gmail/emails")
 def vip_gmail_emails(status: str | None = None, bank: str | None = Query(default=None, max_length=80),
@@ -308,17 +310,17 @@ def vip_gmail_trust_analytics():
 
 @router.get("/vip/financial-identity")
 def vip_financial_identity():
-    require_feature("gmail_automation"); return list_financial_identity()
+    require_feature("financial_accounts"); return list_financial_identity()
 
 @router.post("/vip/financial-identity/accounts")
 def vip_financial_identity_declare(request: OwnAccountDeclareRequest):
-    require_feature("gmail_automation")
+    require_feature("financial_accounts")
     return declare_own_account(request.institution_code, request.account_last4, request.currency,
                                request.institution_name, request.display_name)
 
 @router.put("/vip/financial-identity/accounts/{account_balance_id}")
 def vip_financial_identity_confirm(account_balance_id: int, request: FinancialAccountIdentityRequest):
-    require_feature("gmail_automation")
+    require_feature("financial_accounts")
     return confirm_financial_account(account_balance_id, request.ownership_status, request.display_name)
 
 @router.post("/vip/gmail/candidates/{candidate_id}/accept")

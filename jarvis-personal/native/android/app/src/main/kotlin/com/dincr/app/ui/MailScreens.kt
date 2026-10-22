@@ -37,12 +37,14 @@ import com.dincr.data.MessageKind
 import com.dincr.data.OpsFlag
 import com.dincr.data.OwnTransferRequest
 import com.dincr.data.OwnTransferSuggestions
+import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
 import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.ErrorState
+import com.dincr.design.StatusBanner
 import kotlinx.coroutines.launch
 
 private data class MailData(val status: MailStatus, val candidates: List<MailCandidate>, val transfers: OwnTransferSuggestions)
@@ -54,10 +56,13 @@ private data class MailData(val status: MailStatus, val candidates: List<MailCan
  */
 @Composable
 fun MailScreen(model: AppModel, nav: Navigator) {
+    val canRead = model.profile.collectAsStateWithLifecycle().value?.canReadMail == true
     val data = rememberLoad(model) {
         val status = model.api.mailStatus()
-        MailData(status, if (status.connected) model.api.mailCandidates(pendingOnly = true) else emptyList(),
-            if (status.connected) runCatching { model.api.ownTransferSuggestions() }.getOrDefault(OwnTransferSuggestions()) else OwnTransferSuggestions())
+        // Without mail reading, what was already imported stays reviewable even with no mailbox left.
+        val review = status.connected || model.profile.value?.canReadMail != true
+        MailData(status, if (review) model.api.mailCandidates(pendingOnly = true) else emptyList(),
+            if (review) runCatching { model.api.ownTransferSuggestions() }.getOrDefault(OwnTransferSuggestions()) else OwnTransferSuggestions())
     }
     // The browser returns here after connecting: reload whenever the app comes back.
     LifecycleResumeEffect(Unit) { data.reload(); onPauseOrDispose { } }
@@ -72,7 +77,8 @@ fun MailScreen(model: AppModel, nav: Navigator) {
     DetailScaffold(tx("Correos financieros", "Financial emails"), nav::back) {
         if (!model.isOn(OpsFlag.GMAIL_AUTOMATION)) { FeaturePaused(model, OpsFlag.GMAIL_AUTOMATION); return@DetailScaffold }
         LoadContent(data) { (status, candidates, transfers) ->
-            if (!status.connected) ConnectMail(model, status) else {
+            if (!canRead) MailReadingUnavailable(status.connected)
+            if (!status.connected && canRead) ConnectMail(model, status) else {
                 if (status.needsReauthorization) DincrMessage(MessageKind.TECHNICAL_ERROR, tx("Volvé a conectar tu correo", "Reconnect your mail"), tx("El permiso venció o fue revocado.", "The permission expired or was revoked."))
                 DincrCard {
                     Column {
@@ -85,7 +91,7 @@ fun MailScreen(model: AppModel, nav: Navigator) {
                                 TextButton({ disconnect = c }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Desconectar", "Disconnect"), color = Dincr.colors.negative) }
                             }
                         }
-                        DincrPrimaryButton(tx("Buscar avisos nuevos", "Check for new notices"), loading = syncing, onClick = {
+                        if (canRead) DincrPrimaryButton(tx("Buscar avisos nuevos", "Check for new notices"), loading = syncing, onClick = {
                             syncing = true
                             scope.launch {
                                 model.load(tx("No pudimos revisar tu correo.", "We couldn’t check your mail.")) { model.api.syncMail() }
@@ -120,6 +126,19 @@ fun MailScreen(model: AppModel, nav: Navigator) {
                 }
             })
     }
+}
+
+/**
+ * Reading mail is the Owner's alone during the launch: no connect, consent or sync here for anyone
+ * else. A mailbox already connected can still be disconnected, and imported notices reviewed.
+ */
+@Composable
+private fun MailReadingUnavailable(connected: Boolean) {
+    StatusBanner(BannerTone.INFO, tx("Lectura de correos no disponible", "Mail reading unavailable"),
+        if (connected) tx("Por ahora DINCR no lee correos en tu cuenta. Podés revisar lo ya importado o desconectar tu correo.",
+            "For now DINCR doesn’t read mail on your account. You can review what was already imported or disconnect your mail.")
+        else tx("Por ahora DINCR no lee correos en tu cuenta. Lo ya importado sigue acá para que lo revisés.",
+            "For now DINCR doesn’t read mail on your account. What was already imported stays here for you to review."))
 }
 
 /** H2 — consent, history scope and provider; the connection happens in the system browser. */

@@ -473,7 +473,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         lastReturnSync = now
         val epoch = sessionEpoch
         val plan = _profile.value?.planTier ?: PlanTier.FREE
-        if (plan.allows(Feature.GMAIL_AUTOMATION) && isOn(OpsFlag.GMAIL_AUTOMATION)) {
+        if (plan.allows(Feature.GMAIL_AUTOMATION) && isOn(OpsFlag.GMAIL_AUTOMATION) && _profile.value?.canReadMail == true) {
             runCatching { api.syncMail() }
         }
         if (epoch == sessionEpoch && _phase.value is Phase.Ready) _dataGeneration.value += 1

@@ -51,6 +51,8 @@ final class AppModel {
     /// Whether `mailOutcome` is a failure of the connection (technical-error look) or a neutral notice.
     private(set) var mailOutcomeIsFailure = true
     var planTier: PlanTier { profile?.planTier ?? .free }
+    /// Mail reading is the Owner's alone during the launch (`Profile.canReadMail`).
+    var canReadMail: Bool { profile?.canReadMail == true }
 
     let service: DincrService
     /// The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the
@@ -163,7 +165,7 @@ final class AppModel {
         guard phase == .ready, Date.now.timeIntervalSince(lastReturnSync) >= returnSyncInterval else { return }
         lastReturnSync = .now
         let epoch = sessionEpoch
-        if planTier.allows(.gmailAutomation), flags.isEnabled(.gmailAutomation) {
+        if planTier.allows(.gmailAutomation), flags.isEnabled(.gmailAutomation), canReadMail {
             _ = try? await service.syncMail()
         }
         if epoch == sessionEpoch, phase == .ready { dataGeneration += 1 }
