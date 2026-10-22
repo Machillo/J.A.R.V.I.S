@@ -125,6 +125,11 @@ public struct DincrService: Sendable {
         let _: Acknowledgement = try await client.send("DELETE", "/user-product/finance/debts/\(id)")
     }
 
+    /// DEB-07a — the payments recorded in DINCR for this debt, newest first (read-only).
+    public func debtPayments(id: Int) async throws -> [DebtPayment] {
+        try await client.get("/user-product/finance/debts/\(id)/payments")
+    }
+
     public func payDebt(id: Int, amount: Decimal, idempotencyKey: String) async throws -> DebtPaymentResult {
         try WriteContract.checkAmount(amount)
         return try await client.send("POST", "/user-product/finance/debts/\(id)/payments", body: AmountRequest(amount: amount), idempotencyKey: idempotencyKey)

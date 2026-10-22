@@ -327,6 +327,28 @@ def pay_user_debt(debt_id: int, amount: float):
 
 
 
+def list_user_debt_payments(debt_id: int) -> list[dict]:
+    """DEB-07a — the payments recorded in DINCR for one debt, newest first. Read-only.
+
+    Every payment made with "Registrar pago" (`pay_user_debt`) leaves an auditable transaction
+    (`source='finva_debt_payment'`, `notes='debt_id:<id>'`); this is that list. A payment made
+    outside DINCR, or a movement categorized as a debt payment, is not linked to the debt and is
+    not listed. The debt must belong to the caller's workspace (404 otherwise).
+    """
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        debt = conn.execute("SELECT id FROM debts WHERE id=%s AND workspace_id=%s", (debt_id, workspace_id)).fetchone()
+        if not debt:
+            raise HTTPException(status_code=404, detail="Deuda no encontrada.")
+        rows = conn.execute(
+            """SELECT id,transaction_date,amount FROM transactions
+               WHERE workspace_id=%s AND source='finva_debt_payment' AND notes=%s
+               ORDER BY transaction_date DESC,id DESC""",
+            (workspace_id, f"debt_id:{debt_id}"),
+        ).fetchall()
+    return [{"id": row["id"], "payment_date": str(row["transaction_date"])[:10], "amount": _money(row["amount"])} for row in rows]
+
+
 def list_user_debts():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:

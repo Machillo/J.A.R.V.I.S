@@ -75,6 +75,13 @@ data class DebtRequest(
 @Serializable
 data class AmountRequest(val amount: Money)
 
+/**
+ * DEB-07a — one payment recorded in DINCR for a debt (`GET /finance/debts/{id}/payments`), newest
+ * first: the date and the amount actually applied. iOS: `DebtPayment`.
+ */
+@Serializable
+data class DebtPayment(val id: Long, @SerialName("payment_date") val paymentDate: String? = null, val amount: Money? = null)
+
 @Serializable
 data class DebtPaymentResult(
     val status: String? = null,
