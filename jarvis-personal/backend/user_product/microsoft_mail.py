@@ -27,8 +27,8 @@ from backend.finance.category_catalog import owner_account_context
 from backend.user_product import mail_oauth, owner_mail_automation
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
-    FINVA_QUERY, _connection_import_since, _has_active_vip_access, _initial_scan_scope,
-    _ingest_message, _vault_create, _vault_delete, _vault_read, already_processed,
+    FINVA_QUERY, MAIL_READING_PAUSED, _connection_import_since, _has_active_vip_access, _initial_scan_scope,
+    _ingest_message, _vault_create, _vault_delete, _vault_read, already_processed, mail_reading_allowed,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,7 +132,7 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
 
     account_id = str(flow["account_id"])
     with get_connection() as conn:
-        if not _has_active_vip_access(conn, account_id):
+        if not mail_reading_allowed(conn, account_id, flow.get("workspace_id")):
             return failed("vip_required")
     client_id, client_secret, redirect_uri = _config()
     try:
@@ -199,9 +199,9 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     """Attach an authorized Outlook flow to its account/workspace (caller commits)."""
     if flow["provider"] != "microsoft" or "Mail.Read" not in (flow.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="La autorización no corresponde a Outlook. Volvé a conectarlo.")
-    account_id, workspace_id = str(flow["account_id"]), str(flow["workspace_id"])
-    if not _has_active_vip_access(conn, account_id):
-        raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
+    account_id, workspace_id = str(flow["account_id"]), flow.get("workspace_id")
+    if not mail_reading_allowed(conn, account_id, workspace_id):
+        raise HTTPException(status_code=403, detail=MAIL_READING_PAUSED)
     address = str(flow["mailbox_address"]).strip().lower()  # display only
     # The principal is the mailbox: both unique live-mailbox columns carry it, so a
     # reported address can neither collide with nor take over another mailbox.
@@ -378,8 +378,8 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
         ).fetchone()
         if not connection or "Mail.Read" not in (connection.get("granted_scopes") or []):
             raise HTTPException(status_code=404, detail="Conexión de Outlook no encontrada.")
-        if not _has_active_vip_access(conn, str(connection["account_id"])):
-            raise HTTPException(status_code=403, detail="La lectura de correo requiere VIP.")
+        if not mail_reading_allowed(conn, str(connection["account_id"]), connection.get("workspace_id")):
+            raise HTTPException(status_code=403, detail=MAIL_READING_PAUSED)
         token = _vault_read(conn, str(connection["refresh_token_secret_id"]), str(connection["account_id"]))
         # The Owner reads only the current month and runs no history scan (owner_mail_automation).
         owner = owner_account_context(conn, connection.get("account_id"), connection.get("workspace_id"))

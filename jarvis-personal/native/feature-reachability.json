@@ -369,7 +369,7 @@
     {
      "method": "GET",
      "path": "/user-product/vip/aguinaldo",
-     "gate": "feature:gmail_automation",
+     "gate": "feature:aguinaldo",
      "used_by": [
       "vip"
      ]
@@ -884,7 +884,7 @@
     {
      "method": "GET",
      "path": "/user-product/vip/financial-identity",
-     "gate": "feature:gmail_automation",
+     "gate": "feature:financial_accounts",
      "used_by": [
       "vip"
      ]
