@@ -195,11 +195,56 @@ data class FinancialIdentity(val items: List<Account> = emptyList(), val summary
         val currency: String? = null,
         @SerialName("account_last4") val accountLast4: String? = null,
         @SerialName("ownership_status") val ownershipStatus: String? = null,
-    )
+        /** When the user last answered: with `pending`, the account was reviewed and not recognised. */
+        @SerialName("ownership_confirmed_at") val ownershipConfirmedAt: String? = null,
+    ) {
+        /** The user's answer: own, not mine, "I don't recognise it", or not answered yet (`null`). */
+        val ownership: AccountOwnership? get() = when (ownershipStatus) {
+            "own" -> AccountOwnership.OWN
+            "not_mine" -> AccountOwnership.NOT_MINE
+            "pending" -> if (ownershipConfirmedAt != null) AccountOwnership.UNKNOWN else null
+            else -> null
+        }
+    }
 
     @Serializable
     data class Summary(val total: Int? = null, val pending: Int? = null)
 }
+
+/**
+ * The answers a user can give about an account (`financial_identity.confirm_financial_account`).
+ * "I don't recognise it" is stored as `pending` with its review date: never treated as own. iOS:
+ * `AccountOwnership`.
+ */
+enum class AccountOwnership(val wire: String) { OWN("own"), NOT_MINE("not_mine"), UNKNOWN("pending") }
+
+/**
+ * `POST /vip/financial-identity/accounts`: an own account no notice came from (e.g. the other bank
+ * of a transfer). Only the last 4 digits ever leave the device. iOS: `OwnAccountDeclaration`.
+ */
+@Serializable
+data class OwnAccountDeclaration(
+    @SerialName("institution_code") val institutionCode: String,
+    @SerialName("institution_name") val institutionName: String? = null,
+    @SerialName("account_last4") val accountLast4: String,
+    val currency: String = "CRC",
+    @SerialName("display_name") val displayName: String? = null,
+) {
+    /** Exactly four digits, an institution (with its name when it is "other") and CRC or USD. */
+    val isComplete: Boolean get() = accountLast4.length == 4 && accountLast4.all(Char::isDigit) && institutionCode in INSTITUTIONS &&
+        (institutionCode != "other" || !institutionName.isNullOrBlank()) && currency in setOf("CRC", "USD")
+
+    companion object {
+        val INSTITUTIONS = listOf("bac", "popular", "multimoney", "other")
+
+        fun of(institution: String, name: String, last4: String, currency: String, displayName: String) = OwnAccountDeclaration(
+            institution, name.trim().takeIf { institution == "other" && it.isNotEmpty() }, last4, currency, displayName.trim().ifEmpty { null })
+    }
+}
+
+/** `{status, item}` of the account commands. */
+@Serializable
+data class FinancialAccountResult(val item: FinancialIdentity.Account? = null)
 
 @Serializable
 data class OwnershipRequest(@SerialName("ownership_status") val ownershipStatus: String, @SerialName("display_name") val displayName: String? = null)

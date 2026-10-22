@@ -49,17 +49,25 @@ def semantic_fingerprint(candidate: dict[str, Any]) -> str | None:
 
 
 def _confirmed_account(conn, candidate: dict[str, Any], reference: Any) -> int | None:
+    """The one own account these last 4 digits name, in a currency of the movement.
+
+    A transfer between a colones and a dollars account carries the amount in both currencies
+    (the converted ``currency`` and the ``original_currency``): either end may hold either one.
+    Two own accounts that fit are ambiguous: none is chosen, so the movement stays for review
+    instead of being treated as an own transfer.
+    """
     last4 = _last4(reference)
     if not last4:
         return None
-    row = conn.execute(
+    currencies = sorted({str(value).upper() for value in (candidate.get("currency") or "CRC", candidate.get("original_currency")) if value})
+    rows = conn.execute(
         """SELECT id FROM account_balances
            WHERE account_id=%s AND workspace_id=%s AND ownership_status='own'
-             AND is_active=TRUE AND account_last4=%s AND currency=%s
-           ORDER BY id LIMIT 1""",
-        (candidate["account_id"], candidate["workspace_id"], last4, candidate.get("currency") or "CRC"),
-    ).fetchone()
-    return int(row["id"]) if row else None
+             AND is_active=TRUE AND account_last4=%s AND currency = ANY(%s)
+           ORDER BY id LIMIT 2""",
+        (candidate["account_id"], candidate["workspace_id"], last4, currencies),
+    ).fetchall()
+    return int(rows[0]["id"]) if len(rows) == 1 else None
 
 
 # Notification <-> statement reconciliation (deterministic, Phase 1E follow-up).

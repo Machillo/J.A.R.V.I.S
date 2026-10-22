@@ -5,7 +5,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, OwnAccountDeclareRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -45,7 +45,7 @@ from backend.user_product.gmail_service import (
     review_gmail_candidate,
     sync_current_gmail,
 )
-from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
+from backend.user_product.financial_identity import confirm_financial_account, declare_own_account, list_financial_identity
 from backend.user_product.own_transfer_review import confirm_own_transfer, list_own_transfer_suggestions
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
@@ -309,6 +309,12 @@ def vip_gmail_trust_analytics():
 @router.get("/vip/financial-identity")
 def vip_financial_identity():
     require_feature("gmail_automation"); return list_financial_identity()
+
+@router.post("/vip/financial-identity/accounts")
+def vip_financial_identity_declare(request: OwnAccountDeclareRequest):
+    require_feature("gmail_automation")
+    return declare_own_account(request.institution_code, request.account_last4, request.currency,
+                               request.institution_name, request.display_name)
 
 @router.put("/vip/financial-identity/accounts/{account_balance_id}")
 def vip_financial_identity_confirm(account_balance_id: int, request: FinancialAccountIdentityRequest):

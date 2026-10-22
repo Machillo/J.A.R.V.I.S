@@ -585,12 +585,16 @@ public actor FixtureBackend: HTTPTransport {
                                    "owned": states.filter { $0 == "own" }.count, "not_mine": states.filter { $0 == "not_mine" }.count]])
         default: break
         }
+        if method == "POST", path == "/user-product/vip/financial-identity/accounts" {
+            return declareOwnAccount(body)
+        }
         if parts.starts(with: ["user-product", "vip", "financial-identity", "accounts"]), parts.count == 5 {
             let status = body["ownership_status"] as? String ?? ""
-            guard ["own", "not_mine"].contains(status) else { return error(422, "Estado inválido.") }
+            guard ["own", "not_mine", "pending"].contains(status) else { return error(422, "Estado inválido.") }
             guard let index = identityAccounts.firstIndex(where: { $0["id"] as? Int == Int(parts[4]) }) else { return error(404, "Cuenta financiera no encontrada.") }
             identityAccounts[index]["ownership_status"] = status
-            return ok(identityAccounts[index])
+            identityAccounts[index]["ownership_confirmed_at"] = "2026-10-21T12:00:00Z"
+            return ok(["status": "ok", "item": identityAccounts[index]])
         }
         if parts.starts(with: ["user-product", "vip", "gmail", "candidates"]), parts.count == 6, let candidateID = Int(parts[4]) {
             return review(method, candidateID, parts[5], body)
@@ -788,6 +792,34 @@ public actor FixtureBackend: HTTPTransport {
 
     func ok(_ value: Any) -> Answer { (200, value) }
     func error(_ status: Int, _ detail: String) -> Answer { (status, ["detail": detail]) }
+
+    /// Like `financial_identity.declare_own_account`: the same institution, digits and currency
+    /// reuse the account (marked own); the balance is never shown.
+    private func declareOwnAccount(_ body: [String: Any]) -> Answer {
+        let code = body["institution_code"] as? String ?? ""
+        let last4 = body["account_last4"] as? String ?? ""
+        let currency = body["currency"] as? String ?? "CRC"
+        guard OwnAccountDeclaration.institutions.contains(code) else { return error(422, "Elegí la institución de la cuenta.") }
+        guard last4.count == 4, last4.allSatisfy(\.isNumber) else { return error(422, "Indicá los últimos 4 dígitos de la cuenta.") }
+        let names = ["bac": "BAC", "popular": "Banco Popular", "multimoney": "MultiMoney"]
+        guard let bank = code == "other" ? body["institution_name"] as? String : names[code], !bank.isEmpty else {
+            return error(422, "Escribí el nombre de la institución.")
+        }
+        if let index = identityAccounts.firstIndex(where: { $0["institution_code"] as? String == code && $0["account_last4"] as? String == last4
+                                                             && $0["currency"] as? String == currency }) {
+            identityAccounts[index]["ownership_status"] = "own"
+            identityAccounts[index]["ownership_confirmed_at"] = "2026-10-21T12:00:00Z"
+            return ok(["status": "ok", "item": identityAccounts[index]])
+        }
+        let account: [String: Any] = [
+            "id": (identityAccounts.compactMap { $0["id"] as? Int }.max() ?? 0) + 1,
+            "account_name": body["display_name"] as? String ?? "\(bank) •••• \(last4)" + (currency == "USD" ? " (USD)" : ""),
+            "bank_name": bank, "institution_code": code, "institution_country": "CR", "account_type": "checking",
+            "account_last4": last4, "currency": currency, "ownership_status": "own", "ownership_confirmed_at": "2026-10-21T12:00:00Z",
+        ]
+        identityAccounts.append(account)
+        return ok(["status": "ok", "item": account])
+    }
     static func errorBody(_ detail: String) -> Data { (try? JSONSerialization.data(withJSONObject: ["detail": detail])) ?? Data() }
 
     func needs(_ tier: PlanTier) -> Answer? {

@@ -2028,6 +2028,13 @@
   "user_get": "allowed"
  },
  {
+  "method": "POST",
+  "path": "/user-product/vip/financial-identity/accounts",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
   "method": "PUT",
   "path": "/user-product/vip/financial-identity/accounts/{account_balance_id}",
   "gates": [

@@ -15,9 +15,13 @@ def _last4(value: Any) -> str:
     return digits[-4:] if len(digits) >= 4 else ""
 
 
+INSTITUTION_LABELS = {"bac": "BAC", "popular": "Banco Popular", "multimoney": "MultiMoney"}
+# Institutions a user can name when declaring an own account; "other" carries its own name.
+DECLARABLE_INSTITUTIONS = (*INSTITUTION_LABELS, "other")
+
+
 def _institution_label(code: str) -> str:
-    labels = {"bac": "BAC", "popular": "Banco Popular", "multimoney": "MultiMoney"}
-    return labels.get(code, code.replace("_", " ").title() or "Institución financiera")
+    return INSTITUTION_LABELS.get(code, code.replace("_", " ").title() or "Institución financiera")
 
 
 def _account_signal(candidate: dict[str, Any]) -> dict[str, str] | None:
@@ -152,9 +156,63 @@ def list_financial_identity() -> dict[str, Any]:
     }
 
 
+ACCOUNT_COLUMNS = """id,account_name,bank_name,institution_code,institution_country,
+                      account_type,account_last4,currency,ownership_status,
+                      ownership_confirmed_at,detected_at,last_seen_at,signals_count,source"""
+
+
+def declare_own_account(institution_code: str, account_last4: str, currency: str,
+                        institution_name: str | None = None, display_name: str | None = None) -> dict[str, Any]:
+    """Mark as own an account the user names (institution, last 4 digits, currency).
+
+    For an own account no bank notice ever came from (e.g. the destination of a transfer from
+    another bank). The same account later discovered from a notice is this row: discovery and
+    this command share the identity (institution, last 4 digits, currency) and discovery never
+    changes the ownership. The balance is unknown: it is not counted in net worth.
+    """
+    code = str(institution_code or "").strip().lower()
+    if code not in DECLARABLE_INSTITUTIONS:
+        raise HTTPException(status_code=422, detail="Elegí la institución de la cuenta.")
+    if not re.fullmatch(r"\d{4}", str(account_last4 or "")):
+        raise HTTPException(status_code=422, detail="Indicá los últimos 4 dígitos de la cuenta.")
+    currency = str(currency or "").upper()
+    if currency not in {"CRC", "USD"}:
+        raise HTTPException(status_code=422, detail="La moneda debe ser colones o dólares.")
+    bank = (institution_name or "").strip()[:60] if code == "other" else _institution_label(code)
+    if not bank:
+        raise HTTPException(status_code=422, detail="Escribí el nombre de la institución.")
+    name = (display_name or "").strip()[:120] or f"{bank} •••• {account_last4}" + (" (USD)" if currency == "USD" else "")
+    account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            f"""INSERT INTO account_balances(
+                   workspace_id,account_id,account_name,bank_name,institution_code,
+                   institution_country,account_type,account_last4,currency,current_balance,
+                   source,include_in_net_worth,is_active,ownership_status,ownership_confirmed_at,
+                   detected_at,last_seen_at,signals_count
+               ) VALUES(%s,%s,%s,%s,%s,'CR','checking',%s,%s,0,'user_declared',FALSE,TRUE,'own',NOW(),
+                        NOW(),NOW(),0)
+               ON CONFLICT(workspace_id,account_id,institution_code,account_last4,currency)
+                   WHERE account_id IS NOT NULL AND account_last4 IS NOT NULL AND account_last4<>''
+               DO UPDATE SET ownership_status='own',ownership_confirmed_at=NOW(),is_active=TRUE,updated_at=NOW()
+               RETURNING {ACCOUNT_COLUMNS}""",
+            (workspace_id, account_id, name, bank, code, account_last4, currency),
+        ).fetchone()
+        relink_account_candidates(conn, account=dict(row), account_id=account_id, workspace_id=workspace_id)
+        from backend.user_product.candidate_resolution import reevaluate_workspace_candidates
+        reevaluate_workspace_candidates(conn, account_id=account_id, workspace_id=workspace_id)
+        conn.commit()
+    return {"status": "ok", "item": dict(row)}
+
+
 def confirm_financial_account(account_balance_id: int, ownership_status: str, display_name: str | None = None) -> dict[str, Any]:
-    if ownership_status not in {"own", "not_mine"}:
-        raise HTTPException(status_code=422, detail="La propiedad debe confirmarse como propia o ajena.")
+    """Own, not mine, or "I don't recognise it" (pending, with the review date kept).
+
+    An unrecognised account is never treated as own: like any pending account it is not an
+    endpoint of an own transfer. Its review date tells "reviewed, unknown" from "not reviewed".
+    """
+    if ownership_status not in {"own", "not_mine", "pending"}:
+        raise HTTPException(status_code=422, detail="La propiedad debe ser propia, ajena o desconocida.")
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     name = (display_name or "").strip()
     with get_connection() as conn:
@@ -162,7 +220,7 @@ def confirm_financial_account(account_balance_id: int, ownership_status: str, di
             """UPDATE account_balances
                SET ownership_status=%s,ownership_confirmed_at=NOW(),
                    account_name=CASE WHEN %s<>'' THEN %s ELSE account_name END,
-                   include_in_net_worth=CASE WHEN %s='not_mine' THEN FALSE ELSE include_in_net_worth END,
+                   include_in_net_worth=CASE WHEN %s<>'own' THEN FALSE ELSE include_in_net_worth END,
                    updated_at=NOW()
                WHERE id=%s AND account_id=%s AND workspace_id=%s AND is_active=TRUE
                RETURNING id,account_name,bank_name,institution_code,institution_country,

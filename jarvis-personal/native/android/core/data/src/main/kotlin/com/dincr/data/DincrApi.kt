@@ -165,7 +165,12 @@ class DincrApi(private val client: ApiClient) {
         client.send("POST", "/user-product/vip/gmail/candidates/$candidateId/own-transfer", request)
     suspend fun financialIdentity(): FinancialIdentity = client.get("/user-product/vip/financial-identity")
     suspend fun setAccountOwnership(id: Long, own: Boolean): Acknowledgement =
-        client.send("PUT", "/user-product/vip/financial-identity/accounts/$id", OwnershipRequest(if (own) "own" else "not_mine"))
+        setAccountOwnership(id, if (own) AccountOwnership.OWN else AccountOwnership.NOT_MINE)
+    suspend fun setAccountOwnership(id: Long, ownership: AccountOwnership): Acknowledgement =
+        client.send("PUT", "/user-product/vip/financial-identity/accounts/$id", OwnershipRequest(ownership.wire))
+    /** Marks as own an account no notice came from; the backend re-evaluates the pending notices. */
+    suspend fun declareOwnAccount(declaration: OwnAccountDeclaration): FinancialAccountResult =
+        client.send("POST", "/user-product/vip/financial-identity/accounts", declaration)
 
     // --- JARVIS "Análisis financiero" (Owner; the routers are Owner-only on the server) --------------
     suspend fun transactionAnalysis(): TransactionAnalysis = client.get("/transactions/analysis/summary")

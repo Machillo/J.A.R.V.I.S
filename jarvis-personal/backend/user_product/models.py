@@ -207,7 +207,16 @@ class OwnTransferConfirmRequest(BaseModel):
 
 
 class FinancialAccountIdentityRequest(BaseModel):
-    ownership_status: Literal["own", "not_mine"]
+    # "pending" = the user does not recognise the account (kept with its review date).
+    ownership_status: Literal["own", "not_mine", "pending"]
+    display_name: str | None = Field(default=None, max_length=120)
+
+
+class OwnAccountDeclareRequest(BaseModel):
+    institution_code: Literal["bac", "popular", "multimoney", "other"]
+    institution_name: str | None = Field(default=None, max_length=60)
+    account_last4: str = Field(pattern=r"^\d{4}$")
+    currency: Literal["CRC", "USD"] = "CRC"
     display_name: str | None = Field(default=None, max_length=120)
 
 
