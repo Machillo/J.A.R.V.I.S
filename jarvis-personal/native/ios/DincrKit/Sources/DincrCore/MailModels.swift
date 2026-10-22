@@ -295,12 +295,26 @@ public struct FinancialIdentity: Decodable, Sendable, Equatable {
         public let institutionCode: String?
         public let institutionCountry: String?
         public let accountType: String?
+        /// When the user last answered: with `pending`, the account was reviewed and not recognised.
+        public let ownershipConfirmedAt: String?
 
         public init(id: Int, accountName: String?, bankName: String?, currency: String?, accountLast4: String?, ownershipStatus: String?,
-                    institutionCode: String? = nil, institutionCountry: String? = nil, accountType: String? = nil) {
+                    institutionCode: String? = nil, institutionCountry: String? = nil, accountType: String? = nil,
+                    ownershipConfirmedAt: String? = nil) {
             self.id = id; self.accountName = accountName; self.bankName = bankName; self.currency = currency
             self.accountLast4 = accountLast4; self.ownershipStatus = ownershipStatus
             self.institutionCode = institutionCode; self.institutionCountry = institutionCountry; self.accountType = accountType
+            self.ownershipConfirmedAt = ownershipConfirmedAt
+        }
+
+        /// The user's answer: own, not mine, "I don't recognise it", or not answered yet (`nil`).
+        public var ownership: AccountOwnership? {
+            switch ownershipStatus {
+            case "own": .own
+            case "not_mine": .notMine
+            case "pending" where ownershipConfirmedAt != nil: .unknown
+            default: nil
+            }
         }
 
         /// The bank's branding: the institution code first, then the bank name.
@@ -315,10 +329,51 @@ public struct FinancialIdentity: Decodable, Sendable, Equatable {
     public init(items: [Account]?) { self.items = items }
 }
 
+/// The answers a user can give about a detected or declared account
+/// (`financial_identity.confirm_financial_account`). "I don't recognise it" is stored as `pending`
+/// with its review date: it is never treated as an own account.
+public enum AccountOwnership: String, Sendable, CaseIterable {
+    case own
+    case notMine = "not_mine"
+    case unknown = "pending"
+}
+
 public struct OwnershipRequest: Encodable, Sendable, Equatable {
     public let ownershipStatus: String
-    /// `own` or `not_mine` (`financial_identity.confirm_financial_account`).
-    public init(own: Bool) { self.ownershipStatus = own ? "own" : "not_mine" }
+    public init(_ ownership: AccountOwnership) { self.ownershipStatus = ownership.rawValue }
+    public init(own: Bool) { self.init(own ? .own : .notMine) }
+}
+
+/// `POST /vip/financial-identity/accounts`: an own account no notice came from (e.g. the other bank
+/// of a transfer). Only the last 4 digits ever leave the device.
+public struct OwnAccountDeclaration: Encodable, Sendable, Equatable {
+    public static let institutions = ["bac", "popular", "multimoney", "other"]
+    public let institutionCode: String
+    public let institutionName: String?
+    public let accountLast4: String
+    public let currency: String
+    public let displayName: String?
+
+    public init(institutionCode: String, institutionName: String? = nil, accountLast4: String, currency: String, displayName: String? = nil) {
+        self.institutionCode = institutionCode
+        let name = institutionName?.trimmingCharacters(in: .whitespaces) ?? ""
+        self.institutionName = institutionCode == "other" && !name.isEmpty ? name : nil
+        self.accountLast4 = accountLast4
+        self.currency = currency
+        let display = displayName?.trimmingCharacters(in: .whitespaces) ?? ""
+        self.displayName = display.isEmpty ? nil : display
+    }
+
+    /// Exactly four digits, an institution (with its name when it is "other") and CRC or USD.
+    public var isComplete: Bool {
+        accountLast4.count == 4 && accountLast4.allSatisfy(\.isNumber) && Self.institutions.contains(institutionCode)
+            && (institutionCode != "other" || institutionName != nil) && ["CRC", "USD"].contains(currency)
+    }
+}
+
+/// `{status, item}` of the account commands.
+public struct FinancialAccountResult: Decodable, Sendable, Equatable {
+    public let item: FinancialIdentity.Account?
 }
 
 /// `GET /vip/gmail/own-transfer-suggestions`.

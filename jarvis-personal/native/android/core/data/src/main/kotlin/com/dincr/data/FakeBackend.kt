@@ -104,6 +104,25 @@ class FakeBackend(
     }
 
     private val replays = mutableMapOf<String, Pair<String?, HttpResponse>>()
+
+    /** Like `financial_identity.declare_own_account`: the same institution, digits and currency reuse the account. */
+    private fun declareOwnAccount(body: kotlinx.serialization.json.JsonObject?): HttpResponse {
+        fun field(name: String) = body?.get(name)?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNullSafe() }
+        val code = field("institution_code").orEmpty()
+        val last4 = field("account_last4").orEmpty()
+        val currency = field("currency") ?: "CRC"
+        if (code !in OwnAccountDeclaration.INSTITUTIONS) return error(422, "Elegí la institución de la cuenta.")
+        if (last4.length != 4 || !last4.all(Char::isDigit)) return error(422, "Indicá los últimos 4 dígitos de la cuenta.")
+        val bank = if (code == "other") field("institution_name") else mapOf("bac" to "BAC", "popular" to "Banco Popular", "multimoney" to "MultiMoney")[code]
+        if (bank.isNullOrBlank()) return error(422, "Escribí el nombre de la institución.")
+        val index = accounts.indexOfFirst { it.institutionCode == code && it.accountLast4 == last4 && it.currency == currency }
+        val account = if (index >= 0) accounts[index].copy(ownershipStatus = "own", ownershipConfirmedAt = "2026-10-21T12:00:00Z").also { accounts[index] = it }
+        else FinancialIdentity.Account((accounts.maxOfOrNull { it.id } ?: 0) + 1, field("display_name") ?: "$bank •••• $last4" + (if (currency == "USD") " (USD)" else ""),
+            bank, code, "CR", "checking", currency, last4, "own", "2026-10-21T12:00:00Z").also { accounts += it }
+        return ok(json.encodeToString(FinancialAccountResult.serializer(), FinancialAccountResult(account)))
+    }
+
+    private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String? = if (this is kotlinx.serialization.json.JsonNull) null else content
     /** The change the scripted JARVIS chat waits a "sí" / "no" for. */
     private var jarvisPending = false
     /** The Owner's agenda (`events` table) and the event the scripted chat waits a "sí" for. */
@@ -517,12 +536,13 @@ class FakeBackend(
                 .filter { c -> query["financial_account_id"]?.toLongOrNull()?.let { c.financialAccountId == it } ?: true }))
             path == "/user-product/vip/gmail/own-transfer-suggestions" -> ok(OwnTransferSuggestions())
             path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(accounts.toList(), FinancialIdentity.Summary(accounts.size, accounts.count { it.ownershipStatus == "pending" })))
+            path == "/user-product/vip/financial-identity/accounts" && method == "POST" -> declareOwnAccount(body)
             segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") -> {
                 val index = accounts.indexOfFirst { it.id == segments.getOrNull(4)?.toLongOrNull() }
                 val status = text("ownership_status")
                 if (index < 0) return error(404, "Cuenta financiera no encontrada.")
-                if (status !in setOf("own", "not_mine")) return error(422, "La propiedad debe confirmarse como propia o ajena.")
-                accounts[index] = accounts[index].copy(ownershipStatus = status)
+                if (status !in setOf("own", "not_mine", "pending")) return error(422, "La propiedad debe ser propia, ajena o desconocida.")
+                accounts[index] = accounts[index].copy(ownershipStatus = status, ownershipConfirmedAt = "2026-10-21T12:00:00Z")
                 ok("""{"status":"ok"}""")
             }
             segments.take(4) == listOf("user-product", "vip", "gmail", "candidates") -> {

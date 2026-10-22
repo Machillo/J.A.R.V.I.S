@@ -303,7 +303,18 @@ public struct DincrService: Sendable {
     public func financialIdentity() async throws -> FinancialIdentity { try await client.get("/user-product/vip/financial-identity") }
 
     public func setAccountOwnership(id: Int, own: Bool) async throws {
-        let _: Acknowledgement = try await client.send("PUT", "/user-product/vip/financial-identity/accounts/\(id)", body: OwnershipRequest(own: own))
+        try await setAccountOwnership(id: id, own ? .own : .notMine)
+    }
+
+    public func setAccountOwnership(id: Int, _ ownership: AccountOwnership) async throws {
+        let _: Acknowledgement = try await client.send("PUT", "/user-product/vip/financial-identity/accounts/\(id)", body: OwnershipRequest(ownership))
+    }
+
+    /// Marks as own an account no notice came from; the backend re-evaluates the pending notices.
+    @discardableResult
+    public func declareOwnAccount(_ declaration: OwnAccountDeclaration) async throws -> FinancialIdentity.Account? {
+        let result: FinancialAccountResult = try await client.send("POST", "/user-product/vip/financial-identity/accounts", body: declaration)
+        return result.item
     }
 
     /// Movement ids look like `expense:42`; the colon must survive as a path segment.

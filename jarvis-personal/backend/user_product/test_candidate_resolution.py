@@ -64,8 +64,9 @@ def test_marks_duplicate_and_links_original_candidate():
 
 def test_marks_internal_only_when_two_distinct_confirmed_accounts_match():
     connection = _Connection([
+        # The own-account lookups read up to two rows (two matches would be ambiguous).
         _Result(one=_candidate(external_reference=None)), _Result(one=None), _Result(rows=[]),
-        _Result(one={"id": 11}), _Result(one={"id": 22}), _Result(),
+        _Result(rows=[{"id": 11}]), _Result(rows=[{"id": 22}]), _Result(),
     ])
     result = resolve_candidate(connection, 9)
     assert result == {"status": "internal_transfer"}
@@ -131,7 +132,7 @@ def test_resolving_second_bank_notice_links_both_without_financial_transaction()
              "source_account_reference": None, "destination_account_reference": "2222",
              "external_reference": None}
     connection = _Connection([
-        _Result(one=candidate), _Result(one=None), _Result(rows=[]), _Result(one={"id": 11}),
+        _Result(one=candidate), _Result(one=None), _Result(rows=[]), _Result(rows=[{"id": 11}]),
         _Result(rows=[other]), _Result(), _Result(),
     ])
     assert resolve_candidate(connection, 9) == {"status": "internal_transfer"}
