@@ -1,5 +1,7 @@
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
+from backend.finance.category_catalog import owner_context
+from backend.user_product import owner_ledger
 from datetime import date, datetime
 import calendar
 
@@ -9,6 +11,40 @@ LOAN_TYPES = ("loan_received", "loan_disbursement")
 # A receivable_offset moves no money and is in none of these lists.
 NON_INCOME_CASH_INFLOW_TYPES = ("receivable_payment", "asset_sale")
 OUTFLOW_TYPES = ("expense", "debt_payment")
+
+
+def _owner_monthly_flow(workspace_id) -> list[dict]:
+    """The Owner's months by the single ledger (owner_ledger): income is money received; gross
+    payroll (overtime, VGH, bonuses) is reported apart; loans, collections and asset sales are
+    other inflows; spending is net of refunds; the monthly balance subtracts debt payments;
+    cash_flow adds the other inflows back; each month says whether it is complete."""
+    with get_connection() as conn:
+        tables = owner_ledger._existing_tables(conn)
+        sources = ["SELECT to_char(transaction_date, 'YYYY-MM') AS month FROM transactions WHERE workspace_id = %s"]
+        sources += [owner_ledger.RECORD_MONTHS[table] for table in owner_ledger.LEDGER_TABLES if table in tables]
+        months = [row["month"] for row in conn.execute(
+            f"SELECT month FROM ({' UNION '.join(sources)}) months WHERE month IS NOT NULL ORDER BY month",
+            (workspace_id,) * len(sources),
+        ).fetchall()]
+        flow, cumulative = [], 0.0
+        for month in months:
+            start = date.fromisoformat(f"{month}-01")
+            end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
+            totals = owner_ledger.owner_month_totals(conn, workspace_id, start, end)
+            cumulative = round(cumulative + totals["balance"], 2)
+            flow.append({
+                "month": month, "income": totals["income"], "earned_income": totals["income"],
+                "other_inflows": totals["other_inflows"], "loan_received": totals["loan_received"],
+                "receivable_payments": totals["receivable_payments"], "asset_sale_proceeds": totals["asset_sale_proceeds"],
+                "gross_expenses": totals["gross_expenses"],
+                "refunds": totals["refunds"], "debt_payments": totals["debt_paid"],
+                "spending": totals["expenses"], "expenses": totals["expenses"], "outflow": totals["expenses"],
+                "monthly_balance": totals["balance"], "cash_flow": totals["cash_flow"],
+                "cumulative_balance": cumulative, "unclassified_count": totals["unclassified_count"],
+                "payroll_accrued": totals["payroll_accrued"], "pending_mail_count": totals["pending_mail_count"],
+                "complete": totals["complete"], "incomplete_reasons": totals["incomplete_reasons"],
+            })
+    return flow
 
 
 def get_transaction_summary():
@@ -154,6 +190,8 @@ def get_monthly_flow():
     for the month without creating a second debt record.
     """
     workspace_id = get_current_workspace_id()
+    if owner_context():
+        return _owner_monthly_flow(workspace_id)
 
     with get_connection() as conn:
         rows = conn.execute(
