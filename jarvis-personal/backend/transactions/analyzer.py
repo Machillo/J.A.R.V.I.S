@@ -21,9 +21,7 @@ def _owner_monthly_flow(workspace_id) -> list[dict]:
     with get_connection() as conn:
         tables = owner_ledger._existing_tables(conn)
         sources = ["SELECT to_char(transaction_date, 'YYYY-MM') AS month FROM transactions WHERE workspace_id = %s"]
-        record_month = f"to_char({owner_ledger.costa_rica_record_date_sql()}, 'YYYY-MM')"
-        sources += [f"SELECT {record_month} FROM {table} WHERE workspace_id = %s"
-                    for table in owner_ledger.LEDGER_TABLES if table in tables]
+        sources += [owner_ledger.RECORD_MONTHS[table] for table in owner_ledger.LEDGER_TABLES if table in tables]
         months = [row["month"] for row in conn.execute(
             f"SELECT month FROM ({' UNION '.join(sources)}) months WHERE month IS NOT NULL ORDER BY month",
             (workspace_id,) * len(sources),

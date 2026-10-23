@@ -147,11 +147,30 @@ def _transaction_date_sql() -> str:
     return f"CASE WHEN {raw} ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}' THEN SUBSTRING({raw} FROM 1 FOR 10)::date ELSE NULL END"
 
 
-def costa_rica_record_date_sql(column: str = "created_at") -> str:
-    """A record timestamp (UTC wall time) as its Costa Rica date: UTC-6, no daylight saving.
-    A fixed offset, so it needs no time-zone database and no session time zone."""
-    return f"({column} - interval '6 hours')::date"
+# A record timestamp (UTC wall time) is read as its Costa Rica date, ``(created_at - interval
+# '6 hours')::date``: UTC-6, no daylight saving, so it needs no time-zone database and no session
+# time zone. Every statement names its table literally, so the role-grant scanner sees it
+# (tests/test_dincr_app_grants.py): no interpolated table names.
+RECORD_SUMS = {
+    "salaries": ("salaries", """SELECT COALESCE(SUM(amount),0) AS total FROM salaries WHERE workspace_id=%s
+        AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s"""),
+    "overtime": ("payroll_events", """SELECT COALESCE(SUM(amount),0) AS total FROM payroll_events WHERE workspace_id=%s AND amount>0
+        AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s"""),
+    "vgh": ("payroll_events", """SELECT COALESCE(SUM(amount),0) AS total FROM payroll_events WHERE workspace_id=%s AND amount<0
+        AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s"""),
+    "bonuses": ("bonuses", """SELECT COALESCE(SUM(amount),0) AS total FROM bonuses WHERE workspace_id=%s
+        AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s"""),
+    "expenses_table": ("expenses", """SELECT COALESCE(SUM(amount),0) AS total FROM expenses WHERE workspace_id=%s
+        AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s"""),
+}
 
+# The months that hold record rows (JARVIS > Análisis financiero lists every month with data).
+RECORD_MONTHS = {
+    "salaries": "SELECT to_char((created_at - interval '6 hours')::date, 'YYYY-MM') AS month FROM salaries WHERE workspace_id = %s",
+    "payroll_events": "SELECT to_char((created_at - interval '6 hours')::date, 'YYYY-MM') AS month FROM payroll_events WHERE workspace_id = %s",
+    "bonuses": "SELECT to_char((created_at - interval '6 hours')::date, 'YYYY-MM') AS month FROM bonuses WHERE workspace_id = %s",
+    "expenses": "SELECT to_char((created_at - interval '6 hours')::date, 'YYYY-MM') AS month FROM expenses WHERE workspace_id = %s",
+}
 
 LEDGER_TABLES = ("salaries", "payroll_events", "bonuses", "expenses")
 OPTIONAL_TABLES = LEDGER_TABLES + ("finva_email_candidates",)
@@ -176,17 +195,8 @@ def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
         (workspace_id, start, end),
     ).fetchall()
     tables = _existing_tables(conn)
-    record_date = costa_rica_record_date_sql()
-
-    def table_sum(table: str, extra: str = "") -> object:
-        if table not in tables:
-            return 0
-        row = conn.execute(
-            f"SELECT COALESCE(SUM(amount),0) AS total FROM {table} WHERE workspace_id=%s{extra} "
-            f"AND {record_date} >= %s AND {record_date} < %s",
-            (workspace_id, start, end),
-        ).fetchone()
-        return row["total"]
+    record = {key: (conn.execute(sql, (workspace_id, start, end)).fetchone()["total"] if table in tables else 0)
+              for key, (table, sql) in RECORD_SUMS.items()}
 
     pending = 0
     if "finva_email_candidates" in tables:
@@ -195,12 +205,7 @@ def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
             "AND transaction_date >= %s AND transaction_date < %s",
             (workspace_id, start, end),
         ).fetchone()["count"]
-    return month_totals(
-        [(row["ledger_type"], row["total"], row["count"]) for row in groups],
-        salaries=table_sum("salaries"),
-        overtime=table_sum("payroll_events", " AND amount>0"), vgh=table_sum("payroll_events", " AND amount<0"),
-        bonuses=table_sum("bonuses"), expenses_table=table_sum("expenses"), pending_mail=pending,
-    )
+    return month_totals([(row["ledger_type"], row["total"], row["count"]) for row in groups], pending_mail=pending, **record)
 
 
 def classify_movement(row: dict) -> dict:
