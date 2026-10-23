@@ -1241,6 +1241,13 @@
   "user_get": "denied"
  },
  {
+  "method": "POST",
+  "path": "/jarvis/premium/strategy-dashboard/exact-distribution",
+  "gates": [
+   "router_roles:owner"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/jarvis/premium/strategy-summary",
   "gates": [

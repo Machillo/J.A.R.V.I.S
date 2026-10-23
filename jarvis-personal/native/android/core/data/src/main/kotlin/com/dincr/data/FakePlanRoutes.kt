@@ -52,7 +52,7 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
 
     // --- Strategy dashboards ----------------------------------------------------------------------
 
-    fun strategyDashboard(data: Snapshot, owner: Boolean, role: String?): String {
+    fun strategyDashboard(data: Snapshot, owner: Boolean, role: String?, manualAmount: BigDecimal? = null): String {
         val (incomeSource, income) = basicIncome(data)
         val (_, spent) = monthTotals(data.movements, month)
         val active = data.debts.filter { (it.remainingAmount ?: BigDecimal.ZERO).signum() > 0 }
@@ -60,7 +60,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         val pendingRecurring = data.recurring.filter { it.isActive == true && it.itemType == "expense" && (it.dueDay ?: 0) > today.dayOfMonth }.sumOf { it.amount ?: BigDecimal.ZERO }
         val statement = if (owner) BigDecimal(95_000) else BigDecimal.ZERO
         val mandatoryPending = if (owner) BigDecimal(210_000) else BigDecimal.ZERO
-        val before = income - spent - debtCommitment - pendingRecurring - statement - mandatoryPending
+        // Like the backend: a confirmed amount replaces what the records estimate is available.
+        val before = (manualAmount ?: income) - spent - debtCommitment - pendingRecurring - statement - mandatoryPending
         val surplus = before.max(BigDecimal.ZERO)
         val deficit = before.negate().max(BigDecimal.ZERO)
         val target = active.maxByOrNull { it.interestRate ?: BigDecimal.ZERO }
@@ -71,8 +72,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             DirectorStrategy.AllocationItem("vida_controlada", 15.0, surplus - part(45) - part(40)),
         )
         val formula = linkedMapOf<String, BigDecimal>()
-        if (owner) formula["cash_available_now"] = BigDecimal(640_000)
-        formula["income"] = income
+        if (manualAmount != null) formula["manual_available"] = manualAmount
+        else { if (owner) formula["cash_available_now"] = BigDecimal(640_000); formula["income"] = income }
         if (owner) { formula["statement_spending"] = statement; formula["new_spending_after_cut"] = spent } else formula["recorded_spending"] = spent
         formula["debt_commitment"] = debtCommitment
         if (owner) formula["mandatory_fixed_pending"] = mandatoryPending else formula["pending_recurring"] = pendingRecurring
@@ -105,6 +106,7 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             allocationBaseAmount = surplus, allocationItems = items,
             distributionFormula = formula.mapValues { JsonPrimitive(it.value) },
             distributableAccountCash = if (owner) BigDecimal(640_000) else null,
+            distributionSource = if (manualAmount != null) "manual_amount" else "estimate",
             recurringMonthlyIncome = if (owner) income else null,
             currentMonthExtraNet = if (owner) BigDecimal(45_000) else null,
             incomeReceivedCurrentCycle = if (owner) BigDecimal(432_500) else null,

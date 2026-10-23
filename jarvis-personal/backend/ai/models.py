@@ -1,6 +1,24 @@
+from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+# Exact-amount distribution: a reasonable ceiling (₡1.000 millones) against a mistyped amount.
+EXACT_DISTRIBUTION_MAX = Decimal("1000000000")
+
+
+class ExactDistributionRequest(BaseModel):
+    """The money the Owner confirms having, to distribute with the current strategy (planning only)."""
+    amount: Decimal = Field(gt=0, le=EXACT_DISTRIBUTION_MAX, max_digits=12, decimal_places=2)
+    currency: str = "CRC"
+
+    @field_validator("currency")
+    @classmethod
+    def _colones_only(cls, value: str) -> str:
+        # The Owner's strategy works in colones; another currency is never added or converted silently.
+        if str(value).strip().upper() != "CRC":
+            raise ValueError("Por ahora la distribución exacta es solo en colones (CRC).")
+        return "CRC"
 
 
 class JarvisChatRequest(BaseModel):

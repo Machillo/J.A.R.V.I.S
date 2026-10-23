@@ -217,6 +217,35 @@ def _goal_is_urgent(goal: dict[str, Any]) -> bool:
     )
 
 
+def _whole_cents_within(amounts: dict[str, float], order: list[str], base: float) -> dict[str, float]:
+    """Each amount in whole cents, never adding up to more than the base.
+
+    Rounding every amount on its own could assign a few cents more than the base (or lose
+    some): amounts are floored to the cent and only the cents the flooring lost go back, one
+    each, to the largest fractions. No cent is invented beyond those.
+    """
+    from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
+
+    raw = {key: Decimal(str(round(max(_f(amounts.get(key)), 0.0), 6))) * 100 for key in order}
+    cents = {key: int(value.to_integral_value(rounding=ROUND_FLOOR)) for key, value in raw.items()}
+    base_cents = int((Decimal(str(round(max(_f(base), 0.0), 6))) * 100).to_integral_value(rounding=ROUND_FLOOR))
+    positive = [key for key in order if raw[key] > 0]
+    # The cents the amounts add up to (float noise rounded), never more than the base.
+    target = min(int(sum(raw.values()).to_integral_value(rounding=ROUND_HALF_UP)), base_cents)
+    lost = min(target - sum(cents.values()), len(positive))
+    room = base_cents - sum(cents.values())
+    for key in sorted(positive, key=lambda k: raw[k] - cents[k], reverse=True)[:max(min(lost, room), 0)]:
+        cents[key] += 1
+    excess = sum(cents.values()) - base_cents  # only when the amounts themselves exceed the base
+    for key in sorted(positive, key=lambda k: cents[k], reverse=True):
+        if excess <= 0:
+            break
+        take = min(excess, cents[key])
+        cents[key] -= take
+        excess -= take
+    return {key: cents[key] / 100 for key in order}
+
+
 def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[dict[str, float], list[dict[str, Any]]]:
     base = max(_f(base), 0.0)
     order = [
@@ -227,7 +256,7 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[di
         "inversion",
         "metas_o_inversion",
     ]
-    clean = {key: round(max(_f(amounts.get(key)), 0.0), 2) for key in order}
+    clean = _whole_cents_within(amounts, order, base)
     percentages = {
         key: round((value / base) * 100, 2) if base > 0 else 0.0
         for key, value in clean.items()
@@ -235,7 +264,7 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[di
     items = [
         {"key": key, "percentage": percentages[key], "amount": clean[key]}
         for key in order
-        if clean[key] > 0.01
+        if clean[key] > 0  # whole cents: a 1-cent item is shown, so the items add up to the base
     ]
     return percentages, items
 
@@ -389,7 +418,7 @@ def _build_dynamic_director_allocation(
             amounts["fondo_de_emergencia"] += remainder
 
     allocation, items = _allocation_from_amounts(amounts, base)
-    safe_to_spend = round(amounts["vida_controlada"], 2)
+    safe_to_spend = next((item["amount"] for item in items if item["key"] == "vida_controlada"), 0.0)
 
     if savings_total < mini_fund_target:
         emergency_level = "mini_fund_building"
@@ -409,7 +438,8 @@ def _build_dynamic_director_allocation(
         "mode_label": mode_label,
         "mode_reason": mode_reason,
         "allocation": allocation,
-        "allocation_amounts": {k: round(v, 2) for k, v in amounts.items()},
+        # The same whole cents as the items, so both always add up to the base.
+        "allocation_amounts": {k: next((i["amount"] for i in items if i["key"] == k), 0.0) for k in amounts},
         "allocation_items": items,
         "allocation_base_amount": round(base, 2),
         "safe_to_spend": safe_to_spend,
@@ -968,8 +998,28 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     return _users_strategy_blueprint()
 
 
-def _owner_strategy_blueprint() -> dict[str, Any]:
-    """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea)."""
+def _distribution_warnings(cycle_report: dict[str, Any], salvavidas: dict[str, Any]) -> list[dict[str, str]]:
+    """What the distribution could not read: said, never computed as zero."""
+    warnings = []
+    if not cycle_report:
+        warnings.append({"code": "cycle_unavailable", "message": tx(
+            "No pudimos leer los compromisos de este ciclo; la distribución puede asignar dinero que ya está comprometido.",
+            "We couldn't read this cycle's commitments; the distribution may assign money that is already committed.")})
+    if not salvavidas:
+        warnings.append({"code": "salvavidas_unavailable", "message": tx(
+            "No pudimos leer tu Salvavidas; la parte del fondo de emergencia es aproximada.",
+            "We couldn't read your emergency fund; its share is approximate.")})
+    return warnings
+
+
+def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str, Any]:
+    """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea).
+
+    `manual_available` (exact-amount distribution, a planning tool): the money the Owner confirms
+    having replaces what the records estimate is available (account cash plus income still to
+    come). The cycle's pending obligations are still taken out first and the same Director engine
+    splits the rest. Nothing is written: it only changes where the base comes from.
+    """
     all_debts = get_debts() or []
     debts = [debt for debt in all_debts if _f(debt.get("remaining_amount")) > 0.01]
     summary = get_financial_summary() or {}
@@ -1054,6 +1104,9 @@ def _owner_strategy_blueprint() -> dict[str, Any]:
         - debt_commitment_current_cycle
         - mandatory_fixed_pending
     )
+    pending_obligations = committed_spending + debt_commitment_current_cycle + mandatory_fixed_pending
+    if manual_available is not None:
+        current_before_allocation = manual_available - pending_obligations
 
     # Strategy and the Salvavidas screen must share the same source of truth.
     # The current balance is manual in V1; the monthly base is recalculated live
@@ -1226,9 +1279,13 @@ def _owner_strategy_blueprint() -> dict[str, Any]:
         "allocation_amounts": allocation_amounts,
         "allocation_items": allocation_items,
         "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
+        "distribution_source": "manual_amount" if manual_available is not None else "estimate",
+        "distribution_warnings": _distribution_warnings(cycle_report, salvavidas),
         "distribution_formula": {
-            "cash_available_now": round(distributable_cash, 2),
-            "income": round(remaining_income_current_cycle, 2),
+            **({"manual_available": round(manual_available, 2)} if manual_available is not None else {
+                "cash_available_now": round(distributable_cash, 2),
+                "income": round(remaining_income_current_cycle, 2),
+            }),
             "statement_spending": round(statement_spending, 2),
             "new_spending_after_cut": round(new_spending_after_cut, 2),
             "debt_commitment": round(debt_commitment_current_cycle, 2),
@@ -1523,6 +1580,34 @@ def _users_blueprint_from_inputs(
             tx("Tu ingreso declarado es la base; los correos importados nunca la suben ni la bajan.",
                "Your declared income is the baseline; imported emails never raise or lower it."),
         ],
+    }
+
+
+def get_owner_exact_distribution(amount: Any, currency: str = "CRC") -> dict[str, Any]:
+    """Owner only (phase 1): the current strategy applied to the amount the Owner confirms.
+
+    A planning answer with the dashboard's shape: no transaction, payment, balance, history or
+    setting is written or stored. Another currency is refused, never converted.
+    """
+    from fastapi import HTTPException
+
+    if not _is_owner():
+        raise HTTPException(status_code=403, detail=tx("La distribución por monto exacto está disponible solo para el Owner.",
+                                                       "Exact-amount distribution is available to the Owner only."))
+    if str(currency or "").upper() != "CRC":
+        raise HTTPException(status_code=422, detail=tx("Por ahora la distribución exacta es solo en colones (CRC).",
+                                                       "For now exact distribution is in colones (CRC) only."))
+    strategy = _owner_strategy_blueprint(manual_available=round(float(amount), 2))
+    return {
+        "status": "OK",
+        "user_role": get_current_user().get("role"),
+        "title": strategy.get("title") or tx("Estrategia activa", "Active strategy"),
+        "content": strategy.get("objective") or "",
+        "strategy": strategy,
+        "updated_at": datetime.now().isoformat(),
+        "has_premium_strategy": True,
+        "source": "manual_amount",
+        "manual_amount": {"amount": round(float(amount), 2), "currency": "CRC"},
     }
 
 

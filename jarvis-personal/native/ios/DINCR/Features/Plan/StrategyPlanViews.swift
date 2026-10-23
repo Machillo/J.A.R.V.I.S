@@ -490,6 +490,9 @@ private struct DistributionContent: View {
             if let plan = dashboard.strategy {
                 if plan.needsIncome {
                     NeedsIncomeState(message: plan.objective ?? dashboard.content)
+                } else if plan.isOwnerScope {
+                    // The Owner chooses the estimate or an exact amount (OwnerExactDistributionView.swift).
+                    OwnerDistributionModes(estimate: plan)
                 } else {
                     DashboardDistribution(plan: plan)
                 }
@@ -501,7 +504,7 @@ private struct DistributionContent: View {
     }
 }
 
-private struct DashboardDistribution: View {
+struct DashboardDistribution: View {
     let plan: DashboardStrategy
 
     var body: some View {

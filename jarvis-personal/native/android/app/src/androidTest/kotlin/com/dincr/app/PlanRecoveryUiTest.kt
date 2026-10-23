@@ -507,4 +507,40 @@ class PlanRecoveryUiTest {
         // The rate follows the app language's decimal separator (507,5 / 507.5): match what both share.
         waitForText(tx("TC 507", "Rate 507"), substring = true)
     }
+
+    /**
+     * Owner exact-amount distribution (phase 1): the estimate stays as it was, an exact amount is
+     * validated, calculated from the typed amount (marked as such) and the estimate comes back
+     * unchanged; nothing is recorded (the fake, like the backend, only answers the plan).
+     */
+    @Test fun theOwnerDistributesAnExactAmountAndTheEstimateStays() {
+        launch(role = "owner")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Distribución de dinero", "Money distribution"))
+        waitForText(tx("Distribución aproximada", "Estimated distribution"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
+        click(tx("Monto exacto", "Exact amount"))
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Escribí un monto mayor que cero", "Enter an amount above zero"), substring = true)
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("2500000")
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        waitForText(tx("Monto que indicaste", "Amount you entered"))
+        assertTrue("the exact answer never shows the estimate's cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))
+        click(tx("Aproximada", "Estimated"))
+        waitForText(tx("Distribución aproximada", "Estimated distribution"))
+        waitForText(tx("Efectivo disponible ahora", "Cash available now"))
+        assertTrue(!present(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered")))
+    }
+
+    @Test fun vipUsersHaveNoExactAmountMode() {
+        launch(plan = "vip")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Distribución de dinero", "Money distribution"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
+        assertTrue(!present(tx("Monto exacto", "Exact amount")))
+        assertTrue(!present(tx("Distribución aproximada", "Estimated distribution")))
+    }
 }

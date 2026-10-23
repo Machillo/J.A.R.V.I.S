@@ -229,6 +229,12 @@ class FakeBackend(
             path == "/jarvis/calendar/upcoming" && method == "GET" ->
                 if (profile.role != "owner") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
             // The Owner's strategy: this fake serves it to the Owner role only.
+            path == "/jarvis/premium/strategy-dashboard/exact-distribution" && method == "POST" -> when {
+                profile.role != "owner" -> error(403, "La distribución por monto exacto está disponible solo para el Owner.")
+                (money("amount") ?: java.math.BigDecimal.ZERO).signum() <= 0 -> error(422, "Indicá un monto mayor que cero.")
+                text("currency") != null && text("currency") != "CRC" -> error(422, "Por ahora la distribución exacta es solo en colones (CRC).")
+                else -> ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role, manualAmount = money("amount")))
+            }
             path == "/jarvis/premium/strategy-dashboard" && method == "GET" ->
                 if (!isOwner) error(403, "No tienes permisos para realizar esta acción.") else ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role))
             // JARVIS "Análisis financiero": the internal routers admit only the verified Owner (main.py INTERNAL_ONLY).

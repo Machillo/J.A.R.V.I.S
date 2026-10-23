@@ -15,6 +15,7 @@ import {
 import {
   getDebtAdvisory,
   getAguinaldo,
+  getJarvisExactDistribution,
   getJarvisPremiumStrategyDashboard,
   getSalvavidas,
   updateSalvavidas,
@@ -24,6 +25,8 @@ import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 import { deviceLanguage, localeTag, t } from "../lib/locale";
 import { baseCurrency, currencySymbol, formatMoney } from "../lib/currency";
 import { categoryLabel } from "../lib/categories";
+import { exactAmountError, parseExactAmount } from "../lib/exactDistribution";
+import ExactDistributionControls from "./strategy/ExactDistributionControls";
 
 const language = deviceLanguage();
 const tr = (key) => t(key, language);
@@ -110,6 +113,8 @@ const optionCopy = {
 export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const strategyApi = api || {
     getStrategyDashboard: getJarvisPremiumStrategyDashboard,
+    // Owner only (phase 1): the default api is the Owner's; VIP Users pass their own without it.
+    getExactDistribution: getJarvisExactDistribution,
     getDebtAdvisory,
     getSalvavidas,
     updateSalvavidas,
@@ -122,6 +127,23 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const [salvavidasTargetMonths, setSalvavidasTargetMonths] = useState(6);
   const [protectedExpenseIds, setProtectedExpenseIds] = useState([]);
   const [aguinaldoState, setAguinaldoState] = useState({ loading: true, data: null, error: "" });
+  // Exact-amount distribution: a plan computed by the backend from the typed amount; nothing is saved.
+  const [exact, setExact] = useState({ mode: "estimate", amount: "", loading: false, error: "", data: null });
+
+  const calculateExact = async () => {
+    const parsed = parseExactAmount(exact.amount);
+    if (parsed.error) {
+      setExact((current) => ({ ...current, error: exactAmountError(parsed.error, tx) }));
+      return;
+    }
+    setExact((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const data = await strategyApi.getExactDistribution(parsed.value);
+      setExact((current) => ({ ...current, loading: false, data }));
+    } catch (error) {
+      setExact((current) => ({ ...current, loading: false, error: error?.message || tx("No pudimos calcular la distribución.", "We couldn’t calculate the distribution.") }));
+    }
+  };
 
   const load = async ({ keepPage = false } = {}) => {
     setState((current) => ({ ...current, loading: keepPage ? current.loading : true, running: keepPage, error: "" }));
@@ -228,7 +250,6 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     ? strategy.allocation_items
     : Object.entries(allocation).map(([key, percentage]) => ({ key, percentage, amount: allocationAmounts[key] || 0 }));
   const allocationBase = Number(strategy.allocation_base_amount || 0);
-  const allocationTotal = Number(strategy.allocation_total || allocationItems.reduce((sum, item) => sum + Number(item.amount || 0), 0));
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
   const debtAdvice = state.debtAdvice || {};
   const adviceScenarios = useMemo(
@@ -260,48 +281,62 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
 
   const investmentRecommended = Number(strategy.investment_recommended || 0);
   const investmentState = allocationBase <= 0 ? "blocked" : investmentRecommended > 0 ? "ready" : "limited";
-  const formula = strategy.distribution_formula || {};
-  const hasDistributionFormula = Object.prototype.hasOwnProperty.call(formula, "cash_available_now");
+  // The distribution panel reads the exact-amount answer when the Owner chose it; the rest of the
+  // page keeps the estimate. Before a calculation the exact mode shows no figures.
+  const ownerExact = strategy.scope === "owner" && typeof strategyApi.getExactDistribution === "function";
+  const exactMode = ownerExact && exact.mode === "exact";
+  const distStrategy = (exactMode && exact.data?.strategy) || strategy;
+  const showDistribution = !exactMode || Boolean(exact.data?.strategy);
+  const distAmounts = distStrategy.allocation_amounts || {};
+  const distItems = Array.isArray(distStrategy.allocation_items) ? distStrategy.allocation_items : [];
+  const distBase = Number(distStrategy.allocation_base_amount || 0);
+  const distTotal = Number(distStrategy.allocation_total || distItems.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+  const formula = distStrategy.distribution_formula || {};
+  const manualFormula = Object.prototype.hasOwnProperty.call(formula, "manual_available");
+  const hasDistributionFormula = manualFormula || Object.prototype.hasOwnProperty.call(formula, "cash_available_now");
+  const addedLines = manualFormula ? 1 : 2;
   const distributionDeficit = Math.max(0, Number(formula.deficit || 0));
   const distributionBreakdown = [
-    [tx("Saldo disponible en MultiMoney", "Available MultiMoney balance"), formula.cash_available_now],
-    [tx("Ingreso previsto aún por recibir", "Expected income not yet received"), formula.income],
+    ...(manualFormula
+      ? [[tx("Monto que indicaste", "Amount you entered"), formula.manual_available]]
+      : [[tx("Saldo disponible en MultiMoney", "Available MultiMoney balance"), formula.cash_available_now],
+        [tx("Ingreso previsto aún por recibir", "Expected income not yet received"), formula.income]]),
     [tx("Gastos del estado de cuenta", "Statement expenses"), formula.statement_spending],
     [tx("Gastos nuevos después del corte", "New expenses after the cutoff"), formula.new_spending_after_cut],
     [tx("Cuotas de deuda pendientes", "Pending debt payments"), formula.debt_commitment],
     [tx("Gastos fijos pendientes", "Pending fixed expenses"), formula.mandatory_fixed_pending],
   ];
-  const distributionBalanced = Math.abs(allocationBase - allocationTotal) <= 1;
+  const distributionBalanced = Math.abs(distBase - distTotal) <= 1;
   const distributionDestinations = [
     {
       key: "meta_prioritaria",
-      label: strategy.goal_portfolio?.active_goal?.name
+      label: distStrategy.goal_portfolio?.active_goal?.name
         ? `${tx("Meta activa", "Active goal")} · ${strategy.goal_portfolio.active_goal.name}`
         : tx("Meta activa", "Active goal"),
-      amount: Number(allocationAmounts.meta_prioritaria || 0),
+      amount: Number(distAmounts.meta_prioritaria || 0),
       optional: true,
     },
     {
       key: "fondo_de_emergencia",
       label: tr("strategy.lifebuoy"),
-      amount: Number(allocationAmounts.fondo_de_emergencia || 0),
+      amount: Number(distAmounts.fondo_de_emergencia || 0),
     },
     {
       key: "ataque_de_deuda",
-      label: strategy.primary_debt_name
-        ? `${tx("Deuda prioritaria", "Priority debt")} · ${strategy.primary_debt_name}`
+      label: distStrategy.primary_debt_name
+        ? `${tx("Deuda prioritaria", "Priority debt")} · ${distStrategy.primary_debt_name}`
         : tx("Deuda prioritaria", "Priority debt"),
-      amount: Number(allocationAmounts.ataque_de_deuda || 0),
+      amount: Number(distAmounts.ataque_de_deuda || 0),
     },
     {
       key: "vida_controlada",
       label: tx("Uso libre", "Free to spend"),
-      amount: Number(allocationAmounts.vida_controlada || 0),
+      amount: Number(distAmounts.vida_controlada || 0),
     },
     {
       key: "inversion",
       label: tx("Inversión", "Investment"),
-      amount: Number(allocationAmounts.inversion || 0),
+      amount: Number(distAmounts.inversion || 0),
     },
   ];
 
@@ -452,7 +487,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
         <strong>{money(investmentRecommended)}</strong>
         <p>
           {investmentRecommended > 0
-            ? tx(`Sale únicamente del sobrante real de ${money(allocationBase)} después de gastos y obligaciones.`, `It comes only from the real surplus of ${money(allocationBase)} after expenses and obligations.`)
+            ? tx(`Sale únicamente del sobrante real de ${money(distBase)} después de gastos y obligaciones.`, `It comes only from the real surplus of ${money(distBase)} after expenses and obligations.`)
             : allocationBase <= 0
               ? tx("No hay sobrante real después de cubrir lo registrado y lo obligatorio.", "There’s no real surplus after covering recorded and required expenses.")
               : tx("Hay sobrante, pero la estrategia actual lo necesita antes en otra prioridad.", "There’s a surplus, but the current strategy needs it first for another priority.")}
@@ -549,9 +584,16 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
         <div className="strategy-title-row"><CircleDollarSign size={22} /><div><h3>{tr("strategy.distribution")}</h3><p>{tx(`${brandName} reparte solo lo que verdaderamente sobró después de pagos y gastos conocidos.`, `${brandName} allocates only what’s truly left after known payments and expenses.`)}</p></div></div>
       </div>
 
+      {ownerExact && (
+        <ExactDistributionControls mode={exact.mode} onMode={(mode) => setExact((current) => ({ ...current, mode, error: "" }))}
+          amount={exact.amount} onAmount={(amount) => setExact((current) => ({ ...current, amount, error: "" }))}
+          onCalculate={calculateExact} loading={exact.loading} error={exact.error} result={exact.data?.strategy} tx={tx} />
+      )}
+
+      {showDistribution && (<>
       <div className="strategy-surplus-card">
         <span>{tx("SOBRANTE REAL PARA REPARTIR", "REAL SURPLUS TO ALLOCATE")}</span>
-        <strong>{money(allocationBase)}</strong>
+        <strong>{money(distBase)}</strong>
         <small>{distributionDeficit > 0
           ? tx(`Los compromisos registrados superan los fondos previstos por ${money(distributionDeficit)}. Por eso no hay dinero para repartir en este ciclo.`, `Recorded commitments exceed expected funds by ${money(distributionDeficit)}, so there’s no money to allocate this cycle.`)
           : Number(strategy.new_expenses_after_cut_count || 0) > 0
@@ -564,7 +606,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
           {distributionBreakdown.map(([label, amount], index) => (
             <div className="strategy-allocation-row-v3" key={label}>
               <div><span>{label}</span></div>
-              <strong>{index < 2 ? "+" : "−"}{money(amount)}</strong>
+              <strong>{index < addedLines ? "+" : "−"}{money(amount)}</strong>
             </div>
           ))}
           <div className="strategy-allocation-row-v3">
@@ -585,8 +627,9 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
 
       <div className={`strategy-distribution-check ${distributionBalanced ? "ok" : "warning"}`}>
         {distributionBalanced ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-        <span>{distributionBalanced ? tx(`Todo el sobrante está asignado: ${money(allocationTotal)}.`, `The whole surplus is allocated: ${money(allocationTotal)}.`) : tx(`Revisar distribución: ${money(allocationTotal)} asignados de ${money(allocationBase)}.`, `Review allocation: ${money(allocationTotal)} allocated out of ${money(allocationBase)}.`)}</span>
+        <span>{distributionBalanced ? tx(`Todo el sobrante está asignado: ${money(distTotal)}.`, `The whole surplus is allocated: ${money(distTotal)}.`) : tx(`Revisar distribución: ${money(distTotal)} asignados de ${money(distBase)}.`, `Review allocation: ${money(distTotal)} allocated out of ${money(distBase)}.`)}</span>
       </div>
+      </>)}
     </div>
   );
 

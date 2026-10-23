@@ -390,7 +390,10 @@ fun DistributionScreen(model: AppModel, nav: Navigator) {
         LoadContent(strategy) { data ->
             when (data) {
                 is StrategyData.Basic -> BasicDistribution(data.strategy, nav)
-                is StrategyData.Director -> data.dashboard.strategy?.let { DirectorDistribution(it, nav) }
+                // The Owner chooses the estimate or an exact amount (OwnerExactDistribution.kt).
+                is StrategyData.Director -> data.dashboard.strategy?.let {
+                    if (contract == StrategyContract.OWNER) OwnerDistributionModes(model, it, nav) else DirectorDistribution(it, nav)
+                }
             }
         }
         FinancialDisclaimer()
@@ -414,7 +417,7 @@ private fun BasicDistribution(s: Strategy, nav: Navigator) {
 }
 
 @Composable
-private fun DirectorDistribution(s: DirectorStrategy, nav: Navigator) {
+internal fun DirectorDistribution(s: DirectorStrategy, nav: Navigator) {
     if (s.status == "needs_income") { NeedsIncome(s.objective, nav); return }
     val language = AppLanguage.current()
     AmountCard(tx("Sobrante para repartir", "Surplus to allocate"), s.allocationBaseAmount)
