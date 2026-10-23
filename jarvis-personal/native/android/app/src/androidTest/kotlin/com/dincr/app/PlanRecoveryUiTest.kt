@@ -567,6 +567,9 @@ class PlanRecoveryUiTest {
         waitForText(tx("Todavía no se registró nada. Si ya moviste el dinero así, presioná CONFIRMAR.", "Nothing has been recorded yet. If you already moved the money this way, press CONFIRM."))
         waitForText(tx("Lo que se registrará al confirmar", "What CONFIRM will record"))
         waitForText(tx("Depósito al Salvavidas", "Deposit to the Salvavidas"))
+        // A rotation (activity recreated) keeps the reviewed result and its confirmation key.
+        scenario!!.recreate()
+        waitForText(tx("Lo que se registrará al confirmar", "What CONFIRM will record"))
         tapTag("exact-distribution-confirm")
         waitForText(tx("¿Ya hiciste estos movimientos?", "Did you already make these movements?"))
         click(tx("Confirmar", "Confirm"))

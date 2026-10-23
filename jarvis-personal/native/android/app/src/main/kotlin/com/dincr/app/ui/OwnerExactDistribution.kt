@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,6 +42,8 @@ import kotlinx.coroutines.launch
 
 enum class DistributionMode { ESTIMATE, EXACT }
 
+private val FormSaver = Saver<ExactDistributionForm, String>(save = { it.saved() }, restore = { ExactDistributionForm.restored(it) })
+
 /** The backend's ceiling for a confirmed amount (backend/ai/models.py EXACT_DISTRIBUTION_MAX). */
 val EXACT_DISTRIBUTION_MAX = BigDecimal("1000000000")
 
@@ -48,7 +51,9 @@ val EXACT_DISTRIBUTION_MAX = BigDecimal("1000000000")
 fun OwnerDistributionModes(model: AppModel, estimate: DirectorStrategy, nav: Navigator, onRecorded: suspend () -> Unit = {}) {
     var mode by rememberSaveable { mutableStateOf(DistributionMode.ESTIMATE) }
     // Amount, result and error together: editing the amount drops a result calculated from another.
-    var form by remember { mutableStateOf(ExactDistributionForm()) }
+    // Saved across a rotation or a killed process, so a result keeps its confirmation key: pressing
+    // CONFIRMAR again after an interrupted confirmation never records it twice.
+    var form by rememberSaveable(stateSaver = FormSaver) { mutableStateOf(ExactDistributionForm()) }
     var loading by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }

@@ -151,6 +151,18 @@ class OwnerExactDistributionTest {
         assertEquals(403, status { user.ownerConfirmExactDistribution(request) })
     }
 
+    @Test fun aSavedFormKeepsItsResultAndKey() = runTest {
+        val (_, api) = fixture(FakeBackend.Role.OWNER)
+        val form = calculated(api, 254_698)
+        val restored = ExactDistributionForm.restored(form.saved())
+        assertEquals(form, restored)
+        assertEquals("confirm-test-254698", restored.confirmationRequestKey())
+        assertTrue(restored.canConfirm)
+        assertEquals(ExactDistributionForm(), ExactDistributionForm.restored("not a form"))
+    }
+
+    private fun ExactDistributionForm.confirmationRequestKey() = confirmRequest(BigDecimal(254_698))?.confirmationKey
+
     @Test fun aNewAmountNeedsANewReviewAndKey() = runTest {
         val (_, api) = fixture(FakeBackend.Role.OWNER)
         val form = calculated(api, 254_698)

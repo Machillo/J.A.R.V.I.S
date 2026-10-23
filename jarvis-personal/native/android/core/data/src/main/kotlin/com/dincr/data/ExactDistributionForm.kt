@@ -1,10 +1,15 @@
 package com.dincr.data
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
 /**
  * The Owner's exact-amount form (Plan → Distribución de dinero → Monto exacto). A result always
  * belongs to the amount it was calculated from: editing the amount drops it, and an answer that
  * arrives for an amount the Owner has since changed is ignored. iOS: `ExactDistributionForm`.
  */
+@Serializable
 data class ExactDistributionForm(
     val amountText: String = "",
     val result: DirectorStrategy? = null,
@@ -42,4 +47,15 @@ data class ExactDistributionForm(
     /** The backend's answer for [key]; kept only when it is still this result's key. */
     fun confirmed(key: String, answer: ExactDistributionConfirmation): ExactDistributionForm =
         if (key == confirmationKey) copy(confirmation = answer, error = null) else this
+
+    /** The form as text, to survive a rotation or the process being killed: the result keeps its key. */
+    fun saved(): String = saveJson.encodeToString(this)
+
+    companion object {
+        private val saveJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
+
+        /** A form [saved] earlier; an unreadable one starts empty (never a half-restored key). */
+        fun restored(text: String): ExactDistributionForm =
+            runCatching { saveJson.decodeFromString<ExactDistributionForm>(text) }.getOrDefault(ExactDistributionForm())
+    }
 }
