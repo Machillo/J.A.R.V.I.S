@@ -104,8 +104,6 @@ class DincrApi(private val client: ApiClient) {
     suspend fun createRecurring(request: RecurringRequest, key: String): RecurringItem = client.send("POST", "/user-product/basic/recurring", request, key)
     suspend fun updateRecurring(id: Long, request: RecurringRequest, key: String): RecurringItem = client.send("PUT", "/user-product/basic/recurring/$id", request, key)
     suspend fun deleteRecurring(id: Long): Acknowledgement = client.send("DELETE", "/user-product/basic/recurring/$id")
-    /** Owner only (`/finance` is the Owner's router): next recurring incomes and debt installments. */
-    suspend fun recurringUpcoming(days: Int = 45): RecurringUpcoming = client.get("/finance/recurring/upcoming", mapOf("days" to days.toString()))
     suspend fun report(period: String): MonthReport = client.get("/user-product/basic/reports", mapOf("period" to period))
     suspend fun strategyBasic(): Strategy = client.get("/user-product/finance/strategy-basic")
 

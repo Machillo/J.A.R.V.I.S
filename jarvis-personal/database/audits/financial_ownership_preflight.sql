@@ -616,8 +616,7 @@ FROM (SELECT o.table_name FROM pg_temp.dincr_ownership_tables() o
         ('email_ingested_messages'),
         ('payroll_receipts'),
         ('payroll_receipt_lines'),
-        ('payroll_trusted_senders'),
-        ('recurring_item_occurrences')
+        ('payroll_trusted_senders')
       ) AS d(table_name)) g
 WHERE to_regclass('public.' || g.table_name) IS NOT NULL
   AND EXISTS (SELECT 1 FROM information_schema.columns isc
@@ -655,8 +654,7 @@ FROM (SELECT o.table_name FROM pg_temp.dincr_ownership_tables() o
         ('email_ingested_messages'),
         ('payroll_receipts'),
         ('payroll_receipt_lines'),
-        ('payroll_trusted_senders'),
-        ('recurring_item_occurrences')
+        ('payroll_trusted_senders')
     ) AS d(table_name)) g
 WHERE to_regclass('public.' || g.table_name) IS NOT NULL
   AND EXISTS (SELECT 1 FROM information_schema.columns c
@@ -696,7 +694,6 @@ WHERE c.table_schema = 'public' AND c.column_name = 'workspace_id'
         ('email_ingested_messages'),
         ('payroll_receipts'),
         ('payroll_receipt_lines'),
-        ('payroll_trusted_senders'),
-        ('recurring_item_occurrences')
+        ('payroll_trusted_senders')
     ) AS d(table_name))
 ORDER BY 1, 2, 3, 4, 5;

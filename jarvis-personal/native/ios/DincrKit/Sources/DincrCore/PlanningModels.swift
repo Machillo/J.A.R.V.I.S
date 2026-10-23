@@ -304,16 +304,9 @@ public struct RecurringList: Decodable, Sendable, Equatable {
         public let frequency: String?
         public let dueDay: Int?
         public let isActive: Bool?
-        /// Owner automation: recorded on each due date (Costa Rica) when `autoRecord`.
-        public let startDate: String?
-        public let nextDueDate: String?
-        public let financialAccountId: Int?
-        public let autoRecord: Bool?
-        public init(id: Int, name: String?, amount: Decimal?, category: String?, itemType: String?, frequency: String?, dueDay: Int?, isActive: Bool?,
-                    startDate: String? = nil, nextDueDate: String? = nil, financialAccountId: Int? = nil, autoRecord: Bool? = nil) {
+        public init(id: Int, name: String?, amount: Decimal?, category: String?, itemType: String?, frequency: String?, dueDay: Int?, isActive: Bool?) {
             self.id = id; self.name = name; self.amount = amount; self.category = category; self.itemType = itemType
             self.frequency = frequency; self.dueDay = dueDay; self.isActive = isActive
-            self.startDate = startDate; self.nextDueDate = nextDueDate; self.financialAccountId = financialAccountId; self.autoRecord = autoRecord
         }
     }
     public let items: [Item]?
@@ -325,8 +318,6 @@ public struct RecurringList: Decodable, Sendable, Equatable {
 }
 
 /// Body of `POST /basic/recurring` and `PUT /basic/recurring/{id}`: only the editable fields.
-/// The automation fields travel only when set (nil is omitted), so a pause or an edit that does
-/// not touch them keeps what the server stores.
 public struct RecurringRequest: Encodable, Sendable, Equatable {
     public static let frequencies = ["weekly", "biweekly", "monthly", "quarterly", "annual"]
     public let name: String
@@ -336,37 +327,10 @@ public struct RecurringRequest: Encodable, Sendable, Equatable {
     public let frequency: String
     public let dueDay: Int?
     public let isActive: Bool
-    public let startDate: String?
-    public let nextDueDate: String?
-    public let autoRecord: Bool?
 
-    public init(name: String, amount: Decimal, category: String, itemType: String, frequency: String, dueDay: Int?, isActive: Bool,
-                startDate: String? = nil, nextDueDate: String? = nil, autoRecord: Bool? = nil) {
+    public init(name: String, amount: Decimal, category: String, itemType: String, frequency: String, dueDay: Int?, isActive: Bool) {
         self.name = name; self.amount = amount; self.category = category; self.itemType = itemType
         self.frequency = frequency; self.dueDay = dueDay; self.isActive = isActive
-        self.startDate = startDate; self.nextDueDate = nextDueDate; self.autoRecord = autoRecord
-    }
-}
-
-/// `GET /finance/recurring/upcoming` (Owner only): recorded entries and expected ones, never mixed.
-public struct RecurringUpcoming: Decodable, Sendable, Equatable {
-    public struct Entry: Decodable, Sendable, Equatable {
-        public let name: String?
-        public let dueDate: String?
-        public let amount: Decimal?
-        /// `expected`, or what already happened: `recorded`, `already_recorded`, `paid`.
-        public let status: String?
-        public let automatic: Bool?
-        public var isExpected: Bool { status == "expected" }
-        public init(name: String?, dueDate: String?, amount: Decimal?, status: String?, automatic: Bool?) {
-            self.name = name; self.dueDate = dueDate; self.amount = amount; self.status = status; self.automatic = automatic
-        }
-    }
-    public let date: String?
-    public let incomes: [Entry]?
-    public let installments: [Entry]?
-    public init(date: String?, incomes: [Entry]?, installments: [Entry]?) {
-        self.date = date; self.incomes = incomes; self.installments = installments
     }
 }
 

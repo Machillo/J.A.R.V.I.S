@@ -425,7 +425,7 @@ def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = T
             WHERE workspace_id = %s
               AND COALESCE(auto_update_monthly, TRUE) = TRUE
               AND remaining_amount > 0
-            ORDER BY id
+            ORDER BY id FOR UPDATE  -- one run at a time per debt (cron, route, manual payment)
             """,
             (workspace_id,),
         ).fetchall()
@@ -2438,7 +2438,7 @@ def apply_monthly_payment_to_debt(
             SELECT id, name, debt_type, total_amount, remaining_amount, monthly_payment,
                    interest_rate, term_months, payment_day, user_id, installments_paid,
                    last_payment_date, first_payment_date, interest_method, fixed_fee_amount
-            FROM debts WHERE id = %s AND workspace_id = %s
+            FROM debts WHERE id = %s AND workspace_id = %s FOR UPDATE
             """, (debt_id, workspace_id)
         ).fetchone()
         if not debt:

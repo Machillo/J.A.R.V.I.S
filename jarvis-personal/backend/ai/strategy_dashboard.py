@@ -12,7 +12,6 @@ from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
-from backend.finance.recurring_automation import monthly_recurring_income, recurring_incomes_in_window
 from backend.goals.strategy import build_goal_portfolio
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import load_income_baseline
@@ -198,24 +197,6 @@ def _calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
         "monthly_auto_reserve": round(weighted_total, 2),
         "critical_monthly_required": round(critical_total, 2),
     }
-
-
-def _owner_recurring_income(workspace_id: str, cycle_report: dict[str, Any]) -> dict[str, Any]:
-    """The Owner's automatic recurring incomes in the open cycle: recorded (already income
-    transactions, so already in `received_from_transactions`) and still expected, plus their
-    monthly equivalent. Unavailable (e.g. before its migration) is said, never counted as 0."""
-    cycle = cycle_report.get("cycle") or {}
-    empty = {"available": False, "total": 0.0, "recorded_total": 0.0, "expected_pending_total": 0.0, "items": [], "monthly": 0.0}
-    try:
-        start = date.fromisoformat(str(cycle.get("start")))
-        end = date.fromisoformat(str(cycle.get("end_exclusive")))
-        with get_connection() as conn:
-            window = recurring_incomes_in_window(conn, workspace_id, start, end)
-            window["monthly"] = monthly_recurring_income(conn, workspace_id)
-    except Exception as exc:
-        logger.warning("Owner recurring income unavailable error=%s", type(exc).__name__)
-        return empty
-    return {"available": True, **window}
 
 
 def _safe_cycle_report() -> dict[str, Any]:
@@ -998,21 +979,18 @@ def _owner_strategy_blueprint() -> dict[str, Any]:
 
     salary_results = salary_projection.get("results") or {}
     salary_base = salary_projection.get("base") or {}
-    # Fixed non-salary incomes the Owner records automatically (Recurrentes). Salary is never one
-    # of them (finance/recurring_automation.py), so nothing below counts it twice.
-    recurring_income = _owner_recurring_income(workspace_id, cycle_report)
 
     recurring_monthly_income = (
         _f(salary_results.get("base_net"))
         or _f(salary_base.get("base_monthly_net"))
         or _summary_value(summary, "income", "projected_net_income")
         or _summary_value(summary, "income", "total_income")
-    ) + recurring_income["monthly"]
+    )
     current_month_income = (
         _f(cycle_report.get("income", {}).get("expected_total"))
         or _f(salary_results.get("projected_net"))
-        or recurring_monthly_income - recurring_income["monthly"]
-    ) + recurring_income["total"]
+        or recurring_monthly_income
+    )
     income_received_current_cycle = _f(
         cycle_report.get("income", {}).get("received_from_transactions")
     )
@@ -1198,7 +1176,6 @@ def _owner_strategy_blueprint() -> dict[str, Any]:
         "current_month_extra_net": round(current_month_extra_net, 2),
         "income_received_current_cycle": round(income_received_current_cycle, 2),
         "remaining_income_current_cycle": round(remaining_income_current_cycle, 2),
-        "recurring_income": recurring_income,
         "income_policy": income_policy and {key: income_policy[key] for key in ("policy", "source", "declared", "baseline", "recurring")},
         "current_month_one_time_debt_boost": round(first_month_one_time_boost, 2),
         "monthly_expenses": round(committed_spending, 2),

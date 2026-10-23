@@ -887,21 +887,6 @@
   ]
  },
  {
-  "method": "POST",
-  "path": "/finance/recurring/apply-due",
-  "gates": [
-   "internal_only"
-  ]
- },
- {
-  "method": "GET",
-  "path": "/finance/recurring/upcoming",
-  "gates": [
-   "internal_only"
-  ],
-  "user_get": "denied"
- },
- {
   "method": "GET",
   "path": "/finance/salaries",
   "gates": [

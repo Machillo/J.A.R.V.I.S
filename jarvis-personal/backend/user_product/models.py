@@ -176,12 +176,6 @@ class RecurringItemRequest(BaseModel):
     frequency: Literal["weekly", "biweekly", "monthly", "quarterly", "annual"] = "monthly"
     due_day: int | None = Field(default=None, ge=1, le=31)
     is_active: bool = True
-    # Recorded automatically on each due date (verified Owner only; finance/recurring_automation.py).
-    # Only the fields a request sends change, so an app that never sends them keeps what is stored.
-    start_date: date | None = None
-    next_due_date: date | None = None
-    financial_account_id: int | None = Field(default=None, gt=0)
-    auto_record: bool = False
 
 
 class TransactionCreateRequest(BaseModel):
