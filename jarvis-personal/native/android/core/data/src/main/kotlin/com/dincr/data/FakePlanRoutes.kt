@@ -60,8 +60,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         val pendingRecurring = data.recurring.filter { it.isActive == true && it.itemType == "expense" && (it.dueDay ?: 0) > today.dayOfMonth }.sumOf { it.amount ?: BigDecimal.ZERO }
         val statement = if (owner) BigDecimal(95_000) else BigDecimal.ZERO
         val mandatoryPending = if (owner) BigDecimal(210_000) else BigDecimal.ZERO
-        // Like the backend: a confirmed amount replaces what the records estimate is available.
-        val before = (manualAmount ?: income) - spent - debtCommitment - pendingRecurring - statement - mandatoryPending
+        // Like the backend: the amount left after paying everything is the base, never deducted again.
+        val before = manualAmount ?: (income - spent - debtCommitment - pendingRecurring - statement - mandatoryPending)
         val surplus = before.max(BigDecimal.ZERO)
         val deficit = before.negate().max(BigDecimal.ZERO)
         val target = active.maxByOrNull { it.interestRate ?: BigDecimal.ZERO }
@@ -72,13 +72,16 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             DirectorStrategy.AllocationItem("vida_controlada", 15.0, surplus - part(45) - part(40)),
         )
         val formula = linkedMapOf<String, BigDecimal>()
-        if (manualAmount != null) formula["manual_available"] = manualAmount
-        else { if (owner) formula["cash_available_now"] = BigDecimal(640_000); formula["income"] = income }
-        if (owner) { formula["statement_spending"] = statement; formula["new_spending_after_cut"] = spent } else formula["recorded_spending"] = spent
-        formula["debt_commitment"] = debtCommitment
-        if (owner) formula["mandatory_fixed_pending"] = mandatoryPending else formula["pending_recurring"] = pendingRecurring
-        formula["surplus"] = surplus
-        formula["deficit"] = deficit
+        if (manualAmount != null) { formula["manual_available"] = manualAmount; formula["surplus"] = surplus }
+        else {
+            if (owner) formula["cash_available_now"] = BigDecimal(640_000)
+            formula["income"] = income
+            if (owner) { formula["statement_spending"] = statement; formula["new_spending_after_cut"] = spent } else formula["recorded_spending"] = spent
+            formula["debt_commitment"] = debtCommitment
+            if (owner) formula["mandatory_fixed_pending"] = mandatoryPending else formula["pending_recurring"] = pendingRecurring
+            formula["surplus"] = surplus
+            formula["deficit"] = deficit
+        }
         val timeline = active.sortedByDescending { it.interestRate ?: BigDecimal.ZERO }.mapIndexed { index, debt ->
             DirectorStrategy.TimelineItem(index + 1, debt.name, debt.remainingAmount,
                 (debt.monthlyPayment ?: BigDecimal.ZERO) + if (index == 0) part(45) else BigDecimal.ZERO, today.plusMonths(14L + 10 * index).withDayOfMonth(1).toString())

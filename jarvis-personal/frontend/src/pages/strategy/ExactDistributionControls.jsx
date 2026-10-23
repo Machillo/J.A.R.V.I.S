@@ -1,12 +1,11 @@
 // Owner only (phase 1): choose where the money to split comes from. The MODE says the source
-// (DINCR's estimate or an amount the Owner confirms); the STRATEGY (the backend's Director engine)
+// (DINCR's estimate, or the amount the Owner has left after paying everything, split whole); the STRATEGY (the backend's Director engine)
 // decides how it is split, the same in both. A plan: nothing is recorded or changed.
 // Android: OwnerExactDistribution.kt · iOS: OwnerExactDistributionView.swift.
 import "./ExactDistributionControls.css";
 
 export default function ExactDistributionControls({ mode, onMode, amount, onAmount, onCalculate, loading, error, result, tx }) {
   const warnings = Array.isArray(result?.distribution_warnings) ? result.distribution_warnings : [];
-  const deficit = Math.max(0, Number(result?.distribution_formula?.deficit || 0));
   return (
     <div className="exact-distribution" data-testid="exact-distribution">
       <div className="exact-distribution-modes" role="group" aria-label={tx("Tipo de distribución", "Distribution type")}>
@@ -25,11 +24,11 @@ export default function ExactDistributionControls({ mode, onMode, amount, onAmou
       ) : (
         <form className="exact-distribution-form" onSubmit={(event) => { event.preventDefault(); onCalculate(); }}>
           <p className="exact-distribution-note">
-            {tx("Indicá cuánto dinero tenés hoy para este ciclo. Primero se apartan tus compromisos pendientes y lo que queda se reparte con tu estrategia actual. No registra movimientos ni cambia tus saldos.",
-              "Enter how much money you have today for this cycle. Your pending commitments come out first and the rest is split with your current strategy. It records no movement and changes no balance.")}
+            {tx("Indicá cuánto dinero te sobra después de pagar tus gastos, tarjetas y cuotas. DINCR reparte ese monto completo con tu estrategia actual, sin volver a descontar esos pagos. No registra movimientos ni cambia tus saldos.",
+              "Enter how much money you have left after paying your expenses, cards and instalments. DINCR splits that whole amount with your current strategy, without deducting those payments again. It records no movement and changes no balance.")}
           </p>
           <label>
-            <span>{tx("Monto disponible en colones (₡)", "Available amount in colones (₡)")}</span>
+            <span>{tx("Monto que te sobra, en colones (₡)", "Amount you have left, in colones (₡)")}</span>
             <input inputMode="decimal" autoComplete="off" value={amount} onChange={(event) => onAmount(event.target.value)}
               aria-invalid={Boolean(error)} data-testid="exact-distribution-amount" />
           </label>
@@ -41,12 +40,6 @@ export default function ExactDistributionControls({ mode, onMode, amount, onAmou
             <p className="exact-distribution-note" role="status">
               {tx("Calculado con el monto que indicaste. Es un plan: no se registró ningún movimiento ni cambió ningún saldo.",
                 "Calculated from the amount you entered. It’s a plan: no movement was recorded and no balance changed.")}
-            </p>
-          )}
-          {result && deficit > 0 && (
-            <p className="exact-distribution-error" role="alert">
-              {tx("Tus compromisos pendientes de este ciclo superan ese monto, así que no queda nada por repartir.",
-                "Your pending commitments this cycle exceed that amount, so nothing is left to split.")}
             </p>
           )}
           {warnings.map((warning) => (

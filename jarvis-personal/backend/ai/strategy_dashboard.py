@@ -998,10 +998,13 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     return _users_strategy_blueprint()
 
 
-def _distribution_warnings(cycle_report: dict[str, Any], salvavidas: dict[str, Any]) -> list[dict[str, str]]:
-    """What the distribution could not read: said, never computed as zero."""
+def _distribution_warnings(cycle_report: dict[str, Any], salvavidas: dict[str, Any], manual: bool = False) -> list[dict[str, str]]:
+    """What the distribution could not read: said, never computed as zero.
+
+    The cycle's commitments only matter to the estimate; an exact amount is already what is left.
+    """
     warnings = []
-    if not cycle_report:
+    if not cycle_report and not manual:
         warnings.append({"code": "cycle_unavailable", "message": tx(
             "No pudimos leer los compromisos de este ciclo; la distribución puede asignar dinero que ya está comprometido.",
             "We couldn't read this cycle's commitments; the distribution may assign money that is already committed.")})
@@ -1015,10 +1018,10 @@ def _distribution_warnings(cycle_report: dict[str, Any], salvavidas: dict[str, A
 def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str, Any]:
     """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea).
 
-    `manual_available` (exact-amount distribution, a planning tool): the money the Owner confirms
-    having replaces what the records estimate is available (account cash plus income still to
-    come). The cycle's pending obligations are still taken out first and the same Director engine
-    splits the rest. Nothing is written: it only changes where the base comes from.
+    `manual_available` (exact-amount distribution, a planning tool): the money the Owner has LEFT
+    after already paying expenses, cards and installments. It is the base itself: nothing is taken
+    out of it again (the estimate's card spending, pending installments and fixed expenses would
+    count those payments twice), and the same Director engine splits it. Nothing is written.
     """
     all_debts = get_debts() or []
     debts = [debt for debt in all_debts if _f(debt.get("remaining_amount")) > 0.01]
@@ -1104,9 +1107,9 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         - debt_commitment_current_cycle
         - mandatory_fixed_pending
     )
-    pending_obligations = committed_spending + debt_commitment_current_cycle + mandatory_fixed_pending
     if manual_available is not None:
-        current_before_allocation = manual_available - pending_obligations
+        # The amount is already what is left: no obligation is deducted from it a second time.
+        current_before_allocation = manual_available
 
     # Strategy and the Salvavidas screen must share the same source of truth.
     # The current balance is manual in V1; the monthly base is recalculated live
@@ -1280,12 +1283,14 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         "allocation_items": allocation_items,
         "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
         "distribution_source": "manual_amount" if manual_available is not None else "estimate",
-        "distribution_warnings": _distribution_warnings(cycle_report, salvavidas),
+        "distribution_warnings": _distribution_warnings(cycle_report, salvavidas, manual=manual_available is not None),
+        # The exact amount is the base as typed (no deduction lines); the estimate keeps its formula.
         "distribution_formula": {
-            **({"manual_available": round(manual_available, 2)} if manual_available is not None else {
-                "cash_available_now": round(distributable_cash, 2),
-                "income": round(remaining_income_current_cycle, 2),
-            }),
+            "manual_available": round(manual_available, 2),
+            "surplus": round(allocation_base_amount, 2),
+        } if manual_available is not None else {
+            "cash_available_now": round(distributable_cash, 2),
+            "income": round(remaining_income_current_cycle, 2),
             "statement_spending": round(statement_spending, 2),
             "new_spending_after_cut": round(new_spending_after_cut, 2),
             "debt_commitment": round(debt_commitment_current_cycle, 2),
@@ -1584,7 +1589,7 @@ def _users_blueprint_from_inputs(
 
 
 def get_owner_exact_distribution(amount: Any, currency: str = "CRC") -> dict[str, Any]:
-    """Owner only (phase 1): the current strategy applied to the amount the Owner confirms.
+    """Owner only (phase 1): the current strategy applied to the amount the Owner has left to split.
 
     A planning answer with the dashboard's shape: no transaction, payment, balance, history or
     setting is written or stored. Another currency is refused, never converted.

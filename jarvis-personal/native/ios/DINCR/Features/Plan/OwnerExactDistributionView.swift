@@ -3,7 +3,8 @@ import DincrDesign
 import SwiftUI
 
 // Plan → Distribución de dinero, Owner only (phase 1). The MODE says where the money to split comes
-// from (DINCR's estimate, or an amount the Owner confirms); the STRATEGY (the backend's Director
+// from (DINCR's estimate, or the amount the Owner has left after paying everything, split whole: no
+// obligation is deducted from it again); the STRATEGY (the backend's Director
 // engine) decides how it is split, the same in both. The exact amount is a plan: the backend writes
 // and stores nothing (POST /jarvis/premium/strategy-dashboard/exact-distribution, refused to anyone
 // but the Owner). Android: OwnerExactDistribution.kt.
@@ -38,10 +39,10 @@ struct OwnerDistributionModes: View {
             DashboardDistribution(plan: estimate)
         case .exact:
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-                Text(tx("Indicá cuánto dinero tenés hoy para este ciclo. Primero se apartan tus compromisos pendientes y lo que queda se reparte con tu estrategia actual. No registra movimientos ni cambia tus saldos.",
-                        "Enter how much money you have today for this cycle. Your pending commitments come out first and the rest is split with your current strategy. It records no movement and changes no balance."))
+                Text(tx("Indicá cuánto dinero te sobra después de pagar tus gastos, tarjetas y cuotas. DINCR reparte ese monto completo con tu estrategia actual, sin volver a descontar esos pagos. No registra movimientos ni cambia tus saldos.",
+                        "Enter how much money you have left after paying your expenses, cards and instalments. DINCR splits that whole amount with your current strategy, without deducting those payments again. It records no movement and changes no balance."))
                     .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                MoneyField(label: tx("Monto disponible en colones", "Available amount in colones"), text: $amountText,
+                MoneyField(label: tx("Monto que te sobra, en colones", "Amount you have left, in colones"), text: $amountText,
                            error: error, identifier: "distribution.exact.amount")
                 Button {
                     Task { await calculate() }
@@ -85,11 +86,6 @@ private struct ExactDistributionResult: View {
         StatusBanner(tone: .info, title: tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"),
                      message: tx("Es un plan: no se registró ningún movimiento ni cambió ningún saldo.",
                                  "It’s a plan: no movement was recorded and no balance changed."))
-        if let deficit = plan.distributionFormula?.deficit, deficit > 0 {
-            DincrMessage(.attention, title: tx("Tus compromisos superan ese monto", "Your commitments exceed that amount"),
-                         message: tx("Lo pendiente de este ciclo es mayor que el monto que indicaste, así que no queda nada por repartir. Revisá el faltante abajo.",
-                                     "What’s pending this cycle is more than the amount you entered, so nothing is left to split. See the shortfall below."))
-        }
         ForEach(Array((plan.distributionWarnings ?? []).enumerated()), id: \.offset) { _, warning in
             DincrMessage(.attention, title: tx("Dato incompleto", "Incomplete data"), message: warning.message ?? "")
         }

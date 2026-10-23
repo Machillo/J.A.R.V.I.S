@@ -244,11 +244,6 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     () => (Array.isArray(strategy.timeline) ? strategy.timeline : []),
     [strategy.timeline]
   );
-  const allocation = strategy.allocation || {};
-  const allocationAmounts = strategy.allocation_amounts || {};
-  const allocationItems = Array.isArray(strategy.allocation_items)
-    ? strategy.allocation_items
-    : Object.entries(allocation).map(([key, percentage]) => ({ key, percentage, amount: allocationAmounts[key] || 0 }));
   const allocationBase = Number(strategy.allocation_base_amount || 0);
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
   const debtAdvice = state.debtAdvice || {};
@@ -296,16 +291,17 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const hasDistributionFormula = manualFormula || Object.prototype.hasOwnProperty.call(formula, "cash_available_now");
   const addedLines = manualFormula ? 1 : 2;
   const distributionDeficit = Math.max(0, Number(formula.deficit || 0));
-  const distributionBreakdown = [
-    ...(manualFormula
-      ? [[tx("Monto que indicaste", "Amount you entered"), formula.manual_available]]
-      : [[tx("Saldo disponible en MultiMoney", "Available MultiMoney balance"), formula.cash_available_now],
-        [tx("Ingreso previsto aún por recibir", "Expected income not yet received"), formula.income]]),
-    [tx("Gastos del estado de cuenta", "Statement expenses"), formula.statement_spending],
-    [tx("Gastos nuevos después del corte", "New expenses after the cutoff"), formula.new_spending_after_cut],
-    [tx("Cuotas de deuda pendientes", "Pending debt payments"), formula.debt_commitment],
-    [tx("Gastos fijos pendientes", "Pending fixed expenses"), formula.mandatory_fixed_pending],
-  ];
+  // The exact amount is already what is left: it shows alone, with no deduction lines.
+  const distributionBreakdown = manualFormula
+    ? [[tx("Monto que indicaste", "Amount you entered"), formula.manual_available]]
+    : [
+      [tx("Saldo disponible en MultiMoney", "Available MultiMoney balance"), formula.cash_available_now],
+      [tx("Ingreso previsto aún por recibir", "Expected income not yet received"), formula.income],
+      [tx("Gastos del estado de cuenta", "Statement expenses"), formula.statement_spending],
+      [tx("Gastos nuevos después del corte", "New expenses after the cutoff"), formula.new_spending_after_cut],
+      [tx("Cuotas de deuda pendientes", "Pending debt payments"), formula.debt_commitment],
+      [tx("Gastos fijos pendientes", "Pending fixed expenses"), formula.mandatory_fixed_pending],
+    ];
   const distributionBalanced = Math.abs(distBase - distTotal) <= 1;
   const distributionDestinations = [
     {

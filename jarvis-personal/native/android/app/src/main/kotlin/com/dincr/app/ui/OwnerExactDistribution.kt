@@ -30,7 +30,8 @@ import java.math.BigDecimal
 import kotlinx.coroutines.launch
 
 // Plan → Distribución de dinero, Owner only (phase 1). The MODE says where the money to split
-// comes from (DINCR's estimate, or an amount the Owner confirms); the STRATEGY (the backend's
+// comes from (DINCR's estimate, or the amount the Owner has left after paying everything, split
+// whole: no obligation is deducted from it again); the STRATEGY (the backend's
 // Director engine) decides how it is split, the same in both. The exact amount is a plan: the
 // backend writes and stores nothing (POST /jarvis/premium/strategy-dashboard/exact-distribution,
 // refused to anyone but the Owner).
@@ -58,9 +59,9 @@ fun OwnerDistributionModes(model: AppModel, estimate: DirectorStrategy, nav: Nav
             DirectorDistribution(estimate, nav)
         }
         DistributionMode.EXACT -> {
-            Caption(tx("Indicá cuánto dinero tenés hoy para este ciclo. Primero se apartan tus compromisos pendientes y lo que queda se reparte con tu estrategia actual. No registra movimientos ni cambia tus saldos.",
-                "Enter how much money you have today for this cycle. Your pending commitments come out first and the rest is split with your current strategy. It records no movement and changes no balance."))
-            MoneyField(tx("Monto disponible en colones", "Available amount in colones"), amountText,
+            Caption(tx("Indicá cuánto dinero te sobra después de pagar tus gastos, tarjetas y cuotas. DINCR reparte ese monto completo con tu estrategia actual, sin volver a descontar esos pagos. No registra movimientos ni cambia tus saldos.",
+                "Enter how much money you have left after paying your expenses, cards and instalments. DINCR splits that whole amount with your current strategy, without deducting those payments again. It records no movement and changes no balance."))
+            MoneyField(tx("Monto que te sobra, en colones", "Amount you have left, in colones"), amountText,
                 { amountText = it; error = null }, error, symbol = "₡", modifier = Modifier.testTag("exact-distribution-amount"))
             DincrPrimaryButton(if (result == null) tx("Calcular distribución", "Calculate distribution") else tx("Actualizar distribución", "Update distribution"), {
                 val amount = AmountInput.parse(amountText, format.separators)
@@ -87,12 +88,6 @@ fun OwnerDistributionModes(model: AppModel, estimate: DirectorStrategy, nav: Nav
 private fun ExactResult(strategy: DirectorStrategy, nav: Navigator) {
     StatusBanner(BannerTone.INFO, tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"),
         tx("Es un plan: no se registró ningún movimiento ni cambió ningún saldo.", "It’s a plan: no movement was recorded and no balance changed."))
-    val deficit = Distribution.deficit(strategy)
-    if (deficit != null && deficit.signum() > 0) {
-        DincrMessage(MessageKind.ATTENTION, tx("Tus compromisos superan ese monto", "Your commitments exceed that amount"),
-            tx("Lo pendiente de este ciclo es mayor que el monto que indicaste, así que no queda nada por repartir. Revisá el faltante abajo.",
-                "What’s pending this cycle is more than the amount you entered, so nothing is left to split. See the shortfall below."))
-    }
     strategy.distributionWarnings.forEach { warning ->
         DincrMessage(MessageKind.ATTENTION, tx("Dato incompleto", "Incomplete data"), warning.message.orEmpty())
     }
@@ -107,10 +102,4 @@ private fun ModeSelector(mode: DistributionMode, onSelect: (DistributionMode) ->
             SegmentedButton(mode == value, { onSelect(value) }, SegmentedButtonDefaults.itemShape(index, options.size)) { Text(label) }
         }
     }
-}
-
-/** The formula's shortfall, read from the response (null when it does not say). */
-private object Distribution {
-    fun deficit(strategy: DirectorStrategy): BigDecimal? =
-        com.dincr.data.Distribution.formulaLines(strategy).firstOrNull { it.first == "deficit" }?.second
 }

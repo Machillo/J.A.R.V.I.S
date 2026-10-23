@@ -32,15 +32,16 @@ assert.doesNotMatch(vip, /getExactDistribution|exact-distribution/, "VIP Users n
 assert.match(api, /jsonRequest\("\/jarvis\/premium\/strategy-dashboard\/exact-distribution", "POST", \{ amount, currency: "CRC" \}\)/);
 // Before a calculation the exact mode shows no figure (never the estimate under the exact label).
 assert.match(page, /const showDistribution = !exactMode \|\| Boolean\(exact\.data\?\.strategy\);/);
-// The estimate's formula keeps its lines; the exact one shows the typed amount instead.
-assert.match(page, /tx\("Monto que indicaste", "Amount you entered"\), formula\.manual_available/);
+// The estimate's formula keeps its lines; the exact one shows only the typed amount (no deduction).
+assert.match(page, /const distributionBreakdown = manualFormula\r?\n    \? \[\[tx\("Monto que indicaste", "Amount you entered"\), formula\.manual_available\]\]\r?\n    : \[/);
 assert.match(page, /tx\("Saldo disponible en MultiMoney", "Available MultiMoney balance"\), formula\.cash_available_now/);
 
 const controls = read("pages/strategy/ExactDistributionControls.jsx");
 for (const text of [
   "Aproximada", "Monto exacto", "Puede diferir del dinero que realmente tenés",
   "No registra movimientos ni cambia tus saldos", "Calculado con el monto que indicaste",
-  "superan ese monto", "Monto disponible en colones",
+  "sin volver a descontar esos pagos", "Monto que te sobra, en colones",
 ]) assert.ok(controls.includes(text), text);
+assert.ok(!controls.includes("superan ese monto"), "an exact amount is never compared with the cycle's obligations");
 assert.doesNotMatch(controls, /fetch\(|request\(|jarvisApi/, "the controls never call the API themselves");
 console.log("exact distribution: ok");

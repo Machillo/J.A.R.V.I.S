@@ -3,8 +3,9 @@
 Two modes over the SAME Director engine (`_build_dynamic_director_allocation`):
 - estimate (unchanged): the base comes from the records (account cash + income still to come,
   minus the cycle's pending obligations);
-- manual amount: the amount the Owner confirms replaces what the records estimate is available;
-  the pending obligations still come out first and the same engine splits the rest.
+- manual amount: the money the Owner has LEFT after already paying expenses, cards and
+  installments. It is the base as typed: no obligation is deducted from it again (that would
+  count those payments twice), and the same engine splits all of it.
 
 The mode decides where the base comes from; the strategy decides how it is split. Nothing is
 written. Synthetic data only; every loader is stubbed, and any database access fails the test.
@@ -41,7 +42,7 @@ def _as(role, fn, *args, **kwargs):
 @pytest.fixture
 def owner_inputs(monkeypatch):
     """The Owner engine's loaders, answered in memory; a database access is a failure."""
-    state = {"debts": DEBTS, "savings": 50_000.0, "monthly_base": 600_000.0, "goals": [], "cycle": True}
+    state = {"debts": DEBTS, "savings": 50_000.0, "monthly_base": 600_000.0, "goals": [], "cycle": True, "salvavidas": True}
 
     def no_database(*_a, **_k):
         raise AssertionError("the distribution must not touch the database")
@@ -56,8 +57,12 @@ def owner_inputs(monkeypatch):
         "expenses": {"spending_only": STATEMENT}, "debts": {"payments_current_period": 0},
         "cycle": {"start": "2026-10-05", "end_exclusive": "2026-11-05"}})
     monkeypatch.setattr(sd, "_get_strategy_living_expenses", lambda *_a: {"fixed_living_total": 150_000})
-    monkeypatch.setattr(sd, "get_salvavidas_state",
-                        lambda: {"current_amount": state["savings"], "monthly_base": state["monthly_base"]})
+    def salvavidas():
+        if not state["salvavidas"]:
+            raise RuntimeError("synthetic: Salvavidas unavailable")
+        return {"current_amount": state["savings"], "monthly_base": state["monthly_base"]}
+
+    monkeypatch.setattr(sd, "get_salvavidas_state", salvavidas)
     monkeypatch.setattr(sd, "_fetch_post_cut_expenses", lambda *_a: {"total": POST_CUT})
     monkeypatch.setattr(sd, "_pending_mandatory_fixed_expenses", lambda *_a: {"total": MANDATORY})
     monkeypatch.setattr(sd, "_fetch_distributable_cash", lambda *_a: CASH)
@@ -107,14 +112,29 @@ def test_the_estimate_keeps_its_base_formula_and_engine(owner_inputs):
 
 # 2 / 5. The manual amount is the base, with the same strategy --------------------------------
 
-@pytest.mark.parametrize("amount", [500_000, 750_000.55, 2_000_000])
+def test_250000_typed_are_the_250000_the_strategy_splits(owner_inputs):
+    """The example: what is left (₡250.000) is the base as typed, with ₡340.000 of cycle
+    obligations on record that were already paid and are never deducted again."""
+    assert OBLIGATIONS > 250_000  # a deduction would leave nothing to split: the test would see it
+    result = _exact(250_000)
+    assert result["allocation_base_amount"] == 250_000
+    assert result["distribution_formula"] == {"manual_available": 250_000, "surplus": 250_000}
+    assert _total(result["allocation_items"]) == 250_000  # every colón assigned, none twice
+    assert _split(result["allocation_items"]) == _engine(250_000, owner_inputs)["allocation_items"]
+    assert result["mode"] == _engine(250_000, owner_inputs)["mode"]
+
+
+@pytest.mark.parametrize("amount", [1, 250_000, 500_000, 750_000.55, 2_000_000])
 def test_the_manual_amount_is_split_by_the_same_engine(owner_inputs, amount):
     result = _exact(amount)
-    base = round(amount - OBLIGATIONS, 2)
+    base = round(amount, 2)  # the amount itself: nothing deducted
     assert result["distribution_source"] == "manual_amount"
     assert result["allocation_base_amount"] == base
-    assert result["distribution_formula"]["manual_available"] == round(amount, 2)
-    assert "cash_available_now" not in result["distribution_formula"] and "income" not in result["distribution_formula"]
+    formula = result["distribution_formula"]
+    assert formula["manual_available"] == base and formula["surplus"] == base
+    for deduction in ("cash_available_now", "income", "statement_spending", "new_spending_after_cut",
+                      "debt_commitment", "mandatory_fixed_pending", "deficit"):
+        assert deduction not in formula, deduction
     reference = _engine(base, owner_inputs)
     assert _split(result["allocation_items"]) == reference["allocation_items"] and result["mode"] == reference["mode"]
     assert _total(result["allocation_items"]) == base
@@ -122,8 +142,8 @@ def test_the_manual_amount_is_split_by_the_same_engine(owner_inputs, amount):
 
 def test_a_new_amount_recalculates_every_allocation(owner_inputs):
     low, high = _exact(600_000), _exact(1_600_000)
-    assert low["allocation_base_amount"] == round(600_000 - OBLIGATIONS, 2)
-    assert high["allocation_base_amount"] == round(1_600_000 - OBLIGATIONS, 2)
+    assert low["allocation_base_amount"] == 600_000 and _total(low["allocation_items"]) == 600_000
+    assert high["allocation_base_amount"] == 1_600_000 and _total(high["allocation_items"]) == 1_600_000
     assert _total(high["allocation_items"]) > _total(low["allocation_items"])
     assert {i["key"] for i in high["allocation_items"]} >= {i["key"] for i in low["allocation_items"]}
 
@@ -179,22 +199,30 @@ def test_rounding_cents_are_exact_on_a_known_case():
     assert _total(items) == 0.05 and [i["amount"] for i in items] == [0.02, 0.01, 0.02]
 
 
-# 8. Obligations above the amount -------------------------------------------------------------
+# 8. Obligations on record never shrink the amount; the estimate still deducts them ------------
 
-def test_obligations_above_the_amount_show_a_shortfall_and_assign_nothing(owner_inputs):
-    result = _exact(100_000)
-    assert result["allocation_base_amount"] == 0 and result["allocation_items"] == []
-    assert result["mode"] == "cash_protection"
-    assert result["distribution_formula"]["deficit"] == round(OBLIGATIONS - 100_000, 2)
-    assert result["distribution_formula"]["surplus"] == 0
+@pytest.mark.parametrize("pending", [0.0, 340_000.0, 5_000_000.0])
+def test_recorded_obligations_never_change_the_exact_base(owner_inputs, monkeypatch, pending):
+    """However large the cycle's recorded obligations, the exact base is the amount typed; only
+    the estimate (records-based) deducts them."""
+    monkeypatch.setattr(sd, "_pending_mandatory_fixed_expenses", lambda *_a: {"total": pending})
+    result = _exact(250_000)
+    assert result["allocation_base_amount"] == 250_000 and _total(result["allocation_items"]) == 250_000
+    estimate = _estimate()
+    assert estimate["allocation_base_amount"] == round(max(CASH + INCOME_LEFT - (STATEMENT + POST_CUT + DEBT_COMMITMENT + pending), 0), 2)
 
 
 def test_missing_inputs_are_warned_not_hidden(owner_inputs):
+    # The Salvavidas feeds the engine's emergency rules: unread, it is said, never taken as zero.
+    owner_inputs["salvavidas"] = False
+    assert "salvavidas_unavailable" in {w["code"] for w in _exact(900_000)["distribution_warnings"]}
+    owner_inputs["salvavidas"] = True
+    # The cycle's commitments only feed the estimate: the exact amount does not need them.
     owner_inputs["cycle"] = False
-    result = _exact(900_000)
-    assert "cycle_unavailable" in {w["code"] for w in result["distribution_warnings"]}
-    owner_inputs["cycle"] = True
     assert _exact(900_000)["distribution_warnings"] == []
+    assert "cycle_unavailable" in {w["code"] for w in _estimate()["distribution_warnings"]}
+    owner_inputs["cycle"] = True
+    assert _exact(900_000)["distribution_warnings"] == [] and _estimate()["distribution_warnings"] == []
 
 
 # 9. Currencies are never mixed ---------------------------------------------------------------
@@ -256,7 +284,7 @@ def test_a_valid_amount_answers_the_dashboard_shape(client):
     assert response.status_code == 200
     data = response.json()
     assert data["source"] == "manual_amount" and data["manual_amount"] == {"amount": 750000.5, "currency": "CRC"}
-    assert data["strategy"]["allocation_base_amount"] == round(750_000.50 - OBLIGATIONS, 2)
+    assert data["strategy"]["allocation_base_amount"] == 750_000.50
 
 
 @pytest.mark.parametrize("role", ["user", "admin"])

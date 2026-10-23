@@ -51,11 +51,12 @@ class OwnerExactDistributionTest {
         assertEquals(before, api.ownerStrategyDashboard().strategy!!)
     }
 
-    @Test fun anAmountBelowTheCommitmentsLeavesNothingToSplit() = runTest {
+    @Test fun theTypedAmountIsSplitWholeWithNoDeductionLine() = runTest {
         val (_, api) = fixture(FakeBackend.Role.OWNER)
-        val exact = api.ownerExactDistribution(ExactDistributionRequest(BigDecimal(1))).strategy!!
-        assertTrue(exact.allocationItems.isEmpty())
-        assertTrue(Distribution.formulaLines(exact).first { it.first == "deficit" }.second!!.signum() > 0)
+        val exact = api.ownerExactDistribution(ExactDistributionRequest(BigDecimal(250_000))).strategy!!
+        assertEquals(0, exact.allocationBaseAmount!!.compareTo(BigDecimal(250_000)))
+        assertEquals(0, exact.allocationItems.sumOf { it.amount!! }.compareTo(BigDecimal(250_000)))
+        assertEquals(listOf("manual_available", "surplus"), Distribution.formulaLines(exact).map { it.first })
     }
 
     @Test fun onlyTheOwnerGetsAnExactDistribution() = runTest {
