@@ -41,7 +41,7 @@ assert.match(page, /\[panel\.note\]\(\)/);
 const controls = read("pages/strategy/ExactDistributionControls.jsx");
 for (const text of [
   "Aproximada", "Monto exacto", "Puede diferir del dinero que realmente tenés",
-  "No registra movimientos ni cambia tus saldos", "Calculado con el monto que indicaste",
+  "Calcular no registra nada: solo CONFIRMAR registra los movimientos", "Calculado con el monto que indicaste",
   "sin volver a descontar esos pagos", "Monto que te sobra, en colones",
 ]) assert.ok(controls.includes(text), text);
 assert.ok(!controls.includes("superan ese monto"), "an exact amount is never compared with the cycle's obligations");
@@ -125,3 +125,35 @@ assert.equal(vipPanel.exactMode, false);
 assert.equal(vipPanel.base, 500000);
 
 console.log("exact distribution: ok");
+
+// CONFIRMAR (web): one key per result, the reviewed split is what is sent, confirmed once.
+{
+  const { applyConfirmation, canConfirmExact, confirmExactPayload } = await import("../src/lib/exactDistribution.js");
+  const data = {
+    strategy: { allocation_items: [{ key: "ataque_de_deuda", amount: 114614.1 }, { key: "fondo_de_emergencia", amount: 101879.2 }, { key: "vida_controlada", amount: 38204.7 }] },
+    confirmation_plan: { confirmable: true, blocking_reasons: [], steps: [] },
+  };
+  const typed = editExactAmount({ mode: "exact", amount: "" }, "254698");
+  assert.equal(canConfirmExact(typed), false, "nothing to confirm before a result");
+  const shown = applyExactResult(typed, "254698", data, "confirm-web-0001");
+  assert.equal(canConfirmExact(shown), true);
+  assert.deepEqual(confirmExactPayload(shown, 254698), {
+    amount: 254698, currency: "CRC", confirmation_key: "confirm-web-0001",
+    expected_items: [{ key: "ataque_de_deuda", amount: 114614.1 }, { key: "fondo_de_emergencia", amount: 101879.2 }, { key: "vida_controlada", amount: 38204.7 }],
+  });
+  assert.notEqual(applyExactResult(typed, "254698", data).confirmationKey, applyExactResult(typed, "254698", data).confirmationKey, "a new result gets a new key");
+  assert.equal(canConfirmExact(applyConfirmation(shown, "another-key", { status: "applied" })), true, "an answer for another result is ignored");
+  const confirmed = applyConfirmation(shown, "confirm-web-0001", { status: "applied" });
+  assert.equal(canConfirmExact(confirmed), false, "confirmed once: no second CONFIRMAR");
+  const edited = editExactAmount(confirmed, "300000");
+  assert.equal(edited.confirmationKey, null);
+  assert.equal(confirmExactPayload(edited, 300000), null);
+  const blocked = applyExactResult(typed, "254698", { ...data, confirmation_plan: { confirmable: false, blocking_reasons: ["x"], steps: [] } });
+  assert.equal(canConfirmExact(blocked), false, "a plan that cannot be recorded offers no CONFIRMAR");
+  // The confirmation travels in a POST body to the Owner route, and only the Owner's api has it.
+  assert.match(api, /jsonRequest\("\/jarvis\/premium\/strategy-dashboard\/exact-distribution\/confirm", "POST", payload\)/);
+  assert.match(page, /confirmExactDistribution: confirmJarvisExactDistribution/);
+  assert.doesNotMatch(vip, /confirmExactDistribution|exact-distribution\/confirm/, "VIP Users never confirm a distribution");
+}
+
+console.log("exact distribution confirm: ok");

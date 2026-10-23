@@ -3,6 +3,7 @@ package com.dincr.data
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -122,7 +123,56 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             baseTimeline = if (owner) timeline else emptyList(),
             monthsSavedByCurrentExtras = if (owner) 2 else null,
         )
-        return json.encodeToString(StrategyDashboard("OK", role, strategy.title, strategy.objective, strategy, "live_database"))
+        val plan = manualAmount?.let { confirmationPlan(active, items) }
+        return json.encodeToString(StrategyDashboard("OK", role, strategy.title, strategy.objective, strategy, "live_database", plan))
+    }
+
+    // --- Owner exact amount: CONFIRMAR (backend/ai/owner_distribution.py) ---------------------------
+
+    private val confirmations = mutableMapOf<String, BigDecimal>()
+
+    /** The debt part, highest rate first (this fake's strategy order), each debt at most what it owes. */
+    private fun confirmationPlan(active: List<Debt>, items: List<DirectorStrategy.AllocationItem>): ConfirmationPlan {
+        var blocked = false
+        val steps = items.map { item ->
+            val amount = item.amount ?: BigDecimal.ZERO
+            when (item.key) {
+                "ataque_de_deuda" -> {
+                    var left = amount
+                    val targets = active.sortedByDescending { it.interestRate ?: BigDecimal.ZERO }.mapNotNull { debt ->
+                        val take = left.min(debt.remainingAmount ?: BigDecimal.ZERO)
+                        if (take.signum() <= 0) null else { left -= take; ConfirmationPlan.DebtTarget(debt.id, debt.name, take) }
+                    }
+                    if (left.signum() > 0) blocked = true
+                    ConfirmationPlan.Step(item.key, amount, "debt_extra_payment", targets)
+                }
+                "fondo_de_emergencia" -> ConfirmationPlan.Step(item.key, amount, "salvavidas_deposit")
+                else -> ConfirmationPlan.Step(item.key, amount, "not_recorded")
+            }
+        }
+        return ConfirmationPlan(steps, !blocked, if (blocked) listOf("La parte para deudas es mayor que lo que se debe.") else emptyList())
+    }
+
+    /**
+     * CONFIRMAR: recomputes the split, refuses one the Owner did not review (409), records it once per
+     * key (a repeat answers `already_applied`) and returns the debt payments for the fake to apply.
+     */
+    fun confirmExactDistribution(data: Snapshot, amount: BigDecimal, key: String, expected: Map<String, BigDecimal>): Triple<Int, String, Map<Long, BigDecimal>> {
+        confirmations[key]?.let { previous ->
+            return if (previous.compareTo(amount) != 0) Triple(409, "Esta confirmación ya se usó con otro monto.", emptyMap())
+            else Triple(200, json.encodeToString(ExactDistributionConfirmation("already_applied", ExactDistributionConfirmation.Record(1, previous))), emptyMap())
+        }
+        val answer = json.decodeFromString<StrategyDashboard>(strategyDashboard(data, owner = true, role = "owner", manualAmount = amount))
+        val items = answer.strategy?.allocationItems.orEmpty().mapNotNull { item -> item.key?.let { k -> item.amount?.let { k to it } } }
+            .filter { it.second.signum() > 0 }.toMap()
+        val same = items.keys == expected.filterValues { it.signum() > 0 }.keys && items.all { (k, v) -> expected[k]?.compareTo(v) == 0 }
+        if (!same) return Triple(409, "La distribución cambió desde que la revisaste. Revisala de nuevo antes de confirmar.", emptyMap())
+        val plan = answer.confirmationPlan ?: return Triple(409, "No se pudo registrar.", emptyMap())
+        if (!plan.confirmable) return Triple(409, plan.blockingReasons.joinToString(" "), emptyMap())
+        val payments = plan.steps.flatMap { it.targets }.associate { (it.debtId ?: 0L) to (it.amount ?: BigDecimal.ZERO) }
+        plan.steps.filter { it.action == "salvavidas_deposit" }.forEach { ownerAmount += it.amount ?: BigDecimal.ZERO }
+        confirmations[key] = amount
+        return Triple(200, json.encodeToString(ExactDistributionConfirmation("applied", ExactDistributionConfirmation.Record(confirmations.size.toLong(), amount))), payments)
     }
 
     // --- Salvavidas ---------------------------------------------------------------------------------

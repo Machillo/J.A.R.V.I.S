@@ -73,13 +73,36 @@ export function investmentPanel(strategy) {
  * longer describe it, so they are dropped. Android/iOS: `ExactDistributionForm`.
  */
 export function editExactAmount(current, amount) {
-  return { ...current, amount, error: "", data: null };
+  return { ...current, amount, error: "", data: null, confirmationKey: null, confirmation: null };
 }
 
-/** The answer for `forAmount`; kept only when it is still the amount on screen. */
-export function applyExactResult(current, forAmount, data) {
+const newConfirmationKey = () =>
+  (globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+
+/** The answer for `forAmount`; kept only when it is still the amount on screen. A new result gets a new key. */
+export function applyExactResult(current, forAmount, data, key = newConfirmationKey()) {
   if (current.amount !== forAmount) return { ...current, loading: false };
-  return { ...current, loading: false, error: "", data };
+  return { ...current, loading: false, error: "", data, confirmationKey: key, confirmation: null };
+}
+
+/** CONFIRMAR is offered only for a calculated result the backend says it can record, once. */
+export function canConfirmExact(current) {
+  return Boolean(current.data?.strategy && current.data?.confirmation_plan?.confirmable && current.confirmationKey && !current.confirmation);
+}
+
+/** The split the Owner reviewed, sent with CONFIRMAR: the backend records nothing when its own differs. */
+export function confirmExactPayload(current, amount) {
+  if (!current.data?.strategy || !current.confirmationKey) return null;
+  const items = (current.data.strategy.allocation_items || [])
+    .filter((item) => item.key && item.amount !== undefined && item.amount !== null)
+    .map((item) => ({ key: item.key, amount: item.amount }));
+  return { amount, currency: "CRC", confirmation_key: current.confirmationKey, expected_items: items };
+}
+
+/** The backend's answer for `key`; kept only when it is still this result's key. */
+export function applyConfirmation(current, key, answer) {
+  if (current.confirmationKey !== key) return { ...current, confirming: false };
+  return { ...current, confirming: false, error: "", confirmation: answer };
 }
 
 /** The answer's error for `forAmount`; dropped when the Owner has since typed another amount. */

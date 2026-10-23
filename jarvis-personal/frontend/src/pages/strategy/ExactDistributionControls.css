@@ -76,3 +76,57 @@
   margin: 0;
   color: #ff8a8a;
 }
+
+.exact-distribution-plan {
+  display: grid;
+  gap: 6px;
+}
+
+.exact-distribution-plan ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.exact-distribution-plan li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.exact-distribution-confirm,
+.exact-distribution-ask button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #55d99b;
+  color: #06140d;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exact-distribution-ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.exact-distribution-ask p {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.exact-distribution-ask button + button {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+}
+
+.exact-distribution-ask button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

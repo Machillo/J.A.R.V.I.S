@@ -229,6 +229,23 @@ class FakeBackend(
             path == "/jarvis/calendar/upcoming" && method == "GET" ->
                 if (profile.role != "owner") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
             // The Owner's strategy: this fake serves it to the Owner role only.
+            path == "/jarvis/premium/strategy-dashboard/exact-distribution/confirm" && method == "POST" -> when {
+                profile.role != "owner" -> error(403, "La distribución por monto exacto está disponible solo para el Owner.")
+                (money("amount") ?: java.math.BigDecimal.ZERO).signum() <= 0 -> error(422, "Indicá un monto mayor que cero.")
+                text("confirmation_key").isNullOrBlank() -> error(422, "Falta la clave de confirmación.")
+                else -> {
+                    val expected = (body?.get("expected_items") as? kotlinx.serialization.json.JsonArray).orEmpty().associate { element ->
+                        val item = element as JsonObject
+                        item["key"]!!.jsonPrimitive.content to BigDecimal(item["amount"]!!.jsonPrimitive.content)
+                    }
+                    val (status, answer, payments) = planRoutes.confirmExactDistribution(snapshot(), money("amount")!!, text("confirmation_key")!!, expected)
+                    payments.forEach { (debtId, paid) ->
+                        val index = debts.indexOfFirst { it.id == debtId }
+                        if (index >= 0) debts[index] = debts[index].copy(remainingAmount = (debts[index].remainingAmount ?: BigDecimal.ZERO) - paid)
+                    }
+                    if (status == 200) ok(answer) else error(status, answer)
+                }
+            }
             path == "/jarvis/premium/strategy-dashboard/exact-distribution" && method == "POST" -> when {
                 profile.role != "owner" -> error(403, "La distribución por monto exacto está disponible solo para el Owner.")
                 (money("amount") ?: java.math.BigDecimal.ZERO).signum() <= 0 -> error(422, "Indicá un monto mayor que cero.")

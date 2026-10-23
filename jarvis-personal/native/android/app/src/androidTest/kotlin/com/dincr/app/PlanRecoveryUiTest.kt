@@ -548,4 +548,35 @@ class PlanRecoveryUiTest {
         assertTrue(!present(tx("Monto exacto", "Exact amount")))
         assertTrue(!present(tx("Distribución aproximada", "Estimated distribution")))
     }
+
+    /**
+     * CONFIRMAR: calculating shows what would be recorded and records nothing; confirming (after the
+     * question) records it once, the button goes away, and the Salvavidas screen shows the deposit.
+     */
+    @Test fun theOwnerConfirmsAnExactDistributionAndTheSalvavidasShowsIt() {
+        launch(role = "owner")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Salvavidas", "Emergency fund"))
+        waitForText("₡300.000")
+        back()
+        click(tx("Distribución de dinero", "Money distribution"))
+        click(tx("Monto exacto", "Exact amount"))
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("254698")
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Todavía no se registró nada. Si ya moviste el dinero así, presioná CONFIRMAR.", "Nothing has been recorded yet. If you already moved the money this way, press CONFIRM."))
+        waitForText(tx("Lo que se registrará al confirmar", "What CONFIRM will record"))
+        waitForText(tx("Depósito al Salvavidas", "Deposit to the Salvavidas"))
+        tapTag("exact-distribution-confirm")
+        waitForText(tx("¿Ya hiciste estos movimientos?", "Did you already make these movements?"))
+        click(tx("Confirmar", "Confirm"))
+        waitForText(tx("Distribución confirmada", "Distribution confirmed"))
+        waitForText(tx("Lo que se registró", "What was recorded"))
+        assertTrue("confirmed once: no second CONFIRMAR",
+            compose.onAllNodes(hasTestTag("exact-distribution-confirm")).fetchSemanticsNodes().isEmpty())
+        back()
+        click(tx("Salvavidas", "Emergency fund"))
+        // 300.000 + the Salvavidas part (40 % of 254.698 in this fake's strategy).
+        waitForText("₡401.879", substring = true)
+    }
 }

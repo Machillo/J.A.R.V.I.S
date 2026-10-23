@@ -140,6 +140,9 @@ export const getJarvisPremiumStrategyDashboard = () => request("/jarvis/premium/
 // The amount travels in the body (never in a URL); the backend writes and stores nothing.
 export const getJarvisExactDistribution = (amount) =>
   jsonRequest("/jarvis/premium/strategy-dashboard/exact-distribution", "POST", { amount, currency: "CRC" });
+// CONFIRMAR: records the distribution the Owner carried out, once per confirmation key.
+export const confirmJarvisExactDistribution = (payload) =>
+  jsonRequest("/jarvis/premium/strategy-dashboard/exact-distribution/confirm", "POST", payload);
 export const getAdditionalCardsReport = () => request("/jarvis/cards/additional-report");
 
 

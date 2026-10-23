@@ -397,9 +397,11 @@ def test_one_colon_is_confirmed_exactly(db):
 # Security ---------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("role", ["user", "admin"])
-def test_only_the_owner_can_confirm(db, role):
+def test_only_the_owner_can_confirm(db, role, monkeypatch):
     before = _snapshot(db)
     items = _items(_preview("254698"))
+    # Refused before any database work: not even the lock or the recomputation runs.
+    monkeypatch.setattr(od, "get_connection", lambda: pytest.fail("a refused caller opens no connection"))
     with pytest.raises(HTTPException) as refused:
         _confirm("254698", "confirm-0010", items, role=role)
     assert refused.value.status_code == 403
@@ -417,3 +419,47 @@ def test_another_workspaces_debt_is_never_paid(db):
         assert record_extra_payment(conn, WS, foreign, 1000, payment_date="2026-10-23") is None
     db.execute("SELECT COUNT(*) AS n FROM debt_payments")
     assert db.fetchone()["n"] == 0
+
+
+# Through the whole app: the real routes, the real request models, the real database ----------------
+
+def test_the_owner_calculates_and_confirms_over_http(db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from backend import main
+
+    role = {"value": "owner"}
+    monkeypatch.setattr(main, "authenticate_access_token",
+                        lambda _token: {"id": 7, "email": "owner@example.test", "role": role["value"], "status": "active",
+                                        "account_id": "acc-synthetic", "workspace_id": WS, "plan": "vip"})
+    monkeypatch.setattr(main, "disabled_feature_for_request", lambda *_a, **_k: None)
+    client = TestClient(main.app)
+    headers = {"Authorization": "Bearer synthetic"}
+    path = "/jarvis/premium/strategy-dashboard/exact-distribution"
+
+    before = _snapshot(db)
+    preview = client.post(path, json={"amount": "254698", "currency": "CRC"}, headers=headers)
+    assert preview.status_code == 200, preview.text
+    assert _snapshot(db) == before, "calculating writes nothing"
+    items = _items(preview.json())
+    body = {"amount": "254698", "currency": "CRC", "confirmation_key": "confirm-http-0001", "expected_items": items}
+
+    role["value"] = "user"
+    assert client.post(path + "/confirm", json=body, headers=headers).status_code == 403
+    assert _snapshot(db) == before
+
+    role["value"] = "owner"
+    first = client.post(path + "/confirm", json=body, headers=headers)
+    assert first.status_code == 200, first.text
+    assert first.json()["status"] == "applied"
+    applied = _snapshot(db)
+    assert applied != before
+    again = client.post(path + "/confirm", json=body, headers=headers)
+    assert again.status_code == 200 and again.json()["status"] == "already_applied"
+    assert _snapshot(db) == applied
+
+    # The Salvavidas the apps read (Plan → Salvavidas) shows the deposit.
+    salvavidas = client.get("/user-product/vip/salvavidas", headers=headers)
+    assert salvavidas.status_code == 200, salvavidas.text
+    emergency = next(i["amount"] for i in items if i["key"] == "fondo_de_emergencia")
+    assert _cents(salvavidas.json()["current_amount"]) == _cents(50_000 + emergency)

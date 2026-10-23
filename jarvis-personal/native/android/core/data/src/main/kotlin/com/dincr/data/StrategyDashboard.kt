@@ -44,6 +44,8 @@ data class StrategyDashboard(
     val content: String? = null,
     val strategy: DirectorStrategy? = null,
     val source: String? = null,
+    /** Owner exact amount only: what CONFIRMAR would record for each destination. */
+    @SerialName("confirmation_plan") val confirmationPlan: ConfirmationPlan? = null,
 )
 
 @Serializable

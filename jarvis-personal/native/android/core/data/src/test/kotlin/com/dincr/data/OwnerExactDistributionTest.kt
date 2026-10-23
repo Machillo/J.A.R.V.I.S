@@ -86,4 +86,75 @@ class OwnerExactDistributionTest {
         assertEquals(null, form.result)
         assertEquals("300000", form.amountText)
     }
+
+    // CONFIRMAR -----------------------------------------------------------------------------------
+
+    private suspend fun calculated(api: DincrApi, amount: Int): ExactDistributionForm {
+        val answer = api.ownerExactDistribution(ExactDistributionRequest(BigDecimal(amount)))
+        return ExactDistributionForm().edited("$amount").calculated("$amount", answer.strategy, answer.confirmationPlan, key = "confirm-test-$amount")
+    }
+
+    @Test fun calculatingRecordsNothingAndSaysWhatConfirmWouldRecord() = runTest {
+        val (_, api) = fixture(FakeBackend.Role.OWNER)
+        val debtsBefore = api.debts()
+        val salvavidasBefore = api.salvavidas().currentAmount
+        val form = calculated(api, 254_698)
+        assertTrue(form.canConfirm)
+        val plan = form.plan!!
+        assertEquals(listOf("debt_extra_payment", "salvavidas_deposit", "not_recorded"), plan.steps.map { it.action })
+        assertEquals(0, plan.steps.sumOf { it.amount!! }.compareTo(BigDecimal(254_698)))
+        assertEquals(debtsBefore, api.debts())
+        assertEquals(salvavidasBefore, api.salvavidas().currentAmount)
+    }
+
+    @Test fun confirmSendsTheReviewedSplitAndRecordsItOnce() = runTest {
+        val (backend, api) = fixture(FakeBackend.Role.OWNER)
+        val form = calculated(api, 254_698)
+        val request = form.confirmRequest(BigDecimal(254_698))!!
+        val salvavidasBefore = api.salvavidas().currentAmount!!
+        val owedBefore = api.debts().sumOf { it.remainingAmount ?: BigDecimal.ZERO }
+
+        val first = api.ownerConfirmExactDistribution(request)
+        val body = backend.requests.last().body!!
+        assertTrue(backend.requests.last().url.endsWith("/jarvis/premium/strategy-dashboard/exact-distribution/confirm"))
+        assertTrue(body.contains("\"confirmation_key\":\"confirm-test-254698\"") && body.contains("\"expected_items\""))
+        assertEquals("applied", first.status)
+        val plan = form.plan!!
+        val debtPart = plan.steps.first { it.action == "debt_extra_payment" }.amount!!
+        val savingsPart = plan.steps.first { it.action == "salvavidas_deposit" }.amount!!
+        assertEquals(0, (owedBefore - debtPart).compareTo(api.debts().sumOf { it.remainingAmount ?: BigDecimal.ZERO }))
+        assertEquals(0, (salvavidasBefore + savingsPart).compareTo(api.salvavidas().currentAmount))
+
+        // A retry (lost answer, double tap) is the same key: nothing is recorded again.
+        assertEquals("already_applied", api.ownerConfirmExactDistribution(request).status)
+        assertEquals(0, (salvavidasBefore + savingsPart).compareTo(api.salvavidas().currentAmount))
+        val confirmed = form.confirmed("confirm-test-254698", first)
+        assertFalse("confirmed once: no second CONFIRMAR", confirmed.canConfirm)
+        assertEquals(form, form.confirmed("another-key", first))
+    }
+
+    @Test fun aSplitTheOwnerDidNotReviewIsRefused() = runTest {
+        val (_, api) = fixture(FakeBackend.Role.OWNER)
+        val form = calculated(api, 254_698)
+        val request = form.confirmRequest(BigDecimal(254_698))!!
+        val changed = request.copy(expectedItems = request.expectedItems.map { it.copy(amount = it.amount + BigDecimal.ONE) })
+        assertEquals(409, status { api.ownerConfirmExactDistribution(changed) })
+        assertEquals(409, status { api.ownerConfirmExactDistribution(request.copy(amount = BigDecimal(100_000))) })
+    }
+
+    @Test fun onlyTheOwnerCanConfirm() = runTest {
+        val (_, owner) = fixture(FakeBackend.Role.OWNER)
+        val request = calculated(owner, 254_698).confirmRequest(BigDecimal(254_698))!!
+        val (_, user) = fixture(FakeBackend.Role.USER)
+        assertEquals(403, status { user.ownerConfirmExactDistribution(request) })
+    }
+
+    @Test fun aNewAmountNeedsANewReviewAndKey() = runTest {
+        val (_, api) = fixture(FakeBackend.Role.OWNER)
+        val form = calculated(api, 254_698)
+        val edited = form.edited("300000")
+        assertFalse(edited.canConfirm)
+        assertEquals(null, edited.confirmationKey)
+        assertEquals(null, edited.confirmRequest(BigDecimal(300_000)))
+    }
 }

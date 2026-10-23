@@ -25,8 +25,10 @@ public struct StrategyDashboard: Decodable, Sendable, Equatable {
     public let content: String?
     public let strategy: DashboardStrategy?
     public let source: String?
+    /// Owner exact amount only: what CONFIRMAR would record for each destination.
+    public let confirmationPlan: ConfirmationPlan?
 
-    enum CodingKeys: String, CodingKey { case status, userRole, title, content, strategy, source }
+    enum CodingKeys: String, CodingKey { case status, userRole, title, content, strategy, source, confirmationPlan }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -36,6 +38,7 @@ public struct StrategyDashboard: Decodable, Sendable, Equatable {
         content = c.lenient(String.self, .content)
         strategy = c.lenient(DashboardStrategy.self, .strategy)
         source = c.lenient(String.self, .source)
+        confirmationPlan = c.lenient(ConfirmationPlan.self, .confirmationPlan)
     }
 }
 

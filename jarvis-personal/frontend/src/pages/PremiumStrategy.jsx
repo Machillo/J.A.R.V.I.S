@@ -15,6 +15,7 @@ import {
 import {
   getDebtAdvisory,
   getAguinaldo,
+  confirmJarvisExactDistribution,
   getJarvisExactDistribution,
   getJarvisPremiumStrategyDashboard,
   getSalvavidas,
@@ -26,8 +27,11 @@ import { deviceLanguage, localeTag, t } from "../lib/locale";
 import { baseCurrency, currencySymbol, formatMoney } from "../lib/currency";
 import { categoryLabel } from "../lib/categories";
 import {
+  applyConfirmation,
   applyExactError,
   applyExactResult,
+  canConfirmExact,
+  confirmExactPayload,
   distributionPanel,
   editExactAmount,
   exactAmountError,
@@ -123,6 +127,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     getStrategyDashboard: getJarvisPremiumStrategyDashboard,
     // Owner only (phase 1): the default api is the Owner's; VIP Users pass their own without it.
     getExactDistribution: getJarvisExactDistribution,
+    confirmExactDistribution: confirmJarvisExactDistribution,
     getDebtAdvisory,
     getSalvavidas,
     updateSalvavidas,
@@ -151,6 +156,23 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       setExact((current) => applyExactResult(current, typed, data));
     } catch (error) {
       setExact((current) => applyExactError(current, typed, error?.message || tx("No pudimos calcular la distribución.", "We couldn’t calculate the distribution.")));
+    }
+  };
+
+  // CONFIRMAR: the Owner carried out the reviewed split; the backend records it once, then the page reads it again.
+  const confirmExact = async () => {
+    const parsed = parseExactAmount(exact.amount);
+    const payload = parsed.error ? null : confirmExactPayload(exact, parsed.value);
+    if (!payload) return;
+    const key = payload.confirmation_key;
+    setExact((current) => ({ ...current, confirming: true, error: "" }));
+    try {
+      const answer = await strategyApi.confirmExactDistribution(payload);
+      setExact((current) => applyConfirmation(current, key, answer));
+      await load({ keepPage: true });
+    } catch (error) {
+      setExact((current) => ({ ...current, confirming: false,
+        error: error?.message || tx("No pudimos confirmar la distribución. No se registró nada.", "We couldn’t confirm the distribution. Nothing was recorded.") }));
     }
   };
 
@@ -584,7 +606,9 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       {ownerExact && (
         <ExactDistributionControls mode={exact.mode} onMode={(mode) => setExact((current) => ({ ...current, mode, error: "" }))}
           amount={exact.amount} onAmount={(amount) => setExact((current) => editExactAmount(current, amount))}
-          onCalculate={calculateExact} loading={exact.loading} error={exact.error} result={exact.data?.strategy} tx={tx} />
+          onCalculate={calculateExact} loading={exact.loading} error={exact.error} result={exact.data?.strategy} tx={tx}
+          plan={exact.data?.confirmation_plan} canConfirm={canConfirmExact(exact)} confirming={Boolean(exact.confirming)}
+          confirmed={Boolean(exact.confirmation)} onConfirm={confirmExact} money={money} />
       )}
 
       {showDistribution && (<>

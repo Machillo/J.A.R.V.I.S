@@ -392,7 +392,9 @@ fun DistributionScreen(model: AppModel, nav: Navigator) {
                 is StrategyData.Basic -> BasicDistribution(data.strategy, nav)
                 // The Owner chooses the estimate or an exact amount (OwnerExactDistribution.kt).
                 is StrategyData.Director -> data.dashboard.strategy?.let {
-                    if (contract == StrategyContract.OWNER) OwnerDistributionModes(model, it, nav) else DirectorDistribution(it, nav)
+                    // A confirmed distribution changes the records: the estimate is read again, in place.
+                    if (contract == StrategyContract.OWNER) OwnerDistributionModes(model, it, nav, onRecorded = { strategy.refresh() })
+                    else DirectorDistribution(it, nav)
                 }
             }
         }

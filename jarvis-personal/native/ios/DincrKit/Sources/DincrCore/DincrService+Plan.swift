@@ -19,6 +19,11 @@ extension DincrService {
                               body: ExactDistributionRequest(amount: amount, currency: "CRC"))
     }
 
+    /// Owner only: CONFIRMAR — records the distribution the Owner carried out, once per confirmation key.
+    public func ownerConfirmExactDistribution(_ request: ExactDistributionConfirmRequest) async throws -> ExactDistributionConfirmation {
+        try await client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution/confirm", body: request)
+    }
+
     /// The strategy the identity reads; Estrategia and Distribución show the same answer.
     public func planStrategy(_ source: StrategySource) async throws -> PlanStrategy {
         switch source {
