@@ -1,5 +1,7 @@
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
+from backend.finance.category_catalog import owner_context
+from backend.user_product import owner_ledger
 from datetime import date, datetime
 import calendar
 
@@ -9,6 +11,38 @@ LOAN_TYPES = ("loan_received", "loan_disbursement")
 # A receivable_offset moves no money and is in none of these lists.
 NON_INCOME_CASH_INFLOW_TYPES = ("receivable_payment", "asset_sale")
 OUTFLOW_TYPES = ("expense", "debt_payment")
+
+
+def _owner_monthly_flow(workspace_id) -> list[dict]:
+    """The Owner's months by the single ledger (owner_ledger): income is earned income only;
+    loans, collections and asset sales are other inflows; spending is net of refunds; the
+    monthly balance subtracts debt payments; cash_flow adds the other inflows back."""
+    with get_connection() as conn:
+        months = [row["month"] for row in conn.execute(
+            """SELECT month FROM (
+                 SELECT to_char(transaction_date, 'YYYY-MM') AS month FROM transactions WHERE workspace_id = %s
+                 UNION SELECT to_char(created_at, 'YYYY-MM') FROM salaries WHERE workspace_id = %s
+                 UNION SELECT to_char(created_at, 'YYYY-MM') FROM expenses WHERE workspace_id = %s
+                 UNION SELECT to_char(COALESCE(event_date, created_at::date), 'YYYY-MM') FROM payroll_events WHERE workspace_id = %s AND amount > 0
+                 UNION SELECT to_char(created_at, 'YYYY-MM') FROM bonuses WHERE workspace_id = %s
+               ) months WHERE month IS NOT NULL ORDER BY month""",
+            (workspace_id,) * 5,
+        ).fetchall()]
+        flow, cumulative = [], 0.0
+        for month in months:
+            start = date.fromisoformat(f"{month}-01")
+            end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
+            totals = owner_ledger.owner_month_totals(conn, workspace_id, start, end)
+            cumulative = round(cumulative + totals["balance"], 2)
+            flow.append({
+                "month": month, "income": totals["income"], "earned_income": totals["income"],
+                "other_inflows": totals["other_inflows"], "gross_expenses": totals["gross_expenses"],
+                "refunds": totals["refunds"], "debt_payments": totals["debt_paid"],
+                "spending": totals["expenses"], "expenses": totals["expenses"], "outflow": totals["expenses"],
+                "monthly_balance": totals["balance"], "cash_flow": totals["cash_flow"],
+                "cumulative_balance": cumulative, "unclassified_count": totals["unclassified_count"],
+            })
+    return flow
 
 
 def get_transaction_summary():
@@ -154,6 +188,8 @@ def get_monthly_flow():
     for the month without creating a second debt record.
     """
     workspace_id = get_current_workspace_id()
+    if owner_context():
+        return _owner_monthly_flow(workspace_id)
 
     with get_connection() as conn:
         rows = conn.execute(
