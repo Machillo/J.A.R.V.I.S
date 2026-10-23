@@ -87,7 +87,9 @@ class SummaryChartsUiTest {
             assertEquals("$context: the Owner entry stays the Owner's", role == "owner", tagged("analysis.owner"))
             click(tx("Resumen del mes", "Monthly summary"))
             // The amounts stay as text above the charts.
-            waitUntil("$context: amounts") { present(tx("Balance", "Balance")) }
+            // The Owner reads the month's result with what it means (owner_ledger); the others keep "Balance".
+            waitUntil("$context: amounts") { present(if (role == "owner") tx("Resultado del mes", "Result of the month") else tx("Balance", "Balance")) }
+            if (role == "owner") waitUntil("owner: the month says it is not complete yet") { present(tx("Este mes todavía no está completo", "This month isn’t complete yet")) }
 
             waitUntil("$context: E04 bars") { tagged("summary.flow.chart") }
             val bars = descriptions("summary.flow.chart").single()

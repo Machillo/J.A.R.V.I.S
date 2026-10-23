@@ -619,8 +619,16 @@ class FakeBackend(
     private fun monthlySummary(period: String): MonthlySummary {
         val (income, expenses) = totals(period)
         val cats = categories(period)
-        return MonthlySummary(period, income, expenses, BigDecimal.ZERO, income - expenses, cats.firstOrNull(), cats, savings.sumOf { it.savedAmount ?: BigDecimal.ZERO },
+        val summary = MonthlySummary(period, income, expenses, BigDecimal.ZERO, income - expenses, cats.firstOrNull(), cats, savings.sumOf { it.savedAmount ?: BigDecimal.ZERO },
             GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0))
+        if (!isOwner) return summary
+        // Like the backend: only the verified Owner's month carries the ledger's reading; the
+        // current month still has a mail notice to review.
+        val open = period == today.toString().take(7)
+        return summary.copy(complete = !open, incompleteReasons = if (open) listOf("pending_mail_review") else emptyList(),
+            grossExpenses = expenses, refunds = BigDecimal.ZERO, otherInflows = BigDecimal.ZERO, cashFlow = income - expenses,
+            unclassifiedCount = 0, pendingMailCount = if (open) 1 else 0,
+            payrollAccrued = PayrollAccrued(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO))
     }
 
     private fun budgetView(): Budget {

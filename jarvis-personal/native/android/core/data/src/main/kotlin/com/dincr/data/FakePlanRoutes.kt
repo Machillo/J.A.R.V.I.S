@@ -111,6 +111,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             distributionFormula = formula.mapValues { JsonPrimitive(it.value) },
             distributableAccountCash = if (owner) BigDecimal(640_000) else null,
             distributionSource = if (manualAmount != null) "manual_amount" else "estimate",
+            cyclePeriod = if (owner) DatePeriod(today.withDayOfMonth(6).toString(), today.plusMonths(1).withDayOfMonth(5).toString()) else null,
+            cardStatementPeriod = if (owner) DatePeriod(today.minusMonths(1).withDayOfMonth(21).toString(), today.withDayOfMonth(20).toString()) else null,
             recurringMonthlyIncome = if (owner) income else null,
             currentMonthExtraNet = if (owner) BigDecimal(45_000) else null,
             incomeReceivedCurrentCycle = if (owner) BigDecimal(432_500) else null,
@@ -263,7 +265,10 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         val flow = months.map { m ->
             val (income, expenses) = monthTotals(data.movements, m)
             cumulative += income - expenses
-            TransactionAnalysis.FlowMonth(m, income, expenses, income - expenses, cumulative)
+            // The current month is not complete yet (a notice to review), like the backend's ledger.
+            val open = m == months.last()
+            TransactionAnalysis.FlowMonth(m, income, expenses, income - expenses, cumulative,
+                complete = !open, incompleteReasons = if (open) listOf("pending_mail_review") else emptyList(), pendingMailCount = if (open) 1 else 0)
         }
         val ytd = data.movements.filter { it.kind == MovementKind.EXPENSE && it.transactionDate?.startsWith(today.year.toString()) == true }
         val categories = ytd.groupBy { it.category ?: "Sin categoría" }

@@ -356,12 +356,21 @@ def get_spending_breakdown():
         "transactions": items,
     }
 
+def _owner_expenses_by_month(flow: list[dict]) -> list[dict]:
+    """The Owner's spending per month, from the same ledger months as the flow: the "Gastos por
+    mes" bars and "Ingresos y gastos" show one figure per month (spending net of refunds, with the
+    expenses table), never two definitions side by side."""
+    return [{"month": month["month"], "total": month["expenses"]} for month in flow]
+
+
 def get_transaction_analysis():
+    flow = get_monthly_flow()
     return {
         "summary": get_transaction_summary(),
         "top_expense_categories": get_top_expense_categories(),
-        "expenses_by_month": get_expenses_by_month(),
+        # The Owner's months are computed once (owner_ledger) and both series read them.
+        "expenses_by_month": _owner_expenses_by_month(flow) if owner_context() else get_expenses_by_month(),
         "expenses_by_category_and_month": get_expenses_by_category_and_month(),
-        "monthly_flow": get_monthly_flow(),
+        "monthly_flow": flow,
         "spending_breakdown": get_spending_breakdown(),
     }

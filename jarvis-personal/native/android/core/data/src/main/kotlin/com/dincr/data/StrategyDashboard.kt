@@ -89,6 +89,9 @@ data class DirectorStrategy(
     @SerialName("distribution_source") val distributionSource: String? = null,
     /** What the distribution could not read (said, never computed as zero). */
     @SerialName("distribution_warnings") val distributionWarnings: List<DistributionWarning> = emptyList(),
+    /** Owner: the dates the cycle and the card statement cover (inclusive); null when unknown. */
+    @SerialName("cycle_period") val cyclePeriod: DatePeriod? = null,
+    @SerialName("card_statement_period") val cardStatementPeriod: DatePeriod? = null,
     // Owner only (historical JARVIS model).
     @SerialName("recurring_monthly_income") val recurringMonthlyIncome: Money? = null,
     @SerialName("current_month_extra_net") val currentMonthExtraNet: Money? = null,

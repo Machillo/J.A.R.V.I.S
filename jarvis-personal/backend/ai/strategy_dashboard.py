@@ -1018,6 +1018,13 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     return _users_strategy_blueprint()
 
 
+def _period(section: Any) -> dict[str, str] | None:
+    """`{start, end}` (inclusive ISO dates) of a cycle-report period, or None when unknown."""
+    if not isinstance(section, dict) or not section.get("start") or not section.get("end"):
+        return None
+    return {"start": str(section["start"]), "end": str(section["end"])}
+
+
 def _distribution_warnings(cycle_report: dict[str, Any], salvavidas: dict[str, Any], manual: bool = False) -> list[dict[str, str]]:
     """What the distribution could not read: said, never computed as zero.
 
@@ -1296,6 +1303,10 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         "living_expense_debug": living,
         "salary_projection_debug": salary_projection,
         "cycle_report_debug": cycle_report,
+        # The periods the Owner's figures cover, for the apps to say which dates they mean (the same
+        # cycle report; nothing recalculated). None when the report could not be read.
+        "cycle_period": _period(cycle_report.get("cycle")),
+        "card_statement_period": _period(cycle_report.get("expense_cycle")),
         "goals": goals,
         "goal_reserves": goal_reserves,
         "allocation": allocation,

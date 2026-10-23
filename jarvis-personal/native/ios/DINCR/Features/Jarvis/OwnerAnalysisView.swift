@@ -72,6 +72,7 @@ private struct OwnerAnalysisContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 SectionHeader(title: tx("Ingresos y gastos", "Income and expenses"))
                 IncomeExpenseChart(months: flow)
+                OwnerFlowNotes(flow: transactions.monthlyFlow ?? [])
             }
             .dincrCard()
             .accessibilityElement(children: .contain)
@@ -83,6 +84,8 @@ private struct OwnerAnalysisContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 SectionHeader(title: tx("Gastos por mes", "Expenses by month"))
                 MonthBars(points: Array(byMonth))
+                Text(tx("La misma cifra de gastos que el gráfico de ingresos y gastos.", "The same spending as the income and spending chart."))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
             }
             .dincrCard()
         }
@@ -105,7 +108,7 @@ private struct OwnerAnalysisContent: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             SectionHeader(title: tx("Cierre del mes", "Month end"))
                 .accessibilityIdentifier("jarvis.analysis.monthEnd")
-            FigureRow(label: tx("Saldo proyectado al cierre", "Projected month-end balance"), amount: engine.forecast?.projectedEndBalance)
+            FigureRow(label: tx("Saldo proyectado al cierre (estimación)", "Projected month-end balance (estimate)"), amount: engine.forecast?.projectedEndBalance)
             if let alert = engine.forecast?.alert?.message {
                 Text(alert).font(DincrFont.caption).foregroundStyle(DincrColor.warning)
             }
@@ -127,6 +130,8 @@ private struct OwnerAnalysisContent: View {
         if !recommendations.isEmpty {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Recomendaciones", "Recommendations"))
+                Text(tx("Sugerencias de DINCR: no son movimientos ni pagos hechos.", "DINCR’s suggestions: not movements or payments made."))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                 ForEach(Array(recommendations.enumerated()), id: \.offset) { _, text in
                     Label { Text(text).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) } icon: {
                         Image(systemName: "lightbulb").foregroundStyle(DincrColor.tint)
