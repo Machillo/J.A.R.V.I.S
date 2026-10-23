@@ -41,6 +41,9 @@ CREATE TABLE finva_email_candidates (id BIGSERIAL PRIMARY KEY, workspace_id UUID
     transaction_type TEXT, status TEXT);
 CREATE TABLE financial_goals (id BIGSERIAL PRIMARY KEY, workspace_id UUID, current_amount NUMERIC, target_amount NUMERIC);
 CREATE TABLE financial_profiles (account_id TEXT, workspace_id UUID, liquid_savings NUMERIC);
+CREATE TABLE accounts (id TEXT PRIMARY KEY, role TEXT, status TEXT, primary_email TEXT);
+CREATE TABLE workspaces (id UUID PRIMARY KEY, owner_account_id TEXT);
+CREATE TABLE allowed_users (email TEXT, role TEXT, status TEXT);
 """
 
 SEPTEMBER, OCTOBER, NOVEMBER, DECEMBER = date(2026, 9, 1), date(2026, 10, 1), date(2026, 11, 1), date(2026, 12, 1)
@@ -202,3 +205,41 @@ def test_the_owner_list_says_what_each_row_is_and_keeps_the_old_type(db):
     strip = lambda rows: [{k: v for k, v in row.items() if k not in ("movement_kind", "counts_in")} for row in rows]
     assert strip(owner_rows) == user_rows
     assert all("movement_kind" not in row and "counts_in" not in row and "ledger_type" not in row for row in user_rows)
+
+
+# The real Owner gate, not a simulated role: owner_account_context() reads the stored identity
+# (accounts + workspaces + allowed_users + OWNER_EMAILS). A session that says "owner" is not enough.
+OWNER_EMAIL = "owner@example.test"
+
+
+def _identity(conn, stored_role):
+    q(conn, "INSERT INTO accounts (id, role, status, primary_email) VALUES ('account-a', %s, 'active', %s)", (stored_role, OWNER_EMAIL))
+    q(conn, "INSERT INTO workspaces (id, owner_account_id) VALUES (%s, 'account-a')", (WS_A,))
+    q(conn, "INSERT INTO allowed_users (email, role, status) VALUES (%s, %s, 'active')", (OWNER_EMAIL, stored_role))
+
+
+OWNER_OCTOBER = {"income": 3000, "expenses": 360, "debt_paid": 300, "balance": 2340}
+LEGACY_OCTOBER = {"income": 3000, "expenses": 485, "debt_paid": 300, "balance": 2215}
+
+
+@pytest.mark.parametrize("stored_role,allowlist,expected", [
+    ("owner", OWNER_EMAIL, OWNER_OCTOBER),   # verified Owner: the single ledger
+    ("user", OWNER_EMAIL, LEGACY_OCTOBER),   # the session claims "owner", the stored identity says user
+    ("owner", "", LEGACY_OCTOBER),           # no Owner allowlisted in this deployment: fail safe
+])
+def test_only_the_verified_owner_identity_gets_the_ledger(db, monkeypatch, stored_role, allowlist, expected):
+    from backend.auth.current_user import reset_current_user
+    from backend.finance.category_catalog import owner_account_context
+    from backend.user_product import free_service
+
+    monkeypatch.setattr(free_service, "owner_account_context", owner_account_context)  # the real check
+    monkeypatch.setenv("OWNER_EMAILS", allowlist)
+    _identity(db, stored_role)
+    token = _as("owner")
+    try:
+        summary = free_service.get_free_monthly_summary("2026-10")
+        rows = free_service.list_free_movements()
+    finally:
+        reset_current_user(token)
+    assert {key: summary[key] for key in expected} == expected
+    assert all(("counts_in" in row) == (expected is OWNER_OCTOBER) for row in rows)
