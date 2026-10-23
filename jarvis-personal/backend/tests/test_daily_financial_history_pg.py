@@ -169,12 +169,13 @@ def test_day1_day2_history_end_to_end(db, monkeypatch):
     # The Owner installments have their own tests (test_owner_debt_installments_pg.py).
     from backend.finance import daily_history
     monkeypatch.setattr(daily_history, "_apply_owner_installments",
-                        lambda identity, today: {"debt_installments": 0, "installments_failed": 0})
+                        lambda identity, today: {"debt_installments": 0, "installments_failed": 0, "error": None})
 
     # DAY 1: the job records health and strategy A for VIP and the Owner only.
     first = run_daily_financial_history(DAY1)
     assert first == {"status": "OK", "date": "2026-09-14", "eligible": 2, "recorded": 2, "strategy_changed": 1, "failed": 0,
-                     "debt_installments": 0, "installments_failed": 0}
+                     "debt_installments": 0, "installments_failed": 0,
+                     "installments_errors": []}
     cur.execute("SELECT workspace_id::text, snapshot_date FROM financial_health_snapshots ORDER BY 1")
     assert sorted((r["workspace_id"], r["snapshot_date"]) for r in cur.fetchall()) == sorted(
         [(owner["workspace"], DAY1), (vip["workspace"], DAY1)])

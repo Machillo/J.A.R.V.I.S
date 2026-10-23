@@ -98,20 +98,22 @@ def eligible_workspaces(conn) -> list[dict[str, Any]]:
     return eligible
 
 
-def _apply_owner_installments(identity: dict[str, Any], today: date) -> dict[str, int]:
+def _apply_owner_installments(identity: dict[str, Any], today: date) -> dict[str, Any]:
     """The verified Owner's debt installments due on `today` (Costa Rica), each recorded once.
 
     Before #307 the Owner's debt reads applied them; now this daily POST job is their caller.
-    A failure is logged by class only and never blocks the day's observation.
+    A failure never blocks the day's observation: it is reported by its error class only (no
+    financial data) and makes the run's result fail. The command commits once at its end, so a
+    failure leaves nothing half-applied and the next run (or a retry) is safe.
     """
-    counts = {"debt_installments": 0, "installments_failed": 0}
+    counts: dict[str, Any] = {"debt_installments": 0, "installments_failed": 0, "error": None}
     if identity["role"] != "owner":
         return counts
     try:
         result = apply_due_installments(identity["workspace_id"], dry_run=False, today=today)
-    except Exception as exc:  # no financial data in the log
-        counts["installments_failed"] = 1
-        logger.warning("Owner debt installments failed error=%s", type(exc).__name__)
+    except Exception as exc:  # no financial data in the log or the result
+        counts["installments_failed"], counts["error"] = 1, type(exc).__name__
+        logger.error("Owner debt installments failed error=%s", counts["error"])
         return counts
     counts["debt_installments"] = len(result.get("installments") or [])
     return counts
@@ -153,6 +155,7 @@ def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
         workspaces = eligible_workspaces(guard)
         counts = {"eligible": len(workspaces), "recorded": 0, "strategy_changed": 0, "failed": 0,
                   "debt_installments": 0, "installments_failed": 0}
+        installment_errors: set[str] = set()
         for identity in workspaces:
             try:
                 result = contextvars.copy_context().run(_record_workspace, identity, day)
@@ -162,6 +165,10 @@ def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
                 continue
             counts["recorded"] += 1
             counts["strategy_changed"] += int(result["strategy_changed"])
-            for key, value in result["installments"].items():
-                counts[key] += value
-    return {"status": "OK", "date": day.isoformat(), **counts}
+            installments = result["installments"]
+            counts["debt_installments"] += installments["debt_installments"]
+            counts["installments_failed"] += installments["installments_failed"]
+            if installments["error"]:
+                installment_errors.add(installments["error"])
+    # Error classes only (e.g. "OperationalError"): what failed, never which debt or amount.
+    return {"status": "OK", "date": day.isoformat(), **counts, "installments_errors": sorted(installment_errors)}

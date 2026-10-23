@@ -283,12 +283,12 @@ def test_the_daily_job_applies_installments_for_the_owner_only(pg):
 
     vip_debt, owner_debt = _debt(pg, VIP), _debt(pg)
     vip = _vip(_apply_owner_installments, {"role": "user", "workspace_id": VIP["workspace"]}, date(2026, 10, 20))
-    assert vip == {"debt_installments": 0, "installments_failed": 0}
+    assert vip == {"debt_installments": 0, "installments_failed": 0, "error": None}
     assert _ledger(pg, vip_debt) == []
     owner = _owner(_apply_owner_installments, {"role": "owner", "workspace_id": OWNER["workspace"]}, date(2026, 10, 20))
-    assert owner == {"debt_installments": 1, "installments_failed": 0}
+    assert owner == {"debt_installments": 1, "installments_failed": 0, "error": None}
     again = _owner(_apply_owner_installments, {"role": "owner", "workspace_id": OWNER["workspace"]}, date(2026, 10, 20))
-    assert again == {"debt_installments": 0, "installments_failed": 0}
+    assert again == {"debt_installments": 0, "installments_failed": 0, "error": None}
     assert [row[0] for row in _ledger(pg, owner_debt)] == [1]
 
 
@@ -307,6 +307,58 @@ def test_the_daily_job_run_applies_the_owners_due_installments(pg, monkeypatch):
     assert (second["debt_installments"], second["installments_failed"]) == (0, 0)
     assert [row[0] for row in _ledger(pg, owner_debt)] == [1]
     assert _ledger(pg, vip_debt) == []
+
+
+def test_a_failed_installment_step_is_reported_never_blocks_the_day_and_is_safe_to_retry(pg, monkeypatch):
+    from backend.finance import daily_history, service
+
+    recorded = []
+    monkeypatch.setattr(daily_history, "record_daily_health_snapshot", lambda today: recorded.append(today) or {"health": "stable"})
+    monkeypatch.setattr(daily_history, "compute_advisor_strategy", lambda: {})
+    monkeypatch.setattr(daily_history, "_persist_strategy", lambda strategy: {"changed": True, "persisted": True})
+    monkeypatch.setattr(daily_history, "eligible_workspaces", lambda conn: [_context(OWNER, "owner"), _context(VIP, "user")])
+    debt_id = _debt(pg)
+    breakdown = service._scheduled_payment_breakdown
+
+    def broken(*args):
+        raise RuntimeError("synthetic failure 1000.00 Préstamo sintético")  # must never reach the result
+
+    monkeypatch.setattr(service, "_scheduled_payment_breakdown", broken)
+    failed = daily_history.run_daily_financial_history(date(2026, 10, 20))
+    assert (failed["debt_installments"], failed["installments_failed"], failed["installments_errors"]) == (0, 1, ["RuntimeError"])
+    assert (failed["recorded"], failed["failed"], failed["strategy_changed"]) == (2, 0, 1)  # the rest of the day ran
+    assert len(recorded) == 2
+    assert "1000" not in str(failed) and "sintético" not in str(failed)
+    assert _ledger(pg, debt_id) == [] and _state(pg, debt_id)[1] == 0  # nothing half-applied
+
+    monkeypatch.setattr(service, "_scheduled_payment_breakdown", breakdown)
+    retried = daily_history.run_daily_financial_history(date(2026, 10, 20))
+    again = daily_history.run_daily_financial_history(date(2026, 10, 20))
+    assert (retried["debt_installments"], retried["installments_failed"], retried["installments_errors"]) == (1, 0, [])
+    assert (again["debt_installments"], again["installments_failed"]) == (0, 0)
+    assert [row[0] for row in _ledger(pg, debt_id)] == [1]
+
+
+def test_the_cron_route_marks_an_installment_failure_in_the_job_heartbeat(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from backend import main
+    from backend.core import observability
+    from backend.finance import daily_history_routes
+
+    monkeypatch.setenv("NOTIFICATION_CRON_SECRET", "synthetic-secret")
+    result = {"status": "OK", "date": "2026-10-20", "eligible": 1, "recorded": 1, "strategy_changed": 0, "failed": 0,
+              "debt_installments": 0, "installments_failed": 1, "installments_errors": ["RuntimeError"]}
+    beats = []
+    monkeypatch.setattr(daily_history_routes, "run_daily_financial_history", lambda: result)
+    monkeypatch.setattr(observability, "heartbeat", lambda job, ok, **kw: beats.append((job, ok, kw.get("error_class"))))
+    response = TestClient(main.app).post("/financial-history/cron", headers={"X-Cron-Secret": "synthetic-secret"})
+    assert response.status_code == 200 and response.json()["installments_failed"] == 1
+    assert beats == [("financial_history", False, "installment_failures")]
+    beats.clear()
+    monkeypatch.setattr(daily_history_routes, "run_daily_financial_history", lambda: {**result, "installments_failed": 0, "installments_errors": []})
+    TestClient(main.app).post("/financial-history/cron", headers={"X-Cron-Secret": "synthetic-secret"})
+    assert beats == [("financial_history", True, None)]
 
 
 def test_the_daily_job_passes_its_costa_rica_day(monkeypatch):
