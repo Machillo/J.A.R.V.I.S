@@ -134,7 +134,10 @@ def test_every_table_and_command_the_backend_uses_is_granted():
 # only applies migrations already on main, and merging the code deploys it. Each entry
 # is exactly the privileges granted and the PR that brings the code, which must remove
 # the entry (test_a_grant_ahead_of_its_code_is_removed_once_the_code_uses_it fails then).
-GRANTED_AHEAD_OF_CODE: dict[str, tuple[set[str], str]] = {}
+GRANTED_AHEAD_OF_CODE: dict[str, tuple[set[str], str]] = {
+    # 20261023120000: the Owner's confirmed distributions, written by PR #378 (CONFIRMAR).
+    "owner_distribution_confirmations": ({"SELECT", "INSERT", "UPDATE"}, "#378"),
+}
 
 
 def test_the_role_is_not_granted_tables_the_backend_never_uses():
