@@ -226,12 +226,17 @@ def _job(monkeypatch, identities, *, failing=None):
         monkeypatch.setattr(deterioration, "list_account_balances", balances)
     monkeypatch.setattr(daily_history, "get_connection", lambda: h.FakeConnection(store))
     monkeypatch.setattr(daily_history, "eligible_workspaces", lambda conn: [dict(item) for item in identities])
+    # The Owner installments are a command with their own tests (test_owner_debt_installments_pg.py).
+    monkeypatch.setattr(daily_history, "_apply_owner_installments",
+                        lambda identity, today: {"debt_installments": 0, "installments_failed": 0, "error": None})
     return daily_history.run_daily_financial_history(DAY1), store
 
 
 def test_the_job_records_each_workspace_under_its_own_identity(monkeypatch):
     result, store = _job(monkeypatch, [_identity(WS_A), _identity(WS_B, "owner"), _identity(WS_C, "admin")])
-    assert result == {"status": "OK", "date": "2026-09-14", "eligible": 3, "recorded": 3, "strategy_changed": 1, "failed": 0}
+    assert result == {"status": "OK", "date": "2026-09-14", "eligible": 3, "recorded": 3, "strategy_changed": 1, "failed": 0,
+                      "debt_installments": 0, "installments_failed": 0,
+                     "installments_errors": []}
     assert sorted(store["health"]) == [(WS_A, DAY1), (WS_B, DAY1), (WS_C, DAY1)]
     # Only the verified Owner keeps a strategy; a VIP gets none, and a legacy "admin" identity,
     # even if one reached the job, gets nothing more than a VIP.
