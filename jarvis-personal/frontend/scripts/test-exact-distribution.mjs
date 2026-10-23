@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { EXACT_DISTRIBUTION_MAX, parseExactAmount } from "../src/lib/exactDistribution.js";
+import { EXACT_DISTRIBUTION_MAX, applyExactError, applyExactResult, editExactAmount, parseExactAmount } from "../src/lib/exactDistribution.js";
 
 const read = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8");
 
@@ -44,4 +44,34 @@ for (const text of [
 ]) assert.ok(controls.includes(text), text);
 assert.ok(!controls.includes("superan ese monto"), "an exact amount is never compared with the cycle's obligations");
 assert.doesNotMatch(controls, /fetch\(|request\(|jarvisApi/, "the controls never call the API themselves");
+// A result never outlives the amount it was calculated from (review defect 4).
+const answer = { strategy: { allocation_base_amount: 250000 } };
+const shown = applyExactResult({ mode: "exact", amount: "250000", loading: true, error: "", data: null }, "250000", answer);
+assert.equal(shown.data, answer);
+const edited = editExactAmount(shown, "300000");
+assert.equal(edited.data, null, "editing the amount drops the previous result");
+assert.equal(edited.amount, "300000");
+assert.equal(edited.mode, "exact");
+assert.equal(editExactAmount({ ...shown, error: "x" }, "1").error, "");
+// A late answer (or error) for an amount the Owner has since changed is ignored.
+const late = applyExactResult({ ...edited, loading: true }, "250000", answer);
+assert.equal(late.data, null);
+assert.equal(late.loading, false);
+assert.equal(applyExactError({ ...edited, loading: true }, "250000", "boom").error, "");
+assert.equal(applyExactError({ ...edited, loading: true }, "300000", "boom").error, "boom");
+assert.match(page, /onAmount=\{\(amount\) => setExact\(\(current\) => editExactAmount\(current, amount\)\)\}/);
+assert.match(page, /setExact\(\(current\) => applyExactResult\(current, typed, data\)\)/);
+
+// Review defect 1: the Investments panel reads the estimate only, whatever the distribution mode.
+const investments = page.slice(page.indexOf("const renderInvestments = () =>"), page.indexOf("const renderDebts") > 0 ? page.indexOf("const renderDebts") : page.indexOf("const renderDistribution"));
+assert.ok(investments.length > 100, "renderInvestments found");
+assert.doesNotMatch(investments, /dist[A-Z]\w*/, "no exact-mode value in the Investments panel");
+assert.match(investments, /money\(allocationBase\)/);
+
+// Review defect 2: under an exact amount, no note about expenses that reduced the estimate.
+assert.match(page, /: exactMode\s*\? tx\("Calculado con el monto que indicaste\.", "Calculated from the amount you entered\."\)\s*: Number\(strategy\.new_expenses_after_cut_count/);
+
+// Review defect 3: the active goal's name comes from the distribution shown.
+assert.doesNotMatch(page, /strategy\.goal_portfolio\.active_goal\.name/);
+assert.match(page, /distStrategy\.goal_portfolio\.active_goal\.name/);
 console.log("exact distribution: ok");

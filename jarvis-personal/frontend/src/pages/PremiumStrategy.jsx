@@ -25,7 +25,7 @@ import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 import { deviceLanguage, localeTag, t } from "../lib/locale";
 import { baseCurrency, currencySymbol, formatMoney } from "../lib/currency";
 import { categoryLabel } from "../lib/categories";
-import { exactAmountError, parseExactAmount } from "../lib/exactDistribution";
+import { applyExactError, applyExactResult, editExactAmount, exactAmountError, parseExactAmount } from "../lib/exactDistribution";
 import ExactDistributionControls from "./strategy/ExactDistributionControls";
 
 const language = deviceLanguage();
@@ -131,7 +131,8 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const [exact, setExact] = useState({ mode: "estimate", amount: "", loading: false, error: "", data: null });
 
   const calculateExact = async () => {
-    const parsed = parseExactAmount(exact.amount);
+    const typed = exact.amount;
+    const parsed = parseExactAmount(typed);
     if (parsed.error) {
       setExact((current) => ({ ...current, error: exactAmountError(parsed.error, tx) }));
       return;
@@ -139,9 +140,9 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     setExact((current) => ({ ...current, loading: true, error: "" }));
     try {
       const data = await strategyApi.getExactDistribution(parsed.value);
-      setExact((current) => ({ ...current, loading: false, data }));
+      setExact((current) => applyExactResult(current, typed, data));
     } catch (error) {
-      setExact((current) => ({ ...current, loading: false, error: error?.message || tx("No pudimos calcular la distribución.", "We couldn’t calculate the distribution.") }));
+      setExact((current) => applyExactError(current, typed, error?.message || tx("No pudimos calcular la distribución.", "We couldn’t calculate the distribution.")));
     }
   };
 
@@ -307,7 +308,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     {
       key: "meta_prioritaria",
       label: distStrategy.goal_portfolio?.active_goal?.name
-        ? `${tx("Meta activa", "Active goal")} · ${strategy.goal_portfolio.active_goal.name}`
+        ? `${tx("Meta activa", "Active goal")} · ${distStrategy.goal_portfolio.active_goal.name}`
         : tx("Meta activa", "Active goal"),
       amount: Number(distAmounts.meta_prioritaria || 0),
       optional: true,
@@ -483,7 +484,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
         <strong>{money(investmentRecommended)}</strong>
         <p>
           {investmentRecommended > 0
-            ? tx(`Sale únicamente del sobrante real de ${money(distBase)} después de gastos y obligaciones.`, `It comes only from the real surplus of ${money(distBase)} after expenses and obligations.`)
+            ? tx(`Sale únicamente del sobrante real de ${money(allocationBase)} después de gastos y obligaciones.`, `It comes only from the real surplus of ${money(allocationBase)} after expenses and obligations.`)
             : allocationBase <= 0
               ? tx("No hay sobrante real después de cubrir lo registrado y lo obligatorio.", "There’s no real surplus after covering recorded and required expenses.")
               : tx("Hay sobrante, pero la estrategia actual lo necesita antes en otra prioridad.", "There’s a surplus, but the current strategy needs it first for another priority.")}
@@ -582,7 +583,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
 
       {ownerExact && (
         <ExactDistributionControls mode={exact.mode} onMode={(mode) => setExact((current) => ({ ...current, mode, error: "" }))}
-          amount={exact.amount} onAmount={(amount) => setExact((current) => ({ ...current, amount, error: "" }))}
+          amount={exact.amount} onAmount={(amount) => setExact((current) => editExactAmount(current, amount))}
           onCalculate={calculateExact} loading={exact.loading} error={exact.error} result={exact.data?.strategy} tx={tx} />
       )}
 
@@ -592,7 +593,9 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
         <strong>{money(distBase)}</strong>
         <small>{distributionDeficit > 0
           ? tx(`Los compromisos registrados superan los fondos previstos por ${money(distributionDeficit)}. Por eso no hay dinero para repartir en este ciclo.`, `Recorded commitments exceed expected funds by ${money(distributionDeficit)}, so there’s no money to allocate this cycle.`)
-          : Number(strategy.new_expenses_after_cut_count || 0) > 0
+          : exactMode
+            ? tx("Calculado con el monto que indicaste.", "Calculated from the amount you entered.")
+            : Number(strategy.new_expenses_after_cut_count || 0) > 0
             ? newExpensesText(Number(strategy.new_expenses_after_cut_count))
             : tx("Se recalcula cuando aparece un nuevo gasto.", "It’s recalculated when a new expense appears.")}</small>
       </div>

@@ -19,6 +19,7 @@ import com.dincr.app.tx
 import com.dincr.data.AmountInput
 import com.dincr.data.AuthException
 import com.dincr.data.DirectorStrategy
+import com.dincr.data.ExactDistributionForm
 import com.dincr.data.ExactDistributionRequest
 import com.dincr.data.MessageKind
 import com.dincr.design.BannerTone
@@ -44,9 +45,8 @@ val EXACT_DISTRIBUTION_MAX = BigDecimal("1000000000")
 @Composable
 fun OwnerDistributionModes(model: AppModel, estimate: DirectorStrategy, nav: Navigator) {
     var mode by rememberSaveable { mutableStateOf(DistributionMode.ESTIMATE) }
-    var amountText by rememberSaveable { mutableStateOf("") }
-    var result by remember { mutableStateOf<DirectorStrategy?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    // Amount, result and error together: editing the amount drops a result calculated from another.
+    var form by remember { mutableStateOf(ExactDistributionForm()) }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val format = Dincr.money
@@ -61,25 +61,27 @@ fun OwnerDistributionModes(model: AppModel, estimate: DirectorStrategy, nav: Nav
         DistributionMode.EXACT -> {
             Caption(tx("Indicá cuánto dinero te sobra después de pagar tus gastos, tarjetas y cuotas. DINCR reparte ese monto completo con tu estrategia actual, sin volver a descontar esos pagos. No registra movimientos ni cambia tus saldos.",
                 "Enter how much money you have left after paying your expenses, cards and instalments. DINCR splits that whole amount with your current strategy, without deducting those payments again. It records no movement and changes no balance."))
-            MoneyField(tx("Monto que te sobra, en colones", "Amount you have left, in colones"), amountText,
-                { amountText = it; error = null }, error, symbol = "₡", modifier = Modifier.testTag("exact-distribution-amount"))
-            DincrPrimaryButton(if (result == null) tx("Calcular distribución", "Calculate distribution") else tx("Actualizar distribución", "Update distribution"), {
-                val amount = AmountInput.parse(amountText, format.separators)
+            MoneyField(tx("Monto que te sobra, en colones", "Amount you have left, in colones"), form.amountText,
+                { form = form.edited(it) }, form.error, symbol = "₡", modifier = Modifier.testTag("exact-distribution-amount"))
+            DincrPrimaryButton(if (form.result == null) tx("Calcular distribución", "Calculate distribution") else tx("Actualizar distribución", "Update distribution"), {
+                val typed = form.amountText
+                val amount = AmountInput.parse(typed, format.separators)
                 when {
-                    amount == null -> error = tx("Escribí un monto mayor que cero, con hasta dos decimales.", "Enter an amount above zero, with up to two decimals.")
-                    amount > EXACT_DISTRIBUTION_MAX -> error = tx("El monto no puede superar ₡1.000.000.000.", "The amount can’t exceed ₡1,000,000,000.")
+                    amount == null -> form = form.failed(tx("Escribí un monto mayor que cero, con hasta dos decimales.", "Enter an amount above zero, with up to two decimals."))
+                    amount > EXACT_DISTRIBUTION_MAX -> form = form.failed(tx("El monto no puede superar ₡1.000.000.000.", "The amount can’t exceed ₡1,000,000,000."))
                     else -> {
                         loading = true
                         scope.launch {
                             model.load(tx("No pudimos calcular la distribución.", "We couldn’t calculate the distribution.")) {
                                 model.api.ownerExactDistribution(ExactDistributionRequest(amount))
-                            }.onSuccess { result = it.strategy }.onFailure { if (it !is AuthException.SignedOut) error = it.message }
+                            }.onSuccess { form = form.calculated(typed, it.strategy) }
+                                .onFailure { if (it !is AuthException.SignedOut && form.amountText == typed) form = form.failed(it.message) }
                             loading = false
                         }
                     }
                 }
             }, modifier = Modifier.fillMaxWidth().testTag("exact-distribution-calculate"), loading = loading)
-            result?.let { ExactResult(it, nav) }
+            form.result?.let { ExactResult(it, nav) }
         }
     }
 }

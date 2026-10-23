@@ -528,6 +528,11 @@ class PlanRecoveryUiTest {
         waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
         waitForText(tx("Monto que indicaste", "Amount you entered"))
         assertTrue("the exact answer never shows the estimate's cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))
+        // Editing the amount drops the result of the previous one.
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("5")
+        waitForGone(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
         click(tx("Aproximada", "Estimated"))
         waitForText(tx("Distribución aproximada", "Estimated distribution"))
         waitForText(tx("Efectivo disponible ahora", "Cash available now"))

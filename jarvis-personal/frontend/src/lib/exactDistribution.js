@@ -18,6 +18,26 @@ export function exactAmountError(code, tx) {
 }
 
 /**
+ * The exact-amount state after the Owner edits the amount: the previous result (and error) no
+ * longer describe it, so they are dropped. Android/iOS: `ExactDistributionForm`.
+ */
+export function editExactAmount(current, amount) {
+  return { ...current, amount, error: "", data: null };
+}
+
+/** The answer for `forAmount`; kept only when it is still the amount on screen. */
+export function applyExactResult(current, forAmount, data) {
+  if (current.amount !== forAmount) return { ...current, loading: false };
+  return { ...current, loading: false, error: "", data };
+}
+
+/** The answer's error for `forAmount`; dropped when the Owner has since typed another amount. */
+export function applyExactError(current, forAmount, error) {
+  if (current.amount !== forAmount) return { ...current, loading: false };
+  return { ...current, loading: false, error };
+}
+
+/**
  * "750000", "750.000", "750 000", "750.000,50", "750,000.50" → a number with at most two decimals.
  * Returns { value } or { error } (a code: "empty", "format", "zero", "too_large").
  */

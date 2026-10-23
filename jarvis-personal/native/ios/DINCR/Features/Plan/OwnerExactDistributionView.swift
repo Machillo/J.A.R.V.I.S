@@ -18,9 +18,8 @@ struct OwnerDistributionModes: View {
     @Environment(AppModel.self) private var model
     let estimate: DashboardStrategy
     @State private var mode: Mode = .estimate
-    @State private var amountText = ""
-    @State private var result: DashboardStrategy?
-    @State private var error: String?
+    /// Amount, result and error together: editing the amount drops a result calculated from another.
+    @State private var form = ExactDistributionForm()
     @State private var loading = false
 
     var body: some View {
@@ -42,39 +41,42 @@ struct OwnerDistributionModes: View {
                 Text(tx("Indicá cuánto dinero te sobra después de pagar tus gastos, tarjetas y cuotas. DINCR reparte ese monto completo con tu estrategia actual, sin volver a descontar esos pagos. No registra movimientos ni cambia tus saldos.",
                         "Enter how much money you have left after paying your expenses, cards and instalments. DINCR splits that whole amount with your current strategy, without deducting those payments again. It records no movement and changes no balance."))
                     .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                MoneyField(label: tx("Monto que te sobra, en colones", "Amount you have left, in colones"), text: $amountText,
-                           error: error, identifier: "distribution.exact.amount")
+                MoneyField(label: tx("Monto que te sobra, en colones", "Amount you have left, in colones"), text: Binding(get: { form.amountText }, set: { form.edit($0) }),
+                           error: form.error, identifier: "distribution.exact.amount")
                 Button {
                     Task { await calculate() }
                 } label: {
-                    Text(result == nil ? tx("Calcular distribución", "Calculate distribution") : tx("Actualizar distribución", "Update distribution"))
+                    Text(form.result == nil ? tx("Calcular distribución", "Calculate distribution") : tx("Actualizar distribución", "Update distribution"))
                 }
                 .buttonStyle(.dincrPrimary)
                 .disabled(loading)
                 .accessibilityIdentifier("distribution.exact.calculate")
             }
             .dincrCard()
-            if let result { ExactDistributionResult(plan: result) }
+            if let result = form.result { ExactDistributionResult(plan: result) }
         }
     }
 
     private func calculate() async {
-        guard let amount = AmountInput.parse(amountText, separators: model.moneyFormat.separators) else {
-            error = tx("Escribí un monto mayor que cero, con hasta dos decimales.", "Enter an amount above zero, with up to two decimals.")
+        let typed = form.amountText
+        guard let amount = AmountInput.parse(typed, separators: model.moneyFormat.separators) else {
+            form.error = tx("Escribí un monto mayor que cero, con hasta dos decimales.", "Enter an amount above zero, with up to two decimals.")
             return
         }
         guard amount <= Self.maxAmount else {
-            error = tx("El monto no puede superar ₡1.000.000.000.", "The amount can’t exceed ₡1,000,000,000.")
+            form.error = tx("El monto no puede superar ₡1.000.000.000.", "The amount can’t exceed ₡1,000,000,000.")
             return
         }
         loading = true
-        error = nil
+        form.error = nil
         defer { loading = false }
         let epoch = model.currentEpoch
         do {
-            result = try await model.service.ownerExactDistribution(amount: amount).strategy
+            let strategy = try await model.service.ownerExactDistribution(amount: amount).strategy
+            form.calculated(for: typed, strategy)
         } catch {
-            self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos calcular la distribución.", "We couldn’t calculate the distribution."))
+            guard form.amountText == typed else { return }  // an error for an amount no longer on screen
+            form.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos calcular la distribución.", "We couldn’t calculate the distribution."))
         }
     }
 }

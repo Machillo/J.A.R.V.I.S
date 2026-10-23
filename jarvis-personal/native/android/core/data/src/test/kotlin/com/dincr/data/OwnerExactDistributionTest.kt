@@ -66,4 +66,24 @@ class OwnerExactDistributionTest {
         assertEquals(422, status { owner.ownerExactDistribution(ExactDistributionRequest(BigDecimal.ZERO)) })
         assertEquals(422, status { owner.ownerExactDistribution(ExactDistributionRequest(BigDecimal(500_000), "USD")) })
     }
+
+    @Test fun editingTheAmountDropsTheResultOfThePreviousOne() = runTest {
+        val (_, api) = fixture(FakeBackend.Role.OWNER)
+        val answer = api.ownerExactDistribution(ExactDistributionRequest(BigDecimal(250_000))).strategy!!
+        val shown = ExactDistributionForm().edited("250000").calculated("250000", answer)
+        assertEquals(answer, shown.result)
+        val edited = shown.edited("300000")
+        assertEquals(null, edited.result)  // never "calculated from the amount you entered" for another amount
+        assertEquals("300000", edited.amountText)
+        assertEquals(null, ExactDistributionForm().failed("x").edited("1").error)
+    }
+
+    @Test fun aLateAnswerForAnEarlierAmountIsIgnored() = runTest {
+        val (_, api) = fixture(FakeBackend.Role.OWNER)
+        val answer = api.ownerExactDistribution(ExactDistributionRequest(BigDecimal(250_000))).strategy!!
+        // Calculated for 250000, the Owner typed 300000 before the answer arrived.
+        val form = ExactDistributionForm().edited("300000").calculated("250000", answer)
+        assertEquals(null, form.result)
+        assertEquals("300000", form.amountText)
+    }
 }
