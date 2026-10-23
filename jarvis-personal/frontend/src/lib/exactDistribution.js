@@ -17,6 +17,57 @@ export function exactAmountError(code, tx) {
   return tx(es, en);
 }
 
+const has = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
+const num = (value) => Number(value || 0);
+
+/**
+ * What the strategy page's Distribution panel shows (PremiumStrategy.jsx). In the Owner's exact
+ * mode it reads the exact answer; otherwise, and before an exact answer exists, the estimate.
+ * `note` says which sentence goes under the surplus: "deficit", "exact" (never the estimate's
+ * note about new expenses under a typed amount), "new_expenses" or "recalculated".
+ */
+export function distributionPanel({ strategy, exact, ownerExact }) {
+  const estimate = strategy || {};
+  const exactMode = Boolean(ownerExact) && exact?.mode === "exact";
+  const shown = (exactMode && exact?.data?.strategy) || estimate;
+  const items = Array.isArray(shown.allocation_items) ? shown.allocation_items : [];
+  const base = num(shown.allocation_base_amount);
+  const total = num(shown.allocation_total || items.reduce((sum, item) => sum + num(item.amount), 0));
+  const formula = shown.distribution_formula || {};
+  const manualFormula = has(formula, "manual_available");
+  const deficit = Math.max(0, num(formula.deficit));
+  const newExpensesCount = num(estimate.new_expenses_after_cut_count);
+  return {
+    exactMode,
+    showDistribution: !exactMode || Boolean(exact?.data?.strategy),
+    strategy: shown,
+    amounts: shown.allocation_amounts || {},
+    base,
+    total,
+    balanced: Math.abs(base - total) <= 1,
+    formula,
+    manualFormula,
+    hasFormula: manualFormula || has(formula, "cash_available_now"),
+    // The exact amount is already what is left: it shows alone, with no deduction lines.
+    breakdownKeys: manualFormula
+      ? ["manual_available"]
+      : ["cash_available_now", "income", "statement_spending", "new_spending_after_cut", "debt_commitment", "mandatory_fixed_pending"],
+    addedLines: manualFormula ? 1 : 2,
+    deficit,
+    note: deficit > 0 ? "deficit" : exactMode ? "exact" : newExpensesCount > 0 ? "new_expenses" : "recalculated",
+    newExpensesCount,
+    activeGoalName: shown.goal_portfolio?.active_goal?.name || null,
+    primaryDebtName: shown.primary_debt_name || null,
+  };
+}
+
+/** What the Investments panel shows: always the estimate, whatever the distribution mode. */
+export function investmentPanel(strategy) {
+  const base = num(strategy?.allocation_base_amount);
+  const recommended = num(strategy?.investment_recommended);
+  return { base, recommended, state: base <= 0 ? "blocked" : recommended > 0 ? "ready" : "limited" };
+}
+
 /**
  * The exact-amount state after the Owner edits the amount: the previous result (and error) no
  * longer describe it, so they are dropped. Android/iOS: `ExactDistributionForm`.

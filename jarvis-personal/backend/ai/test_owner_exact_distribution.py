@@ -184,13 +184,15 @@ def test_switching_modes_keeps_the_strategy_and_the_data(owner_inputs):
 def test_rounding_never_assigns_more_than_the_base():
     rng = random.Random(376)
     for _ in range(2000):
-        base = round(rng.uniform(0, 5_000_000), rng.choice([0, 1, 2]))
+        # Any number of decimals: an estimated base (income x rates) is not always whole cents.
+        base = round(rng.uniform(0, 5_000_000), rng.choice([0, 1, 2, 3, 4, 6]))
         weights = [rng.random() for _ in range(rng.randint(1, 6))]
         keys = ["meta_prioritaria", "ataque_de_deuda", "fondo_de_emergencia", "vida_controlada", "inversion", "metas_o_inversion"]
         amounts = {k: base * w / sum(weights) for k, w in zip(keys, weights)}
         _, items = sd._allocation_from_amounts(amounts, base)
-        assert _total(items) <= round(base, 2) + 1e-9
-        assert _total(items) == round(base, 2)  # the weights cover the base: nothing is lost either
+        shown = round(base, 2)  # allocation_base_amount, the base the answer shows
+        assert _total(items) <= shown + 1e-9
+        assert _total(items) == shown  # the weights cover the base: no cent lost, none added
         assert all(item["amount"] > 0 and round(item["amount"], 2) == item["amount"] for item in items)
 
 
@@ -298,3 +300,28 @@ def test_the_estimate_route_is_unchanged_and_answers_like_before(client):
     assert response.status_code == 200
     assert response.json()["source"] == "live_database"
     assert response.json()["strategy"]["distribution_source"] == "estimate"
+
+
+# 10. The POST writes nothing, through the whole app ----------------------------------------------
+
+def test_the_post_writes_nothing_through_the_whole_app(monkeypatch):
+    """The real route and the real Owner engine (no loader stubbed) against the recording database
+    of the GET gate (tests/get_route_harness.py): every INSERT/UPDATE/DELETE/UPSERT/TRUNCATE/DDL is
+    recorded and never run. The GET gate does not cover POST routes, so this one is run here."""
+    from backend.tests.get_route_harness import AUTH, harness
+
+    for role, expected in (("owner", 200), ("user", 403)):
+        with harness(monkeypatch, role) as (client, recorder):
+            reads = []
+            execute = recorder.execute
+            recorder.execute = lambda query: (reads.append(query), execute(query))[1]
+            response = client.post(PATH, json={"amount": "250000", "currency": "CRC"}, headers=AUTH)
+            assert response.status_code == expected, (role, response.text)
+            assert recorder.writes == [], (role, recorder.writes)
+            if role == "owner":
+                assert reads, "the Owner engine really read the database"
+                assert response.json()["strategy"]["allocation_base_amount"] == 250000
+                assert response.json()["strategy"]["distribution_source"] == "manual_amount"
+            else:
+                assert not reads, "a refused caller reaches no query"
+

@@ -2,7 +2,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { EXACT_DISTRIBUTION_MAX, applyExactError, applyExactResult, editExactAmount, parseExactAmount } from "../src/lib/exactDistribution.js";
+import {
+  EXACT_DISTRIBUTION_MAX, applyExactError, applyExactResult, distributionPanel, editExactAmount, investmentPanel, parseExactAmount,
+} from "../src/lib/exactDistribution.js";
 
 const read = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8");
 
@@ -30,11 +32,11 @@ assert.match(page, /const ownerExact = strategy\.scope === "owner" && typeof str
 assert.doesNotMatch(vip, /getExactDistribution|exact-distribution/, "VIP Users never get the exact distribution");
 // The amount travels in a POST body, never in a URL.
 assert.match(api, /jsonRequest\("\/jarvis\/premium\/strategy-dashboard\/exact-distribution", "POST", \{ amount, currency: "CRC" \}\)/);
-// Before a calculation the exact mode shows no figure (never the estimate under the exact label).
-assert.match(page, /const showDistribution = !exactMode \|\| Boolean\(exact\.data\?\.strategy\);/);
-// The estimate's formula keeps its lines; the exact one shows only the typed amount (no deduction).
-assert.match(page, /const distributionBreakdown = manualFormula\r?\n    \? \[\[tx\("Monto que indicaste", "Amount you entered"\), formula\.manual_available\]\]\r?\n    : \[/);
-assert.match(page, /tx\("Saldo disponible en MultiMoney", "Available MultiMoney balance"\), formula\.cash_available_now/);
+// The page renders the panels from these functions (behaviour tested below with real-shaped data).
+assert.match(page, /const investment = investmentPanel\(strategy\);/);
+assert.match(page, /const panel = distributionPanel\(\{ strategy, exact, ownerExact \}\);/);
+assert.match(page, /money\(investment\.base\)/);
+assert.match(page, /\[panel\.note\]\(\)/);
 
 const controls = read("pages/strategy/ExactDistributionControls.jsx");
 for (const text of [
@@ -62,16 +64,64 @@ assert.equal(applyExactError({ ...edited, loading: true }, "300000", "boom").err
 assert.match(page, /onAmount=\{\(amount\) => setExact\(\(current\) => editExactAmount\(current, amount\)\)\}/);
 assert.match(page, /setExact\(\(current\) => applyExactResult\(current, typed, data\)\)/);
 
-// Review defect 1: the Investments panel reads the estimate only, whatever the distribution mode.
-const investments = page.slice(page.indexOf("const renderInvestments = () =>"), page.indexOf("const renderDebts") > 0 ? page.indexOf("const renderDebts") : page.indexOf("const renderDistribution"));
-assert.ok(investments.length > 100, "renderInvestments found");
-assert.doesNotMatch(investments, /dist[A-Z]\w*/, "no exact-mode value in the Investments panel");
-assert.match(investments, /money\(allocationBase\)/);
+// --- Panels, with an estimate and an exact answer that differ in every field -------------------
+const estimate = {
+  scope: "owner", allocation_base_amount: 500000, investment_recommended: 120000, new_expenses_after_cut_count: 2,
+  allocation_items: [{ key: "ataque_de_deuda", amount: 380000 }, { key: "inversion", amount: 120000 }],
+  allocation_amounts: { ataque_de_deuda: 380000, inversion: 120000 },
+  distribution_formula: { cash_available_now: 300000, income: 900000, statement_spending: 100000, new_spending_after_cut: 50000,
+    debt_commitment: 400000, mandatory_fixed_pending: 150000, surplus: 500000, deficit: 0 },
+  goal_portfolio: { active_goal: { name: "Meta del estimado" } }, primary_debt_name: "Deuda del estimado",
+};
+const exactAnswer = {
+  scope: "owner", distribution_source: "manual_amount", allocation_base_amount: 250000, investment_recommended: 0,
+  allocation_items: [{ key: "meta_prioritaria", amount: 100000 }, { key: "fondo_de_emergencia", amount: 150000 }],
+  allocation_amounts: { meta_prioritaria: 100000, fondo_de_emergencia: 150000 },
+  distribution_formula: { manual_available: 250000, surplus: 250000 },
+  goal_portfolio: { active_goal: { name: "Meta del monto exacto" } }, primary_debt_name: "Deuda del monto exacto",
+};
+const exactState = { mode: "exact", amount: "250000", loading: false, error: "", data: { strategy: exactAnswer } };
 
-// Review defect 2: under an exact amount, no note about expenses that reduced the estimate.
-assert.match(page, /: exactMode\s*\? tx\("Calculado con el monto que indicaste\.", "Calculated from the amount you entered\."\)\s*: Number\(strategy\.new_expenses_after_cut_count/);
+// Defect 1: the Investments panel reads the estimate, even with an exact answer on screen.
+const investment = investmentPanel(estimate);
+assert.deepEqual(investment, { base: 500000, recommended: 120000, state: "ready" });
+const exactPanel = distributionPanel({ strategy: estimate, exact: exactState, ownerExact: true });
+assert.equal(exactPanel.base, 250000, "the Distribution panel shows the exact base");
+assert.notEqual(investment.base, exactPanel.base, "the two panels never share the exact base");
+assert.equal(investmentPanel({ allocation_base_amount: 0 }).state, "blocked");
+assert.equal(investmentPanel({ allocation_base_amount: 10, investment_recommended: 0 }).state, "limited");
 
-// Review defect 3: the active goal's name comes from the distribution shown.
-assert.doesNotMatch(page, /strategy\.goal_portfolio\.active_goal\.name/);
-assert.match(page, /distStrategy\.goal_portfolio\.active_goal\.name/);
+// Defect 2: under an exact amount the note is "exact", never the estimate's new-expenses note.
+assert.equal(exactPanel.note, "exact");
+const estimatePanel = distributionPanel({ strategy: estimate, exact: { ...exactState, mode: "estimate" }, ownerExact: true });
+assert.equal(estimatePanel.note, "new_expenses");
+assert.equal(estimatePanel.newExpensesCount, 2);
+assert.equal(distributionPanel({ strategy: { ...estimate, new_expenses_after_cut_count: 0 }, exact: null, ownerExact: true }).note, "recalculated");
+assert.equal(distributionPanel({ strategy: { ...estimate, distribution_formula: { ...estimate.distribution_formula, deficit: 5 } }, exact: null, ownerExact: true }).note, "deficit");
+
+// Defect 3: the active goal and the target debt come from the distribution shown.
+assert.equal(exactPanel.activeGoalName, "Meta del monto exacto");
+assert.equal(exactPanel.primaryDebtName, "Deuda del monto exacto");
+assert.equal(estimatePanel.activeGoalName, "Meta del estimado");
+const goalOnlyInExact = distributionPanel({ strategy: { ...estimate, goal_portfolio: {} }, exact: exactState, ownerExact: true });
+assert.equal(goalOnlyInExact.activeGoalName, "Meta del monto exacto", "no crash when only the exact answer has a goal");
+assert.equal(distributionPanel({ strategy: estimate, exact: { ...exactState, data: { strategy: { ...exactAnswer, goal_portfolio: {} } } }, ownerExact: true }).activeGoalName, null);
+
+// The exact answer lists only the typed amount; the estimate keeps its deduction lines.
+assert.deepEqual(exactPanel.breakdownKeys, ["manual_available"]);
+assert.equal(exactPanel.addedLines, 1);
+assert.equal(exactPanel.deficit, 0);
+assert.ok(exactPanel.balanced);
+assert.deepEqual(estimatePanel.breakdownKeys, ["cash_available_now", "income", "statement_spending", "new_spending_after_cut", "debt_commitment", "mandatory_fixed_pending"]);
+assert.equal(estimatePanel.base, 500000);
+
+// Defect 4 through the panel: before a calculation, and after editing the amount, no figure shows.
+assert.equal(distributionPanel({ strategy: estimate, exact: { ...exactState, data: null }, ownerExact: true }).showDistribution, false);
+const afterEdit = distributionPanel({ strategy: estimate, exact: editExactAmount(exactState, "300000"), ownerExact: true });
+assert.equal(afterEdit.showDistribution, false, "an edited amount never shows the previous result");
+// Not the Owner: an exact answer is never read.
+const vipPanel = distributionPanel({ strategy: estimate, exact: exactState, ownerExact: false });
+assert.equal(vipPanel.exactMode, false);
+assert.equal(vipPanel.base, 500000);
+
 console.log("exact distribution: ok");

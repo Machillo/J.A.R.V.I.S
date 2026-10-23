@@ -218,20 +218,27 @@ def _goal_is_urgent(goal: dict[str, Any]) -> bool:
 
 
 def _whole_cents_within(amounts: dict[str, float], order: list[str], base: float) -> dict[str, float]:
-    """Each amount in whole cents, never adding up to more than the base.
+    """Each amount in whole cents, never adding up to more than the base shown.
 
-    Rounding every amount on its own could assign a few cents more than the base (or lose
-    some): amounts are floored to the cent and only the cents the flooring lost go back, one
-    each, to the largest fractions. No cent is invented beyond those.
+    The base is the one the answer shows (`allocation_base_amount` = round(base, 2)), so the items
+    always add up to that figure exactly when the amounts cover it, and never to more. Rounding
+    every amount on its own could assign a few cents more than the base (or lose some): amounts
+    are floored to the cent and only the cents the flooring lost go back, one each, to the largest
+    fractions. No cent is invented beyond those.
     """
     from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
     raw = {key: Decimal(str(round(max(_f(amounts.get(key)), 0.0), 6))) * 100 for key in order}
     cents = {key: int(value.to_integral_value(rounding=ROUND_FLOOR)) for key, value in raw.items()}
-    base_cents = int((Decimal(str(round(max(_f(base), 0.0), 6))) * 100).to_integral_value(rounding=ROUND_FLOOR))
+    base_cents = int(Decimal(str(round(max(_f(base), 0.0), 2))) * 100)  # exactly the base the answer shows
     positive = [key for key in order if raw[key] > 0]
-    # The cents the amounts add up to (float noise rounded), never more than the base.
-    target = min(int(sum(raw.values()).to_integral_value(rounding=ROUND_HALF_UP)), base_cents)
+    # The cents the amounts add up to, never more than the base: amounts that cover the base (within
+    # a cent of float noise) add up to exactly the base shown; amounts that leave part of it
+    # unassigned keep their own (half-up) total.
+    total = sum(raw.values())
+    exact_base = Decimal(str(round(max(_f(base), 0.0), 6))) * 100
+    covers = abs(total - exact_base) < 1
+    target = base_cents if covers else min(int(total.to_integral_value(rounding=ROUND_HALF_UP)), base_cents)
     lost = min(target - sum(cents.values()), len(positive))
     room = base_cents - sum(cents.values())
     for key in sorted(positive, key=lambda k: raw[k] - cents[k], reverse=True)[:max(min(lost, room), 0)]:

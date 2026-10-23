@@ -25,7 +25,15 @@ import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 import { deviceLanguage, localeTag, t } from "../lib/locale";
 import { baseCurrency, currencySymbol, formatMoney } from "../lib/currency";
 import { categoryLabel } from "../lib/categories";
-import { applyExactError, applyExactResult, editExactAmount, exactAmountError, parseExactAmount } from "../lib/exactDistribution";
+import {
+  applyExactError,
+  applyExactResult,
+  distributionPanel,
+  editExactAmount,
+  exactAmountError,
+  investmentPanel,
+  parseExactAmount,
+} from "../lib/exactDistribution";
 import ExactDistributionControls from "./strategy/ExactDistributionControls";
 
 const language = deviceLanguage();
@@ -245,7 +253,6 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     () => (Array.isArray(strategy.timeline) ? strategy.timeline : []),
     [strategy.timeline]
   );
-  const allocationBase = Number(strategy.allocation_base_amount || 0);
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
   const debtAdvice = state.debtAdvice || {};
   const adviceScenarios = useMemo(
@@ -275,40 +282,33 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     return <section className="page premium-strategy-page"><div className="hud-card">{tr("strategy.loading")}</div></section>;
   }
 
-  const investmentRecommended = Number(strategy.investment_recommended || 0);
-  const investmentState = allocationBase <= 0 ? "blocked" : investmentRecommended > 0 ? "ready" : "limited";
-  // The distribution panel reads the exact-amount answer when the Owner chose it; the rest of the
-  // page keeps the estimate. Before a calculation the exact mode shows no figures.
+  // The Investments panel always reads the estimate; the Distribution panel reads the exact answer
+  // when the Owner chose it (and shows no figure before one exists). lib/exactDistribution.js.
+  const investment = investmentPanel(strategy);
+  const investmentRecommended = investment.recommended;
+  const investmentState = investment.state;
   const ownerExact = strategy.scope === "owner" && typeof strategyApi.getExactDistribution === "function";
-  const exactMode = ownerExact && exact.mode === "exact";
-  const distStrategy = (exactMode && exact.data?.strategy) || strategy;
-  const showDistribution = !exactMode || Boolean(exact.data?.strategy);
-  const distAmounts = distStrategy.allocation_amounts || {};
-  const distItems = Array.isArray(distStrategy.allocation_items) ? distStrategy.allocation_items : [];
-  const distBase = Number(distStrategy.allocation_base_amount || 0);
-  const distTotal = Number(distStrategy.allocation_total || distItems.reduce((sum, item) => sum + Number(item.amount || 0), 0));
-  const formula = distStrategy.distribution_formula || {};
-  const manualFormula = Object.prototype.hasOwnProperty.call(formula, "manual_available");
-  const hasDistributionFormula = manualFormula || Object.prototype.hasOwnProperty.call(formula, "cash_available_now");
-  const addedLines = manualFormula ? 1 : 2;
-  const distributionDeficit = Math.max(0, Number(formula.deficit || 0));
-  // The exact amount is already what is left: it shows alone, with no deduction lines.
-  const distributionBreakdown = manualFormula
-    ? [[tx("Monto que indicaste", "Amount you entered"), formula.manual_available]]
-    : [
-      [tx("Saldo disponible en MultiMoney", "Available MultiMoney balance"), formula.cash_available_now],
-      [tx("Ingreso previsto aún por recibir", "Expected income not yet received"), formula.income],
-      [tx("Gastos del estado de cuenta", "Statement expenses"), formula.statement_spending],
-      [tx("Gastos nuevos después del corte", "New expenses after the cutoff"), formula.new_spending_after_cut],
-      [tx("Cuotas de deuda pendientes", "Pending debt payments"), formula.debt_commitment],
-      [tx("Gastos fijos pendientes", "Pending fixed expenses"), formula.mandatory_fixed_pending],
-    ];
-  const distributionBalanced = Math.abs(distBase - distTotal) <= 1;
+  const panel = distributionPanel({ strategy, exact, ownerExact });
+  const { showDistribution, amounts: distAmounts, base: distBase, total: distTotal, formula } = panel;
+  const hasDistributionFormula = panel.hasFormula;
+  const addedLines = panel.addedLines;
+  const distributionDeficit = panel.deficit;
+  const breakdownLabels = {
+    manual_available: tx("Monto que indicaste", "Amount you entered"),
+    cash_available_now: tx("Saldo disponible en MultiMoney", "Available MultiMoney balance"),
+    income: tx("Ingreso previsto aún por recibir", "Expected income not yet received"),
+    statement_spending: tx("Gastos del estado de cuenta", "Statement expenses"),
+    new_spending_after_cut: tx("Gastos nuevos después del corte", "New expenses after the cutoff"),
+    debt_commitment: tx("Cuotas de deuda pendientes", "Pending debt payments"),
+    mandatory_fixed_pending: tx("Gastos fijos pendientes", "Pending fixed expenses"),
+  };
+  const distributionBreakdown = panel.breakdownKeys.map((key) => [breakdownLabels[key], formula[key]]);
+  const distributionBalanced = panel.balanced;
   const distributionDestinations = [
     {
       key: "meta_prioritaria",
-      label: distStrategy.goal_portfolio?.active_goal?.name
-        ? `${tx("Meta activa", "Active goal")} · ${distStrategy.goal_portfolio.active_goal.name}`
+      label: panel.activeGoalName
+        ? `${tx("Meta activa", "Active goal")} · ${panel.activeGoalName}`
         : tx("Meta activa", "Active goal"),
       amount: Number(distAmounts.meta_prioritaria || 0),
       optional: true,
@@ -320,8 +320,8 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     },
     {
       key: "ataque_de_deuda",
-      label: distStrategy.primary_debt_name
-        ? `${tx("Deuda prioritaria", "Priority debt")} · ${distStrategy.primary_debt_name}`
+      label: panel.primaryDebtName
+        ? `${tx("Deuda prioritaria", "Priority debt")} · ${panel.primaryDebtName}`
         : tx("Deuda prioritaria", "Priority debt"),
       amount: Number(distAmounts.ataque_de_deuda || 0),
     },
@@ -484,8 +484,8 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
         <strong>{money(investmentRecommended)}</strong>
         <p>
           {investmentRecommended > 0
-            ? tx(`Sale únicamente del sobrante real de ${money(allocationBase)} después de gastos y obligaciones.`, `It comes only from the real surplus of ${money(allocationBase)} after expenses and obligations.`)
-            : allocationBase <= 0
+            ? tx(`Sale únicamente del sobrante real de ${money(investment.base)} después de gastos y obligaciones.`, `It comes only from the real surplus of ${money(investment.base)} after expenses and obligations.`)
+            : investment.base <= 0
               ? tx("No hay sobrante real después de cubrir lo registrado y lo obligatorio.", "There’s no real surplus after covering recorded and required expenses.")
               : tx("Hay sobrante, pero la estrategia actual lo necesita antes en otra prioridad.", "There’s a surplus, but the current strategy needs it first for another priority.")}
         </p>
@@ -591,13 +591,12 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       <div className="strategy-surplus-card">
         <span>{tx("SOBRANTE REAL PARA REPARTIR", "REAL SURPLUS TO ALLOCATE")}</span>
         <strong>{money(distBase)}</strong>
-        <small>{distributionDeficit > 0
-          ? tx(`Los compromisos registrados superan los fondos previstos por ${money(distributionDeficit)}. Por eso no hay dinero para repartir en este ciclo.`, `Recorded commitments exceed expected funds by ${money(distributionDeficit)}, so there’s no money to allocate this cycle.`)
-          : exactMode
-            ? tx("Calculado con el monto que indicaste.", "Calculated from the amount you entered.")
-            : Number(strategy.new_expenses_after_cut_count || 0) > 0
-            ? newExpensesText(Number(strategy.new_expenses_after_cut_count))
-            : tx("Se recalcula cuando aparece un nuevo gasto.", "It’s recalculated when a new expense appears.")}</small>
+        <small>{{
+          deficit: () => tx(`Los compromisos registrados superan los fondos previstos por ${money(distributionDeficit)}. Por eso no hay dinero para repartir en este ciclo.`, `Recorded commitments exceed expected funds by ${money(distributionDeficit)}, so there’s no money to allocate this cycle.`),
+          exact: () => tx("Calculado con el monto que indicaste.", "Calculated from the amount you entered."),
+          new_expenses: () => newExpensesText(panel.newExpensesCount),
+          recalculated: () => tx("Se recalcula cuando aparece un nuevo gasto.", "It’s recalculated when a new expense appears."),
+        }[panel.note]()}</small>
       </div>
 
       {hasDistributionFormula && (
