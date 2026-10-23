@@ -253,7 +253,9 @@ def _whole_cents_within(amounts: dict[str, float], order: list[str], base: float
     return {key: cents[key] / 100 for key in order}
 
 
-def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[dict[str, float], list[dict[str, Any]]]:
+def _allocation_from_amounts(amounts: dict[str, float], base: float, exact: bool = False) -> tuple[dict[str, float], list[dict[str, Any]]]:
+    """Percentages and items. `exact` (the Owner's exact amount): whole cents that add up to the
+    base (`_whole_cents_within`), and a 1-cent item is shown; estimates round each amount."""
     base = max(_f(base), 0.0)
     order = [
         "meta_prioritaria",
@@ -263,7 +265,8 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[di
         "inversion",
         "metas_o_inversion",
     ]
-    clean = _whole_cents_within(amounts, order, base)
+    clean = (_whole_cents_within(amounts, order, base) if exact
+             else {key: round(max(_f(amounts.get(key)), 0.0), 2) for key in order})
     percentages = {
         key: round((value / base) * 100, 2) if base > 0 else 0.0
         for key, value in clean.items()
@@ -271,7 +274,7 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[di
     items = [
         {"key": key, "percentage": percentages[key], "amount": clean[key]}
         for key in order
-        if clean[key] > 0  # whole cents: a 1-cent item is shown, so the items add up to the base
+        if clean[key] > (0 if exact else 0.01)
     ]
     return percentages, items
 
@@ -284,8 +287,13 @@ def _build_dynamic_director_allocation(
     savings_total: float,
     emergency_monthly_base: float,
     rates_known: bool = True,
+    split_every_cent: bool = False,
 ) -> dict[str, Any]:
     """Motor de prioridades dinámicas del Director Financiero.
+
+    `split_every_cent` (the Owner's exact amount only): a single cent is still split and no
+    fraction of a cent is left unassigned, so the items add up to the typed amount exactly.
+    Estimates (Owner and Users) keep their 1-cent thresholds.
 
     `rates_known` False (Users, a debt without a known rate): the highest rate is unknown, so the
     "10% or more" rule is neither assumed true nor false (never computed from a missing rate as 0%).
@@ -344,7 +352,7 @@ def _build_dynamic_director_allocation(
     amounts["meta_prioritaria"] = goal_now
     remaining = max(base - goal_now, 0.0)
 
-    if base < 0.01:  # less than one cent: nothing to split (a single cent is still split)
+    if (base < 0.01) if split_every_cent else (base <= 0.01):
         mode = "cash_protection"
         mode_label = tx("PROTECCIÓN DE CAJA", "CASH PROTECTION")
         mode_reason = tx("No hay excedente real disponible después de obligaciones.", "There is no real surplus available after obligations.")
@@ -414,7 +422,7 @@ def _build_dynamic_director_allocation(
     # Ajuste de redondeo / pesos: cualquier sobrante no asignado se protege.
     assigned = sum(amounts.values())
     remainder = max(base - assigned, 0.0)
-    if remainder > 0:  # even a fraction of a cent: the items must add up to the whole base
+    if remainder > (0 if split_every_cent else 0.01):
         if urgent_goals:
             amounts["meta_prioritaria"] += remainder
         elif debt_exists:
@@ -424,8 +432,14 @@ def _build_dynamic_director_allocation(
         else:
             amounts["fondo_de_emergencia"] += remainder
 
-    allocation, items = _allocation_from_amounts(amounts, base)
-    safe_to_spend = next((item["amount"] for item in items if item["key"] == "vida_controlada"), 0.0)
+    allocation, items = _allocation_from_amounts(amounts, base, exact=split_every_cent)
+    if split_every_cent:
+        safe_to_spend = next((item["amount"] for item in items if item["key"] == "vida_controlada"), 0.0)
+        # The same whole cents as the items, so both always add up to the base.
+        shown_amounts = {k: next((i["amount"] for i in items if i["key"] == k), 0.0) for k in amounts}
+    else:
+        safe_to_spend = round(amounts["vida_controlada"], 2)
+        shown_amounts = {k: round(v, 2) for k, v in amounts.items()}
 
     if savings_total < mini_fund_target:
         emergency_level = "mini_fund_building"
@@ -445,8 +459,7 @@ def _build_dynamic_director_allocation(
         "mode_label": mode_label,
         "mode_reason": mode_reason,
         "allocation": allocation,
-        # The same whole cents as the items, so both always add up to the base.
-        "allocation_amounts": {k: next((i["amount"] for i in items if i["key"] == k), 0.0) for k in amounts},
+        "allocation_amounts": shown_amounts,
         "allocation_items": items,
         "allocation_base_amount": round(base, 2),
         "safe_to_spend": safe_to_spend,
@@ -1134,6 +1147,7 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         goal_reserves=goal_reserves,
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
+        split_every_cent=manual_available is not None,
     )
     allocation = director.get("allocation") or {}
     allocation_amounts = director.get("allocation_amounts") or {}

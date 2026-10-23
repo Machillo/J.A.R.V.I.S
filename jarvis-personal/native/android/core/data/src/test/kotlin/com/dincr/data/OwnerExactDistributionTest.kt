@@ -118,6 +118,7 @@ class OwnerExactDistributionTest {
         val body = backend.requests.last().body!!
         assertTrue(backend.requests.last().url.endsWith("/jarvis/premium/strategy-dashboard/exact-distribution/confirm"))
         assertTrue(body.contains("\"confirmation_key\":\"confirm-test-254698\"") && body.contains("\"expected_items\""))
+        assertTrue(body.contains("\"plan_fingerprint\":\"${form.plan!!.fingerprint}\""))
         assertEquals("applied", first.status)
         val plan = form.plan!!
         val debtPart = plan.steps.first { it.action == "debt_extra_payment" }.amount!!
@@ -140,6 +141,7 @@ class OwnerExactDistributionTest {
         val changed = request.copy(expectedItems = request.expectedItems.map { it.copy(amount = it.amount + BigDecimal.ONE) })
         assertEquals(409, status { api.ownerConfirmExactDistribution(changed) })
         assertEquals(409, status { api.ownerConfirmExactDistribution(request.copy(amount = BigDecimal(100_000))) })
+        assertEquals(409, status { api.ownerConfirmExactDistribution(request.copy(planFingerprint = "0".repeat(64))) })
     }
 
     @Test fun onlyTheOwnerCanConfirm() = runTest {

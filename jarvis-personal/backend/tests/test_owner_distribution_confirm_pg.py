@@ -184,8 +184,12 @@ def _preview(amount, role="owner"):
     return _as(role, sd.get_owner_exact_distribution, amount, "CRC")
 
 
-def _confirm(amount, key, items, role="owner"):
-    return _as(role, od.confirm_owner_distribution, amount, "CRC", key, items)
+# The plan fingerprint of the last reviewed preview (`_items`), sent with CONFIRMAR as the apps do.
+_REVIEWED = {"fingerprint": None}
+
+
+def _confirm(amount, key, items, role="owner", fingerprint=None):
+    return _as(role, od.confirm_owner_distribution, amount, "CRC", key, items, fingerprint or _REVIEWED["fingerprint"])
 
 
 def _snapshot(cur, ws=None):
@@ -202,6 +206,7 @@ def _cents(value) -> int:
 
 
 def _items(preview):
+    _REVIEWED["fingerprint"] = preview["confirmation_plan"]["fingerprint"]
     return [{"key": item["key"], "amount": item["amount"]} for item in preview["strategy"]["allocation_items"]]
 
 
@@ -442,7 +447,8 @@ def test_the_owner_calculates_and_confirms_over_http(db, monkeypatch):
     assert preview.status_code == 200, preview.text
     assert _snapshot(db) == before, "calculating writes nothing"
     items = _items(preview.json())
-    body = {"amount": "254698", "currency": "CRC", "confirmation_key": "confirm-http-0001", "expected_items": items}
+    body = {"amount": "254698", "currency": "CRC", "confirmation_key": "confirm-http-0001", "expected_items": items,
+            "plan_fingerprint": preview.json()["confirmation_plan"]["fingerprint"]}
 
     role["value"] = "user"
     assert client.post(path + "/confirm", json=body, headers=headers).status_code == 403
@@ -463,3 +469,63 @@ def test_the_owner_calculates_and_confirms_over_http(db, monkeypatch):
     assert salvavidas.status_code == 200, salvavidas.text
     emergency = next(i["amount"] for i in items if i["key"] == "fondo_de_emergencia")
     assert _cents(salvavidas.json()["current_amount"]) == _cents(50_000 + emergency)
+
+
+# Review findings ---------------------------------------------------------------------------------
+
+def test_a_debt_balance_that_changed_since_the_review_is_refused(db):
+    """Same amounts per destination, another plan: the card owes less than when the Owner
+    reviewed it, so the debt part would be split differently from what he paid. Nothing is recorded."""
+    items = _items(_preview("254698"))  # the review: ₡60.000 to the card, the rest to the loan
+    db.execute("UPDATE debts SET remaining_amount = 50000 WHERE workspace_id = %s AND name = 'Tarjeta sintética'", (WS,))
+    reviewed = _REVIEWED["fingerprint"]
+    assert _items(_preview("254698")) == items, "the split per destination did not change"
+    assert _REVIEWED["fingerprint"] != reviewed, "the plan did"
+    before = _snapshot(db)
+    with pytest.raises(HTTPException) as refused:
+        _confirm("254698", "confirm-0011", items, fingerprint=reviewed)
+    assert refused.value.status_code == 409
+    assert _snapshot(db) == before
+
+
+def test_debts_that_tie_get_the_same_order_in_the_preview_and_the_confirmation(db):
+    db.execute("DELETE FROM debts WHERE workspace_id = %s", (WS,))
+    db.execute("""INSERT INTO debts (workspace_id, name, debt_type, total_amount, remaining_amount, monthly_payment, interest_rate)
+                  VALUES (%s, 'Cuota A sintética', 'tasa_cero', 900000, 300000, 10000, 0),
+                         (%s, 'Cuota B sintética', 'tasa_cero', 900000, 300000, 10000, 0)""", (WS, WS))
+    preview = _preview("254698")
+    targets = next(s for s in preview["confirmation_plan"]["steps"] if s["key"] == "ataque_de_deuda")["targets"]
+    _confirm("254698", "confirm-0013", _items(preview))
+    db.execute("SELECT name, remaining_amount FROM debts WHERE workspace_id=%s", (WS,))
+    paid = {row["name"]: 300000 - float(row["remaining_amount"]) for row in db.fetchall()}
+    assert {t["name"]: t["amount"] for t in targets} == {name: amount for name, amount in paid.items() if amount > 0}
+
+
+@pytest.mark.parametrize("case", ["usd_account", "unknown_balance", "inactive_account"])
+def test_a_salvavidas_deposit_is_refused_instead_of_guessed(db, case):
+    if case == "usd_account":
+        db.execute("UPDATE account_balances SET currency = 'USD' WHERE workspace_id = %s", (WS,))
+    else:
+        db.execute("UPDATE account_balances SET is_active = FALSE WHERE workspace_id = %s", (WS,))
+        if case == "unknown_balance":
+            db.execute("DELETE FROM account_balances WHERE workspace_id = %s", (WS,))
+            db.execute("DELETE FROM user_preferences WHERE workspace_id = %s", (WS,))
+    before = _snapshot(db)
+    items = _items(_preview("254698"))
+    with pytest.raises(HTTPException) as refused:
+        _confirm("254698", f"confirm-{case.replace('_', '-')}", items)
+    assert refused.value.status_code == 409
+    assert _snapshot(db) == before, "nothing applied, not even the debt payments"
+
+
+def test_the_cycle_report_does_not_count_a_confirmed_extra_payment_as_an_installment():
+    """The estimate subtracts the cycle's installments still pending (configured minus paid). A
+    confirmed distribution's extra principal is not an installment: counted as paid, it would free
+    money that the estimate would split again. The cycle report's debt-payment query excludes it."""
+    import inspect
+
+    from backend.finance import service
+
+    source = inspect.getsource(service.get_financial_cycle_report)
+    query = source[source.index("debt_payments = [dict(row)"):source.index("income_transactions =")]
+    assert "source IS DISTINCT FROM 'owner_distribution'" in query

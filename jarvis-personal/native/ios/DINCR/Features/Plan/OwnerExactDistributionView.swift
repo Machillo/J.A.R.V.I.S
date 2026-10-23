@@ -90,8 +90,8 @@ struct OwnerDistributionModes: View {
             // The records changed: the estimate is read again (a failure keeps the previous one).
             refreshedEstimate = (try? await model.service.ownerStrategyDashboard())?.strategy ?? refreshedEstimate
         } catch {
-            form.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos confirmar la distribución. No se registró nada.",
-                                                                            "We couldn’t confirm the distribution. Nothing was recorded."))
+            form.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos saber si se registró. Volvé a presionar CONFIRMAR: si ya se registró, no se repite.",
+                                                                            "We couldn’t tell whether it was recorded. Press CONFIRM again: if it was already recorded, it isn’t repeated."))
         }
     }
 

@@ -105,7 +105,7 @@ fun OwnerDistributionModes(model: AppModel, estimate: DirectorStrategy, nav: Nav
             } else {
                 confirming = true
                 scope.launch {
-                    model.load(tx("No pudimos confirmar la distribución. No se registró nada.", "We couldn’t confirm the distribution. Nothing was recorded.")) {
+                    model.load(tx("No pudimos saber si se registró. Volvé a presionar CONFIRMAR: si ya se registró, no se repite.", "We couldn’t tell whether it was recorded. Press CONFIRM again: if it was already recorded, it isn’t repeated.")) {
                         model.api.ownerConfirmExactDistribution(request)
                     }.onSuccess { form = form.confirmed(key, it); onRecorded() }
                         .onFailure { if (it !is AuthException.SignedOut) form = form.failed(it.message) }

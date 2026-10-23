@@ -238,7 +238,7 @@ class FakeBackend(
                         val item = element as JsonObject
                         item["key"]!!.jsonPrimitive.content to BigDecimal(item["amount"]!!.jsonPrimitive.content)
                     }
-                    val (status, answer, payments) = planRoutes.confirmExactDistribution(snapshot(), money("amount")!!, text("confirmation_key")!!, expected)
+                    val (status, answer, payments) = planRoutes.confirmExactDistribution(snapshot(), money("amount")!!, text("confirmation_key")!!, expected, text("plan_fingerprint"))
                     payments.forEach { (debtId, paid) ->
                         val index = debts.indexOfFirst { it.id == debtId }
                         if (index >= 0) debts[index] = debts[index].copy(remainingAmount = (debts[index].remainingAmount ?: BigDecimal.ZERO) - paid)

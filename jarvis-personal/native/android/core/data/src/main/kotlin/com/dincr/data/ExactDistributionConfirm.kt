@@ -17,6 +17,8 @@ data class ConfirmationPlan(
     val steps: List<Step> = emptyList(),
     val confirmable: Boolean = false,
     @SerialName("blocking_reasons") val blockingReasons: List<String> = emptyList(),
+    /** The plan as one value (which debt and goal get what); sent back with CONFIRMAR. */
+    val fingerprint: String? = null,
 ) {
     @Serializable
     data class Step(
@@ -44,6 +46,7 @@ data class ExactDistributionConfirmRequest(
     val amount: Money,
     @SerialName("confirmation_key") val confirmationKey: String,
     @SerialName("expected_items") val expectedItems: List<ExpectedDistributionItem>,
+    @SerialName("plan_fingerprint") val planFingerprint: String,
     val currency: String = "CRC",
 )
 

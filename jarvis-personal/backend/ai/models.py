@@ -30,10 +30,19 @@ class ExactDistributionConfirmRequest(ExactDistributionRequest):
     """CONFIRMAR: the Owner declares he carried out the distribution he reviewed.
 
     `confirmation_key` identifies this confirmation (one per reviewed distribution): repeating it
-    never applies it twice. `expected_items` is the split the Owner saw; the server recomputes it
-    and records nothing when it differs."""
+    never applies it twice. `expected_items` and `plan_fingerprint` are the split and the plan the
+    Owner saw; the server recomputes both and records nothing when either differs."""
     confirmation_key: str = Field(pattern=r"^[A-Za-z0-9_-]{8,80}$")
     expected_items: list[ExpectedDistributionItem] = Field(min_length=1, max_length=12)
+    # The `confirmation_plan.fingerprint` the Owner reviewed (which debt and goal get what).
+    plan_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("expected_items")
+    @classmethod
+    def _one_amount_per_destination(cls, items: list[ExpectedDistributionItem]) -> list[ExpectedDistributionItem]:
+        if len({item.key for item in items}) != len(items):
+            raise ValueError("Cada destino va una sola vez.")
+        return items
 
 
 class JarvisChatRequest(BaseModel):

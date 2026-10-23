@@ -342,6 +342,10 @@ def update_salvavidas(
     return get_salvavidas_state()
 
 
+class SalvavidasDepositRefused(ValueError):
+    """A deposit that cannot be recorded without guessing: nothing is written."""
+
+
 def deposit_to_owner_salvavidas(conn, workspace_id: str, amount: float, *, note: str) -> dict[str, Any]:
     """Owner: add money the Owner put into the Salvavidas, inside the caller's transaction.
 
@@ -350,6 +354,11 @@ def deposit_to_owner_salvavidas(conn, workspace_id: str, amount: float, *, note:
     as ``update_salvavidas`` does. A deposit adds to the account's balance without re-declaring
     it, so the movements already counted after its declaration and its last reconciliation stay
     as they were. The saved preference amount follows (compatibility). Nothing is committed here.
+
+    Refused (``SalvavidasDepositRefused``, nothing written) instead of guessed: an account in
+    another currency (colones are never added to it), no account and no saved amount (the current
+    balance is unknown, never 0), or an existing "Salvavidas" account that is inactive or of
+    another type (its real balance is never overwritten).
     """
     deposit = max(_f(amount), 0.0)
     preference = conn.execute(
@@ -357,15 +366,17 @@ def deposit_to_owner_salvavidas(conn, workspace_id: str, amount: float, *, note:
         (workspace_id, PREFERENCE_KEY),
     ).fetchone()
     saved = preference.get("preference_value") if preference else None
-    saved_amount = max(_f(saved.get("current_amount")), 0.0) if isinstance(saved, dict) else 0.0
     account = conn.execute(
-        """SELECT id,current_balance FROM account_balances
+        """SELECT id,current_balance,currency FROM account_balances
            WHERE workspace_id=%s AND is_active=TRUE AND account_type='emergency_fund'
            ORDER BY updated_at DESC,id DESC LIMIT 1
            FOR UPDATE""",
         (workspace_id,),
     ).fetchone()
     if account:
+        if str(account.get("currency") or "").upper() != "CRC":
+            raise SalvavidasDepositRefused(tx("Tu Salvavidas no está en colones; no se registró nada.",
+                                              "Your Salvavidas is not in colones; nothing was recorded."))
         previous = max(_f(account.get("current_balance")), 0.0)
         new_amount = round(previous + deposit, 2)
         conn.execute(
@@ -374,15 +385,23 @@ def deposit_to_owner_salvavidas(conn, workspace_id: str, amount: float, *, note:
         )
         account_id = account["id"]
     else:
-        previous = saved_amount
+        if not isinstance(saved, dict) or saved.get("current_amount") is None:
+            raise SalvavidasDepositRefused(tx("Guardá primero el saldo actual de tu Salvavidas; no se registró nada.",
+                                              "Save your Salvavidas' current balance first; nothing was recorded."))
+        other = conn.execute(
+            """SELECT id FROM account_balances
+               WHERE workspace_id=%s AND LOWER(account_name)='salvavidas' AND COALESCE(account_last4,'')='' LIMIT 1""",
+            (workspace_id,),
+        ).fetchone()
+        if other:
+            raise SalvavidasDepositRefused(tx("Tu cuenta Salvavidas está inactiva o es de otro tipo; revisala antes de confirmar. No se registró nada.",
+                                              "Your Salvavidas account is inactive or of another type; check it before confirming. Nothing was recorded."))
+        previous = max(_f(saved.get("current_amount")), 0.0)
         new_amount = round(previous + deposit, 2)
         account_id = conn.execute(
             """INSERT INTO account_balances (workspace_id, account_name, bank_name, account_type, account_last4, currency,
                                              current_balance, annual_interest_rate, source, include_in_net_worth)
                VALUES (%s,'Salvavidas','MultiMoney','emergency_fund','','CRC',%s,0,'salvavidas',TRUE)
-               ON CONFLICT (workspace_id, account_name, account_last4) DO UPDATE
-               SET account_type='emergency_fund', current_balance=EXCLUDED.current_balance, balance_as_of=NOW(),
-                   source='salvavidas', is_active=TRUE, updated_at=NOW()
                RETURNING id""",
             (workspace_id, new_amount),
         ).fetchone()["id"]

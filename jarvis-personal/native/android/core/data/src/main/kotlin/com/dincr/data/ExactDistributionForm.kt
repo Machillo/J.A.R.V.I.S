@@ -33,9 +33,10 @@ data class ExactDistributionForm(
     fun confirmRequest(amount: java.math.BigDecimal): ExactDistributionConfirmRequest? {
         val strategy = result ?: return null
         val key = confirmationKey ?: return null
+        val fingerprint = plan?.fingerprint ?: return null
         return ExactDistributionConfirmRequest(amount, key, strategy.allocationItems.mapNotNull { item ->
             item.key?.let { k -> item.amount?.let { ExpectedDistributionItem(k, it) } }
-        })
+        }, fingerprint)
     }
 
     /** The backend's answer for [key]; kept only when it is still this result's key. */

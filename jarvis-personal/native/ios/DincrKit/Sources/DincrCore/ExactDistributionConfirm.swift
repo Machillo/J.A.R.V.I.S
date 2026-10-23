@@ -44,13 +44,16 @@ public struct ConfirmationPlan: Decodable, Sendable, Equatable {
     public let steps: [Step]
     public let confirmable: Bool
     public let blockingReasons: [String]
+    /// The plan as one value (which debt and goal get what); sent back with CONFIRMAR.
+    public let fingerprint: String?
 
-    enum CodingKeys: String, CodingKey { case steps, confirmable, blockingReasons }
+    enum CodingKeys: String, CodingKey { case steps, confirmable, blockingReasons, fingerprint }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         steps = c.lenient([Step].self, .steps) ?? []
         confirmable = c.lenient(Bool.self, .confirmable) ?? false
         blockingReasons = c.lenient([String].self, .blockingReasons) ?? []
+        fingerprint = c.lenient(String.self, .fingerprint)
     }
 }
 
@@ -65,6 +68,7 @@ public struct ExactDistributionConfirmRequest: Encodable, Sendable, Equatable {
     public let currency: String
     public let confirmationKey: String
     public let expectedItems: [ExpectedDistributionItem]
+    public let planFingerprint: String
 }
 
 public struct ExactDistributionConfirmation: Decodable, Sendable, Equatable {

@@ -150,14 +150,16 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
                 else -> ConfirmationPlan.Step(item.key, amount, "not_recorded")
             }
         }
-        return ConfirmationPlan(steps, !blocked, if (blocked) listOf("La parte para deudas es mayor que lo que se debe.") else emptyList())
+        val fingerprint = steps.joinToString("|") { step -> "${step.key}:${step.amount}:" + step.targets.joinToString(",") { "${it.debtId}=${it.amount}" } }
+            .let { java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }
+        return ConfirmationPlan(steps, !blocked, if (blocked) listOf("La parte para deudas es mayor que lo que se debe.") else emptyList(), fingerprint)
     }
 
     /**
      * CONFIRMAR: recomputes the split, refuses one the Owner did not review (409), records it once per
      * key (a repeat answers `already_applied`) and returns the debt payments for the fake to apply.
      */
-    fun confirmExactDistribution(data: Snapshot, amount: BigDecimal, key: String, expected: Map<String, BigDecimal>): Triple<Int, String, Map<Long, BigDecimal>> {
+    fun confirmExactDistribution(data: Snapshot, amount: BigDecimal, key: String, expected: Map<String, BigDecimal>, fingerprint: String?): Triple<Int, String, Map<Long, BigDecimal>> {
         confirmations[key]?.let { previous ->
             return if (previous.compareTo(amount) != 0) Triple(409, "Esta confirmación ya se usó con otro monto.", emptyMap())
             else Triple(200, json.encodeToString(ExactDistributionConfirmation("already_applied", ExactDistributionConfirmation.Record(1, previous))), emptyMap())
@@ -169,6 +171,7 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         if (!same) return Triple(409, "La distribución cambió desde que la revisaste. Revisala de nuevo antes de confirmar.", emptyMap())
         val plan = answer.confirmationPlan ?: return Triple(409, "No se pudo registrar.", emptyMap())
         if (!plan.confirmable) return Triple(409, plan.blockingReasons.joinToString(" "), emptyMap())
+        if (plan.fingerprint != fingerprint) return Triple(409, "La distribución cambió desde que la revisaste. Revisala de nuevo antes de confirmar.", emptyMap())
         val payments = plan.steps.flatMap { it.targets }.associate { (it.debtId ?: 0L) to (it.amount ?: BigDecimal.ZERO) }
         plan.steps.filter { it.action == "salvavidas_deposit" }.forEach { ownerAmount += it.amount ?: BigDecimal.ZERO }
         confirmations[key] = amount

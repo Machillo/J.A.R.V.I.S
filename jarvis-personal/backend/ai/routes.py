@@ -67,7 +67,7 @@ def jarvis_confirm_exact_distribution(request: ExactDistributionConfirmRequest):
     investment reserve) in one transaction, once per confirmation key."""
     return confirm_owner_distribution(
         request.amount, request.currency, request.confirmation_key,
-        [item.model_dump() for item in request.expected_items],
+        [item.model_dump() for item in request.expected_items], request.plan_fingerprint,
     )
 
 

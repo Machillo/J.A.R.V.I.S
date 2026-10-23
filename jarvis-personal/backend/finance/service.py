@@ -1424,6 +1424,8 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             FROM transactions
             WHERE workspace_id = %s
               AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'debt_payment'
+              -- Extra principal of a confirmed distribution is not the cycle's installment.
+              AND source IS DISTINCT FROM 'owner_distribution'
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC

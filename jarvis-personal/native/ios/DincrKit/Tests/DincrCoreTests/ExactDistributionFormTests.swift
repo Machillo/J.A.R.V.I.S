@@ -51,7 +51,8 @@ struct ExactDistributionFormTests {
            {"key":"ataque_de_deuda","amount":114614.10,"action":"debt_extra_payment",
             "targets":[{"debt_id":2,"name":"Tarjeta de ejemplo","amount":60000},{"debt_id":1,"name":"Préstamo de ejemplo","amount":54614.10}]},
            {"key":"fondo_de_emergencia","amount":101879.20,"action":"salvavidas_deposit"},
-           {"key":"vida_controlada","amount":38204.70,"action":"not_recorded"}]}}
+           {"key":"vida_controlada","amount":38204.70,"action":"not_recorded"}],
+          "fingerprint":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}
         """#.utf8))
     }
 
@@ -74,6 +75,11 @@ struct ExactDistributionFormTests {
         let body = String(decoding: try APIClient.encoder.encode(request), as: UTF8.self)
         #expect(body.contains(#""confirmation_key":"confirm-ios-0002""#))
         #expect(body.contains(#""expected_items""#) && body.contains(#""currency":"CRC""#))
+        #expect(body.contains(#""plan_fingerprint":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef""#))
+        // Whole cents on the wire, never a Double artefact (the backend refuses more than 2 decimals).
+        #expect(body.contains("114614.1") && body.contains("101879.2") && body.contains("38204.7"))
+        #expect(!body.contains("114614.09") && !body.contains("101879.19") && !body.contains("38204.69"))
+        #expect(request.expectedItems.map(\.amount) == [Decimal(string: "114614.1")!, Decimal(string: "101879.2")!, Decimal(string: "38204.7")!])
         #expect(request.expectedItems.map(\.key) == ["ataque_de_deuda", "fondo_de_emergencia", "vida_controlada"])
         form.confirmed(key: "another-key", ExactDistributionConfirmation(status: "applied"))
         #expect(form.canConfirm)  // an answer for another result is ignored

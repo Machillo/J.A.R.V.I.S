@@ -92,11 +92,12 @@ export function canConfirmExact(current) {
 
 /** The split the Owner reviewed, sent with CONFIRMAR: the backend records nothing when its own differs. */
 export function confirmExactPayload(current, amount) {
-  if (!current.data?.strategy || !current.confirmationKey) return null;
+  const fingerprint = current.data?.confirmation_plan?.fingerprint;
+  if (!current.data?.strategy || !current.confirmationKey || !fingerprint) return null;
   const items = (current.data.strategy.allocation_items || [])
     .filter((item) => item.key && item.amount !== undefined && item.amount !== null)
     .map((item) => ({ key: item.key, amount: item.amount }));
-  return { amount, currency: "CRC", confirmation_key: current.confirmationKey, expected_items: items };
+  return { amount, currency: "CRC", confirmation_key: current.confirmationKey, expected_items: items, plan_fingerprint: fingerprint };
 }
 
 /** The backend's answer for `key`; kept only when it is still this result's key. */

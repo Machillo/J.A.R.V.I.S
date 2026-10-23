@@ -172,7 +172,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       await load({ keepPage: true });
     } catch (error) {
       setExact((current) => ({ ...current, confirming: false,
-        error: error?.message || tx("No pudimos confirmar la distribución. No se registró nada.", "We couldn’t confirm the distribution. Nothing was recorded.") }));
+        error: error?.message || tx("No pudimos saber si se registró. Volvé a presionar CONFIRMAR: si ya se registró, no se repite.", "We couldn’t tell whether it was recorded. Press CONFIRM again: if it was already recorded, it isn’t repeated.") }));
     }
   };
 

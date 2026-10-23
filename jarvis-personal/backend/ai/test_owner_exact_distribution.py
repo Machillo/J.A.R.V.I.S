@@ -189,7 +189,7 @@ def test_rounding_never_assigns_more_than_the_base():
         weights = [rng.random() for _ in range(rng.randint(1, 6))]
         keys = ["meta_prioritaria", "ataque_de_deuda", "fondo_de_emergencia", "vida_controlada", "inversion", "metas_o_inversion"]
         amounts = {k: base * w / sum(weights) for k, w in zip(keys, weights)}
-        _, items = sd._allocation_from_amounts(amounts, base)
+        _, items = sd._allocation_from_amounts(amounts, base, exact=True)
         shown = round(base, 2)  # allocation_base_amount, the base the answer shows
         assert _total(items) <= shown + 1e-9
         assert _total(items) == shown  # the weights cover the base: no cent lost, none added
@@ -197,8 +197,23 @@ def test_rounding_never_assigns_more_than_the_base():
 
 
 def test_rounding_cents_are_exact_on_a_known_case():
-    _, items = sd._allocation_from_amounts({"ataque_de_deuda": 0.0166, "fondo_de_emergencia": 0.0166, "vida_controlada": 0.0168}, 0.05)
+    amounts = {"ataque_de_deuda": 0.0166, "fondo_de_emergencia": 0.0166, "vida_controlada": 0.0168}
+    _, items = sd._allocation_from_amounts(amounts, 0.05, exact=True)
     assert _total(items) == 0.05 and [i["amount"] for i in items] == [0.02, 0.01, 0.02]
+
+
+def test_estimates_keep_their_rounding_for_owner_and_users():
+    """The cent-exact split is the Owner's exact amount only: an estimate (Owner or Users) rounds
+    each amount and hides sub-cent items exactly as before."""
+    amounts = {"ataque_de_deuda": 0.0166, "fondo_de_emergencia": 0.0166, "vida_controlada": 0.0168}
+    _, items = sd._allocation_from_amounts(amounts, 0.05)
+    assert [i["amount"] for i in items] == [0.02, 0.02, 0.02]
+    director = sd._build_dynamic_director_allocation(available_before_allocation=0.01, debts=[], goal_reserves={},
+                                                     savings_total=0, emergency_monthly_base=100_000)
+    assert director["mode"] == "cash_protection" and director["allocation_items"] == []
+    exact = sd._build_dynamic_director_allocation(available_before_allocation=0.01, debts=[], goal_reserves={},
+                                                  savings_total=0, emergency_monthly_base=100_000, split_every_cent=True)
+    assert _total(exact["allocation_items"]) == 0.01
 
 
 # 8. Obligations on record never shrink the amount; the estimate still deducts them ------------
@@ -331,7 +346,7 @@ def test_the_post_writes_nothing_through_the_whole_app(monkeypatch):
 
 CONFIRM = PATH + "/confirm"
 VALID_CONFIRM = {"amount": "254698", "currency": "CRC", "confirmation_key": "confirm-http-0001",
-                 "expected_items": [{"key": "vida_controlada", "amount": "254698"}]}
+                 "expected_items": [{"key": "vida_controlada", "amount": "254698"}], "plan_fingerprint": "a" * 64}
 
 
 @pytest.mark.parametrize("role", ["user", "admin"])
@@ -348,9 +363,21 @@ def test_a_user_who_is_not_the_owner_cannot_confirm(client, monkeypatch, role):
     {"confirmation_key": ""}, {"confirmation_key": "short"}, {"confirmation_key": "has spaces in it"},
     {"confirmation_key": None}, {"expected_items": []}, {"expected_items": [{"key": "", "amount": 1}]},
     {"expected_items": [{"key": "vida_controlada", "amount": -1}]},
+    {"expected_items": [{"key": "vida_controlada", "amount": 1}, {"key": "vida_controlada", "amount": 1}]},
+    {"plan_fingerprint": None}, {"plan_fingerprint": "abc"}, {"plan_fingerprint": "G" * 64},
 ])
 def test_an_invalid_confirmation_is_refused_before_anything_runs(client, monkeypatch, change):
     from backend.ai import routes
 
     monkeypatch.setattr(routes, "confirm_owner_distribution", lambda *_a: pytest.fail("nothing runs"))
     assert client.post(CONFIRM, json={**VALID_CONFIRM, **change}, headers=HEADERS).status_code == 422
+
+
+def test_a_valid_confirmation_reaches_the_service(client, monkeypatch):
+    """The cases above are refused for their own field: this one, with every field valid, gets through."""
+    from backend.ai import routes
+
+    seen = []
+    monkeypatch.setattr(routes, "confirm_owner_distribution", lambda *args: seen.append(args) or {"status": "applied"})
+    assert client.post(CONFIRM, json=VALID_CONFIRM, headers=HEADERS).status_code == 200
+    assert seen and seen[0][2] == "confirm-http-0001" and seen[0][4] == "a" * 64

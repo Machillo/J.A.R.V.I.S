@@ -131,7 +131,7 @@ console.log("exact distribution: ok");
   const { applyConfirmation, canConfirmExact, confirmExactPayload } = await import("../src/lib/exactDistribution.js");
   const data = {
     strategy: { allocation_items: [{ key: "ataque_de_deuda", amount: 114614.1 }, { key: "fondo_de_emergencia", amount: 101879.2 }, { key: "vida_controlada", amount: 38204.7 }] },
-    confirmation_plan: { confirmable: true, blocking_reasons: [], steps: [] },
+    confirmation_plan: { confirmable: true, blocking_reasons: [], steps: [], fingerprint: "f".repeat(64) },
   };
   const typed = editExactAmount({ mode: "exact", amount: "" }, "254698");
   assert.equal(canConfirmExact(typed), false, "nothing to confirm before a result");
@@ -140,7 +140,10 @@ console.log("exact distribution: ok");
   assert.deepEqual(confirmExactPayload(shown, 254698), {
     amount: 254698, currency: "CRC", confirmation_key: "confirm-web-0001",
     expected_items: [{ key: "ataque_de_deuda", amount: 114614.1 }, { key: "fondo_de_emergencia", amount: 101879.2 }, { key: "vida_controlada", amount: 38204.7 }],
+    plan_fingerprint: "f".repeat(64),
   });
+  assert.equal(confirmExactPayload({ ...shown, data: { ...data, confirmation_plan: { confirmable: true } } }, 254698), null,
+    "no CONFIRMAR without the reviewed plan's fingerprint");
   assert.notEqual(applyExactResult(typed, "254698", data).confirmationKey, applyExactResult(typed, "254698", data).confirmationKey, "a new result gets a new key");
   assert.equal(canConfirmExact(applyConfirmation(shown, "another-key", { status: "applied" })), true, "an answer for another result is ignored");
   const confirmed = applyConfirmation(shown, "confirm-web-0001", { status: "applied" });

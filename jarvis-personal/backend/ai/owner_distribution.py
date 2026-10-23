@@ -16,7 +16,8 @@ with the mechanisms the app already uses for each one:
   happens, so nothing is written for it.
 
 Consistency: the server recomputes the distribution and applies it only when it is exactly the
-one the Owner reviewed (same destinations, same amounts to the cent, adding up to the amount).
+one the Owner reviewed: same destinations and amounts to the cent, adding up to the amount, and
+the same plan (``fingerprint``: which debt gets how much, which goal). Otherwise nothing is written.
 Everything is written in one transaction, committed once, under a per-workspace lock: a failure
 leaves nothing applied. A confirmation key identifies one confirmation; repeating it (double
 tap, retry) returns the confirmation already applied and writes nothing again.
@@ -26,6 +27,7 @@ What it does not know: which account the money came from. No other account balan
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -37,7 +39,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.core.time import costa_rica_today
 from backend.finance.debt_extra_payment import record_extra_payment
-from backend.finance.emergency_fund import deposit_to_owner_salvavidas
+from backend.finance.emergency_fund import SalvavidasDepositRefused, deposit_to_owner_salvavidas
 from backend.goals.service import apply_goal_contribution
 
 DEBT, EMERGENCY, GOAL, LIFE = "ataque_de_deuda", "fondo_de_emergencia", "meta_prioritaria", "vida_controlada"
@@ -65,7 +67,9 @@ def debt_attack_targets(debts: list[dict[str, Any]], amount: Any) -> tuple[list[
 
     left = _cents(amount)
     targets = []
-    active = [debt for debt in debts if _cents(debt.get("remaining_amount")) > 0]
+    # Sorted by id first: debts that tie on every strategy key get the same order in the preview
+    # and in the confirmation, whatever order they were read in.
+    active = sorted((debt for debt in debts if _cents(debt.get("remaining_amount")) > 0), key=lambda d: int(d.get("id") or 0))
     for debt in _sort_debts_for_director(active, owner_rules=True):
         if left <= 0:
             break
@@ -101,7 +105,15 @@ def confirmation_plan(strategy: dict[str, Any], debts: list[dict[str, Any]]) -> 
         else:
             steps.append({"key": key, "amount": amount, "action": "unsupported"})
             blocking.append(tx("Un destino de la estrategia no se puede registrar.", "A strategy destination cannot be recorded."))
-    return {"steps": steps, "confirmable": not blocking, "blocking_reasons": blocking}
+    return {"steps": steps, "confirmable": not blocking, "blocking_reasons": blocking, "fingerprint": _fingerprint(steps)}
+
+
+def _fingerprint(steps: list[dict[str, Any]]) -> str:
+    """The plan the Owner reviewed, as one value: destination, action, cents, each debt's cents, goal."""
+    canonical = [[step.get("key"), step.get("action"), _cents(step.get("amount")), step.get("goal_id"),
+                  [[target.get("debt_id"), _cents(target.get("amount"))] for target in step.get("targets") or []]]
+                 for step in steps]
+    return hashlib.sha256(json.dumps(canonical, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def _existing(conn, workspace_id: str, key: str) -> dict[str, Any] | None:
@@ -135,7 +147,7 @@ def _conflict(message_es: str, message_en: str) -> HTTPException:
 
 
 def confirm_owner_distribution(amount: Any, currency: str, confirmation_key: str,
-                               expected_items: list[dict[str, Any]]) -> dict[str, Any]:
+                               expected_items: list[dict[str, Any]], plan_fingerprint: str) -> dict[str, Any]:
     """Record the distribution the Owner reviewed and declares carried out (see the module doc)."""
     from backend.ai.strategy_dashboard import _is_owner, get_owner_exact_distribution
 
@@ -165,6 +177,10 @@ def confirm_owner_distribution(amount: Any, currency: str, confirmation_key: str
         plan = confirmation_plan(strategy, debts)
         if not plan["confirmable"]:
             raise HTTPException(status_code=409, detail=" ".join(plan["blocking_reasons"]))
+        if plan["fingerprint"] != plan_fingerprint:
+            # Same amounts, another plan: a debt balance or the goal changed since the review.
+            raise _conflict("La distribución cambió desde que la revisaste. Revisala de nuevo antes de confirmar.",
+                            "The distribution changed since you reviewed it. Review it again before confirming.")
 
         row = conn.execute(
             """INSERT INTO owner_distribution_confirmations (workspace_id, confirmation_key, amount, currency, items, confirmed_by)
@@ -191,7 +207,10 @@ def confirm_owner_distribution(amount: Any, currency: str, confirmation_key: str
                                     "amount": target["amount"], "payment_id": payment["payment_id"],
                                     "new_remaining_amount": payment["new_remaining_amount"]})
             elif step["action"] == "salvavidas_deposit":
-                deposit = deposit_to_owner_salvavidas(conn, workspace_id, step["amount"], note=note)
+                try:
+                    deposit = deposit_to_owner_salvavidas(conn, workspace_id, step["amount"], note=note)
+                except SalvavidasDepositRefused as refused:
+                    raise HTTPException(status_code=409, detail=str(refused)) from refused
                 applied.append({"key": step["key"], "action": step["action"], "amount": step["amount"], **deposit})
             elif step["action"] == "goal_contribution":
                 contribution = apply_goal_contribution(conn, workspace_id, int(step["goal_id"]), float(step["amount"]))

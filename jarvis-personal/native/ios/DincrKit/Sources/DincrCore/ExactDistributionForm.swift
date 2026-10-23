@@ -44,12 +44,22 @@ public struct ExactDistributionForm: Equatable, Sendable {
 
     /// The split the Owner reviewed, sent with CONFIRMAR: the backend records nothing when its own differs.
     public func confirmRequest(amount: Decimal) -> ExactDistributionConfirmRequest? {
-        guard let result, let confirmationKey else { return nil }
+        guard let result, let confirmationKey, let fingerprint = plan?.fingerprint else { return nil }
         let items = (result.allocationItems ?? []).compactMap { item -> ExpectedDistributionItem? in
             guard let key = item.key, let value = item.amount else { return nil }
-            return ExpectedDistributionItem(key: key, amount: value)
+            // JSONDecoder reads a Decimal through Double (114614.1 → 114614.09999…): back to whole cents.
+            return ExpectedDistributionItem(key: key, amount: Self.cents(value))
         }
-        return ExactDistributionConfirmRequest(amount: amount, currency: "CRC", confirmationKey: confirmationKey, expectedItems: items)
+        return ExactDistributionConfirmRequest(amount: Self.cents(amount), currency: "CRC", confirmationKey: confirmationKey,
+                                               expectedItems: items, planFingerprint: fingerprint)
+    }
+
+    /// `value` rounded to whole cents (half up), as the backend reads money.
+    static func cents(_ value: Decimal) -> Decimal {
+        var input = value
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &input, 2, .plain)
+        return rounded
     }
 
     /// The backend's answer for `key`; kept only when it is still this result's key.
