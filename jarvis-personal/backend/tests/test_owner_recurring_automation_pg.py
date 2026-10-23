@@ -500,6 +500,23 @@ def test_an_older_app_keeps_the_stored_automation_untouched(pg):
     assert (plain["auto_record"], plain["next_due_date"], plain["item_type"]) == (False, None, "expense")
 
 
+@pytest.mark.parametrize("missing", ["dincr_guard_financial_truncate()", "dincr_delete_guard_tables()"])
+def test_the_migration_aborts_without_its_prerequisites_and_changes_nothing(admin_uri, missing):
+    uri, conn, drop = _create_database(admin_uri, _seed)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"DROP FUNCTION public.{missing} CASCADE")
+            with pytest.raises(psycopg2.Error) as aborted:
+                cur.execute(MIGRATION.read_text(encoding="utf-8"))
+            assert aborted.value.pgcode == "PR001"
+            cur.execute("ROLLBACK")  # the file's own BEGIN left the aborted transaction open
+        assert _q(conn, "SELECT to_regclass('public.recurring_item_occurrences')") == [(None,)]
+        assert _q(conn, "SELECT count(*) FROM information_schema.columns WHERE table_name='finva_recurring_items' "
+                        "AND column_name='auto_record'") == [(0,)]
+    finally:
+        drop()
+
+
 def test_rollback_keeps_transactions_and_the_migration_reapplies(pg):
     _income(date(2026, 10, 25))
     _materialize(date(2026, 10, 25))

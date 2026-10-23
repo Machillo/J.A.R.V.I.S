@@ -41,7 +41,7 @@ BEGIN
         RAISE EXCEPTION 'role dincr_app is missing: apply 20260926150000 first' USING ERRCODE = 'PR002';
     END IF;
     IF to_regproc('public.dincr_guard_financial_delete') IS NULL OR to_regproc('public.dincr_guard_workspace_move') IS NULL
-       OR to_regproc('public.dincr_delete_guard_tables') IS NULL
+       OR to_regproc('public.dincr_guard_financial_truncate') IS NULL OR to_regproc('public.dincr_delete_guard_tables') IS NULL
        OR to_regclass('public.finva_recurring_items') IS NULL OR to_regclass('public.transactions') IS NULL
        OR to_regclass('public.account_balances') IS NULL OR to_regclass('public.payroll_receipts') IS NULL THEN
         RAISE EXCEPTION 'ownership guards or base tables missing: apply 20260925140000, 20260925130000 and 20261002150000 first'
