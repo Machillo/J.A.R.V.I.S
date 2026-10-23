@@ -325,3 +325,32 @@ def test_the_post_writes_nothing_through_the_whole_app(monkeypatch):
             else:
                 assert not reads, "a refused caller reaches no query"
 
+
+
+# CONFIRMAR over HTTP: Owner only, validated before anything runs ---------------------------------
+
+CONFIRM = PATH + "/confirm"
+VALID_CONFIRM = {"amount": "254698", "currency": "CRC", "confirmation_key": "confirm-http-0001",
+                 "expected_items": [{"key": "vida_controlada", "amount": "254698"}]}
+
+
+@pytest.mark.parametrize("role", ["user", "admin"])
+def test_a_user_who_is_not_the_owner_cannot_confirm(client, monkeypatch, role):
+    from backend.ai import owner_distribution
+
+    monkeypatch.setattr(owner_distribution, "get_connection", lambda: pytest.fail("a refused caller reaches no query"))
+    client.role["value"] = role
+    assert client.post(CONFIRM, json=VALID_CONFIRM, headers=HEADERS).status_code == 403
+
+
+@pytest.mark.parametrize("change", [
+    {"amount": 0}, {"amount": -1}, {"amount": "abc"}, {"amount": 10.555}, {"currency": "USD"},
+    {"confirmation_key": ""}, {"confirmation_key": "short"}, {"confirmation_key": "has spaces in it"},
+    {"confirmation_key": None}, {"expected_items": []}, {"expected_items": [{"key": "", "amount": 1}]},
+    {"expected_items": [{"key": "vida_controlada", "amount": -1}]},
+])
+def test_an_invalid_confirmation_is_refused_before_anything_runs(client, monkeypatch, change):
+    from backend.ai import routes
+
+    monkeypatch.setattr(routes, "confirm_owner_distribution", lambda *_a: pytest.fail("nothing runs"))
+    assert client.post(CONFIRM, json={**VALID_CONFIRM, **change}, headers=HEADERS).status_code == 422

@@ -1248,6 +1248,13 @@
   ]
  },
  {
+  "method": "POST",
+  "path": "/jarvis/premium/strategy-dashboard/exact-distribution/confirm",
+  "gates": [
+   "router_roles:owner"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/jarvis/premium/strategy-summary",
   "gates": [

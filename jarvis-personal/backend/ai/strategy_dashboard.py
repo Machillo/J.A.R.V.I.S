@@ -344,7 +344,7 @@ def _build_dynamic_director_allocation(
     amounts["meta_prioritaria"] = goal_now
     remaining = max(base - goal_now, 0.0)
 
-    if base <= 0.01:
+    if base < 0.01:  # less than one cent: nothing to split (a single cent is still split)
         mode = "cash_protection"
         mode_label = tx("PROTECCIÓN DE CAJA", "CASH PROTECTION")
         mode_reason = tx("No hay excedente real disponible después de obligaciones.", "There is no real surplus available after obligations.")
@@ -414,7 +414,7 @@ def _build_dynamic_director_allocation(
     # Ajuste de redondeo / pesos: cualquier sobrante no asignado se protege.
     assigned = sum(amounts.values())
     remainder = max(base - assigned, 0.0)
-    if remainder > 0.01:
+    if remainder > 0:  # even a fraction of a cent: the items must add up to the whole base
         if urgent_goals:
             amounts["meta_prioritaria"] += remainder
         elif debt_exists:
@@ -1599,9 +1599,12 @@ def get_owner_exact_distribution(amount: Any, currency: str = "CRC") -> dict[str
     """Owner only (phase 1): the current strategy applied to the amount the Owner has left to split.
 
     A planning answer with the dashboard's shape: no transaction, payment, balance, history or
-    setting is written or stored. Another currency is refused, never converted.
+    setting is written or stored. Another currency is refused, never converted. The answer says
+    what CONFIRMAR would record for each destination (``owner_distribution.confirmation_plan``).
     """
     from fastapi import HTTPException
+
+    from backend.ai.owner_distribution import confirmation_plan
 
     if not _is_owner():
         raise HTTPException(status_code=403, detail=tx("La distribución por monto exacto está disponible solo para el Owner.",
@@ -1620,6 +1623,7 @@ def get_owner_exact_distribution(amount: Any, currency: str = "CRC") -> dict[str
         "has_premium_strategy": True,
         "source": "manual_amount",
         "manual_amount": {"amount": round(float(amount), 2), "currency": "CRC"},
+        "confirmation_plan": confirmation_plan(strategy, get_debts() or []),
     }
 
 

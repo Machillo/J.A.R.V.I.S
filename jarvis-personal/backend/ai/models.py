@@ -21,6 +21,21 @@ class ExactDistributionRequest(BaseModel):
         return "CRC"
 
 
+class ExpectedDistributionItem(BaseModel):
+    key: str = Field(min_length=1, max_length=40)
+    amount: Decimal = Field(ge=0, le=EXACT_DISTRIBUTION_MAX, max_digits=12, decimal_places=2)
+
+
+class ExactDistributionConfirmRequest(ExactDistributionRequest):
+    """CONFIRMAR: the Owner declares he carried out the distribution he reviewed.
+
+    `confirmation_key` identifies this confirmation (one per reviewed distribution): repeating it
+    never applies it twice. `expected_items` is the split the Owner saw; the server recomputes it
+    and records nothing when it differs."""
+    confirmation_key: str = Field(pattern=r"^[A-Za-z0-9_-]{8,80}$")
+    expected_items: list[ExpectedDistributionItem] = Field(min_length=1, max_length=12)
+
+
 class JarvisChatRequest(BaseModel):
     message: str
 
