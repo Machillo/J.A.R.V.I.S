@@ -129,7 +129,7 @@ def list_free_movements() -> list[dict]:
                      original_amount,original_currency,exchange_rate
               FROM expenses WHERE workspace_id=%s
               UNION ALL
-              SELECT 'payroll:'||id,id,'payroll',created_at::date,COALESCE(description,'Horas extra'),amount,'income','income','Horas extra','',TRUE,
+              SELECT 'payroll:'||id,id,'payroll',created_at::date,COALESCE(description,'Horas extra'),amount,'income','payroll_accrued','Horas extra','',TRUE,
                      NULL,NULL,NULL
               FROM payroll_events WHERE workspace_id=%s AND amount>0
               UNION ALL

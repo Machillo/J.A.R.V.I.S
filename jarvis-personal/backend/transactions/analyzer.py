@@ -14,14 +14,15 @@ OUTFLOW_TYPES = ("expense", "debt_payment")
 
 
 def _owner_monthly_flow(workspace_id) -> list[dict]:
-    """The Owner's months by the single ledger (owner_ledger): income is earned income only;
-    loans, collections and asset sales are other inflows; spending is net of refunds; the
-    monthly balance subtracts debt payments; cash_flow adds the other inflows back."""
+    """The Owner's months by the single ledger (owner_ledger): income is money received; gross
+    payroll (overtime, VGH, bonuses) is reported apart; loans, collections and asset sales are
+    other inflows; spending is net of refunds; the monthly balance subtracts debt payments;
+    cash_flow adds the other inflows back; each month says whether it is complete."""
     with get_connection() as conn:
         tables = owner_ledger._existing_tables(conn)
         sources = ["SELECT to_char(transaction_date, 'YYYY-MM') AS month FROM transactions WHERE workspace_id = %s"]
-        sources += [f"SELECT to_char(created_at, 'YYYY-MM') FROM {table} WHERE workspace_id = %s"
-                    + (" AND amount > 0" if table == "payroll_events" else "")
+        record_month = f"to_char({owner_ledger.costa_rica_record_date_sql()}, 'YYYY-MM')"
+        sources += [f"SELECT {record_month} FROM {table} WHERE workspace_id = %s"
                     for table in owner_ledger.LEDGER_TABLES if table in tables]
         months = [row["month"] for row in conn.execute(
             f"SELECT month FROM ({' UNION '.join(sources)}) months WHERE month IS NOT NULL ORDER BY month",
@@ -42,6 +43,8 @@ def _owner_monthly_flow(workspace_id) -> list[dict]:
                 "spending": totals["expenses"], "expenses": totals["expenses"], "outflow": totals["expenses"],
                 "monthly_balance": totals["balance"], "cash_flow": totals["cash_flow"],
                 "cumulative_balance": cumulative, "unclassified_count": totals["unclassified_count"],
+                "payroll_accrued": totals["payroll_accrued"], "pending_mail_count": totals["pending_mail_count"],
+                "complete": totals["complete"], "incomplete_reasons": totals["incomplete_reasons"],
             })
     return flow
 

@@ -11,7 +11,8 @@ import pytest
 from backend.auth.current_user import reset_current_user, set_current_user
 from backend.user_product import owner_ledger
 from backend.user_product.owner_ledger import (
-    DEBT_PAYMENTS, EXPENSES, INCOME, NOT_COUNTED, OTHER_INFLOWS, REFUNDS, UNCLASSIFIED, concept_of, month_totals,
+    DEBT_PAYMENTS, EXPENSES, INCOME, NOT_COUNTED, OTHER_INFLOWS, PAYROLL_ACCRUED, REFUNDS, UNCLASSIFIED, concept_of,
+    month_totals,
 )
 
 
@@ -85,15 +86,31 @@ def test_transfers_never_count_and_an_unclassified_one_is_reported():
     assert result["unclassified_count"] == 1
 
 
-def test_the_other_ledger_tables_count_as_income_and_expenses():
-    result = totals(("income", 100), ("expense", 40), salaries=1000, payroll=50, expenses_table=60)
-    assert result["income"] == 1150 and result["expenses"] == 100
+def test_income_is_money_received_payroll_and_bonuses_are_gross_and_apart():
+    # Overtime, VGH (negative) and bonuses are gross payroll amounts (the salary projection takes
+    # CCSS and income tax from them); the money arrives inside the salary deposit. Counting both
+    # would double the deposit, so they are reported apart and never added to income or the result.
+    result = totals(("income", 100), ("expense", 40), salaries=1000, overtime=50, vgh=-20, bonuses=250, expenses_table=60)
+    assert result["income"] == 1100 and result["expenses"] == 100 and result["balance"] == 1000
+    assert result["payroll_accrued"] == {"overtime_gross": 50, "vgh_gross": -20, "bonuses_gross": 250, "total_gross": 280}
 
 
-def test_bonuses_are_not_an_input_until_their_precedence_is_decided():
-    # Documented blocker: a bonus is a gross payroll input and the list does not show it.
-    with pytest.raises(TypeError):
-        month_totals([], bonuses=250)
+def test_payroll_accrued_without_a_deposit_marks_the_month_incomplete():
+    result = totals(overtime=80)
+    assert result["income"] == 0 and result["complete"] is False
+    assert result["incomplete_reasons"] == ["payroll_without_deposit"]
+
+
+def test_a_month_with_its_deposit_and_nothing_pending_is_complete():
+    result = totals(("income", 1000), overtime=80)
+    assert result["complete"] is True and result["incomplete_reasons"] == []
+
+
+def test_pending_mail_and_unclassified_movements_mark_the_month_incomplete():
+    result = totals(("income", 1000), ("transfer", 5), pending_mail=3)
+    assert result["complete"] is False
+    assert result["incomplete_reasons"] == ["pending_mail_review", "unclassified_movements"]
+    assert result["pending_mail_count"] == 3
 
 
 def test_other_inflows_keep_their_breakdown():
@@ -117,7 +134,7 @@ def test_nothing_is_counted_twice_across_concepts():
 
 ROWS = [
     {"movement_id": "salary:1", "origin": "salary", "transaction_type": "income", "ledger_type": "income", "amount": 1000},
-    {"movement_id": "payroll:2", "origin": "payroll", "transaction_type": "income", "ledger_type": "income", "amount": 50},
+    {"movement_id": "payroll:2", "origin": "payroll", "transaction_type": "income", "ledger_type": "payroll_accrued", "amount": 50},
     {"movement_id": "expense:3", "origin": "expense", "transaction_type": "expense", "ledger_type": "expense", "amount": 60},
     {"movement_id": "transaction:4", "origin": "transaction", "transaction_type": "expense", "ledger_type": "loan_received", "amount": 500},
     {"movement_id": "transaction:5", "origin": "transaction", "transaction_type": "expense", "ledger_type": "refund", "amount": 100},
@@ -175,6 +192,7 @@ def test_owner_rows_carry_their_real_kind_and_what_they_count_in(monkeypatch):
     assert rows["transaction:7"]["counts_in"] == UNCLASSIFIED
     assert rows["transaction:9"]["counts_in"] == NOT_COUNTED
     assert rows["salary:1"]["counts_in"] == INCOME and rows["expense:3"]["counts_in"] == EXPENSES
+    assert (rows["payroll:2"]["movement_kind"], rows["payroll:2"]["counts_in"]) == ("payroll_accrued", PAYROLL_ACCRUED)
     # Installed apps decode transaction_type as income/expense only: it never changes.
     assert {row["transaction_type"] for row in rows.values()} <= {"income", "expense"}
     assert all("ledger_type" not in row for row in rows.values())
@@ -193,8 +211,9 @@ def test_the_owner_list_adds_up_to_the_month_figures(monkeypatch):
     for row in rows:
         by_concept[row["counts_in"]] = by_concept.get(row["counts_in"], 0) + row["amount"]
     result = totals(*[(row["ledger_type"], row["amount"]) for row in ROWS if row["origin"] == "transaction"],
-                    salaries=1000, payroll=50, expenses_table=60)
+                    salaries=1000, overtime=50, expenses_table=60)
     assert by_concept[INCOME] == result["income"]
+    assert by_concept[PAYROLL_ACCRUED] == result["payroll_accrued"]["overtime_gross"]
     assert by_concept[EXPENSES] - by_concept[REFUNDS] == result["expenses"]
     assert by_concept[DEBT_PAYMENTS] == result["debt_paid"]
     assert by_concept[OTHER_INFLOWS] == result["other_inflows"]
@@ -204,7 +223,9 @@ def test_the_owner_list_adds_up_to_the_month_figures(monkeypatch):
 
 OWNER_TOTALS = {"income": 1.0, "expenses": 2.0, "debt_paid": 3.0, "gross_expenses": 2.0, "refunds": 0.0,
                 "unmatched_refunds": 0.0, "other_inflows": 0.0, "loan_received": 0.0, "receivable_payments": 0.0,
-                "asset_sale_proceeds": 0.0, "balance": -4.0, "cash_flow": -4.0, "unclassified_count": 0}
+                "asset_sale_proceeds": 0.0, "balance": -4.0, "cash_flow": -4.0, "unclassified_count": 0,
+                "payroll_accrued": {"overtime_gross": 7.0, "vgh_gross": 0.0, "bonuses_gross": 0.0, "total_gross": 7.0},
+                "pending_mail_count": 2, "complete": False, "incomplete_reasons": ["pending_mail_review"]}
 LEGACY_TOTALS = {"income": 10.0, "expenses": 20.0, "debt_paid": 30.0}
 
 
@@ -261,7 +282,8 @@ class MonthsConnection:
     def execute(self, query, params=()):
         if "to_regclass" in query:
             return SimpleNamespace(fetchall=lambda: [{"name": name} for name in params[0]])
-        assert "bonuses" not in query and "event_date" not in query
+        assert "event_date" not in query, "no work date is invented: payroll is dated by its record"
+        assert "interval '6 hours'" in query, "record timestamps are read as Costa Rica dates"
         return SimpleNamespace(fetchall=lambda: [{"month": month} for month in self.months])
 
 
@@ -281,3 +303,6 @@ def test_analisis_financiero_uses_the_ledger_for_the_owner(monkeypatch):
     assert october["monthly_balance"] == -4.0 and october["cash_flow"] == 1.0
     assert october["expenses"] == october["spending"] == october["outflow"] == 2.0
     assert october["cumulative_balance"] == -8.0
+    # Gross payroll is reported apart and the month says it is not complete.
+    assert october["payroll_accrued"]["overtime_gross"] == 7.0
+    assert october["complete"] is False and october["incomplete_reasons"] == ["pending_mail_review"]

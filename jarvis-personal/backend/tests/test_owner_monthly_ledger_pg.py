@@ -1,8 +1,11 @@
 """The Owner's single monthly ledger on a real PostgreSQL (Owner audit, Fase 1 §2).
 
-One month holds every movement type plus the other ledger tables. The Owner's Resumen del mes,
-list and ledger must agree with the rules; another workspace's rows never count; a regular
-user keeps the current totals. Only SELECTs run against the seeded data.
+The schema mirrors production: the record tables (salaries, expenses, payroll_events, bonuses)
+keep ``created_at`` as ``timestamp without time zone`` written by ``NOW()`` in a UTC session,
+and ``transactions.transaction_date`` is a ``date``. The Owner's month counts money received;
+overtime, VGH and bonuses are gross payroll reported apart; record timestamps are read as Costa
+Rica dates (UTC-6, no daylight saving). Another workspace's rows never count; a regular user
+keeps today's totals. Only SELECTs run against the seeded data.
 
 Uses DINCR_TEST_POSTGRES_URL or the embedded `pgserver`; CI sets DINCR_REQUIRE_PG_TESTS=1 so
 they fail instead of skipping. All data is synthetic.
@@ -31,14 +34,16 @@ CREATE TABLE salaries (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGI
 CREATE TABLE expenses (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, amount NUMERIC(14,2), category TEXT, expense_type TEXT,
     description TEXT, original_amount NUMERIC, original_currency TEXT, exchange_rate NUMERIC, created_at TIMESTAMP NOT NULL DEFAULT NOW());
 CREATE TABLE payroll_events (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, event_type TEXT, hours NUMERIC(8,2),
-    multiplier NUMERIC(8,4), amount NUMERIC(14,2), description TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    multiplier NUMERIC(8,4), amount NUMERIC(14,2), description TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW());
 CREATE TABLE bonuses (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, amount NUMERIC(14,2), description TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW());
+CREATE TABLE finva_email_candidates (id BIGSERIAL PRIMARY KEY, workspace_id UUID, transaction_date DATE, amount NUMERIC(14,2),
+    transaction_type TEXT, status TEXT);
 CREATE TABLE financial_goals (id BIGSERIAL PRIMARY KEY, workspace_id UUID, current_amount NUMERIC, target_amount NUMERIC);
 CREATE TABLE financial_profiles (account_id TEXT, workspace_id UUID, liquid_savings NUMERIC);
 """
 
-OCTOBER, NOVEMBER = date(2026, 10, 1), date(2026, 11, 1)
+SEPTEMBER, OCTOBER, NOVEMBER, DECEMBER = date(2026, 9, 1), date(2026, 10, 1), date(2026, 11, 1), date(2026, 12, 1)
 
 
 @pytest.fixture(scope="module")
@@ -74,20 +79,28 @@ def db(admin_uri, monkeypatch):
     conn = psycopg2.connect(uri)
     conn.autocommit = True
     q(conn, SCHEMA)
-    for ws in (WS_A, WS_B):  # the same month in another workspace: it must never count for WS_A
+    for ws in (WS_A, WS_B):  # the same months in another workspace: they must never count for WS_A
         for kind, amount in (("income", 1000), ("expense", 400), ("refund", 100), ("debt_payment", 300),
                              ("loan_received", 500), ("receivable_payment", 200), ("asset_sale", 50),
                              ("receivable_offset", 70), ("internal_transfer", 900), ("transfer", 60), ("reimbursement", 40)):
             q(conn, "INSERT INTO transactions (workspace_id, transaction_date, amount, transaction_type) VALUES (%s, '2026-10-15', %s, %s)",
               (ws, amount, kind))
-        q(conn, "INSERT INTO salaries (workspace_id, amount, created_at) VALUES (%s, 2000, '2026-10-30 10:00')", (ws,))
-        q(conn, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 60, 'Comida', '2026-10-05 10:00')", (ws,))
-        q(conn, "INSERT INTO bonuses (workspace_id, amount, created_at) VALUES (%s, 250, '2026-10-20 10:00')", (ws,))
-        # Overtime recorded on 1 Nov counts in November (payroll is dated by created_at, as Hoy does).
-        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, hours, multiplier, created_at) VALUES (%s, 80, 'ot', 2, 1.5, '2026-11-01 09:00')", (ws,))
-        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, hours, multiplier, created_at) VALUES (%s, -15, 'ot', 0, 0, '2026-10-12 09:00')", (ws,))
+        # The declared net salary, written by the app with its date at 12:00.
+        q(conn, "INSERT INTO salaries (workspace_id, amount, created_at) VALUES (%s, 2000, '2026-10-30 12:00')", (ws,))
+        q(conn, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 60, 'Comida', '2026-10-05 12:00')", (ws,))
+        # Recorded at 22:00 on 30 Sep in Costa Rica (04:00 UTC on 1 Oct): a September expense.
+        q(conn, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 25, 'Comida', '2026-10-01 04:00')", (ws,))
+        # Gross payroll recorded through JARVIS at NOW() (UTC wall time):
+        # overtime at 21:00 on 31 Oct in Costa Rica (03:00 UTC on 1 Nov) belongs to October;
+        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, hours, multiplier, created_at) VALUES (%s, 80, 'ot', 2, 1.5, '2026-11-01 03:00')", (ws,))
+        # a VGH (negative) in October; overtime at 01:00 on 1 Nov in Costa Rica (07:00 UTC) is November's.
+        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, hours, multiplier, created_at) VALUES (%s, -15, 'vgh', 1, 1, '2026-10-12 15:00')", (ws,))
+        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, hours, multiplier, created_at) VALUES (%s, 40, 'ot', 1, 1.5, '2026-11-01 07:00')", (ws,))
+        q(conn, "INSERT INTO bonuses (workspace_id, amount, created_at) VALUES (%s, 250, '2026-10-20 18:00')", (ws,))
         # A refund in November only: never income, and November's spending does not go negative.
         q(conn, "INSERT INTO transactions (workspace_id, transaction_date, amount, transaction_type) VALUES (%s, '2026-11-03', 30, 'refund')", (ws,))
+        q(conn, "INSERT INTO finva_email_candidates (workspace_id, transaction_date, amount, transaction_type, status) VALUES (%s, '2026-10-09', 99, 'income', 'pending')", (ws,))
+        q(conn, "INSERT INTO finva_email_candidates (workspace_id, transaction_date, amount, transaction_type, status) VALUES (%s, '2026-10-10', 99, 'expense', 'confirmed')", (ws,))
     monkeypatch.setattr(database, "DATABASE_URL", uri)
     # owner_account_context() checks the stored Owner identity; here the session role stands in for it.
     from backend.auth.current_user import get_current_user
@@ -110,32 +123,46 @@ def _as(role):
     return set_current_user({"id": 7, "account_id": "account-a", "workspace_id": WS_A, "role": role})
 
 
-def test_the_owner_month_follows_the_rules_and_ignores_other_workspaces(db):
+def _month(start, end):
     from backend.core.database import get_connection
     from backend.user_product.owner_ledger import owner_month_totals
-
     with get_connection() as conn:
-        october = owner_month_totals(conn, WS_A, OCTOBER, NOVEMBER)
-        november = owner_month_totals(conn, WS_A, NOVEMBER, date(2026, 12, 1))
+        return owner_month_totals(conn, WS_A, start, end)
+
+
+def test_the_owner_month_counts_money_received_and_reports_gross_payroll_apart(db):
+    october = _month(OCTOBER, NOVEMBER)
     assert october == {
-        "income": 1000 + 2000,                 # income + salaries; the bonus is not counted (documented blocker)
-        "expenses": 400 + 60 - 100,            # spending net of the refund
+        "income": 1000 + 2000,                 # deposits + declared net salary: money received
+        "expenses": 400 + 60 - 100,            # spending net of the refund (the 25 is September's)
         "gross_expenses": 460, "refunds": 100, "unmatched_refunds": 0,
         "debt_paid": 300,
         "other_inflows": 500 + 200 + 50,       # loan, collection, asset sale: money in, not income
         "loan_received": 500, "receivable_payments": 200, "asset_sale_proceeds": 50,
-        "balance": 3000 - 360 - 300,
+        "balance": 3000 - 360 - 300,           # gross payroll never enters the result
         "cash_flow": 2340 + 750,
         "unclassified_count": 2,               # the unclassified transfer and the undecided reimbursement
+        "payroll_accrued": {"overtime_gross": 80, "vgh_gross": -15, "bonuses_gross": 250, "total_gross": 315},
+        "pending_mail_count": 1,
+        "complete": False,
+        "incomplete_reasons": ["pending_mail_review", "unclassified_movements"],
     }
-    assert november["income"] == 80, "overtime recorded in November counts in November"
+
+
+def test_record_timestamps_are_costa_rica_dates(db):
+    september, november = _month(SEPTEMBER, OCTOBER), _month(NOVEMBER, DECEMBER)
+    assert september["gross_expenses"] == 25, "22:00 on 30 Sep in Costa Rica is September"
+    assert november["payroll_accrued"]["overtime_gross"] == 40, "01:00 on 1 Nov in Costa Rica is November"
+    # November has gross payroll and no deposit: not a complete month.
+    assert november["income"] == 0 and november["complete"] is False
+    assert november["incomplete_reasons"] == ["payroll_without_deposit"]
     assert november["expenses"] == 0 and november["unmatched_refunds"] == 30
 
 
 @pytest.mark.parametrize("role,expected", [
     ("owner", {"income": 3000, "expenses": 360, "debt_paid": 300, "balance": 2340}),
-    # Regular users keep today's totals: gross spending (the refund is not subtracted).
-    ("user", {"income": 3000, "expenses": 460, "debt_paid": 300, "balance": 2240}),
+    # Regular users keep today's totals: gross spending, UTC dates, overtime counted as income.
+    ("user", {"income": 3000, "expenses": 485, "debt_paid": 300, "balance": 2215}),
 ])
 def test_resumen_del_mes_changes_only_for_the_owner(db, role, expected):
     from backend.auth.current_user import reset_current_user
@@ -168,6 +195,8 @@ def test_the_owner_list_says_what_each_row_is_and_keeps_the_old_type(db):
     assert kinds["debt_payment"] == "debt_payments" and kinds["transfer"] == "unclassified"
     assert kinds["reimbursement"] == "unclassified" and kinds["receivable_offset"] == "not_counted"
     assert "internal_transfer" not in kinds, "confirmed own transfers stay out of the list, as today"
+    payroll = [row for row in owner_rows if row["origin"] == "payroll"]
+    assert payroll and all(row["counts_in"] == "payroll_accrued" for row in payroll)
     assert {row["transaction_type"] for row in owner_rows} <= {"income", "expense"}
     # Same rows, same order, same old fields; only the Owner gets the two new ones.
     strip = lambda rows: [{k: v for k, v in row.items() if k not in ("movement_kind", "counts_in")} for row in rows]
