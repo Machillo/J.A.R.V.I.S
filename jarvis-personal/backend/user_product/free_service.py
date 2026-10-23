@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
-from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category, owner_context
+from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category, owner_account_context
 from backend.user_product import owner_ledger
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 
@@ -92,8 +92,10 @@ def get_free_monthly_summary(period: str | None = None) -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     start = _month(period)
     with get_connection() as conn:
-        # The Owner's month follows the single ledger (owner_ledger); everyone else keeps these totals.
-        totals = (owner_ledger.owner_month_totals(conn, workspace_id, start, _next_month(start)) if owner_context()
+        # The verified Owner's month follows the single ledger (owner_ledger), decided from the
+        # stored identity of this account and workspace; everyone else keeps these totals.
+        owner = owner_account_context(conn, account_id, workspace_id)
+        totals = (owner_ledger.owner_month_totals(conn, workspace_id, start, _next_month(start)) if owner
                   else _period_totals(conn, workspace_id, start, _next_month(start)))
         categories = _categories(conn, workspace_id, start, _next_month(start))
         goals = conn.execute(
@@ -112,9 +114,10 @@ def get_free_monthly_summary(period: str | None = None) -> dict:
 
 
 def list_free_movements() -> list[dict]:
-    workspace_id = get_current_workspace_id()
+    account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     transaction_date = _transaction_date_sql()
     with get_connection() as conn:
+        owner = owner_account_context(conn, account_id, workspace_id)
         rows = conn.execute(
             f"""SELECT * FROM (
               SELECT 'salary:'||id movement_id,id source_id,'salary' origin,created_at::date transaction_date,
@@ -142,7 +145,7 @@ def list_free_movements() -> list[dict]:
     # transaction_type stays income/expense (installed apps decode only those two). The Owner's
     # rows also say what they really are and what they count in (owner_ledger); for everyone
     # else the response is unchanged.
-    if owner_context():
+    if owner:
         return [{key: value for key, value in owner_ledger.classify_movement(dict(row)).items() if key != "ledger_type"} for row in rows]
     return [{key: value for key, value in dict(row).items() if key != "ledger_type"} for row in rows]
 

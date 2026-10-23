@@ -86,8 +86,20 @@ def test_transfers_never_count_and_an_unclassified_one_is_reported():
 
 
 def test_the_other_ledger_tables_count_as_income_and_expenses():
-    result = totals(("income", 100), ("expense", 40), salaries=1000, payroll=50, bonuses=250, expenses_table=60)
-    assert result["income"] == 1400 and result["expenses"] == 100
+    result = totals(("income", 100), ("expense", 40), salaries=1000, payroll=50, expenses_table=60)
+    assert result["income"] == 1150 and result["expenses"] == 100
+
+
+def test_bonuses_are_not_an_input_until_their_precedence_is_decided():
+    # Documented blocker: a bonus is a gross payroll input and the list does not show it.
+    with pytest.raises(TypeError):
+        month_totals([], bonuses=250)
+
+
+def test_other_inflows_keep_their_breakdown():
+    result = totals(("loan_received", 500), ("loan_disbursement", 100), ("receivable_payment", 200), ("asset_sale", 50))
+    assert (result["loan_received"], result["receivable_payments"], result["asset_sale_proceeds"]) == (600, 200, 50)
+    assert result["other_inflows"] == 850 and result["income"] == 0
 
 
 def test_nothing_is_counted_twice_across_concepts():
@@ -133,6 +145,16 @@ class ListConnection:
 
 def _as(role):
     return set_current_user({"id": 7, "account_id": "account-a", "workspace_id": "workspace-a", "role": role})
+
+
+@pytest.fixture(autouse=True)
+def verified_owner(monkeypatch):
+    """owner_account_context() checks the stored Owner identity; here the session role stands in for it."""
+    from backend.auth.current_user import get_current_user
+    from backend.user_product import free_service, vip_service
+    check = lambda _conn, _account, _workspace: get_current_user().get("role") == "owner"
+    monkeypatch.setattr(free_service, "owner_account_context", check)
+    monkeypatch.setattr(vip_service, "owner_account_context", check)
 
 
 def _list_as(role, monkeypatch):
@@ -181,7 +203,8 @@ def test_the_owner_list_adds_up_to_the_month_figures(monkeypatch):
 # 4. The Owner screens read the ledger; everyone else keeps the current totals
 
 OWNER_TOTALS = {"income": 1.0, "expenses": 2.0, "debt_paid": 3.0, "gross_expenses": 2.0, "refunds": 0.0,
-                "unmatched_refunds": 0.0, "other_inflows": 0.0, "balance": -4.0, "cash_flow": -4.0, "unclassified_count": 0}
+                "unmatched_refunds": 0.0, "other_inflows": 0.0, "loan_received": 0.0, "receivable_payments": 0.0,
+                "asset_sale_proceeds": 0.0, "balance": -4.0, "cash_flow": -4.0, "unclassified_count": 0}
 LEGACY_TOTALS = {"income": 10.0, "expenses": 20.0, "debt_paid": 30.0}
 
 
@@ -236,13 +259,16 @@ class MonthsConnection:
         return False
 
     def execute(self, query, params=()):
+        if "to_regclass" in query:
+            return SimpleNamespace(fetchall=lambda: [{"name": name} for name in params[0]])
+        assert "bonuses" not in query and "event_date" not in query
         return SimpleNamespace(fetchall=lambda: [{"month": month} for month in self.months])
 
 
 def test_analisis_financiero_uses_the_ledger_for_the_owner(monkeypatch):
     from backend.transactions import analyzer
     monkeypatch.setattr(analyzer, "get_connection", lambda: MonthsConnection(["2026-09", "2026-10"]))
-    monkeypatch.setattr(owner_ledger, "owner_month_totals", lambda *_a: dict(OWNER_TOTALS, other_inflows=5.0, cash_flow=1.0))
+    monkeypatch.setattr(owner_ledger, "owner_month_totals", lambda *_a: dict(OWNER_TOTALS, other_inflows=5.0, loan_received=5.0, cash_flow=1.0))
     token = _as("owner")
     try:
         flow = analyzer.get_monthly_flow()
@@ -251,7 +277,7 @@ def test_analisis_financiero_uses_the_ledger_for_the_owner(monkeypatch):
     assert [row["month"] for row in flow] == ["2026-09", "2026-10"]
     october = flow[-1]
     # income = earned income only; loans, collections and sales are other inflows; debt payments lower the balance.
-    assert october["income"] == 1.0 and october["other_inflows"] == 5.0
+    assert october["income"] == 1.0 and october["other_inflows"] == 5.0 and october["loan_received"] == 5.0
     assert october["monthly_balance"] == -4.0 and october["cash_flow"] == 1.0
     assert october["expenses"] == october["spending"] == october["outflow"] == 2.0
     assert october["cumulative_balance"] == -8.0

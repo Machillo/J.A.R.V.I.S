@@ -30,8 +30,8 @@ CREATE TABLE salaries (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGI
     original_amount NUMERIC, original_currency TEXT, exchange_rate NUMERIC, created_at TIMESTAMP NOT NULL DEFAULT NOW());
 CREATE TABLE expenses (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, amount NUMERIC(14,2), category TEXT, expense_type TEXT,
     description TEXT, original_amount NUMERIC, original_currency TEXT, exchange_rate NUMERIC, created_at TIMESTAMP NOT NULL DEFAULT NOW());
-CREATE TABLE payroll_events (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, event_type TEXT, amount NUMERIC(14,2),
-    description TEXT, event_date DATE, created_at TIMESTAMP NOT NULL DEFAULT NOW());
+CREATE TABLE payroll_events (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, event_type TEXT, hours NUMERIC(8,2),
+    multiplier NUMERIC(8,4), amount NUMERIC(14,2), description TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE bonuses (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, amount NUMERIC(14,2), description TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW());
 CREATE TABLE financial_goals (id BIGSERIAL PRIMARY KEY, workspace_id UUID, current_amount NUMERIC, target_amount NUMERIC);
@@ -83,11 +83,17 @@ def db(admin_uri, monkeypatch):
         q(conn, "INSERT INTO salaries (workspace_id, amount, created_at) VALUES (%s, 2000, '2026-10-30 10:00')", (ws,))
         q(conn, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 60, 'Comida', '2026-10-05 10:00')", (ws,))
         q(conn, "INSERT INTO bonuses (workspace_id, amount, created_at) VALUES (%s, 250, '2026-10-20 10:00')", (ws,))
-        # Overtime that happened on 31 Oct but was recorded on 1 Nov: it belongs to October.
-        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, event_date, created_at) VALUES (%s, 80, 'ot', '2026-10-31', '2026-11-01 09:00')", (ws,))
+        # Overtime recorded on 1 Nov counts in November (payroll is dated by created_at, as Hoy does).
+        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, hours, multiplier, created_at) VALUES (%s, 80, 'ot', 2, 1.5, '2026-11-01 09:00')", (ws,))
+        q(conn, "INSERT INTO payroll_events (workspace_id, amount, event_type, hours, multiplier, created_at) VALUES (%s, -15, 'ot', 0, 0, '2026-10-12 09:00')", (ws,))
         # A refund in November only: never income, and November's spending does not go negative.
         q(conn, "INSERT INTO transactions (workspace_id, transaction_date, amount, transaction_type) VALUES (%s, '2026-11-03', 30, 'refund')", (ws,))
     monkeypatch.setattr(database, "DATABASE_URL", uri)
+    # owner_account_context() checks the stored Owner identity; here the session role stands in for it.
+    from backend.auth.current_user import get_current_user
+    from backend.user_product import free_service
+    monkeypatch.setattr(free_service, "owner_account_context",
+                        lambda _conn, _account, _workspace: get_current_user().get("role") == "owner")
     database.close_idle_connections()
     try:
         yield conn
@@ -112,21 +118,23 @@ def test_the_owner_month_follows_the_rules_and_ignores_other_workspaces(db):
         october = owner_month_totals(conn, WS_A, OCTOBER, NOVEMBER)
         november = owner_month_totals(conn, WS_A, NOVEMBER, date(2026, 12, 1))
     assert october == {
-        "income": 1000 + 2000 + 250 + 80,      # income + salaries + bonus + overtime by its event date
+        "income": 1000 + 2000,                 # income + salaries; the bonus is not counted (documented blocker)
         "expenses": 400 + 60 - 100,            # spending net of the refund
         "gross_expenses": 460, "refunds": 100, "unmatched_refunds": 0,
         "debt_paid": 300,
         "other_inflows": 500 + 200 + 50,       # loan, collection, asset sale: money in, not income
-        "balance": 3330 - 360 - 300,
-        "cash_flow": 2670 + 750,
+        "loan_received": 500, "receivable_payments": 200, "asset_sale_proceeds": 50,
+        "balance": 3000 - 360 - 300,
+        "cash_flow": 2340 + 750,
         "unclassified_count": 2,               # the unclassified transfer and the undecided reimbursement
     }
-    assert november["income"] == 0 and november["expenses"] == 0 and november["unmatched_refunds"] == 30
+    assert november["income"] == 80, "overtime recorded in November counts in November"
+    assert november["expenses"] == 0 and november["unmatched_refunds"] == 30
 
 
 @pytest.mark.parametrize("role,expected", [
-    ("owner", {"income": 3330, "expenses": 360, "debt_paid": 300, "balance": 2670}),
-    # Regular users keep today's totals: gross spending, overtime by its recording date, no bonuses.
+    ("owner", {"income": 3000, "expenses": 360, "debt_paid": 300, "balance": 2340}),
+    # Regular users keep today's totals: gross spending (the refund is not subtracted).
     ("user", {"income": 3000, "expenses": 460, "debt_paid": 300, "balance": 2240}),
 ])
 def test_resumen_del_mes_changes_only_for_the_owner(db, role, expected):

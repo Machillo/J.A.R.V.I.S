@@ -18,15 +18,14 @@ def _owner_monthly_flow(workspace_id) -> list[dict]:
     loans, collections and asset sales are other inflows; spending is net of refunds; the
     monthly balance subtracts debt payments; cash_flow adds the other inflows back."""
     with get_connection() as conn:
+        tables = owner_ledger._existing_tables(conn)
+        sources = ["SELECT to_char(transaction_date, 'YYYY-MM') AS month FROM transactions WHERE workspace_id = %s"]
+        sources += [f"SELECT to_char(created_at, 'YYYY-MM') FROM {table} WHERE workspace_id = %s"
+                    + (" AND amount > 0" if table == "payroll_events" else "")
+                    for table in owner_ledger.LEDGER_TABLES if table in tables]
         months = [row["month"] for row in conn.execute(
-            """SELECT month FROM (
-                 SELECT to_char(transaction_date, 'YYYY-MM') AS month FROM transactions WHERE workspace_id = %s
-                 UNION SELECT to_char(created_at, 'YYYY-MM') FROM salaries WHERE workspace_id = %s
-                 UNION SELECT to_char(created_at, 'YYYY-MM') FROM expenses WHERE workspace_id = %s
-                 UNION SELECT to_char(COALESCE(event_date, created_at::date), 'YYYY-MM') FROM payroll_events WHERE workspace_id = %s AND amount > 0
-                 UNION SELECT to_char(created_at, 'YYYY-MM') FROM bonuses WHERE workspace_id = %s
-               ) months WHERE month IS NOT NULL ORDER BY month""",
-            (workspace_id,) * 5,
+            f"SELECT month FROM ({' UNION '.join(sources)}) months WHERE month IS NOT NULL ORDER BY month",
+            (workspace_id,) * len(sources),
         ).fetchall()]
         flow, cumulative = [], 0.0
         for month in months:
@@ -36,7 +35,9 @@ def _owner_monthly_flow(workspace_id) -> list[dict]:
             cumulative = round(cumulative + totals["balance"], 2)
             flow.append({
                 "month": month, "income": totals["income"], "earned_income": totals["income"],
-                "other_inflows": totals["other_inflows"], "gross_expenses": totals["gross_expenses"],
+                "other_inflows": totals["other_inflows"], "loan_received": totals["loan_received"],
+                "receivable_payments": totals["receivable_payments"], "asset_sale_proceeds": totals["asset_sale_proceeds"],
+                "gross_expenses": totals["gross_expenses"],
                 "refunds": totals["refunds"], "debt_payments": totals["debt_paid"],
                 "spending": totals["expenses"], "expenses": totals["expenses"], "outflow": totals["expenses"],
                 "monthly_balance": totals["balance"], "cash_flow": totals["cash_flow"],

@@ -5,8 +5,8 @@ taxonomy the codebase already defines (``finance/balance_movements.py``,
 ``email_monitor/movement_taxonomy.py``, ``finance/receivable_semantics.py``) the same way on Hoy,
 Movimientos > Resumen del mes, the Movimientos list and JARVIS > Análisis financiero:
 
-- earned income: ``income`` movements plus the ``salaries``, ``payroll_events`` (amount > 0, by the
-  event's date) and ``bonuses`` tables;
+- earned income: ``income`` movements plus the ``salaries`` and ``payroll_events`` (amount > 0)
+  tables, dated by ``created_at`` like Hoy and the list already do;
 - spending: ``expense`` movements plus the ``expenses`` table, net of ``refund`` movements (a
   refund is never income; spending never goes below 0, the rest is an unmatched refund);
 - debt payments: ``debt_payment`` movements, a line of their own;
@@ -16,8 +16,17 @@ Movimientos > Resumen del mes, the Movimientos list and JARVIS > Análisis finan
 - unclassified: ``transfer`` and any type this specification does not decide. They are reported
   as a count and never guessed into income or spending.
 
-Owner only: callers use it when ``owner_context()`` is true (the server-authenticated role).
-Free, Basic and VIP keep their current totals. Reading never writes.
+Decided not to guess (documented blockers, not handled here):
+- ``bonuses`` stay out: they are gross inputs to the salary projection, the list does not show
+  them, and counting them could double a payroll deposit already recorded as income.
+- ``payroll_events.event_date`` is not in the repository schema: payroll is dated by
+  ``created_at``.
+- Declared payroll (salaries, overtime) next to an observed salary deposit needs a precedence
+  policy (CLAUDE.md §4.D) before any dedupe; both count, as Hoy already does.
+
+Owner only: the shared Users services use it when ``owner_account_context()`` says the account
+and workspace are the verified Owner's (stored identity); the Owner-only analysis route uses the
+server-authenticated role. Free, Basic and VIP keep their current totals. Reading never writes.
 """
 from __future__ import annotations
 
@@ -62,18 +71,26 @@ def _money(value: object) -> float:
 
 
 def month_totals(groups: Iterable[tuple[object, object, int]], *, salaries: object = 0, payroll: object = 0,
-                 bonuses: object = 0, expenses_table: object = 0) -> dict:
+                 expenses_table: object = 0) -> dict:
     """The month's figures from ``(transaction_type, amount, count)`` groups of ``transactions`` and
     the sums of the other ledger tables. Exact (Decimal) arithmetic, rounded once at the end."""
     sums = {concept: Decimal("0") for concept in (INCOME, EXPENSES, REFUNDS, DEBT_PAYMENTS, OTHER_INFLOWS)}
+    inflows = {"loan_received": Decimal("0"), "receivable_payments": Decimal("0"), "asset_sale_proceeds": Decimal("0")}
     unclassified = 0
     for transaction_type, amount, count in groups:
-        concept = concept_of(transaction_type)
+        kind, value = normalized_type(transaction_type), Decimal(str(amount or 0))
+        concept = concept_of(kind)
         if concept == UNCLASSIFIED:
             unclassified += int(count or 0)
         elif concept in sums:
-            sums[concept] += Decimal(str(amount or 0))
-    income = sums[INCOME] + sum(Decimal(str(value or 0)) for value in (salaries, payroll, bonuses))
+            sums[concept] += value
+        if kind in ("loan_received", "loan_disbursement"):
+            inflows["loan_received"] += value
+        elif kind == "receivable_payment":
+            inflows["receivable_payments"] += value
+        elif kind == "asset_sale":
+            inflows["asset_sale_proceeds"] += value
+    income = sums[INCOME] + sum(Decimal(str(value or 0)) for value in (salaries, payroll))
     gross = sums[EXPENSES] + Decimal(str(expenses_table or 0))
     refunds = sums[REFUNDS]
     spending = max(gross - refunds, Decimal("0"))
@@ -86,6 +103,7 @@ def month_totals(groups: Iterable[tuple[object, object, int]], *, salaries: obje
         "unmatched_refunds": _money(max(refunds - gross, Decimal("0"))),
         "debt_paid": _money(sums[DEBT_PAYMENTS]),
         "other_inflows": _money(sums[OTHER_INFLOWS]),
+        **{key: _money(value) for key, value in inflows.items()},
         "balance": _money(balance),
         "cash_flow": _money(balance + sums[OTHER_INFLOWS]),
         "unclassified_count": unclassified,
@@ -98,8 +116,20 @@ def _transaction_date_sql() -> str:
     return f"CASE WHEN {raw} ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}' THEN SUBSTRING({raw} FROM 1 FOR 10)::date ELSE NULL END"
 
 
+LEDGER_TABLES = ("salaries", "payroll_events", "expenses")
+
+
+def _existing_tables(conn) -> set[str]:
+    rows = conn.execute(
+        "SELECT name FROM unnest(%s::text[]) AS name WHERE to_regclass('public.' || name) IS NOT NULL",
+        (list(LEDGER_TABLES),),
+    ).fetchall()
+    return {row["name"] for row in rows}
+
+
 def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
-    """The month ``[start, end)`` of one workspace by the rules above. SELECT only."""
+    """The month ``[start, end)`` of one workspace by the rules above. SELECT only. A ledger table
+    that does not exist holds no movements (as ``basic_service._basic_tables_ready``)."""
     transaction_date = _transaction_date_sql()
     groups = conn.execute(
         f"""SELECT LOWER(BTRIM(COALESCE(transaction_type,''))) AS ledger_type, COALESCE(SUM(amount),0) AS total, COUNT(*) AS count
@@ -107,18 +137,22 @@ def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
             GROUP BY 1""",
         (workspace_id, start, end),
     ).fetchall()
-    other = conn.execute(
-        """SELECT
-             COALESCE((SELECT SUM(amount) FROM salaries WHERE workspace_id=%s AND created_at::date >= %s AND created_at::date < %s),0) AS salaries,
-             COALESCE((SELECT SUM(amount) FROM payroll_events WHERE workspace_id=%s AND amount>0
-                        AND COALESCE(event_date, created_at::date) >= %s AND COALESCE(event_date, created_at::date) < %s),0) AS payroll,
-             COALESCE((SELECT SUM(amount) FROM bonuses WHERE workspace_id=%s AND created_at::date >= %s AND created_at::date < %s),0) AS bonuses,
-             COALESCE((SELECT SUM(amount) FROM expenses WHERE workspace_id=%s AND created_at::date >= %s AND created_at::date < %s),0) AS expenses_table""",
-        (workspace_id, start, end, workspace_id, start, end, workspace_id, start, end, workspace_id, start, end),
-    ).fetchone()
+    tables = _existing_tables(conn)
+
+    def table_sum(table: str, extra: str = "") -> object:
+        if table not in tables:
+            return 0
+        row = conn.execute(
+            f"SELECT COALESCE(SUM(amount),0) AS total FROM {table} WHERE workspace_id=%s{extra} "
+            "AND created_at::date >= %s AND created_at::date < %s",
+            (workspace_id, start, end),
+        ).fetchone()
+        return row["total"]
+
     return month_totals(
         [(row["ledger_type"], row["total"], row["count"]) for row in groups],
-        salaries=other["salaries"], payroll=other["payroll"], bonuses=other["bonuses"], expenses_table=other["expenses_table"],
+        salaries=table_sum("salaries"), payroll=table_sum("payroll_events", " AND amount>0"),
+        expenses_table=table_sum("expenses"),
     )
 
 

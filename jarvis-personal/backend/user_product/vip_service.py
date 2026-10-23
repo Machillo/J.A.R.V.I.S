@@ -11,7 +11,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import imported_income_by_month, income_baseline
-from backend.finance.category_catalog import owner_context
+from backend.finance.category_catalog import owner_account_context
 from backend.user_product import owner_ledger
 from backend.user_product.basic_service import (
     _basic_tables_ready,
@@ -139,7 +139,8 @@ def get_vip_command_center() -> dict:
             months.append({"month": start.strftime("%Y-%m"), **totals, "balance": round(totals["income"] - totals["expenses"] - totals["debt_paid"], 2)})
         # What Hoy shows as the month (reports) follows the Owner's single ledger; the income
         # policy below keeps reading these months, unchanged.
-        report_months = _owner_report_months(conn, workspace_id, months) if owner_context() else months
+        owner = owner_account_context(conn, account_id, workspace_id)
+        report_months = _owner_report_months(conn, workspace_id, months) if owner else months
         imported_income = imported_income_by_month(conn, workspace_id, _shift_month(current, -11))
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
