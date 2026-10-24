@@ -37,7 +37,7 @@ extension FixtureBackend {
             guard isInternalRole else { return error(403, "No tienes permisos para realizar esta acción.") }
             return ok(analysis(path))
         default:
-            return nil
+            return receivablesRoute(method, path, body)
         }
     }
 
