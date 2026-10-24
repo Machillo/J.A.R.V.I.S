@@ -4,13 +4,14 @@ Always-loaded operating rules for this repository. The invariants in §2–§5 a
 
 ## 1. Product and repository
 
-- The public product is **DINCR**, a mobile product (Android/iOS via Capacitor). `dincr.com` is marketing, legal and support only: never build a second, web-based financial app there.
+- The public product is **DINCR**, a mobile product. The official store apps are the **native iOS (Swift) and Android (Kotlin) apps** in `jarvis-personal/native`; the Capacitor build is legacy and internal, not the store client. `dincr.com` is marketing, legal and support only: never build a second, web-based financial app there.
 - Plans: Free, Basic, VIP and Owner. Owner is internal (DINCR Owner / JARVIS) and never purchasable.
 - FINVA/JARVIS are historical internal names in code, tables, routes, folders and env vars. Do not rename them unless the task asks.
 - The current code is the source of truth. Inspect it before assuming architecture or behavior.
 - Layout:
   - `jarvis-personal/backend`: FastAPI, Supabase/Postgres.
-  - `jarvis-personal/frontend`: React + Vite + Capacitor. Public app in `src/users`, `src/products/finva`, `src/pages`; Owner in `src/personal`, `src/products/jarvis`.
+  - `jarvis-personal/native`: the official iOS (SwiftUI, `ios/`) and Android (Compose, `android/`) apps; `native/feature-reachability.json` is what each plan reaches.
+  - `jarvis-personal/frontend`: React + Vite + Capacitor (legacy shells and the internal lab). Public app in `src/users`, `src/products/finva`, `src/pages`; Owner in `src/personal`, `src/products/jarvis`.
   - `jarvis-personal/frontend/landing`: dincr.com.
   - `jarvis-personal/database/migrations`: schema.
 
