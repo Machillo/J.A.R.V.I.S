@@ -54,7 +54,8 @@ from backend.core.idempotency import (
     safe_abandon_operation,
 )
 from backend.core.feature_flags import disabled_feature_for_request
-from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language, use_language
+from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language, tx, use_language
+from backend.core import write_limit
 
 # The web app is the only process exempt from declaring a workspace for deletes.
 _database.APPLICATION_NAME = os.getenv("DINCR_DB_APPLICATION_NAME", "dincr-backend")
@@ -318,6 +319,18 @@ async def auth_middleware(request: Request, call_next):
                 "feature": disabled_feature["flag_key"],
             },
             headers={**cors_headers, "X-Request-ID": request_id},
+        )
+    # SEC-12: a technical cap on writes per account, before any work (core/write_limit.py).
+    retry_after = write_limit.retry_after_for(user, request.method, request.url.path)
+    if retry_after is not None:
+        logger.warning("Write limit reached id=%s method=%s", request_id, request.method)
+        with use_language(language_for_request(request.url.path, request.headers.get("accept-language"))):
+            detail = tx("Hiciste muchos cambios seguidos. Esperá unos segundos e intentá de nuevo.",
+                        "You made many changes in a row. Wait a few seconds and try again.")
+        return JSONResponse(
+            status_code=429,
+            content={"detail": detail, "code": "too_many_writes"},
+            headers={**cors_headers, "X-Request-ID": request_id, "Retry-After": str(int(retry_after + 0.999))},
         )
     context_token = set_current_user(user)
     idempotency_key = request.headers.get("X-Idempotency-Key", "").strip()
