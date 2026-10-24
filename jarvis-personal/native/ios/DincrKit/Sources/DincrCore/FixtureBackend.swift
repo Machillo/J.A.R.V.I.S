@@ -255,7 +255,7 @@ public actor FixtureBackend: HTTPTransport {
         case ("POST", "/user-product/finance/income"), ("POST", "/user-product/finance/expenses"):
             return createMovement(income: path.hasSuffix("income"), body)
         // Debts
-        case ("GET", "/user-product/finance/debts"): return ok(debts)
+        case ("GET", "/user-product/finance/debts"): return ok(debts.map(withPayoffEstimate))
         case ("POST", "/user-product/finance/debts"):
             var debt = body
             debt["id"] = nextId()
@@ -682,6 +682,40 @@ public actor FixtureBackend: HTTPTransport {
         return ["month": month, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "debt_balance": number(sum(debts, "remaining_amount")),
                 "balance": number(income - expenses), "available_after_commitments": number(income - expenses),
                 "categories": categories(month).map { ["category": $0["category"]!, "amount": $0["amount"]!] }, "monthly_history": history()]
+    }
+
+    /// Like the backend's debt_payoff.py: installments left and the last one's date, only for a known
+    /// rate and a payment that covers the interest; nil otherwise, never a guessed date.
+    private func withPayoffEstimate(_ debt: [String: Any]) -> [String: Any] {
+        var row = debt
+        let remaining = (debt["remaining_amount"] as? NSNumber)?.doubleValue ?? 0
+        let payment = (debt["monthly_payment"] as? NSNumber)?.doubleValue ?? 0
+        let known = debt["interest_rate_known"] as? Bool == true
+        let monthlyRate = ((debt["interest_rate"] as? NSNumber)?.doubleValue ?? 0) / 100 / 12
+        var months: Int?
+        if remaining <= 0 { months = 0 } else if known, payment > 0 {
+            var left = remaining
+            for month in 1...1200 {
+                let interest = left * monthlyRate
+                if payment <= interest { break }
+                left += interest - payment
+                if left <= 0.01 { months = month; break }
+            }
+        }
+        row["estimated_payoff_months"] = months ?? NSNull()
+        if let months, months > 0 {
+            let calendar = Calendar(identifier: .gregorian)
+            let paymentDay = debt["payment_day"] as? Int ?? 1
+            let thisMonth = calendar.dateComponents([.year, .month, .day], from: today)
+            let startsNextMonth = (thisMonth.day ?? 1) > paymentDay
+            let last = calendar.date(byAdding: .month, value: months - 1 + (startsNextMonth ? 1 : 0), to: today) ?? today
+            let parts = calendar.dateComponents([.year, .month], from: last)
+            let lastDay = calendar.range(of: .day, in: .month, for: last)?.count ?? 28
+            row["estimated_payoff_date"] = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, min(paymentDay, lastDay))
+        } else {
+            row["estimated_payoff_date"] = NSNull()
+        }
+        return row
     }
 
     private func monthlySummary(_ period: String) -> [String: Any] {

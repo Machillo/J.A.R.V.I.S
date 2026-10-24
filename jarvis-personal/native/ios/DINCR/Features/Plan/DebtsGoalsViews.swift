@@ -80,6 +80,7 @@ private struct DebtList: View {
             EmptyStateView(symbol: "creditcard", title: tx("No tenés deudas registradas", "You have no debts recorded"),
                            message: tx("Agregá tarjetas o préstamos para ver tu avance y tu estrategia.", "Add cards or loans to see your progress and your strategy.")) { EmptyView() }
         }
+        DebtPayoffSummary(summary: DebtPayoff.summary(debts))
         ForEach(debts) { debt in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack(alignment: .firstTextBaseline) {
@@ -98,6 +99,7 @@ private struct DebtList: View {
                 }
                 if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
                 if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.label(next)) }
+                DebtPayoffLine(debt: debt)
                 if canWrite {
                     HStack(spacing: DincrSpacing.s2) {
                         if (debt.remainingAmount ?? 0) > 0 {

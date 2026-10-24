@@ -337,7 +337,7 @@ class FakeBackend(
             }
 
             // Debts
-            path == "/user-product/finance/debts" && method == "GET" -> ok(debts.map { it.copy(progressPercent = progress(it)) })
+            path == "/user-product/finance/debts" && method == "GET" -> ok(debts.map { withPayoffEstimate(it.copy(progressPercent = progress(it))) })
             path == "/user-product/finance/debts" && method == "POST" -> {
                 val debt = Debt(id(), text("name"), text("debt_type") ?: "other", money("total_amount") ?: money("remaining_amount"), money("remaining_amount"),
                     money("monthly_payment"), money("interest_rate"), int("term_months"), int("payment_day"), text("next_payment_date"))
@@ -614,6 +614,33 @@ class FakeBackend(
         }
         return FreeDashboard(month, income, expenses, BigDecimal.ZERO, debts.sumOf { it.remainingAmount ?: BigDecimal.ZERO }, income - expenses, income - expenses,
             categories(month).map { CategoryAmount(it.category ?: "", it.amount ?: BigDecimal.ZERO) }, history)
+    }
+
+    /**
+     * Like the backend's debt_payoff.py: installments left and the last one's date, only for a known
+     * rate and a payment that covers the interest; null otherwise, never a guessed date.
+     */
+    private fun withPayoffEstimate(debt: Debt): Debt {
+        val remaining = debt.remainingAmount?.toDouble() ?: 0.0
+        val payment = debt.monthlyPayment?.toDouble() ?: 0.0
+        val monthlyRate = (debt.interestRate?.toDouble() ?: 0.0) / 100 / 12
+        var months: Int? = null
+        if (remaining <= 0) months = 0 else if (debt.interestRateKnown == true && payment > 0) {
+            var left = remaining
+            for (month in 1..1200) {
+                val interest = left * monthlyRate
+                if (payment <= interest) break
+                left += interest - payment
+                if (left <= 0.01) { months = month; break }
+            }
+        }
+        val date = months?.takeIf { it > 0 }?.let { count ->
+            val day = debt.paymentDay ?: 1
+            val first = if (today.dayOfMonth > day) today.plusMonths(1) else today
+            val last = first.plusMonths((count - 1).toLong())
+            last.withDayOfMonth(minOf(day, last.lengthOfMonth())).toString()
+        }
+        return debt.copy(estimatedPayoffMonths = months, estimatedPayoffDate = date)
     }
 
     private fun monthlySummary(period: String): MonthlySummary {

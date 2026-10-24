@@ -37,6 +37,7 @@ import com.dincr.data.AmountInput
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.Debt
+import com.dincr.data.DebtPayoff
 import com.dincr.data.DebtRequest
 import com.dincr.data.Feature
 import com.dincr.data.IdempotencyKey
@@ -128,6 +129,7 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
                         AmountLine(tx("Cuotas del mes", "Monthly payments"), Debt.knownSum(list.map { it.monthlyPayment }))
                     }
                 }
+                DebtPayoffSummary(DebtPayoff.summary(list))
                 list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }) }
             }
         }
@@ -172,6 +174,7 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
             debt.knownProgressPercent?.let { ProgressLine(it / 100.0, tx("${it.toInt()} % pagado", "${it.toInt()} % paid")) }
             debt.monthlyPayment?.let { AmountLine(tx("Cuota mensual", "Monthly payment"), it) }
             debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateLabel(it)) }
+            DebtPayoffLine(debt)
             Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                 // A payment on a paid-off debt would record a zero payment: not offered.
                 if ((debt.remainingAmount ?: BigDecimal.ZERO).signum() > 0) TextButton(onPay, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Registrar pago", "Record payment"), color = Dincr.colors.tint) }
