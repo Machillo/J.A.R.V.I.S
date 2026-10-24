@@ -571,7 +571,8 @@ struct DashboardDistribution: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("De dónde sale", "Where it comes from"))
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    FigureRow(label: DistributionLabels.formula(line.key), amount: line.amount)
+                    // The Owner's lines read as in "¿Por qué?"; Users keep the shared labels.
+                    FigureRow(label: OwnerReading.formulaLabel(line.key, plan: plan), amount: line.amount)
                 }
             }
             .dincrCard()
