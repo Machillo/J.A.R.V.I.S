@@ -622,13 +622,16 @@ class FakeBackend(
         val summary = MonthlySummary(period, income, expenses, BigDecimal.ZERO, income - expenses, cats.firstOrNull(), cats, savings.sumOf { it.savedAmount ?: BigDecimal.ZERO },
             GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0))
         if (!isOwner) return summary
-        // Like the backend: only the verified Owner's month carries the ledger's reading; the
-        // current month still has a mail notice to review.
+        // Like the backend: only the verified Owner's month carries the ledger's reading. The current
+        // month still has a mail notice to review; a closed month has a loan received (not income) and
+        // gross payroll reported apart. iOS: FixtureBackend.monthlySummary.
         val open = period == today.toString().take(7)
+        val loan = if (open) BigDecimal.ZERO else BigDecimal(100_000)
         return summary.copy(complete = !open, incompleteReasons = if (open) listOf("pending_mail_review") else emptyList(),
-            grossExpenses = expenses, refunds = BigDecimal.ZERO, otherInflows = BigDecimal.ZERO, cashFlow = income - expenses,
+            grossExpenses = expenses, refunds = BigDecimal.ZERO, otherInflows = loan, loanReceived = loan, cashFlow = income - expenses + loan,
             unclassifiedCount = 0, pendingMailCount = if (open) 1 else 0,
-            payrollAccrued = PayrollAccrued(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO))
+            payrollAccrued = if (open) PayrollAccrued(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)
+            else PayrollAccrued(BigDecimal(60_000), BigDecimal.ZERO, BigDecimal(25_000), BigDecimal(85_000)))
     }
 
     private fun budgetView(): Budget {
