@@ -13,17 +13,34 @@ data class DatePeriod(val start: String? = null, val end: String? = null)
 
 object OwnerReading {
     /** Why a month is not complete (backend owner_ledger codes), in plain words. */
+    // One is singular; zero, several and an unknown count ("algunos") are plural.
     fun incompleteReason(code: String, pendingMail: Int?, unclassified: Int?, language: AppLanguage = AppLanguage.current()): String = when (code) {
-        "pending_mail_review" -> language.pick(
+        "pending_mail_review" -> if (pendingMail == 1) language.pick(
+            "Hay 1 aviso de correo de este mes sin revisar: su monto todavía no cuenta.",
+            "There is 1 mail notice from this month not reviewed yet: its amount doesn’t count yet.")
+        else language.pick(
             "Hay ${pendingMail ?: "algunos"} avisos de correo de este mes sin revisar: sus montos todavía no cuentan.",
             "There are ${pendingMail ?: "some"} mail notices from this month not reviewed yet: their amounts don’t count yet.")
-        "unclassified_movements" -> language.pick(
+        "unclassified_movements" -> if (unclassified == 1) language.pick(
+            "Hay 1 movimiento sin clasificar (por ejemplo una transferencia): no suma como ingreso ni como gasto.",
+            "There is 1 unclassified movement (a transfer, for example): it counts neither as income nor as spending.")
+        else language.pick(
             "Hay ${unclassified ?: "algunos"} movimientos sin clasificar (por ejemplo transferencias): no suman como ingreso ni como gasto.",
             "There are ${unclassified ?: "some"} unclassified movements (transfers, for example): they count neither as income nor as spending.")
         "payroll_without_deposit" -> language.pick(
             "Hay nómina registrada (horas extra o bonos) sin el depósito del salario de este mes.",
             "There is payroll recorded (overtime or bonuses) without this month’s salary deposit.")
         else -> language.pick("Falta información para cerrar este mes.", "Some information is missing to close this month.")
+    }
+
+    /** A `YYYY-MM` month as the analysis lists it ("oct 2026", "Oct 2026"); anything else as it came. iOS: `OwnerReading.monthLabel`. */
+    fun monthLabel(period: String, language: AppLanguage = AppLanguage.current()): String {
+        val parts = period.split("-")
+        val month = parts.getOrNull(1)?.toIntOrNull()
+        if (parts.size != 2 || parts[0].length != 4 || parts[0].toIntOrNull() == null || month == null || month !in 1..12) return period
+        val spanish = listOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic")
+        val english = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        return "${language.pick(spanish[month - 1], english[month - 1])} ${parts[0]}"
     }
 
     /** The months of a series that are not complete yet, in calendar order. */

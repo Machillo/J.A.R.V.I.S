@@ -176,7 +176,7 @@ private fun FlowNotes(t: TransactionAnalysis, charted: List<String>) {
         "By calendar month. Income: money received. Spending: refunds already taken out. Loans, collections and sales don’t count as income."))
     val incomplete = OwnerReading.incompleteMonths(t.monthlyFlow).filter { it in charted }
     if (incomplete.isNotEmpty()) Box(Modifier.testTag("jarvis.analysis.incomplete")) {
-        Caption(tx("Meses todavía incompletos: ", "Months not complete yet: ") + incomplete.joinToString(", ") { shortMonth(it) + " " + it.take(4) } +
+        Caption(tx("Meses todavía incompletos: ", "Months not complete yet: ") + incomplete.joinToString(", ") { OwnerReading.monthLabel(it) } +
             tx(" (avisos sin revisar, movimientos sin clasificar o nómina sin el depósito del salario).",
             " (notices not reviewed, movements not classified or payroll without the salary deposit)."))
     }

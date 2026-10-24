@@ -131,7 +131,7 @@ struct OwnerFlowNotes: View {
                         "By calendar month. Income: money received. Spending: refunds already taken out. Loans, collections and sales don’t count as income."))
         let incomplete = OwnerReading.incompleteMonths(flow).filter { charted.contains($0) }
         if !incomplete.isEmpty {
-            OwnerCaption(tx("Meses todavía incompletos: ", "Months not complete yet: ") + incomplete.joined(separator: ", ") +
+            OwnerCaption(tx("Meses todavía incompletos: ", "Months not complete yet: ") + incomplete.map { OwnerReading.monthLabel($0) }.joined(separator: ", ") +
                          tx(" (avisos sin revisar, movimientos sin clasificar o nómina sin el depósito del salario).",
                             " (notices not reviewed, movements not classified or payroll without the salary deposit)."))
                 .accessibilityIdentifier("jarvis.analysis.incomplete")

@@ -56,6 +56,34 @@ class OwnerReadingTest {
         assertTrue(OwnerReading.incompleteReason("pending_mail_review", null, null, AppLanguage.ENGLISH).startsWith("There are some"))
     }
 
+    @Test fun oneNoticeOrMovementIsSingularAndZeroOrSeveralArePlural() {
+        fun mail(count: Int?, language: AppLanguage) = OwnerReading.incompleteReason("pending_mail_review", count, null, language)
+        fun movements(count: Int?, language: AppLanguage) = OwnerReading.incompleteReason("unclassified_movements", null, count, language)
+        assertEquals("Hay 1 aviso de correo de este mes sin revisar: su monto todavía no cuenta.", mail(1, AppLanguage.SPANISH))
+        assertEquals("There is 1 mail notice from this month not reviewed yet: its amount doesn’t count yet.", mail(1, AppLanguage.ENGLISH))
+        assertEquals("Hay 1 movimiento sin clasificar (por ejemplo una transferencia): no suma como ingreso ni como gasto.", movements(1, AppLanguage.SPANISH))
+        assertEquals("There is 1 unclassified movement (a transfer, for example): it counts neither as income nor as spending.", movements(1, AppLanguage.ENGLISH))
+        for (count in listOf(0, 2, 12)) {
+            val es = mail(count, AppLanguage.SPANISH)
+            assertTrue(es, es.startsWith("Hay $count avisos de correo") && es.contains("sus montos todavía no cuentan"))
+            assertTrue(mail(count, AppLanguage.ENGLISH).startsWith("There are $count mail notices"))
+            val moves = movements(count, AppLanguage.SPANISH)
+            assertTrue(moves, moves.startsWith("Hay $count movimientos sin clasificar") && moves.contains("no suman"))
+            assertTrue(movements(count, AppLanguage.ENGLISH).startsWith("There are $count unclassified movements"))
+        }
+        assertTrue(mail(null, AppLanguage.SPANISH).startsWith("Hay algunos avisos"))
+        assertTrue(movements(null, AppLanguage.ENGLISH).startsWith("There are some unclassified movements"))
+    }
+
+    @Test fun anIncompleteMonthIsListedByItsShortNameAndYear() {
+        assertEquals("oct 2026", OwnerReading.monthLabel("2026-10", AppLanguage.SPANISH))
+        assertEquals("set 2026", OwnerReading.monthLabel("2026-09", AppLanguage.SPANISH))
+        assertEquals("Jan 2026", OwnerReading.monthLabel("2026-01", AppLanguage.ENGLISH))
+        assertEquals("Dec 2025", OwnerReading.monthLabel("2025-12", AppLanguage.ENGLISH))
+        // Anything that is not a YYYY-MM month stays as it came.
+        for (raw in listOf("", "2026", "2026-13", "2026-00", "26-10", "octubre")) assertEquals(raw, OwnerReading.monthLabel(raw, AppLanguage.SPANISH))
+    }
+
     @Test fun theIncompleteMonthsOfAFlowAreListed() {
         val flow = listOf(
             TransactionAnalysis.FlowMonth("2026-08", complete = true),

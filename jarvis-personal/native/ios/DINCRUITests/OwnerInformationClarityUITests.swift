@@ -62,7 +62,7 @@ final class OwnerInformationClarityUITests: XCTestCase {
             // This month: a mail notice still to review.
             XCTAssertTrue(element("summary.owner.month", in: app).waitForExistence(timeout: 10), l)
             XCTAssertTrue(text(pick(l, "Este mes todavía no está completo", "This month isn’t complete yet"), in: app).exists, l)
-            XCTAssertTrue(text(pick(l, "avisos de correo de este mes sin revisar", "mail notices from this month not reviewed"), in: app).exists, l)
+            XCTAssertTrue(text(pick(l, "Hay 1 aviso de correo de este mes sin revisar", "There is 1 mail notice from this month not reviewed"), in: app).exists, "\(l): one notice reads singular")
             XCTAssertTrue(text(pick(l, "Resultado del mes", "Result of the month"), in: app).exists, l)
             snapshot("\(l)-summary-current", app)
 
@@ -112,6 +112,11 @@ final class OwnerInformationClarityUITests: XCTestCase {
             open("jarvis.section.analysis", in: app)
             reveal(pick(l, "Meses todavía incompletos", "Months not complete yet"), in: app, l)
             XCTAssertTrue(element("jarvis.analysis.incomplete", in: app).exists, l)
+            // The month by its short name and year, like Android ("oct 2026"), never "2026-10".
+            let label = element("jarvis.analysis.incomplete", in: app).label
+            XCTAssertFalse(label.range(of: #"\d{4}-\d{2}"#, options: .regularExpression) != nil, "\(l): \(label)")
+            XCTAssertTrue(label.range(of: pick(l, #"(ene|feb|mar|abr|may|jun|jul|ago|set|oct|nov|dic) \d{4}"#, #"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}"#),
+                                      options: .regularExpression) != nil, "\(l): \(label)")
             snapshot("\(l)-jarvis-analysis", app)
             app.terminate()
         }

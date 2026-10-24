@@ -42,6 +42,38 @@ struct OwnerReadingTests {
         #expect(OwnerReading.incompleteReason("pending_mail_review", pendingMail: nil, unclassified: nil, language: .english).hasPrefix("There are some"))
     }
 
+    @Test func oneNoticeOrMovementIsSingularAndZeroOrSeveralArePlural() {
+        func mail(_ count: Int?, _ language: AppLanguage) -> String {
+            OwnerReading.incompleteReason("pending_mail_review", pendingMail: count, unclassified: nil, language: language)
+        }
+        func movements(_ count: Int?, _ language: AppLanguage) -> String {
+            OwnerReading.incompleteReason("unclassified_movements", pendingMail: nil, unclassified: count, language: language)
+        }
+        #expect(mail(1, .spanish) == "Hay 1 aviso de correo de este mes sin revisar: su monto todavía no cuenta.")
+        #expect(mail(1, .english) == "There is 1 mail notice from this month not reviewed yet: its amount doesn’t count yet.")
+        #expect(movements(1, .spanish) == "Hay 1 movimiento sin clasificar (por ejemplo una transferencia): no suma como ingreso ni como gasto.")
+        #expect(movements(1, .english) == "There is 1 unclassified movement (a transfer, for example): it counts neither as income nor as spending.")
+        for count in [0, 2, 12] {
+            #expect(mail(count, .spanish).hasPrefix("Hay \(count) avisos de correo") && mail(count, .spanish).contains("sus montos todavía no cuentan"))
+            #expect(mail(count, .english).hasPrefix("There are \(count) mail notices"))
+            #expect(movements(count, .spanish).hasPrefix("Hay \(count) movimientos sin clasificar") && movements(count, .spanish).contains("no suman"))
+            #expect(movements(count, .english).hasPrefix("There are \(count) unclassified movements"))
+        }
+        #expect(mail(nil, .spanish).hasPrefix("Hay algunos avisos"))
+        #expect(movements(nil, .english).hasPrefix("There are some unclassified movements"))
+    }
+
+    @Test func anIncompleteMonthIsListedByItsShortNameAndYear() {
+        #expect(OwnerReading.monthLabel("2026-10", language: .spanish) == "oct 2026")
+        #expect(OwnerReading.monthLabel("2026-09", language: .spanish) == "set 2026")
+        #expect(OwnerReading.monthLabel("2026-01", language: .english) == "Jan 2026")
+        #expect(OwnerReading.monthLabel("2025-12", language: .english) == "Dec 2025")
+        // Anything that is not a YYYY-MM month stays as it came.
+        for raw in ["", "2026", "2026-13", "2026-00", "26-10", "octubre"] {
+            #expect(OwnerReading.monthLabel(raw, language: .spanish) == raw)
+        }
+    }
+
     @Test func aMonthWithNothingPendingSaysWhetherItHasDataAndWhetherItIsOver() throws {
         func month(_ period: String, _ income: String) throws -> MonthlySummary {
             try decode(MonthlySummary.self, #"{"period":"\#(period)","income":\#(income),"expenses":0,"debt_paid":0,"complete":true}"#)
