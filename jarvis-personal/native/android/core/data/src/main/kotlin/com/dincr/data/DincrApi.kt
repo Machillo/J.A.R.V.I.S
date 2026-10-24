@@ -183,6 +183,19 @@ class DincrApi(private val client: ApiClient) {
     suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
     suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")
 
+    // --- JARVIS "Control de dinero" (Owner; `/finance/*` is Owner-only on the server) ----------------
+    // The writes are explicit Owner commands, never retried on their own: the backend does not deduplicate them.
+    suspend fun receivables(): ReceivablesReport = client.get("/finance/receivables")
+    suspend fun recordReceivablePayment(id: Long, request: ReceivablePaymentRequest) =
+        checkWrite(client.send<ReceivablePaymentRequest, ReceivableWriteResult>("POST", "/finance/receivables/$id/payments", request))
+    suspend fun addReceivableEntry(request: ReceivableEntryRequest) =
+        checkWrite(client.send<ReceivableEntryRequest, ReceivableWriteResult>("POST", "/finance/receivables/entries", request))
+
+    /** The backend refuses these writes in the body with HTTP 200: an error, never "saved". */
+    private fun checkWrite(result: ReceivableWriteResult) {
+        if (!result.succeeded) throw ApiError(ApiError.Kind.VALIDATION, code = result.status.orEmpty(), message = result.message ?: "No pudimos guardarlo.")
+    }
+
     // --- Store billing ----------------------------------------------------------------------------------
     suspend fun storeCatalog(): StoreCatalog = client.get("/product-ops/billing/store/catalog")
     suspend fun storeEntitlement(): StoreEntitlement = client.get("/product-ops/billing/store/entitlement")
