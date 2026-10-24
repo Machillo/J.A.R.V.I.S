@@ -72,7 +72,7 @@ private struct OwnerAnalysisContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 SectionHeader(title: tx("Ingresos y gastos", "Income and expenses"))
                 IncomeExpenseChart(months: flow)
-                OwnerFlowNotes(flow: transactions.monthlyFlow ?? [])
+                OwnerFlowNotes(flow: transactions.monthlyFlow ?? [], charted: flow.map(\.month))
             }
             .dincrCard()
             .accessibilityElement(children: .contain)
@@ -84,7 +84,8 @@ private struct OwnerAnalysisContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 SectionHeader(title: tx("Gastos por mes", "Expenses by month"))
                 MonthBars(points: Array(byMonth))
-                Text(tx("La misma cifra de gastos que el gráfico de ingresos y gastos.", "The same spending as the income and spending chart."))
+                Text(tx("Solo gastos registrados como movimientos, sin restar reembolsos: por eso puede diferir del gráfico de ingresos y gastos.",
+                        "Only spending recorded as movements, refunds not taken out, so it can differ from the income and spending chart."))
                     .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
             }
             .dincrCard()

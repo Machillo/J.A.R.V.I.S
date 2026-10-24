@@ -348,16 +348,20 @@ private struct DashboardPlanDetail: View {
 
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             if plan.isOwnerScope {
-                // The Owner's figures are the cycle's (from the 6th to the 5th), not a calendar month's.
+                // The Owner's figures are the cycle's (from one cut day to the next), not a calendar month's.
                 SectionHeader(title: tx("Este ciclo", "This cycle"))
                 OwnerPeriodNote(label: tx("Ciclo", "Cycle"), period: plan.cyclePeriod)
                 FigureRow(label: tx("Ingresos esperados del ciclo", "Income expected this cycle"), amount: plan.monthlyIncome)
+                if let source = IncomeSourceLabel.label(plan.incomePolicy?.source) {
+                    Text(source).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                }
                 OwnerCaption(tx("Salario y extras previstos para el ciclo (proyección).", "Salary and extras expected for the cycle (projection)."))
                 FigureRow(label: tx("Gastos comprometidos", "Committed spending"), amount: plan.monthlyExpenses)
-                OwnerCaption(tx("Gastos del estado de cuenta de la tarjeta más los gastos con tarjeta después del corte.",
-                                "Card statement spending plus card spending after the statement cut."))
+                OwnerCaption(tx("Gastos del período del estado de cuenta más los gastos registrados después del corte.",
+                                "Spending in the statement period plus spending recorded after the cut."))
                 FigureRow(label: tx("Cuotas de deuda pendientes", "Pending debt payments"), amount: plan.debtCommitmentCurrentCycle)
                 OwnerCaption(tx("Cuotas de deuda que faltan por pagar en este ciclo.", "Debt instalments still to pay this cycle."))
+                FigureRow(label: tx("Obligaciones recurrentes sin cubrir", "Recurring obligations not yet covered"), amount: plan.pendingRecurringTotal)
                 // Not Hoy's "Podés gastar con tranquilidad" (another calculation): the strategy's own share.
                 FigureRow(label: tx("Para uso libre en este ciclo", "Free to use this cycle"), amount: plan.safeToSpend)
                 OwnerCaption(tx("La parte de tu sobrante que la estrategia deja para gastos personales. «Podés gastar con tranquilidad» en Hoy se calcula aparte, con tus próximos 45 días.",
@@ -459,13 +463,13 @@ private struct OwnerStrategyFigures: View {
             OwnerCaption(tx("Ingresos ya registrados en este ciclo.", "Income already recorded this cycle."))
             FigureRow(label: tx("Ingreso por recibir en el ciclo", "Income still to receive this cycle"), amount: plan.remainingIncomeCurrentCycle)
             // Money available today and what is already committed from it.
-            FigureRow(label: tx("Efectivo en tus cuentas para repartir", "Cash in your accounts to split"), amount: plan.distributableAccountCash)
-            OwnerCaption(tx("Saldo de tus cuentas de efectivo del que parte la distribución.", "The balance of your cash accounts the distribution starts from."))
-            FigureRow(label: tx("Gastos del estado de cuenta de la tarjeta", "Card statement spending"), amount: plan.statementExpenses)
+            FigureRow(label: tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account"), amount: plan.distributableAccountCash)
+            OwnerCaption(tx("Saldo actual de la cuenta de la que parte la distribución.", "The current balance of the account the distribution starts from."))
+            FigureRow(label: tx("Gastos del período del estado de cuenta", "Spending in the statement period"), amount: plan.statementExpenses)
             OwnerPeriodNote(label: tx("Estado de cuenta", "Statement"), period: plan.cardStatementPeriod)
-            FigureRow(label: tx("Gastos con tarjeta después del corte", "Card spending after the statement cut"), amount: plan.newExpensesAfterCut)
-            OwnerCaption(tx("Se pagan con el próximo estado de cuenta, pero ya reducen lo que se puede repartir.",
-                            "They are paid with the next statement but already reduce what can be split."))
+            FigureRow(label: tx("Gastos después del corte", "Spending after the statement cut"), amount: plan.newExpensesAfterCut)
+            OwnerCaption(tx("Gastos registrados después de la fecha de corte: ya reducen lo que se puede repartir.",
+                            "Spending recorded after the cut date: it already reduces what can be split."))
             FigureRow(label: tx("Gastos fijos obligatorios pendientes", "Pending mandatory fixed expenses"), amount: plan.mandatoryFixedPending)
             ForEach(Array((plan.mandatoryFixedPendingItems ?? []).enumerated()), id: \.offset) { _, item in
                 FigureRow(label: "· \(item.name ?? tx("Gasto fijo", "Fixed expense"))", amount: item.amount)

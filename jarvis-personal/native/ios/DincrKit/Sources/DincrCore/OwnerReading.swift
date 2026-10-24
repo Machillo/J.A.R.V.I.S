@@ -49,6 +49,19 @@ public enum OwnerReading {
         }
     }
 
+    /// How a month with nothing pending reads: no movements (unknown, not zero), in progress, or closed.
+    public enum MonthState: Sendable, Equatable { case noMovements, inProgress, closed }
+
+    public static func monthState(_ s: MonthlySummary, currentMonth: String) -> MonthState {
+        if [s.income, s.expenses, s.grossExpenses, s.debtPaid, s.otherInflows].allSatisfy({ ($0 ?? 0) == 0 }) { return .noMovements }
+        return s.period == currentMonth ? .inProgress : .closed
+    }
+
+    /// Gross payroll is worth showing when any part of it is not zero (the parts can cancel out in the total).
+    public static func hasPayroll(_ p: PayrollAccrued) -> Bool {
+        [p.overtimeGross, p.vghGross, p.bonusesGross, p.totalGross].contains { ($0 ?? 0) != 0 }
+    }
+
     /// The months of a series that are not complete yet, in calendar order.
     public static func incompleteMonths(_ flow: [TransactionAnalysis.MonthPoint]) -> [String] {
         flow.filter { $0.complete == false && !$0.month.isEmpty }.map(\.month)
@@ -61,9 +74,9 @@ public enum OwnerReading {
         guard plan.isOwnerScope else { return DistributionLabels.formula(key, language: language) }
         switch key {
         case "income": return language.pick("Ingresos por recibir en el ciclo", "Income still to come this cycle")
-        case "cash_available_now": return language.pick("Efectivo en tus cuentas ahora", "Cash in your accounts now")
-        case "statement_spending": return language.pick("Gastos del estado de cuenta de la tarjeta", "Card statement spending")
-        case "new_spending_after_cut": return language.pick("Gastos con tarjeta después del corte", "Card spending after the statement cut")
+        case "cash_available_now": return language.pick("Efectivo en tu cuenta de distribución", "Cash in your distribution account")
+        case "statement_spending": return language.pick("Gastos del período del estado de cuenta", "Spending in the statement period")
+        case "new_spending_after_cut": return language.pick("Gastos después del corte", "Spending after the statement cut")
         default: return DistributionLabels.formula(key, language: language)
         }
     }

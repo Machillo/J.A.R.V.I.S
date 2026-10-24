@@ -27,6 +27,19 @@ object OwnerReading {
     }
 
     /** The months of a series that are not complete yet, in calendar order. */
+    /** How a month with nothing pending reads: no movements (unknown, not zero), in progress, or closed. */
+    enum class MonthState { NO_MOVEMENTS, IN_PROGRESS, CLOSED }
+
+    fun monthState(s: MonthlySummary, currentMonth: String): MonthState = when {
+        listOf(s.income, s.expenses, s.grossExpenses, s.debtPaid, s.otherInflows).all { (it?.signum() ?: 0) == 0 } -> MonthState.NO_MOVEMENTS
+        s.period == currentMonth -> MonthState.IN_PROGRESS
+        else -> MonthState.CLOSED
+    }
+
+    /** Gross payroll is worth showing when any part of it is not zero (the parts can cancel out in the total). */
+    fun hasPayroll(p: PayrollAccrued): Boolean =
+        listOf(p.overtimeGross, p.vghGross, p.bonusesGross, p.totalGross).any { (it?.signum() ?: 0) != 0 }
+
     fun incompleteMonths(flow: List<TransactionAnalysis.FlowMonth>): List<String> =
         flow.filter { it.complete == false }.mapNotNull { it.month?.takeIf(String::isNotEmpty) }
 
@@ -37,9 +50,9 @@ object OwnerReading {
      */
     fun formulaLabel(key: String, strategy: DirectorStrategy, language: AppLanguage = AppLanguage.current()): String = when {
         strategy.isOwnerScope && key == "income" -> language.pick("Ingresos por recibir en el ciclo", "Income still to come this cycle")
-        strategy.isOwnerScope && key == "cash_available_now" -> language.pick("Efectivo en tus cuentas ahora", "Cash in your accounts now")
-        strategy.isOwnerScope && key == "statement_spending" -> language.pick("Gastos del estado de cuenta de la tarjeta", "Card statement spending")
-        strategy.isOwnerScope && key == "new_spending_after_cut" -> language.pick("Gastos con tarjeta después del corte", "Card spending after the statement cut")
+        strategy.isOwnerScope && key == "cash_available_now" -> language.pick("Efectivo en tu cuenta de distribución", "Cash in your distribution account")
+        strategy.isOwnerScope && key == "statement_spending" -> language.pick("Gastos del período del estado de cuenta", "Spending in the statement period")
+        strategy.isOwnerScope && key == "new_spending_after_cut" -> language.pick("Gastos después del corte", "Spending after the statement cut")
         else -> Distribution.formulaLabel(key, language)
     }
 }

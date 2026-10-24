@@ -1,7 +1,5 @@
 """The Owner's figures keep one meaning across screens (Owner information clarity).
 
-- JARVIS > Análisis financiero: "Gastos por mes" and "Ingresos y gastos" read the same Owner ledger
-  months (owner_ledger), computed once per request; Users keep their own series.
 - The Owner strategy says which dates its cycle and card statement cover (from the same cycle
   report, nothing recalculated); unknown periods stay unknown (None), never invented.
 Synthetic data only; loaders are stubbed and any database access fails.
@@ -12,42 +10,9 @@ import pytest
 
 from backend.ai import strategy_dashboard as sd
 from backend.auth.current_user import reset_current_user, set_current_user
-from backend.transactions import analyzer
-
-FLOW = [
-    {"month": "2026-09", "income": 900000.0, "expenses": 410000.0, "monthly_balance": 300000.0, "complete": True},
-    {"month": "2026-10", "income": 450000.0, "expenses": 125000.5, "monthly_balance": 200000.0, "complete": False},
-]
-
 
 def _no_query(*_a, **_k):
     raise AssertionError("not expected in this test")
-
-
-def _stub_analysis(monkeypatch, owner: bool, flow_calls: list):
-    monkeypatch.setattr(analyzer, "owner_context", lambda: owner)
-    monkeypatch.setattr(analyzer, "get_monthly_flow", lambda: flow_calls.append(1) or [dict(m) for m in FLOW])
-    monkeypatch.setattr(analyzer, "get_transaction_summary", lambda: {})
-    monkeypatch.setattr(analyzer, "get_top_expense_categories", lambda: [])
-    monkeypatch.setattr(analyzer, "get_expenses_by_category_and_month", lambda: [])
-    monkeypatch.setattr(analyzer, "get_spending_breakdown", lambda: {})
-
-
-def test_the_owner_expenses_by_month_are_the_flow_months(monkeypatch):
-    calls: list = []
-    _stub_analysis(monkeypatch, owner=True, flow_calls=calls)
-    monkeypatch.setattr(analyzer, "get_expenses_by_month", _no_query)  # the old expense-rows-only series
-    result = analyzer.get_transaction_analysis()
-    assert result["expenses_by_month"] == [{"month": "2026-09", "total": 410000.0}, {"month": "2026-10", "total": 125000.5}]
-    assert [m["expenses"] for m in result["monthly_flow"]] == [m["total"] for m in result["expenses_by_month"]]
-    assert calls == [1], "the ledger months are computed once per request"
-
-
-def test_users_keep_their_expenses_by_month(monkeypatch):
-    calls: list = []
-    _stub_analysis(monkeypatch, owner=False, flow_calls=calls)
-    monkeypatch.setattr(analyzer, "get_expenses_by_month", lambda: [{"month": "2026-10", "total": 99.0}])
-    assert analyzer.get_transaction_analysis()["expenses_by_month"] == [{"month": "2026-10", "total": 99.0}]
 
 
 # --- Owner strategy periods ------------------------------------------------------------------
@@ -63,8 +28,8 @@ def _as(role, fn):
 @pytest.fixture
 def owner_strategy(monkeypatch):
     cycle = {"value": {
-        "cycle": {"start": "2026-10-06", "end": "2026-11-05", "end_exclusive": "2026-11-06"},
-        "expense_cycle": {"start": "2026-09-21", "end": "2026-10-20", "end_exclusive": "2026-10-21"},
+        "cycle": {"start": "2026-10-05", "end": "2026-11-05", "end_exclusive": "2026-11-06"},
+        "expense_cycle": {"start": "2026-09-21", "end": "2026-10-21", "end_exclusive": "2026-10-22"},
         "income": {"expected_total": 900000, "received_from_transactions": 0},
         "expenses": {"spending_only": 100000}, "debts": {"payments_current_period": 0},
     }}
@@ -85,8 +50,8 @@ def owner_strategy(monkeypatch):
 
 def test_the_owner_strategy_says_which_dates_it_covers(owner_strategy):
     result = _as("owner", sd.build_local_strategy_blueprint)
-    assert result["cycle_period"] == {"start": "2026-10-06", "end": "2026-11-05"}
-    assert result["card_statement_period"] == {"start": "2026-09-21", "end": "2026-10-20"}
+    assert result["cycle_period"] == {"start": "2026-10-05", "end": "2026-11-05"}
+    assert result["card_statement_period"] == {"start": "2026-09-21", "end": "2026-10-21"}
 
 
 def test_an_unread_cycle_has_no_invented_dates(owner_strategy):
@@ -95,7 +60,7 @@ def test_an_unread_cycle_has_no_invented_dates(owner_strategy):
     assert result["cycle_period"] is None and result["card_statement_period"] is None
 
 
-def test_the_periods_never_change_a_figure(owner_strategy, monkeypatch):
+def test_the_periods_are_only_added_alongside_the_figures(owner_strategy, monkeypatch):
     with_periods = _as("owner", sd.build_local_strategy_blueprint)
     monkeypatch.setattr(sd, "_period", lambda _section: None)
     without = _as("owner", sd.build_local_strategy_blueprint)

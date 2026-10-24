@@ -33,16 +33,26 @@ struct OwnerMonthSummary: View {
     @Environment(\.moneyFormat) private var format
 
     var body: some View {
-        OwnerCaption(tx("Mes calendario completo, del primer al último día. Solo cuenta dinero que ya se movió.",
-                        "The whole calendar month, first to last day. Only money that already moved counts."))
-        if summary.complete == true {
-            StatusBanner(tone: .info, title: tx("Mes completo", "Complete month"),
-                         message: tx("Todos los movimientos del mes están revisados y clasificados.", "Every movement of the month is reviewed and classified."))
-        } else {
+        OwnerCaption(tx("Mes calendario, del primer al último día. Solo cuenta dinero que ya se movió.",
+                        "The calendar month, first to last day. Only money that already moved counts."))
+        if summary.complete == false {
             DincrMessage(.attention, title: tx("Este mes todavía no está completo", "This month isn’t complete yet"),
                          message: (summary.incompleteReasons ?? []).map {
                              OwnerReading.incompleteReason($0, pendingMail: summary.pendingMailCount, unclassified: summary.unclassifiedCount)
                          }.joined(separator: "\n"))
+        } else {
+            // Nothing recorded is unknown, not a verified zero; a month in progress can still change.
+            switch OwnerReading.monthState(summary, currentMonth: Self.currentMonth) {
+            case .noMovements:
+                OwnerCaption(tx("No hay movimientos registrados en este mes: las cifras en cero significan que no hay registros, no que se confirmó que no hubo dinero.",
+                                "No movements recorded this month: the zero figures mean there are no records, not that no money moved."))
+            case .inProgress:
+                OwnerCaption(tx("Mes en curso: hasta hoy no quedan avisos sin revisar ni movimientos sin clasificar. Las cifras cambian hasta que termine el mes.",
+                                "Month in progress: so far no notices are left to review and no movements to classify. The figures change until the month ends."))
+            case .closed:
+                OwnerCaption(tx("Mes completo: no quedan avisos sin revisar ni movimientos sin clasificar.",
+                                "Complete month: no notices left to review and no movements to classify."))
+            }
         }
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             FigureRow(label: tx("Ingresos recibidos", "Income received"), amount: summary.income, sign: .income)
@@ -73,7 +83,7 @@ struct OwnerMonthSummary: View {
             .accessibilityIdentifier("summary.owner.otherInflows")
         }
 
-        if let payroll = summary.payrollAccrued, let total = payroll.totalGross, total != 0 {
+        if let payroll = summary.payrollAccrued, OwnerReading.hasPayroll(payroll) {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Nómina bruta registrada (aparte)", "Gross payroll recorded (apart)"))
                 if let value = payroll.overtimeGross, value != 0 { FigureRow(label: tx("Horas extra (bruto)", "Overtime (gross)"), amount: value) }
@@ -96,7 +106,7 @@ struct OwnerMonthSummary: View {
     }
 
     private var refundNote: String {
-        if let gross = summary.grossExpenses, let refunds = summary.refunds, refunds > 0 {
+        if let gross = summary.grossExpenses, let refunds = summary.refunds, refunds > 0, refunds <= gross {
             return tx("Gastos de \(format.string(gross)) menos reembolsos de \(format.string(refunds)).",
                       "Spending of \(format.string(gross)) minus refunds of \(format.string(refunds)).")
         }
@@ -104,18 +114,26 @@ struct OwnerMonthSummary: View {
     }
 
     private static func positive(_ value: Decimal?) -> Bool { (value ?? 0) > 0 }
+
+    private static var currentMonth: String {
+        let parts = Calendar.current.dateComponents([.year, .month], from: Date())
+        return String(format: "%04d-%02d", parts.year ?? 0, parts.month ?? 0)
+    }
 }
 
 /// What the income and spending bars mean and which months are not complete yet (backend owner_ledger).
 struct OwnerFlowNotes: View {
     let flow: [TransactionAnalysis.MonthPoint]
+    /// The months the chart shows: only those are listed as incomplete.
+    let charted: [String]
     var body: some View {
         OwnerCaption(tx("Por mes calendario. Ingresos: dinero recibido. Gastos: ya restados los reembolsos. Préstamos, cobros y ventas no cuentan como ingreso.",
                         "By calendar month. Income: money received. Spending: refunds already taken out. Loans, collections and sales don’t count as income."))
-        let incomplete = OwnerReading.incompleteMonths(flow)
+        let incomplete = OwnerReading.incompleteMonths(flow).filter { charted.contains($0) }
         if !incomplete.isEmpty {
             OwnerCaption(tx("Meses todavía incompletos: ", "Months not complete yet: ") + incomplete.joined(separator: ", ") +
-                         tx(" (avisos sin revisar o movimientos sin clasificar).", " (notices not reviewed or movements not classified)."))
+                         tx(" (avisos sin revisar, movimientos sin clasificar o nómina sin el depósito del salario).",
+                            " (notices not reviewed, movements not classified or payroll without the salary deposit)."))
                 .accessibilityIdentifier("jarvis.analysis.incomplete")
         }
     }

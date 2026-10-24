@@ -77,10 +77,24 @@ class OwnerReadingTest {
 
     @Test fun theOwnerStrategySaysWhichDatesItCovers() {
         val s = json.decodeFromString(DirectorStrategy.serializer(),
-            """{"scope":"owner","cycle_period":{"start":"2026-10-06","end":"2026-11-05"},"card_statement_period":{"start":"2026-09-21","end":"2026-10-20"}}""")
-        assertEquals(DatePeriod("2026-10-06", "2026-11-05"), s.cyclePeriod)
-        assertEquals(DatePeriod("2026-09-21", "2026-10-20"), s.cardStatementPeriod)
+            """{"scope":"owner","cycle_period":{"start":"2026-10-05","end":"2026-11-05"},"card_statement_period":{"start":"2026-09-21","end":"2026-10-21"}}""")
+        assertEquals(DatePeriod("2026-10-05", "2026-11-05"), s.cyclePeriod)
+        assertEquals(DatePeriod("2026-09-21", "2026-10-21"), s.cardStatementPeriod)
         assertNull(json.decodeFromString(DirectorStrategy.serializer(), """{"scope":"users"}""").cyclePeriod)
+    }
+
+    @Test fun aMonthWithNothingPendingSaysWhetherItHasDataAndWhetherItIsOver() {
+        fun month(period: String, income: String) =
+            json.decodeFromString(MonthlySummary.serializer(), """{"period":"$period","income":$income,"expenses":0,"debt_paid":0,"complete":true}""")
+        // No movements is unknown, never shown as a verified, complete month of zeros.
+        assertEquals(OwnerReading.MonthState.NO_MOVEMENTS, OwnerReading.monthState(month("2026-08", "0"), "2026-10"))
+        assertEquals(OwnerReading.MonthState.IN_PROGRESS, OwnerReading.monthState(month("2026-10", "100"), "2026-10"))
+        assertEquals(OwnerReading.MonthState.CLOSED, OwnerReading.monthState(month("2026-09", "100"), "2026-10"))
+    }
+
+    @Test fun grossPayrollShowsWhenItsPartsCancelOut() {
+        assertTrue(OwnerReading.hasPayroll(PayrollAccrued(overtimeGross = BigDecimal(5000), vghGross = BigDecimal(-5000), totalGross = BigDecimal.ZERO)))
+        assertFalse(OwnerReading.hasPayroll(PayrollAccrued(totalGross = BigDecimal.ZERO)))
     }
 
     private fun fixture(plan: PlanTier, role: FakeBackend.Role) =

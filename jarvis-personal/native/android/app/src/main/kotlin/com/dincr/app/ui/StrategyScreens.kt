@@ -229,8 +229,8 @@ private fun DirectorMonthPlan(s: DirectorStrategy, plan: MonthPlan, nav: Navigat
             incomeSourceNote(s.incomePolicy?.source)?.let { Caption(it) }
             if (s.isOwnerScope) Caption(tx("Salario y extras previstos para el ciclo (proyección).", "Salary and extras expected for the cycle (projection)."))
             AmountLine(if (s.isOwnerScope) tx("Gastos comprometidos", "Committed spending") else tx("Gastos registrados este mes", "Spending recorded this month"), s.monthlyExpenses)
-            if (s.isOwnerScope) Caption(tx("Gastos del estado de cuenta de la tarjeta más los gastos con tarjeta después del corte.",
-                "Card statement spending plus card spending after the statement cut."))
+            if (s.isOwnerScope) Caption(tx("Gastos del período del estado de cuenta más los gastos registrados después del corte.",
+                "Spending in the statement period plus spending recorded after the cut."))
             AmountLine(tx("Compromiso de deudas", "Debt commitment"), s.debtCommitmentCurrentCycle)
             if (s.isOwnerScope) Caption(tx("Cuotas de deuda que faltan por pagar en este ciclo.", "Debt instalments still to pay this cycle."))
             s.pendingRecurringTotal?.let { AmountLine(tx("Pagos recurrentes pendientes", "Pending recurring payments"), it) }
@@ -382,13 +382,13 @@ private fun OwnerCycle(s: DirectorStrategy) {
         Caption(tx("Ingresos ya registrados en este ciclo.", "Income already recorded this cycle."))
         AmountLine(tx("Por recibir en el ciclo", "Still to receive this cycle"), s.remainingIncomeCurrentCycle)
         // Money available today and what is already committed from it.
-        AmountLine(tx("Efectivo en tus cuentas para repartir", "Cash in your accounts to split"), s.distributableAccountCash)
-        Caption(tx("Saldo de tus cuentas de efectivo del que parte la distribución.", "The balance of your cash accounts the distribution starts from."))
-        AmountLine(tx("Gastos del estado de cuenta de la tarjeta", "Card statement spending"), s.statementExpenses)
+        AmountLine(tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account"), s.distributableAccountCash)
+        Caption(tx("Saldo actual de la cuenta de la que parte la distribución.", "The current balance of the account the distribution starts from."))
+        AmountLine(tx("Gastos del período del estado de cuenta", "Spending in the statement period"), s.statementExpenses)
         OwnerPeriodNote(tx("Estado de cuenta", "Statement"), s.cardStatementPeriod)
-        AmountLine(tx("Gastos con tarjeta después del corte", "Card spending after the statement cut"), s.newExpensesAfterCut)
-        Caption(tx("Se pagan con el próximo estado de cuenta, pero ya reducen lo que se puede repartir.",
-            "They are paid with the next statement but already reduce what can be split."))
+        AmountLine(tx("Gastos después del corte", "Spending after the statement cut"), s.newExpensesAfterCut)
+        Caption(tx("Gastos registrados después de la fecha de corte: ya reducen lo que se puede repartir.",
+            "Spending recorded after the cut date: it already reduces what can be split."))
         AmountLine(tx("Gastos fijos obligatorios pendientes", "Pending mandatory fixed expenses"), s.mandatoryFixedPending)
         s.mandatoryFixedPendingItems.forEach { Caption("• ${it.name.orEmpty()} · ${it.amount?.let(Dincr.money::format) ?: "—"}" + (it.dueDate?.let { d -> " · " + dateLabel(d) } ?: "")) }
         s.monthsSavedByCurrentExtras?.takeIf { it > 0 }?.let {

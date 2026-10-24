@@ -124,7 +124,7 @@ private fun AnalysisModeSections(a: OwnerAnalysis) {
     if (flow.isNotEmpty()) Column(Modifier.testTag("jarvis.analysis.flow")) {
         Section(tx("Ingresos y gastos", "Income and expenses")) {
             IncomeExpenseBars(flow.map { Triple(shortMonth(it.month), it.income, it.expenses) })
-            FlowNotes(t)
+            FlowNotes(t, flow.map { it.month })
         }
     }
     val byMonth = t.knownExpensesByMonth(6)
@@ -171,19 +171,21 @@ private fun AnalysisModeSections(a: OwnerAnalysis) {
  * owner_ledger: pending mail notices, unclassified movements or payroll without a deposit).
  */
 @Composable
-private fun FlowNotes(t: TransactionAnalysis) {
+private fun FlowNotes(t: TransactionAnalysis, charted: List<String>) {
     Caption(tx("Por mes calendario. Ingresos: dinero recibido. Gastos: ya restados los reembolsos. Préstamos, cobros y ventas no cuentan como ingreso.",
         "By calendar month. Income: money received. Spending: refunds already taken out. Loans, collections and sales don’t count as income."))
-    val incomplete = OwnerReading.incompleteMonths(t.monthlyFlow)
+    val incomplete = OwnerReading.incompleteMonths(t.monthlyFlow).filter { it in charted }
     if (incomplete.isNotEmpty()) Box(Modifier.testTag("jarvis.analysis.incomplete")) {
         Caption(tx("Meses todavía incompletos: ", "Months not complete yet: ") + incomplete.joinToString(", ") { shortMonth(it) + " " + it.take(4) } +
-            tx(" (avisos sin revisar o movimientos sin clasificar).", " (notices not reviewed or movements not classified)."))
+            tx(" (avisos sin revisar, movimientos sin clasificar o nómina sin el depósito del salario).",
+            " (notices not reviewed, movements not classified or payroll without the salary deposit)."))
     }
 }
 
-/** "Gastos por mes" is the same spending as the income-and-spending bars (backend: one ledger). */
+/** "Gastos por mes" is the expense movements per month (backend get_expenses_by_month), not the ledger's net spending. */
 @Composable
-private fun SameSpendingNote() = Caption(tx("La misma cifra de gastos que el gráfico de ingresos y gastos.", "The same spending as the income and spending chart."))
+private fun SameSpendingNote() = Caption(tx("Solo gastos registrados como movimientos, sin restar reembolsos: por eso puede diferir del gráfico de ingresos y gastos.",
+    "Only spending recorded as movements, refunds not taken out, so it can differ from the income and spending chart."))
 
 /** The spending bars list this many categories; beyond it the donut keeps its own legend (as iOS). */
 private const val SPENDING_BARS_LIMIT = 8
@@ -203,7 +205,7 @@ private fun SpendingSection(t: TransactionAnalysis) {
     val flow = t.flowMonths()
     if (flow.isNotEmpty()) Section(tx("Ingresos y gastos", "Income and expenses")) {
         IncomeExpenseBars(flow.map { Triple(shortMonth(it.month), it.income, it.expenses) })
-        FlowNotes(t)
+        FlowNotes(t, flow.map { it.month })
     }
     val byMonth = t.knownExpensesByMonth(12)
     if (byMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(byMonth); SameSpendingNote() }

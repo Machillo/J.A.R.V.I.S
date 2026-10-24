@@ -42,6 +42,21 @@ struct OwnerReadingTests {
         #expect(OwnerReading.incompleteReason("pending_mail_review", pendingMail: nil, unclassified: nil, language: .english).hasPrefix("There are some"))
     }
 
+    @Test func aMonthWithNothingPendingSaysWhetherItHasDataAndWhetherItIsOver() throws {
+        func month(_ period: String, _ income: String) throws -> MonthlySummary {
+            try decode(MonthlySummary.self, #"{"period":"\#(period)","income":\#(income),"expenses":0,"debt_paid":0,"complete":true}"#)
+        }
+        // No movements is unknown, never shown as a verified, complete month of zeros.
+        #expect(OwnerReading.monthState(try month("2026-08", "0"), currentMonth: "2026-10") == .noMovements)
+        #expect(OwnerReading.monthState(try month("2026-10", "100"), currentMonth: "2026-10") == .inProgress)
+        #expect(OwnerReading.monthState(try month("2026-09", "100"), currentMonth: "2026-10") == .closed)
+    }
+
+    @Test func grossPayrollShowsWhenItsPartsCancelOut() throws {
+        #expect(OwnerReading.hasPayroll(try decode(PayrollAccrued.self, #"{"overtime_gross":5000,"vgh_gross":-5000,"total_gross":0}"#)))
+        #expect(!OwnerReading.hasPayroll(try decode(PayrollAccrued.self, #"{"total_gross":0}"#)))
+    }
+
     @Test func theIncompleteMonthsOfAFlowAreListed() throws {
         let flow = try decode([TransactionAnalysis.MonthPoint].self, """
         [{"month":"2026-08","complete":true},{"month":"2026-09","complete":false},
@@ -60,10 +75,10 @@ struct OwnerReadingTests {
 
     @Test func theOwnerStrategySaysWhichDatesItCovers() throws {
         let s = try decode(DashboardStrategy.self, """
-        {"scope":"owner","cycle_period":{"start":"2026-10-06","end":"2026-11-05"},"card_statement_period":{"start":"2026-09-21","end":"2026-10-20"}}
+        {"scope":"owner","cycle_period":{"start":"2026-10-05","end":"2026-11-05"},"card_statement_period":{"start":"2026-09-21","end":"2026-10-21"}}
         """)
-        #expect(s.cyclePeriod == DatePeriod(start: "2026-10-06", end: "2026-11-05"))
-        #expect(s.cardStatementPeriod == DatePeriod(start: "2026-09-21", end: "2026-10-20"))
+        #expect(s.cyclePeriod == DatePeriod(start: "2026-10-05", end: "2026-11-05"))
+        #expect(s.cardStatementPeriod == DatePeriod(start: "2026-09-21", end: "2026-10-21"))
         #expect(try decode(DashboardStrategy.self, #"{"scope":"users"}"#).cyclePeriod == nil)
     }
 }

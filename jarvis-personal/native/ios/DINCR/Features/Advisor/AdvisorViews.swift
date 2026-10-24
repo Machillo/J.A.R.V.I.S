@@ -182,7 +182,7 @@ private struct SummaryContent: View {
     var body: some View {
         let flow = SummaryVisuals.flow(summary)
         if summary.isOwnerLedger {
-            // The Owner's ledger: each figure with what it means, period and completeness (OwnerMonthSummaryView.swift).
+            // The Owner's ledger: each figure with what it means, period and completeness (OwnerReadingViews.swift).
             OwnerMonthSummary(summary: summary)
         } else {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {

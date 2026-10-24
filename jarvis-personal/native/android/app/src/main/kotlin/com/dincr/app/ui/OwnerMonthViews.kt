@@ -10,13 +10,12 @@ import com.dincr.data.MessageKind
 import com.dincr.data.MoneyFormat
 import com.dincr.data.MonthlySummary
 import com.dincr.data.OwnerReading
-import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
 import com.dincr.design.DincrMessage
-import com.dincr.design.StatusBanner
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
+import java.time.YearMonth
 
 // The Owner's month in Movimientos → Resumen del mes (backend owner_ledger, the same reading as
 // Hoy and JARVIS → Análisis financiero). It says which period it covers, whether the month is
@@ -27,14 +26,19 @@ import java.math.BigDecimal
 /** The Owner's monthly figures, each with what it means. Shown only when the answer is the Owner's ledger. */
 @Composable
 fun OwnerMonthSummary(s: MonthlySummary) {
-    Caption(tx("Mes calendario completo, del primer al último día. Solo cuenta dinero que ya se movió.",
-        "The whole calendar month, first to last day. Only money that already moved counts."))
-    if (s.complete == true) {
-        StatusBanner(BannerTone.INFO, tx("Mes completo", "Complete month"),
-            tx("Todos los movimientos del mes están revisados y clasificados.", "Every movement of the month is reviewed and classified."))
-    } else {
+    Caption(tx("Mes calendario, del primer al último día. Solo cuenta dinero que ya se movió.",
+        "The calendar month, first to last day. Only money that already moved counts."))
+    if (s.complete == false) {
         DincrMessage(MessageKind.ATTENTION, tx("Este mes todavía no está completo", "This month isn’t complete yet"),
             s.incompleteReasons.joinToString("\n") { OwnerReading.incompleteReason(it, s.pendingMailCount, s.unclassifiedCount) })
+    } else when (OwnerReading.monthState(s, YearMonth.now().toString())) {
+        // Nothing recorded is unknown, not a verified zero; a month in progress can still change.
+        OwnerReading.MonthState.NO_MOVEMENTS -> Caption(tx("No hay movimientos registrados en este mes: las cifras en cero significan que no hay registros, no que se confirmó que no hubo dinero.",
+            "No movements recorded this month: the zero figures mean there are no records, not that no money moved."))
+        OwnerReading.MonthState.IN_PROGRESS -> Caption(tx("Mes en curso: hasta hoy no quedan avisos sin revisar ni movimientos sin clasificar. Las cifras cambian hasta que termine el mes.",
+            "Month in progress: so far no notices are left to review and no movements to classify. The figures change until the month ends."))
+        OwnerReading.MonthState.CLOSED -> Caption(tx("Mes completo: no quedan avisos sin revisar ni movimientos sin clasificar.",
+            "Complete month: no notices left to review and no movements to classify."))
     }
     DincrCard {
         Column(Modifier.testTag("summary.owner.month"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
@@ -58,7 +62,7 @@ fun OwnerMonthSummary(s: MonthlySummary) {
                 "It came into your accounts but you didn’t earn it, so it doesn’t add to your income."))
         }
     }
-    s.payrollAccrued?.takeIf { (it.totalGross?.signum() ?: 0) != 0 }?.let { p ->
+    s.payrollAccrued?.takeIf { OwnerReading.hasPayroll(it) }?.let { p ->
         Section(tx("Nómina bruta registrada (aparte)", "Gross payroll recorded (apart)")) {
             Column(Modifier.testTag("summary.owner.payroll")) {
                 p.overtimeGross?.takeIf { it.signum() != 0 }?.let { AmountLine(tx("Horas extra (bruto)", "Overtime (gross)"), it) }
@@ -74,7 +78,7 @@ fun OwnerMonthSummary(s: MonthlySummary) {
 /** What the spending line means: net of refunds, with the gross amount when there were refunds. */
 @Composable
 private fun refundNote(gross: BigDecimal?, refunds: BigDecimal?): String =
-    if (gross != null && positive(refunds)) tx("Gastos de ${Dincr.money.format(gross)} menos reembolsos de ${Dincr.money.format(refunds!!)}.",
+    if (gross != null && positive(refunds) && refunds!! <= gross) tx("Gastos de ${Dincr.money.format(gross)} menos reembolsos de ${Dincr.money.format(refunds!!)}.",
         "Spending of ${Dincr.money.format(gross)} minus refunds of ${Dincr.money.format(refunds!!)}.")
     else tx("Compras y pagos del mes, ya restados los reembolsos.", "Purchases and payments of the month, refunds already taken out.")
 
