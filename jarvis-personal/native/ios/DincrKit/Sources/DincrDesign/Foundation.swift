@@ -45,11 +45,21 @@ public enum DincrFont {
     public static let amount = Font.body.weight(.semibold).monospacedDigit()
 }
 
+private struct OnHeroKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 private struct DecorativeMotionKey: EnvironmentKey {
     static let defaultValue = true
 }
 
 public extension EnvironmentValues {
+    /// True inside a hero card (`dincrHeroCard`), where tracks and fills use the hero's own steps.
+    var dincrOnHero: Bool {
+        get { self[OnHeroKey.self] }
+        set { self[OnHeroKey.self] = newValue }
+    }
+
     /// Off in UI tests (and anywhere a looping animation must not run); Reduce Motion also stops it.
     var dincrDecorativeMotion: Bool {
         get { self[DecorativeMotionKey.self] }
@@ -65,10 +75,17 @@ public enum DincrMotion {
 }
 
 public extension View {
-    /// Card surface: tonal, no shadow (DESIGN.md → Elevation & Depth). Below the Owner root it is the
-    /// Owner surface with its hairline border (DESIGN.md → Owner identity).
+    /// Card surface: tonal with a hairline edge, no shadow (DESIGN.md → Elevation & Depth). Below the
+    /// Owner root it is the Owner surface with its hairline border (DESIGN.md → Owner identity).
     func dincrCard(padding: CGFloat = DincrSpacing.s4) -> some View {
         modifier(DincrCardModifier(padding: padding))
+    }
+
+    /// The screen's main figure (DESIGN.md → Hero card): ink surface, white figure. The content is
+    /// drawn with the dark scheme's roles so every nested component stays readable on ink in both
+    /// schemes (as Android's `heroPalette`); the Owner keeps its own card.
+    func dincrHeroCard(padding: CGFloat = DincrSpacing.s5) -> some View {
+        modifier(DincrHeroCardModifier(padding: padding))
     }
 
     /// Screen background (the Owner's petrol scene below the Owner root).
@@ -100,8 +117,31 @@ private struct DincrCardModifier: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(owner ? OwnerColor.surface : DincrColor.surface, in: shape)
             .overlay {
-                if owner { shape.strokeBorder(OwnerColor.border, lineWidth: 1) }
+                shape.strokeBorder(owner ? OwnerColor.border : DincrColor.line, lineWidth: 1)
             }
+    }
+}
+
+private struct DincrHeroCardModifier: ViewModifier {
+    let padding: CGFloat
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if owner {
+            content.dincrCard()
+        } else {
+            // The background is resolved in the outer scheme; only the content switches to dark roles.
+            content
+                .padding(padding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .environment(\.colorScheme, .dark)
+                .environment(\.dincrOnHero, true)
+                .background(
+                    LinearGradient(colors: [DincrColor.hero, DincrColor.hero2], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous)
+                )
+        }
     }
 }
 

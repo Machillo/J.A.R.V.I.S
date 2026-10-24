@@ -16,7 +16,12 @@ public struct DincrMessage: View {
         let style = DincrMessageStyle(kind)
         HStack(alignment: .top, spacing: DincrSpacing.s3) {
             // The icon carries the spoken kind, so VoiceOver reads it before the title.
-            Image(systemName: style.symbol).foregroundStyle(style.color).accessibilityLabel(style.spokenKind)
+            Image(systemName: style.symbol)
+                .font(.system(size: DincrIconSize.md, weight: .medium))
+                .foregroundStyle(style.color)
+                .frame(width: 36, height: 36)
+                .background(DincrColor.surface, in: Circle())
+                .accessibilityLabel(style.spokenKind)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text)
                 if !message.isEmpty {
@@ -33,7 +38,7 @@ public struct DincrMessage: View {
                 style.fill
                 if kind == .attention { style.color.frame(width: 4) }
             }
-            .clipShape(RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
         }
         .accessibilityElement(children: .combine)
     }

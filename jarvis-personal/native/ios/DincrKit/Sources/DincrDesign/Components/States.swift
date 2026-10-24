@@ -156,6 +156,7 @@ public struct DincrProgressBar: View {
     let fraction: Double?
     let isOver: Bool
     let overColor: Color
+    @Environment(\.dincrOnHero) private var onHero
 
     public init(fraction: Double, isOver: Bool = false) {
         self.fraction = min(max(fraction, 0), 1); self.isOver = isOver; overColor = DincrColor.negative
@@ -178,7 +179,7 @@ public struct DincrProgressBar: View {
         if let fraction {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(DincrColor.surface2)
+                    Capsule().fill(onHero ? DincrColor.onHero.opacity(0.16) : DincrColor.surface2)
                     Capsule().fill(isOver ? overColor : DincrColor.tint)
                         .frame(width: max(proxy.size.width * fraction, fraction > 0 ? 6 : 0))
                 }
