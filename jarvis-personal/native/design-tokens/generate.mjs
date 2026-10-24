@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Generates the native design tokens from /DESIGN.md (the normative DINCR 2.0 source).
+// Generates the native design tokens from /DESIGN.md (the normative DINCR 2.0 source) and the
+// personal-appearance alternatives from appearance.json (appearance.mjs).
 //
 //   node jarvis-personal/native/design-tokens/generate.mjs          write the generated files
 //   node jarvis-personal/native/design-tokens/generate.mjs --check  fail if they are stale
@@ -8,13 +9,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { contrastFailures, kotlinCatalog, kotlinTokens, parseAppearance, swiftCatalog, swiftTokens } from "./appearance.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../../..");
 const designPath = path.join(repoRoot, "DESIGN.md");
+const appearancePath = path.join(here, "appearance.json");
 const outputs = {
   swift: path.join(here, "../ios/DincrKit/Sources/DincrDesign/Generated/DincrTokens.swift"),
   kotlin: path.join(here, "../android/core/design/src/main/kotlin/com/dincr/design/generated/DincrTokens.kt"),
+  swiftAppearance: path.join(here, "../ios/DincrKit/Sources/DincrDesign/Generated/DincrAppearanceTokens.swift"),
+  swiftCatalog: path.join(here, "../ios/DincrKit/Sources/DincrCore/Generated/AppearanceCatalog.swift"),
+  kotlinAppearance: path.join(here, "../android/core/design/src/main/kotlin/com/dincr/design/generated/DincrAppearanceTokens.kt"),
+  kotlinCatalog: path.join(here, "../android/core/data/src/main/kotlin/com/dincr/data/generated/AppearanceCatalog.kt"),
 };
 
 // Windows checkouts with core.autocrlf turn LF into CRLF; the tokens do not depend on it.
@@ -140,9 +147,45 @@ const val DINCR_TOKENS_VERSION = "${tokens.version}"
 `;
 }
 
-export function render(source) {
+/** DESIGN.md's colors as one map: light keys and their `dark-` counterparts. */
+export function colorMap(tokens) {
+  return Object.fromEntries(tokens.colors.flatMap(({ key, light, dark }) => [[key, light], [`dark-${key}`, dark]]));
+}
+
+/**
+ * The appearance alternatives, validated against DESIGN.md: the classic palette and accent are
+ * exactly DESIGN.md's (so an account on the classic set sees today's app), and every combination
+ * keeps the contrast rules.
+ */
+export function checkedAppearance(tokens, rawAppearance) {
+  const appearance = parseAppearance(rawAppearance);
+  const base = colorMap(tokens);
+  const classicPalette = appearance.palettes[appearance.options.palette.classic];
+  const classicAccent = appearance.accents[appearance.options.accent.classic];
+  for (const mode of ["light", "dark"]) {
+    const prefix = mode === "dark" ? "dark-" : "";
+    for (const [set, name] of [[classicPalette[mode], "palette"], [classicAccent[mode], "accent"]]) {
+      for (const [key, value] of Object.entries(set)) {
+        if (base[prefix + key] !== value) throw new Error(`appearance.json classic ${name} ${mode}.${key} is ${value}, DESIGN.md says ${base[prefix + key]}`);
+      }
+    }
+  }
+  const failures = contrastFailures(appearance, base);
+  if (failures.length) throw new Error(`appearance.json contrast:\n  ${failures.join("\n  ")}`);
+  return appearance;
+}
+
+export function render(source, rawAppearance = fs.readFileSync(appearancePath, "utf8")) {
   const tokens = parseTokens(source);
-  return { swift: swift(tokens), kotlin: kotlin(tokens) };
+  const appearance = checkedAppearance(tokens, rawAppearance);
+  return {
+    swift: swift(tokens),
+    kotlin: kotlin(tokens),
+    swiftAppearance: swiftTokens(appearance, tokens.version),
+    swiftCatalog: swiftCatalog(appearance, tokens.version),
+    kotlinAppearance: kotlinTokens(appearance, tokens.version),
+    kotlinCatalog: kotlinCatalog(appearance, tokens.version),
+  };
 }
 
 const kinds = { DincrColor: "colors", DincrColors: "colors", DincrSpacing: "spacing", DincrRadius: "radius", DincrIconSize: "icon" };
