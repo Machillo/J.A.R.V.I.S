@@ -6,7 +6,7 @@ Always-loaded operating rules for this repository. The invariants in §2–§5 a
 
 - The public product is **DINCR**, a mobile product (Android/iOS via Capacitor). `dincr.com` is marketing, legal and support only: never build a second, web-based financial app there.
 - Plans: Free, Basic, VIP and Owner. Owner is internal (DINCR Owner / JARVIS) and never purchasable.
-- FINVA/JARVIS are historical internal names in code, tables, routes, folders and env vars. Do not rename them unless the task asks.
+- The product name is **DINCR**, exactly. Never call the product FINVA in UI, copy, store texts, docs, PRs, commits or reports. FINVA/JARVIS survive only as historical internal identifiers in code, tables, routes, folders and env vars (inventory: `jarvis-personal/docs/brand/legacy-name-audit.md`); do not rename them unless the task asks. `npm run test:brand` (native apps, shells, store, landing) and `test-i18n.mjs` (web copy) fail if the legacy name reaches users.
 - The current code is the source of truth. Inspect it before assuming architecture or behavior.
 - Layout:
   - `jarvis-personal/backend`: FastAPI, Supabase/Postgres.
