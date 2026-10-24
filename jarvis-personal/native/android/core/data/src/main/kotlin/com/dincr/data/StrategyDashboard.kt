@@ -32,6 +32,10 @@ enum class StrategyContract {
  * wrapper around the deterministic director strategy. Every figure is the backend's; the app only
  * formats them. Decoding is tolerant: unknown keys are ignored and every number is optional.
  */
+/** Body of the Owner's exact-amount distribution: the amount in colones, never converted. */
+@Serializable
+data class ExactDistributionRequest(val amount: Money, val currency: String = "CRC")
+
 @Serializable
 data class StrategyDashboard(
     val status: String? = null,
@@ -40,6 +44,8 @@ data class StrategyDashboard(
     val content: String? = null,
     val strategy: DirectorStrategy? = null,
     val source: String? = null,
+    /** Owner exact amount only: what CONFIRMAR would record for each destination. */
+    @SerialName("confirmation_plan") val confirmationPlan: ConfirmationPlan? = null,
 )
 
 @Serializable
@@ -79,6 +85,10 @@ data class DirectorStrategy(
     @SerialName("distribution_formula") val distributionFormula: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
     /** Null for Users: DINCR never knows a User's account cash (never shown as zero). */
     @SerialName("distributable_account_cash") val distributableAccountCash: Money? = null,
+    /** `estimate` (from DINCR's records) or `manual_amount` (the Owner's confirmed amount, a plan only). */
+    @SerialName("distribution_source") val distributionSource: String? = null,
+    /** What the distribution could not read (said, never computed as zero). */
+    @SerialName("distribution_warnings") val distributionWarnings: List<DistributionWarning> = emptyList(),
     // Owner only (historical JARVIS model).
     @SerialName("recurring_monthly_income") val recurringMonthlyIncome: Money? = null,
     @SerialName("current_month_extra_net") val currentMonthExtraNet: Money? = null,
@@ -93,6 +103,9 @@ data class DirectorStrategy(
     @SerialName("months_saved_by_current_extras") val monthsSavedByCurrentExtras: Int? = null,
 ) {
     val isOwnerScope: Boolean get() = scope == "owner"
+
+    /** The base is the amount the Owner typed, not DINCR's estimate. */
+    val isManualAmount: Boolean get() = distributionSource == "manual_amount"
 
     /** A debt's rate is missing, so the plan names no debt to attack until the rates are complete. */
     val needsDebtRates: Boolean get() = "debt_interest_rates" in missing
@@ -130,6 +143,9 @@ data class DirectorStrategy(
     )
 
     @Serializable
+    data class DistributionWarning(val code: String? = null, val message: String? = null)
+
+    @Serializable
     data class AllocationItem(
         val key: String? = null,
         val percentage: Double? = null,
@@ -158,7 +174,7 @@ data class DirectorStrategy(
 object Distribution {
     /** Formula keys in display order; a key the response does not carry is not shown. */
     val USERS_FORMULA = listOf("income", "recorded_spending", "debt_commitment", "pending_recurring", "surplus", "deficit")
-    val OWNER_FORMULA = listOf("cash_available_now", "income", "statement_spending", "new_spending_after_cut", "debt_commitment", "mandatory_fixed_pending", "surplus", "deficit")
+    val OWNER_FORMULA = listOf("manual_available", "cash_available_now", "income", "statement_spending", "new_spending_after_cut", "debt_commitment", "mandatory_fixed_pending", "surplus", "deficit")
 
     fun formulaLines(strategy: DirectorStrategy): List<Pair<String, java.math.BigDecimal?>> {
         val order = if (strategy.isOwnerScope) OWNER_FORMULA else USERS_FORMULA
@@ -187,6 +203,7 @@ object Distribution {
     }
 
     fun formulaLabel(key: String, language: AppLanguage): String = when (key) {
+        "manual_available" -> language.pick("Monto que indicaste", "Amount you entered")
         "cash_available_now" -> language.pick("Efectivo disponible ahora", "Cash available now")
         "income" -> language.pick("Ingresos", "Income")
         "recorded_spending" -> language.pick("Gastos registrados", "Recorded spending")

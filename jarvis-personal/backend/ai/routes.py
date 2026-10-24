@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends
 
-from backend.ai.models import JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest, MemoryItemRequest, ProfilePreferencesRequest
+from backend.ai.models import ExactDistributionConfirmRequest, ExactDistributionRequest, JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest, MemoryItemRequest, ProfilePreferencesRequest
 from backend.ai.jarvis_engine import process_message, create_initial_financial_strategy
+from backend.ai.owner_distribution import confirm_owner_distribution
 from backend.ai.premium_orchestrator import get_current_strategy_summary
 from backend.auth.current_user import require_owner
 from backend.ai.preferences import get_sports_preferences, update_sports_preferences, save_browser_subscription
 from backend.core.events import get_upcoming_events
 from backend.sports.service import ensure_owner_sports_preferences, get_sports_calendar_summary
 
-from backend.ai.strategy_dashboard import get_premium_strategy_dashboard, get_additional_card_report
+from backend.ai.strategy_dashboard import get_additional_card_report, get_owner_exact_distribution, get_premium_strategy_dashboard
 
 from backend.ai.memory_service import (
     create_memory_item,
@@ -51,6 +52,23 @@ def jarvis_premium_initial_strategy():
 @router.get("/premium/strategy-dashboard")
 def jarvis_premium_strategy_dashboard():
     return get_premium_strategy_dashboard()
+
+
+@router.post("/premium/strategy-dashboard/exact-distribution")
+def jarvis_exact_distribution(request: ExactDistributionRequest):
+    """The current strategy applied to an amount the Owner confirms. A POST so the amount travels in
+    the body, never in a URL or log; it writes and stores nothing (a planning answer)."""
+    return get_owner_exact_distribution(request.amount, request.currency)
+
+
+@router.post("/premium/strategy-dashboard/exact-distribution/confirm")
+def jarvis_confirm_exact_distribution(request: ExactDistributionConfirmRequest):
+    """CONFIRMAR: records the distribution the Owner carried out (debt payments, Salvavidas, goal,
+    investment reserve) in one transaction, once per confirmation key."""
+    return confirm_owner_distribution(
+        request.amount, request.currency, request.confirmation_key,
+        [item.model_dump() for item in request.expected_items], request.plan_fingerprint,
+    )
 
 
 @router.get("/cards/additional-report")

@@ -3,6 +3,7 @@ package com.dincr.data
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -52,7 +53,7 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
 
     // --- Strategy dashboards ----------------------------------------------------------------------
 
-    fun strategyDashboard(data: Snapshot, owner: Boolean, role: String?): String {
+    fun strategyDashboard(data: Snapshot, owner: Boolean, role: String?, manualAmount: BigDecimal? = null): String {
         val (incomeSource, income) = basicIncome(data)
         val (_, spent) = monthTotals(data.movements, month)
         val active = data.debts.filter { (it.remainingAmount ?: BigDecimal.ZERO).signum() > 0 }
@@ -60,7 +61,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         val pendingRecurring = data.recurring.filter { it.isActive == true && it.itemType == "expense" && (it.dueDay ?: 0) > today.dayOfMonth }.sumOf { it.amount ?: BigDecimal.ZERO }
         val statement = if (owner) BigDecimal(95_000) else BigDecimal.ZERO
         val mandatoryPending = if (owner) BigDecimal(210_000) else BigDecimal.ZERO
-        val before = income - spent - debtCommitment - pendingRecurring - statement - mandatoryPending
+        // Like the backend: the amount left after paying everything is the base, never deducted again.
+        val before = manualAmount ?: (income - spent - debtCommitment - pendingRecurring - statement - mandatoryPending)
         val surplus = before.max(BigDecimal.ZERO)
         val deficit = before.negate().max(BigDecimal.ZERO)
         val target = active.maxByOrNull { it.interestRate ?: BigDecimal.ZERO }
@@ -71,13 +73,16 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             DirectorStrategy.AllocationItem("vida_controlada", 15.0, surplus - part(45) - part(40)),
         )
         val formula = linkedMapOf<String, BigDecimal>()
-        if (owner) formula["cash_available_now"] = BigDecimal(640_000)
-        formula["income"] = income
-        if (owner) { formula["statement_spending"] = statement; formula["new_spending_after_cut"] = spent } else formula["recorded_spending"] = spent
-        formula["debt_commitment"] = debtCommitment
-        if (owner) formula["mandatory_fixed_pending"] = mandatoryPending else formula["pending_recurring"] = pendingRecurring
-        formula["surplus"] = surplus
-        formula["deficit"] = deficit
+        if (manualAmount != null) { formula["manual_available"] = manualAmount; formula["surplus"] = surplus }
+        else {
+            if (owner) formula["cash_available_now"] = BigDecimal(640_000)
+            formula["income"] = income
+            if (owner) { formula["statement_spending"] = statement; formula["new_spending_after_cut"] = spent } else formula["recorded_spending"] = spent
+            formula["debt_commitment"] = debtCommitment
+            if (owner) formula["mandatory_fixed_pending"] = mandatoryPending else formula["pending_recurring"] = pendingRecurring
+            formula["surplus"] = surplus
+            formula["deficit"] = deficit
+        }
         val timeline = active.sortedByDescending { it.interestRate ?: BigDecimal.ZERO }.mapIndexed { index, debt ->
             DirectorStrategy.TimelineItem(index + 1, debt.name, debt.remainingAmount,
                 (debt.monthlyPayment ?: BigDecimal.ZERO) + if (index == 0) part(45) else BigDecimal.ZERO, today.plusMonths(14L + 10 * index).withDayOfMonth(1).toString())
@@ -105,6 +110,7 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             allocationBaseAmount = surplus, allocationItems = items,
             distributionFormula = formula.mapValues { JsonPrimitive(it.value) },
             distributableAccountCash = if (owner) BigDecimal(640_000) else null,
+            distributionSource = if (manualAmount != null) "manual_amount" else "estimate",
             recurringMonthlyIncome = if (owner) income else null,
             currentMonthExtraNet = if (owner) BigDecimal(45_000) else null,
             incomeReceivedCurrentCycle = if (owner) BigDecimal(432_500) else null,
@@ -117,7 +123,59 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             baseTimeline = if (owner) timeline else emptyList(),
             monthsSavedByCurrentExtras = if (owner) 2 else null,
         )
-        return json.encodeToString(StrategyDashboard("OK", role, strategy.title, strategy.objective, strategy, "live_database"))
+        val plan = manualAmount?.let { confirmationPlan(active, items) }
+        return json.encodeToString(StrategyDashboard("OK", role, strategy.title, strategy.objective, strategy, "live_database", plan))
+    }
+
+    // --- Owner exact amount: CONFIRMAR (backend/ai/owner_distribution.py) ---------------------------
+
+    private val confirmations = mutableMapOf<String, BigDecimal>()
+
+    /** The debt part, highest rate first (this fake's strategy order), each debt at most what it owes. */
+    private fun confirmationPlan(active: List<Debt>, items: List<DirectorStrategy.AllocationItem>): ConfirmationPlan {
+        var blocked = false
+        val steps = items.map { item ->
+            val amount = item.amount ?: BigDecimal.ZERO
+            when (item.key) {
+                "ataque_de_deuda" -> {
+                    var left = amount
+                    val targets = active.sortedByDescending { it.interestRate ?: BigDecimal.ZERO }.mapNotNull { debt ->
+                        val take = left.min(debt.remainingAmount ?: BigDecimal.ZERO)
+                        if (take.signum() <= 0) null else { left -= take; ConfirmationPlan.DebtTarget(debt.id, debt.name, take) }
+                    }
+                    if (left.signum() > 0) blocked = true
+                    ConfirmationPlan.Step(item.key, amount, "debt_extra_payment", targets)
+                }
+                "fondo_de_emergencia" -> ConfirmationPlan.Step(item.key, amount, "salvavidas_deposit")
+                else -> ConfirmationPlan.Step(item.key, amount, "not_recorded")
+            }
+        }
+        val fingerprint = steps.joinToString("|") { step -> "${step.key}:${step.amount}:" + step.targets.joinToString(",") { "${it.debtId}=${it.amount}" } }
+            .let { java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }
+        return ConfirmationPlan(steps, !blocked, if (blocked) listOf("La parte para deudas es mayor que lo que se debe.") else emptyList(), fingerprint)
+    }
+
+    /**
+     * CONFIRMAR: recomputes the split, refuses one the Owner did not review (409), records it once per
+     * key (a repeat answers `already_applied`) and returns the debt payments for the fake to apply.
+     */
+    fun confirmExactDistribution(data: Snapshot, amount: BigDecimal, key: String, expected: Map<String, BigDecimal>, fingerprint: String?): Triple<Int, String, Map<Long, BigDecimal>> {
+        confirmations[key]?.let { previous ->
+            return if (previous.compareTo(amount) != 0) Triple(409, "Esta confirmación ya se usó con otro monto.", emptyMap())
+            else Triple(200, json.encodeToString(ExactDistributionConfirmation("already_applied", ExactDistributionConfirmation.Record(1, previous))), emptyMap())
+        }
+        val answer = json.decodeFromString<StrategyDashboard>(strategyDashboard(data, owner = true, role = "owner", manualAmount = amount))
+        val items = answer.strategy?.allocationItems.orEmpty().mapNotNull { item -> item.key?.let { k -> item.amount?.let { k to it } } }
+            .filter { it.second.signum() > 0 }.toMap()
+        val same = items.keys == expected.filterValues { it.signum() > 0 }.keys && items.all { (k, v) -> expected[k]?.compareTo(v) == 0 }
+        if (!same) return Triple(409, "La distribución cambió desde que la revisaste. Revisala de nuevo antes de confirmar.", emptyMap())
+        val plan = answer.confirmationPlan ?: return Triple(409, "No se pudo registrar.", emptyMap())
+        if (!plan.confirmable) return Triple(409, plan.blockingReasons.joinToString(" "), emptyMap())
+        if (plan.fingerprint != fingerprint) return Triple(409, "La distribución cambió desde que la revisaste. Revisala de nuevo antes de confirmar.", emptyMap())
+        val payments = plan.steps.flatMap { it.targets }.associate { (it.debtId ?: 0L) to (it.amount ?: BigDecimal.ZERO) }
+        plan.steps.filter { it.action == "salvavidas_deposit" }.forEach { ownerAmount += it.amount ?: BigDecimal.ZERO }
+        confirmations[key] = amount
+        return Triple(200, json.encodeToString(ExactDistributionConfirmation("applied", ExactDistributionConfirmation.Record(confirmations.size.toLong(), amount))), payments)
     }
 
     // --- Salvavidas ---------------------------------------------------------------------------------

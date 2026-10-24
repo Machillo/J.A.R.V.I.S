@@ -507,4 +507,79 @@ class PlanRecoveryUiTest {
         // The rate follows the app language's decimal separator (507,5 / 507.5): match what both share.
         waitForText(tx("TC 507", "Rate 507"), substring = true)
     }
+
+    /**
+     * Owner exact-amount distribution (phase 1): the estimate stays as it was, an exact amount is
+     * validated, calculated from the typed amount (marked as such) and the estimate comes back
+     * unchanged; nothing is recorded (the fake, like the backend, only answers the plan).
+     */
+    @Test fun theOwnerDistributesAnExactAmountAndTheEstimateStays() {
+        launch(role = "owner")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Distribución de dinero", "Money distribution"))
+        waitForText(tx("Distribución aproximada", "Estimated distribution"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
+        click(tx("Monto exacto", "Exact amount"))
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Escribí un monto mayor que cero", "Enter an amount above zero"), substring = true)
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("2500000")
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        waitForText(tx("Monto que indicaste", "Amount you entered"))
+        assertTrue("the exact answer never shows the estimate's cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))
+        // Editing the amount drops the result of the previous one.
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("5")
+        waitForGone(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        click(tx("Aproximada", "Estimated"))
+        waitForText(tx("Distribución aproximada", "Estimated distribution"))
+        waitForText(tx("Efectivo disponible ahora", "Cash available now"))
+        assertTrue(!present(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered")))
+    }
+
+    @Test fun vipUsersHaveNoExactAmountMode() {
+        launch(plan = "vip")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Distribución de dinero", "Money distribution"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
+        assertTrue(!present(tx("Monto exacto", "Exact amount")))
+        assertTrue(!present(tx("Distribución aproximada", "Estimated distribution")))
+    }
+
+    /**
+     * CONFIRMAR: calculating shows what would be recorded and records nothing; confirming (after the
+     * question) records it once, the button goes away, and the Salvavidas screen shows the deposit.
+     */
+    @Test fun theOwnerConfirmsAnExactDistributionAndTheSalvavidasShowsIt() {
+        launch(role = "owner")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Salvavidas", "Emergency fund"))
+        waitForText("₡300.000")
+        back()
+        click(tx("Distribución de dinero", "Money distribution"))
+        click(tx("Monto exacto", "Exact amount"))
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("254698")
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Todavía no se registró nada. Si ya moviste el dinero así, presioná CONFIRMAR.", "Nothing has been recorded yet. If you already moved the money this way, press CONFIRM."))
+        waitForText(tx("Lo que se registrará al confirmar", "What CONFIRM will record"))
+        waitForText(tx("Depósito al Salvavidas", "Deposit to the Salvavidas"))
+        // A rotation (activity recreated) keeps the reviewed result and its confirmation key.
+        scenario!!.recreate()
+        waitForText(tx("Lo que se registrará al confirmar", "What CONFIRM will record"))
+        tapTag("exact-distribution-confirm")
+        waitForText(tx("¿Ya hiciste estos movimientos?", "Did you already make these movements?"))
+        click(tx("Confirmar", "Confirm"))
+        waitForText(tx("Distribución confirmada", "Distribution confirmed"))
+        waitForText(tx("Lo que se registró", "What was recorded"))
+        assertTrue("confirmed once: no second CONFIRMAR",
+            compose.onAllNodes(hasTestTag("exact-distribution-confirm")).fetchSemanticsNodes().isEmpty())
+        back()
+        click(tx("Salvavidas", "Emergency fund"))
+        // 300.000 + the Salvavidas part (40 % of 254.698 in this fake's strategy).
+        waitForText("₡401.879", substring = true)
+    }
 }

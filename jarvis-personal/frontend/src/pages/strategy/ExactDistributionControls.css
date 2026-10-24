@@ -1,0 +1,132 @@
+/* Owner exact-amount distribution: mode selector and amount form (ExactDistributionControls.jsx). */
+.exact-distribution {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.exact-distribution-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 12px;
+}
+
+.exact-distribution-modes button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.exact-distribution-modes button.active {
+  background: rgba(85, 217, 155, 0.16);
+  color: #55d99b;
+  font-weight: 600;
+}
+
+.exact-distribution-form {
+  display: grid;
+  gap: 10px;
+}
+
+.exact-distribution-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.exact-distribution-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.exact-distribution-form button[type="submit"] {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: #55d99b;
+  color: #06140d;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exact-distribution-form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.exact-distribution-note {
+  margin: 0;
+  opacity: 0.8;
+}
+
+.exact-distribution-error {
+  margin: 0;
+  color: #ff8a8a;
+}
+
+.exact-distribution-plan {
+  display: grid;
+  gap: 6px;
+}
+
+.exact-distribution-plan ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.exact-distribution-plan li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.exact-distribution-confirm,
+.exact-distribution-ask button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #55d99b;
+  color: #06140d;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exact-distribution-ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.exact-distribution-ask p {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.exact-distribution-ask button + button {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+}
+
+.exact-distribution-ask button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

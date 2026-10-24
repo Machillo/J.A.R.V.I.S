@@ -217,7 +217,45 @@ def _goal_is_urgent(goal: dict[str, Any]) -> bool:
     )
 
 
-def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[dict[str, float], list[dict[str, Any]]]:
+def _whole_cents_within(amounts: dict[str, float], order: list[str], base: float) -> dict[str, float]:
+    """Each amount in whole cents, never adding up to more than the base shown.
+
+    The base is the one the answer shows (`allocation_base_amount` = round(base, 2)), so the items
+    always add up to that figure exactly when the amounts cover it, and never to more. Rounding
+    every amount on its own could assign a few cents more than the base (or lose some): amounts
+    are floored to the cent and only the cents the flooring lost go back, one each, to the largest
+    fractions. No cent is invented beyond those.
+    """
+    from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
+
+    raw = {key: Decimal(str(round(max(_f(amounts.get(key)), 0.0), 6))) * 100 for key in order}
+    cents = {key: int(value.to_integral_value(rounding=ROUND_FLOOR)) for key, value in raw.items()}
+    base_cents = int(Decimal(str(round(max(_f(base), 0.0), 2))) * 100)  # exactly the base the answer shows
+    positive = [key for key in order if raw[key] > 0]
+    # The cents the amounts add up to, never more than the base: amounts that cover the base (within
+    # a cent of float noise) add up to exactly the base shown; amounts that leave part of it
+    # unassigned keep their own (half-up) total.
+    total = sum(raw.values())
+    exact_base = Decimal(str(round(max(_f(base), 0.0), 6))) * 100
+    covers = abs(total - exact_base) < 1
+    target = base_cents if covers else min(int(total.to_integral_value(rounding=ROUND_HALF_UP)), base_cents)
+    lost = min(target - sum(cents.values()), len(positive))
+    room = base_cents - sum(cents.values())
+    for key in sorted(positive, key=lambda k: raw[k] - cents[k], reverse=True)[:max(min(lost, room), 0)]:
+        cents[key] += 1
+    excess = sum(cents.values()) - base_cents  # only when the amounts themselves exceed the base
+    for key in sorted(positive, key=lambda k: cents[k], reverse=True):
+        if excess <= 0:
+            break
+        take = min(excess, cents[key])
+        cents[key] -= take
+        excess -= take
+    return {key: cents[key] / 100 for key in order}
+
+
+def _allocation_from_amounts(amounts: dict[str, float], base: float, exact: bool = False) -> tuple[dict[str, float], list[dict[str, Any]]]:
+    """Percentages and items. `exact` (the Owner's exact amount): whole cents that add up to the
+    base (`_whole_cents_within`), and a 1-cent item is shown; estimates round each amount."""
     base = max(_f(base), 0.0)
     order = [
         "meta_prioritaria",
@@ -227,7 +265,8 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[di
         "inversion",
         "metas_o_inversion",
     ]
-    clean = {key: round(max(_f(amounts.get(key)), 0.0), 2) for key in order}
+    clean = (_whole_cents_within(amounts, order, base) if exact
+             else {key: round(max(_f(amounts.get(key)), 0.0), 2) for key in order})
     percentages = {
         key: round((value / base) * 100, 2) if base > 0 else 0.0
         for key, value in clean.items()
@@ -235,7 +274,7 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[di
     items = [
         {"key": key, "percentage": percentages[key], "amount": clean[key]}
         for key in order
-        if clean[key] > 0.01
+        if clean[key] > (0 if exact else 0.01)
     ]
     return percentages, items
 
@@ -248,8 +287,13 @@ def _build_dynamic_director_allocation(
     savings_total: float,
     emergency_monthly_base: float,
     rates_known: bool = True,
+    split_every_cent: bool = False,
 ) -> dict[str, Any]:
     """Motor de prioridades dinámicas del Director Financiero.
+
+    `split_every_cent` (the Owner's exact amount only): a single cent is still split and no
+    fraction of a cent is left unassigned, so the items add up to the typed amount exactly.
+    Estimates (Owner and Users) keep their 1-cent thresholds.
 
     `rates_known` False (Users, a debt without a known rate): the highest rate is unknown, so the
     "10% or more" rule is neither assumed true nor false (never computed from a missing rate as 0%).
@@ -308,7 +352,7 @@ def _build_dynamic_director_allocation(
     amounts["meta_prioritaria"] = goal_now
     remaining = max(base - goal_now, 0.0)
 
-    if base <= 0.01:
+    if (base < 0.01) if split_every_cent else (base <= 0.01):
         mode = "cash_protection"
         mode_label = tx("PROTECCIÓN DE CAJA", "CASH PROTECTION")
         mode_reason = tx("No hay excedente real disponible después de obligaciones.", "There is no real surplus available after obligations.")
@@ -378,7 +422,7 @@ def _build_dynamic_director_allocation(
     # Ajuste de redondeo / pesos: cualquier sobrante no asignado se protege.
     assigned = sum(amounts.values())
     remainder = max(base - assigned, 0.0)
-    if remainder > 0.01:
+    if remainder > (0 if split_every_cent else 0.01):
         if urgent_goals:
             amounts["meta_prioritaria"] += remainder
         elif debt_exists:
@@ -388,8 +432,14 @@ def _build_dynamic_director_allocation(
         else:
             amounts["fondo_de_emergencia"] += remainder
 
-    allocation, items = _allocation_from_amounts(amounts, base)
-    safe_to_spend = round(amounts["vida_controlada"], 2)
+    allocation, items = _allocation_from_amounts(amounts, base, exact=split_every_cent)
+    if split_every_cent:
+        safe_to_spend = next((item["amount"] for item in items if item["key"] == "vida_controlada"), 0.0)
+        # The same whole cents as the items, so both always add up to the base.
+        shown_amounts = {k: next((i["amount"] for i in items if i["key"] == k), 0.0) for k in amounts}
+    else:
+        safe_to_spend = round(amounts["vida_controlada"], 2)
+        shown_amounts = {k: round(v, 2) for k, v in amounts.items()}
 
     if savings_total < mini_fund_target:
         emergency_level = "mini_fund_building"
@@ -409,7 +459,7 @@ def _build_dynamic_director_allocation(
         "mode_label": mode_label,
         "mode_reason": mode_reason,
         "allocation": allocation,
-        "allocation_amounts": {k: round(v, 2) for k, v in amounts.items()},
+        "allocation_amounts": shown_amounts,
         "allocation_items": items,
         "allocation_base_amount": round(base, 2),
         "safe_to_spend": safe_to_spend,
@@ -968,8 +1018,31 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     return _users_strategy_blueprint()
 
 
-def _owner_strategy_blueprint() -> dict[str, Any]:
-    """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea)."""
+def _distribution_warnings(cycle_report: dict[str, Any], salvavidas: dict[str, Any], manual: bool = False) -> list[dict[str, str]]:
+    """What the distribution could not read: said, never computed as zero.
+
+    The cycle's commitments only matter to the estimate; an exact amount is already what is left.
+    """
+    warnings = []
+    if not cycle_report and not manual:
+        warnings.append({"code": "cycle_unavailable", "message": tx(
+            "No pudimos leer los compromisos de este ciclo; la distribución puede asignar dinero que ya está comprometido.",
+            "We couldn't read this cycle's commitments; the distribution may assign money that is already committed.")})
+    if not salvavidas:
+        warnings.append({"code": "salvavidas_unavailable", "message": tx(
+            "No pudimos leer tu Salvavidas; la parte del fondo de emergencia es aproximada.",
+            "We couldn't read your emergency fund; its share is approximate.")})
+    return warnings
+
+
+def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str, Any]:
+    """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea).
+
+    `manual_available` (exact-amount distribution, a planning tool): the money the Owner has LEFT
+    after already paying expenses, cards and installments. It is the base itself: nothing is taken
+    out of it again (the estimate's card spending, pending installments and fixed expenses would
+    count those payments twice), and the same Director engine splits it. Nothing is written.
+    """
     all_debts = get_debts() or []
     debts = [debt for debt in all_debts if _f(debt.get("remaining_amount")) > 0.01]
     summary = get_financial_summary() or {}
@@ -1054,6 +1127,9 @@ def _owner_strategy_blueprint() -> dict[str, Any]:
         - debt_commitment_current_cycle
         - mandatory_fixed_pending
     )
+    if manual_available is not None:
+        # The amount is already what is left: no obligation is deducted from it a second time.
+        current_before_allocation = manual_available
 
     # Strategy and the Salvavidas screen must share the same source of truth.
     # The current balance is manual in V1; the monthly base is recalculated live
@@ -1071,6 +1147,7 @@ def _owner_strategy_blueprint() -> dict[str, Any]:
         goal_reserves=goal_reserves,
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
+        split_every_cent=manual_available is not None,
     )
     allocation = director.get("allocation") or {}
     allocation_amounts = director.get("allocation_amounts") or {}
@@ -1226,7 +1303,13 @@ def _owner_strategy_blueprint() -> dict[str, Any]:
         "allocation_amounts": allocation_amounts,
         "allocation_items": allocation_items,
         "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
+        "distribution_source": "manual_amount" if manual_available is not None else "estimate",
+        "distribution_warnings": _distribution_warnings(cycle_report, salvavidas, manual=manual_available is not None),
+        # The exact amount is the base as typed (no deduction lines); the estimate keeps its formula.
         "distribution_formula": {
+            "manual_available": round(manual_available, 2),
+            "surplus": round(allocation_base_amount, 2),
+        } if manual_available is not None else {
             "cash_available_now": round(distributable_cash, 2),
             "income": round(remaining_income_current_cycle, 2),
             "statement_spending": round(statement_spending, 2),
@@ -1523,6 +1606,38 @@ def _users_blueprint_from_inputs(
             tx("Tu ingreso declarado es la base; los correos importados nunca la suben ni la bajan.",
                "Your declared income is the baseline; imported emails never raise or lower it."),
         ],
+    }
+
+
+def get_owner_exact_distribution(amount: Any, currency: str = "CRC") -> dict[str, Any]:
+    """Owner only (phase 1): the current strategy applied to the amount the Owner has left to split.
+
+    A planning answer with the dashboard's shape: no transaction, payment, balance, history or
+    setting is written or stored. Another currency is refused, never converted. The answer says
+    what CONFIRMAR would record for each destination (``owner_distribution.confirmation_plan``).
+    """
+    from fastapi import HTTPException
+
+    from backend.ai.owner_distribution import confirmation_plan
+
+    if not _is_owner():
+        raise HTTPException(status_code=403, detail=tx("La distribución por monto exacto está disponible solo para el Owner.",
+                                                       "Exact-amount distribution is available to the Owner only."))
+    if str(currency or "").upper() != "CRC":
+        raise HTTPException(status_code=422, detail=tx("Por ahora la distribución exacta es solo en colones (CRC).",
+                                                       "For now exact distribution is in colones (CRC) only."))
+    strategy = _owner_strategy_blueprint(manual_available=round(float(amount), 2))
+    return {
+        "status": "OK",
+        "user_role": get_current_user().get("role"),
+        "title": strategy.get("title") or tx("Estrategia activa", "Active strategy"),
+        "content": strategy.get("objective") or "",
+        "strategy": strategy,
+        "updated_at": datetime.now().isoformat(),
+        "has_premium_strategy": True,
+        "source": "manual_amount",
+        "manual_amount": {"amount": round(float(amount), 2), "currency": "CRC"},
+        "confirmation_plan": confirmation_plan(strategy, get_debts() or []),
     }
 
 

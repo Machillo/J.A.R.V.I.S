@@ -25,8 +25,10 @@ public struct StrategyDashboard: Decodable, Sendable, Equatable {
     public let content: String?
     public let strategy: DashboardStrategy?
     public let source: String?
+    /// Owner exact amount only: what CONFIRMAR would record for each destination.
+    public let confirmationPlan: ConfirmationPlan?
 
-    enum CodingKeys: String, CodingKey { case status, userRole, title, content, strategy, source }
+    enum CodingKeys: String, CodingKey { case status, userRole, title, content, strategy, source, confirmationPlan }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -36,6 +38,7 @@ public struct StrategyDashboard: Decodable, Sendable, Equatable {
         content = c.lenient(String.self, .content)
         strategy = c.lenient(DashboardStrategy.self, .strategy)
         source = c.lenient(String.self, .source)
+        confirmationPlan = c.lenient(ConfirmationPlan.self, .confirmationPlan)
     }
 }
 
@@ -113,6 +116,8 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     /// How the distributable amount was reached. Users and Owner send different keys; only the
     /// ones present are shown, in `DistributionFormula.order`.
     public struct DistributionFormula: Decodable, Sendable, Equatable {
+        /// Owner exact-amount distribution: the amount the Owner typed (replaces cash and income).
+        public let manualAvailable: Decimal?
         public let cashAvailableNow: Decimal?
         public let income: Decimal?
         public let recordedSpending: Decimal?
@@ -125,11 +130,12 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         public let deficit: Decimal?
 
         enum CodingKeys: String, CodingKey {
-            case cashAvailableNow, income, recordedSpending, statementSpending, newSpendingAfterCut
+            case manualAvailable, cashAvailableNow, income, recordedSpending, statementSpending, newSpendingAfterCut
             case debtCommitment, pendingRecurring, mandatoryFixedPending, surplus, deficit
         }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
+            manualAvailable = c.lenient(Decimal.self, .manualAvailable)
             cashAvailableNow = c.lenient(Decimal.self, .cashAvailableNow)
             income = c.lenient(Decimal.self, .income)
             recordedSpending = c.lenient(Decimal.self, .recordedSpending)
@@ -145,13 +151,18 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         /// The wire keys present, in reading order (Owner: cash first; both: surplus and deficit last).
         public var lines: [(key: String, amount: Decimal)] {
             let all: [(String, Decimal?)] = [
-                ("cash_available_now", cashAvailableNow), ("income", income), ("recorded_spending", recordedSpending),
+                ("manual_available", manualAvailable), ("cash_available_now", cashAvailableNow), ("income", income), ("recorded_spending", recordedSpending),
                 ("statement_spending", statementSpending), ("new_spending_after_cut", newSpendingAfterCut),
                 ("debt_commitment", debtCommitment), ("pending_recurring", pendingRecurring),
                 ("mandatory_fixed_pending", mandatoryFixedPending), ("surplus", surplus), ("deficit", deficit),
             ]
             return all.compactMap { pair in pair.1.map { (key: pair.0, amount: $0) } }
         }
+    }
+    /// What the distribution could not read (said, never computed as zero).
+    public struct DistributionWarning: Decodable, Sendable, Equatable {
+        public let code: String?
+        public let message: String?
     }
     public struct PendingItem: Decodable, Sendable, Equatable {
         public let name: String?
@@ -205,6 +216,9 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     public let allocationBaseAmount: Decimal?
     public let allocationItems: [AllocationItem]?
     public let distributionFormula: DistributionFormula?
+    /// `estimate` (DINCR's records) or `manual_amount` (the Owner's confirmed amount, a plan only).
+    public let distributionSource: String?
+    public let distributionWarnings: [DistributionWarning]?
     // Owner only (nil for Users).
     public let recurringMonthlyIncome: Decimal?
     public let currentMonthExtraNet: Decimal?
@@ -230,7 +244,7 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         case scope, status, title, objective, priority, monthlyIncome, incomePolicy, monthlyExpenses
         case debtCommitmentCurrentCycle, pendingRecurringTotal, safeToSpend, emergencyFund, salvavidas, timeline
         case estimatedDebtFreeDate, totalDebt, debtProgressPercent, investmentRecommended, rules
-        case allocationBaseAmount, allocationItems, distributionFormula
+        case allocationBaseAmount, allocationItems, distributionFormula, distributionSource, distributionWarnings
         case recurringMonthlyIncome, currentMonthExtraNet, incomeReceivedCurrentCycle, remainingIncomeCurrentCycle
         case distributableAccountCash, statementExpenses, newExpensesAfterCut, mandatoryFixedPending
         case mandatoryFixedPendingItems, investmentPortfolio, baseTimeline, monthsSavedByCurrentExtras
@@ -263,6 +277,8 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         allocationBaseAmount = c.lenient(Decimal.self, .allocationBaseAmount)
         allocationItems = c.lenient([AllocationItem].self, .allocationItems)
         distributionFormula = c.lenient(DistributionFormula.self, .distributionFormula)
+        distributionSource = c.lenient(String.self, .distributionSource)
+        distributionWarnings = c.lenient([DistributionWarning].self, .distributionWarnings)
         recurringMonthlyIncome = c.lenient(Decimal.self, .recurringMonthlyIncome)
         currentMonthExtraNet = c.lenient(Decimal.self, .currentMonthExtraNet)
         incomeReceivedCurrentCycle = c.lenient(Decimal.self, .incomeReceivedCurrentCycle)
@@ -280,6 +296,8 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     /// The historical JARVIS model, sent only to the server-resolved Owner.
     public var isOwnerScope: Bool { scope == "owner" }
     public var needsIncome: Bool { status == "needs_income" }
+    /// The base is the amount the Owner typed, not DINCR's estimate.
+    public var isManualAmount: Bool { distributionSource == "manual_amount" }
 
     /// Whether `emergency_fund.current` is a real amount. The director reads unknown Users savings
     /// as 0 for its allocation, so a Users answer whose Salvavidas says the savings are unknown shows
@@ -287,6 +305,13 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     public var emergencyKnown: Bool {
         emergencyFund?.current != nil && (isOwnerScope || salvavidas?.currentAmountKnown != false)
     }
+}
+
+/// Body of the Owner's exact-amount distribution.
+public struct ExactDistributionRequest: Encodable, Sendable, Equatable {
+    public let amount: Decimal
+    public let currency: String
+    public init(amount: Decimal, currency: String = "CRC") { self.amount = amount; self.currency = currency }
 }
 
 /// Which strategy contract an identity reads. The role comes from `/auth/me` only: the Owner reads
@@ -338,6 +363,7 @@ public enum DistributionLabels {
 
     public static func formula(_ key: String, language: AppLanguage = .current) -> String {
         switch key {
+        case "manual_available": return language.pick("Monto que indicaste", "Amount you entered")
         case "cash_available_now": return language.pick("Efectivo disponible ahora", "Cash available now")
         case "income": return language.pick("Ingreso", "Income")
         case "recorded_spending": return language.pick("Gastos registrados", "Recorded spending")

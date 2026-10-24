@@ -12,6 +12,18 @@ extension DincrService {
     /// from the server role, and the backend refuses everyone else.
     public func ownerStrategyDashboard() async throws -> StrategyDashboard { try await client.get("/jarvis/premium/strategy-dashboard") }
 
+    /// Owner only (phase 1): the same strategy applied to an amount the Owner confirms, in colones
+    /// (never converted). A plan: the backend writes and stores nothing.
+    public func ownerExactDistribution(amount: Decimal) async throws -> StrategyDashboard {
+        try await client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution",
+                              body: ExactDistributionRequest(amount: amount, currency: "CRC"))
+    }
+
+    /// Owner only: CONFIRMAR — records the distribution the Owner carried out, once per confirmation key.
+    public func ownerConfirmExactDistribution(_ request: ExactDistributionConfirmRequest) async throws -> ExactDistributionConfirmation {
+        try await client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution/confirm", body: request)
+    }
+
     /// The strategy the identity reads; Estrategia and Distribución show the same answer.
     public func planStrategy(_ source: StrategySource) async throws -> PlanStrategy {
         switch source {
