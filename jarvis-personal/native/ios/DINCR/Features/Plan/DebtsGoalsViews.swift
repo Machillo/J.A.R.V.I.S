@@ -236,6 +236,7 @@ struct GoalsView: View {
     @State private var action: AmountAction?
     @State private var goalForm: GoalForm.Mode?
     @State private var creatingPlan = false
+    @State private var editingPlan: SavingsPlan?
     @State private var notice: String?
     @State private var confirming: PendingDelete?
 
@@ -270,6 +271,7 @@ struct GoalsView: View {
             }) { snapshot, _ in
                 GoalsContent(snapshot: snapshot, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
                              contribute: { action = .contribute($0) }, save: { action = .save($0) }, edit: { goalForm = .edit($0) },
+                             editPlan: { editingPlan = $0 },
                              deleteGoal: { goal in confirming = PendingDelete(name: goal.name ?? "") { try await model.service.deleteGoal(id: goal.id) } },
                              deletePlan: { plan in confirming = PendingDelete(name: plan.name ?? "") { try await model.service.deleteSavingsPlan(id: plan.id) } })
             }
@@ -287,6 +289,7 @@ struct GoalsView: View {
         .sheet(item: $action) { action in AmountSheet(action: action) { done($0) } }
         .sheet(item: $goalForm) { mode in GoalForm(mode: mode) { done($0) } }
         .sheet(isPresented: $creatingPlan) { SavingsPlanForm { done($0) } }
+        .sheet(item: $editingPlan) { plan in SavingsPlanForm(plan: plan) { done($0) } }
         .confirmationDialog(tx("¿Eliminar «\(confirming?.name ?? "")»?", "Delete “\(confirming?.name ?? "")”?"),
                             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
             Button(tx("Eliminar", "Delete"), role: .destructive) {
@@ -321,6 +324,7 @@ private struct GoalsContent: View {
     let contribute: (Goal) -> Void
     let save: (SavingsPlan) -> Void
     let edit: (Goal) -> Void
+    let editPlan: (SavingsPlan) -> Void
     let deleteGoal: (Goal) -> Void
     let deletePlan: (SavingsPlan) -> Void
 
@@ -378,6 +382,10 @@ private struct GoalsContent: View {
                 if canWrite {
                     HStack {
                         Button(tx("Aportar", "Contribute")) { save(plan) }.buttonStyle(.dincrSecondary)
+                        // PLN-04: the same edit Android offers (the server gate is `goals`, every plan).
+                        Button(tx("Editar", "Edit")) { editPlan(plan) }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("plan.edit.\(plan.id)")
                         Button(tx("Eliminar", "Delete"), role: .destructive) { deletePlan(plan) }
                             .frame(minHeight: 44)
                     }
@@ -483,15 +491,19 @@ struct GoalForm: View {
     }
 }
 
-/// E7 — a new savings plan.
+/// E7 — a new savings plan; PLN-04 — edit one (Android: `SavingsPlanForm`).
 struct SavingsPlanForm: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    var plan: SavingsPlan? = nil
     let onDone: (String) -> Void
     @State private var name = ""
     @State private var monthly = ""
+    @State private var saved = ""
     @State private var start = Date.now
     @State private var end = Date.now.addingTimeInterval(86_400 * 365)
+    @State private var status = "active"
+    @State private var prefilled = false
     @State private var error: String?
     @State private var saving = false
     /// One key per form: a retry after a lost response is answered from the first request; a
@@ -501,33 +513,66 @@ struct SavingsPlanForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField(tx("Nombre", "Name"), text: $name)
-                MoneyField(label: tx("Aporte mensual", "Monthly amount"), text: $monthly)
+                TextField(tx("Nombre", "Name"), text: $name).accessibilityIdentifier("plan.name")
+                MoneyField(label: tx("Aporte mensual", "Monthly amount"), text: $monthly, identifier: "plan.monthly")
+                if plan != nil { MoneyField(label: tx("Ya ahorrado", "Already saved"), text: $saved, identifier: "plan.saved") }
                 DatePicker(tx("Inicio", "Start"), selection: $start, displayedComponents: .date)
                 DatePicker(tx("Fin", "End"), selection: $end, in: start..., displayedComponents: .date)
+                if plan != nil {
+                    Picker(tx("Estado", "Status"), selection: $status) {
+                        Text(tx("Activo", "Active")).tag("active")
+                        Text(tx("En pausa", "Paused")).tag("paused")
+                        Text(tx("Completado", "Completed")).tag("completed")
+                    }
+                }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
-            .navigationTitle(tx("Nuevo plan de ahorro", "New savings plan"))
+            .navigationTitle(plan == nil ? tx("Nuevo plan de ahorro", "New savings plan") : tx("Editar plan", "Edit plan"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(tx("Cancelar", "Cancel")) { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) { Button(tx("Guardar", "Save")) { Task { await save() } }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(tx("Guardar", "Save")) { Task { await save() } }.disabled(saving).accessibilityIdentifier("plan.save")
+                }
             }
+            .onAppear(perform: prefill)
         }
+        .interactiveDismissDisabled(saving)
+    }
+
+    private func prefill() {
+        guard let plan, !prefilled else { return }
+        prefilled = true
+        let format = model.moneyFormat
+        name = plan.name ?? ""
+        monthly = plan.monthlyAmount.map(format.inputText) ?? ""
+        saved = plan.savedAmount.map(format.inputText) ?? ""
+        if let day = plan.startDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { start = parsed }
+        if let day = plan.endDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { end = parsed }
+        status = ["active", "paused", "completed"].contains(plan.status ?? "") ? plan.status! : "active"
     }
 
     private func save() async {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = tx("Escribí un nombre.", "Enter a name."); return }
         guard let amount = AmountInput.parse(monthly, separators: model.moneyFormat.separators) else { error = model.moneyFormat.amountHint; return }
-        let request = SavingsPlanRequest(name: trimmed, monthlyAmount: amount, savedAmount: 0,
-                                         startDate: MovementEditor.dayFormatter.string(from: start), endDate: MovementEditor.dayFormatter.string(from: end))
+        // A new plan starts at 0 saved; an edit keeps what is written (empty = 0, as Android).
+        let savedAmount = saved.isEmpty ? 0 : AmountInput.parseZeroOrMore(saved, separators: model.moneyFormat.separators)
+        guard let savedAmount else { error = model.moneyFormat.amountHint; return }
+        let request = SavingsPlanRequest(name: trimmed, monthlyAmount: amount, savedAmount: plan == nil ? 0 : savedAmount,
+                                         startDate: MovementEditor.dayFormatter.string(from: start), endDate: MovementEditor.dayFormatter.string(from: end),
+                                         status: plan == nil ? nil : status)
         saving = true; error = nil
         defer { saving = false }
         let epoch = model.currentEpoch
         do {
-            _ = try await model.service.createSavingsPlan(request, idempotencyKey: key)
-            onDone(tx("Plan de ahorro creado", "Savings plan created"))
+            if let plan {
+                _ = try await model.service.updateSavingsPlan(id: plan.id, request, idempotencyKey: key)
+                onDone(tx("Plan de ahorro actualizado", "Savings plan updated"))
+            } else {
+                _ = try await model.service.createSavingsPlan(request, idempotencyKey: key)
+                onDone(tx("Plan de ahorro creado", "Savings plan created"))
+            }
             dismiss()
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))

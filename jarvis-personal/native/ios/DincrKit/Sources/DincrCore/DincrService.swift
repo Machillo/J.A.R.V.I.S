@@ -161,6 +161,12 @@ public struct DincrService: Sendable {
         return try await client.send("POST", "/user-product/savings-plans", body: request, idempotencyKey: idempotencyKey)
     }
 
+    /// PLN-04: edit a savings plan (name, monthly amount, saved, dates, status), as Android does.
+    public func updateSavingsPlan(id: Int, _ request: SavingsPlanRequest, idempotencyKey: String) async throws -> SavingsPlan {
+        try WriteContract.check(request)
+        return try await client.send("PUT", "/user-product/savings-plans/\(id)", body: request, idempotencyKey: idempotencyKey)
+    }
+
     public func deleteSavingsPlan(id: Int) async throws {
         let _: Acknowledgement = try await client.send("DELETE", "/user-product/savings-plans/\(id)")
     }
