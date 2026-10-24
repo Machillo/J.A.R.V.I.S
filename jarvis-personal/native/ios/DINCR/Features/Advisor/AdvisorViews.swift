@@ -181,14 +181,19 @@ private struct SummaryContent: View {
 
     var body: some View {
         let flow = SummaryVisuals.flow(summary)
-        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            FigureRow(label: tx("Ingresos", "Income"), amount: summary.income, sign: .income)
-            FigureRow(label: tx("Gastos", "Expenses"), amount: summary.expenses, sign: .expense)
-            FigureRow(label: tx("Pagado a deudas", "Paid to debts"), amount: summary.debtPaid)
-            FigureRow(label: tx("Balance", "Balance"), amount: summary.balance)
-            FigureRow(label: tx("Ahorrado", "Saved"), amount: summary.savings)
+        if summary.isOwnerLedger {
+            // The Owner's ledger: each figure with what it means, period and completeness (OwnerReadingViews.swift).
+            OwnerMonthSummary(summary: summary)
+        } else {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                FigureRow(label: tx("Ingresos", "Income"), amount: summary.income, sign: .income)
+                FigureRow(label: tx("Gastos", "Expenses"), amount: summary.expenses, sign: .expense)
+                FigureRow(label: tx("Pagado a deudas", "Paid to debts"), amount: summary.debtPaid)
+                FigureRow(label: tx("Balance", "Balance"), amount: summary.balance)
+                FigureRow(label: tx("Ahorrado", "Saved"), amount: summary.savings)
+            }
+            .dincrCard()
         }
-        .dincrCard()
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             SectionHeader(title: tx("Ingresos frente a gastos", "Income vs expenses"))
             if case .bars(let month) = flow {

@@ -314,7 +314,7 @@ private struct DashboardPlanDetail: View {
                 if let lines = plan.distributionFormula?.lines, !lines.isEmpty {
                     SectionHeader(title: tx("De dónde sale", "Where it comes from"))
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                        FigureRow(label: DistributionLabels.formula(line.key), amount: line.amount)
+                        FigureRow(label: OwnerReading.formulaLabel(line.key, plan: plan), amount: line.amount)
                     }
                 }
             }
@@ -347,16 +347,37 @@ private struct DashboardPlanDetail: View {
         }
 
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            SectionHeader(title: tx("Tu mes", "Your month"))
-            FigureRow(label: tx("Ingreso mensual", "Monthly income"), amount: plan.monthlyIncome)
-            if let source = IncomeSourceLabel.label(plan.incomePolicy?.source) {
-                Text(source).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            if plan.isOwnerScope {
+                // The Owner's figures are the cycle's (from one cut day to the next), not a calendar month's.
+                SectionHeader(title: tx("Este ciclo", "This cycle"))
+                OwnerPeriodNote(label: tx("Ciclo", "Cycle"), period: plan.cyclePeriod)
+                FigureRow(label: tx("Ingresos esperados del ciclo", "Income expected this cycle"), amount: plan.monthlyIncome)
+                if let source = IncomeSourceLabel.label(plan.incomePolicy?.source) {
+                    Text(source).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                }
+                OwnerCaption(tx("Salario y extras previstos para el ciclo (proyección).", "Salary and extras expected for the cycle (projection)."))
+                FigureRow(label: tx("Gastos comprometidos", "Committed spending"), amount: plan.monthlyExpenses)
+                OwnerCaption(tx("Gastos del período del estado de cuenta más los gastos registrados después del corte.",
+                                "Spending in the statement period plus spending recorded after the cut."))
+                FigureRow(label: tx("Cuotas de deuda pendientes", "Pending debt payments"), amount: plan.debtCommitmentCurrentCycle)
+                OwnerCaption(tx("Cuotas de deuda que faltan por pagar en este ciclo.", "Debt instalments still to pay this cycle."))
+                FigureRow(label: tx("Obligaciones recurrentes sin cubrir", "Recurring obligations not yet covered"), amount: plan.pendingRecurringTotal)
+                // Not Hoy's "Podés gastar con tranquilidad" (another calculation): the strategy's own share.
+                FigureRow(label: tx("Para uso libre en este ciclo", "Free to use this cycle"), amount: plan.safeToSpend)
+                OwnerCaption(tx("La parte de tu sobrante que la estrategia deja para gastos personales. «Podés gastar con tranquilidad» en Hoy se calcula aparte, con tus próximos 45 días.",
+                                "The share of your surplus the strategy leaves for personal spending. Hoy’s “Safe to spend” is calculated separately, from your next 45 days."))
+            } else {
+                SectionHeader(title: tx("Tu mes", "Your month"))
+                FigureRow(label: tx("Ingreso mensual", "Monthly income"), amount: plan.monthlyIncome)
+                if let source = IncomeSourceLabel.label(plan.incomePolicy?.source) {
+                    Text(source).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                }
+                FigureRow(label: tx("Gastos registrados este mes", "Spending recorded this month"), amount: plan.monthlyExpenses)
+                FigureRow(label: tx("Cuotas de deuda pendientes", "Pending debt payments"), amount: plan.debtCommitmentCurrentCycle)
+                // Recurring obligations not yet covered by the spending recorded this month (backend figure).
+                FigureRow(label: tx("Obligaciones recurrentes sin cubrir", "Recurring obligations not yet covered"), amount: plan.pendingRecurringTotal)
+                FigureRow(label: tx("Podés gastar con tranquilidad", "Safe to spend"), amount: plan.safeToSpend)
             }
-            FigureRow(label: tx("Gastos registrados este mes", "Spending recorded this month"), amount: plan.monthlyExpenses)
-            FigureRow(label: tx("Cuotas de deuda pendientes", "Pending debt payments"), amount: plan.debtCommitmentCurrentCycle)
-            // Recurring obligations not yet covered by the spending recorded this month (backend figure).
-            FigureRow(label: tx("Obligaciones recurrentes sin cubrir", "Recurring obligations not yet covered"), amount: plan.pendingRecurringTotal)
-            FigureRow(label: tx("Podés gastar con tranquilidad", "Safe to spend"), amount: plan.safeToSpend)
         }
         .dincrCard()
 
@@ -433,13 +454,22 @@ private struct OwnerStrategyFigures: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             SectionHeader(title: tx("Tu ciclo", "Your cycle"))
+            OwnerPeriodNote(label: tx("Ciclo", "Cycle"), period: plan.cyclePeriod)
+            // Income: what is expected (projection) and what already arrived (records).
             FigureRow(label: tx("Ingreso recurrente", "Recurring income"), amount: plan.recurringMonthlyIncome)
-            FigureRow(label: tx("Extras del mes (OT, bonos, feriados)", "This month’s extras (OT, bonuses, holidays)"), amount: plan.currentMonthExtraNet)
+            OwnerCaption(tx("Salario neto mensual proyectado.", "Projected monthly net salary."))
+            FigureRow(label: tx("Extras esperados del ciclo (horas extra, bonos, feriados)", "Extras expected this cycle (overtime, bonuses, holidays)"), amount: plan.currentMonthExtraNet)
             FigureRow(label: tx("Ingreso recibido en el ciclo", "Income received this cycle"), amount: plan.incomeReceivedCurrentCycle)
+            OwnerCaption(tx("Ingresos ya registrados en este ciclo.", "Income already recorded this cycle."))
             FigureRow(label: tx("Ingreso por recibir en el ciclo", "Income still to receive this cycle"), amount: plan.remainingIncomeCurrentCycle)
-            FigureRow(label: tx("Efectivo distribuible", "Distributable cash"), amount: plan.distributableAccountCash)
-            FigureRow(label: tx("Gastos del estado de cuenta", "Statement expenses"), amount: plan.statementExpenses)
-            FigureRow(label: tx("Gastos nuevos después del corte", "New expenses after the cut"), amount: plan.newExpensesAfterCut)
+            // Money available today and what is already committed from it.
+            FigureRow(label: tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account"), amount: plan.distributableAccountCash)
+            OwnerCaption(tx("Saldo actual de la cuenta de la que parte la distribución.", "The current balance of the account the distribution starts from."))
+            FigureRow(label: tx("Gastos del período del estado de cuenta", "Spending in the statement period"), amount: plan.statementExpenses)
+            OwnerPeriodNote(label: tx("Estado de cuenta", "Statement"), period: plan.cardStatementPeriod)
+            FigureRow(label: tx("Gastos después del corte", "Spending after the statement cut"), amount: plan.newExpensesAfterCut)
+            OwnerCaption(tx("Gastos registrados después de la fecha de corte: ya reducen lo que se puede repartir.",
+                            "Spending recorded after the cut date: it already reduces what can be split."))
             FigureRow(label: tx("Gastos fijos obligatorios pendientes", "Pending mandatory fixed expenses"), amount: plan.mandatoryFixedPending)
             ForEach(Array((plan.mandatoryFixedPendingItems ?? []).enumerated()), id: \.offset) { _, item in
                 FigureRow(label: "· \(item.name ?? tx("Gasto fijo", "Fixed expense"))", amount: item.amount)
@@ -541,7 +571,8 @@ struct DashboardDistribution: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("De dónde sale", "Where it comes from"))
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    FigureRow(label: DistributionLabels.formula(line.key), amount: line.amount)
+                    // The Owner's lines read as in "¿Por qué?"; Users keep the shared labels.
+                    FigureRow(label: OwnerReading.formulaLabel(line.key, plan: plan), amount: line.amount)
                 }
             }
             .dincrCard()
