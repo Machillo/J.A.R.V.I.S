@@ -2,20 +2,20 @@
 // Do not edit. Change appearance.json and run the generator.
 import SwiftUI
 
-public struct AppearanceNeutrals {
+public struct AppearanceNeutrals: Sendable {
     public let bg, surface, surface2, line, lineStrong, fieldBorder, text, text2, textMuted: Color
     public let positive, glow: Color?
 }
 
-public struct AppearanceAccent {
+public struct AppearanceAccent: Sendable {
     public let tint, tintPressed, tintContainer, onTint, onTintContainer, focusRing: Color
 }
 
-public struct AppearanceShape {
+public struct AppearanceShape: Sendable {
     public let card, control: CGFloat
 }
 
-public struct AppearanceDensity {
+public struct AppearanceDensity: Sendable {
     public let gap, cardPadding, rowMin: CGFloat
 }
 
