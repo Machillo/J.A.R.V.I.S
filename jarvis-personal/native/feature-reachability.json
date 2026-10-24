@@ -1568,6 +1568,18 @@
      "path": "/jarvis/premium/strategy-dashboard",
      "gate": "router_roles:owner",
      "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/jarvis/premium/strategy-dashboard/exact-distribution",
+     "gate": "router_roles:owner",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/jarvis/premium/strategy-dashboard/exact-distribution/confirm",
+     "gate": "router_roles:owner",
+     "used_by": []
     }
    ],
    "ios": {

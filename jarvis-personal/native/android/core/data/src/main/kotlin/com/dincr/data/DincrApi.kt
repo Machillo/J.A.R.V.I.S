@@ -112,6 +112,12 @@ class DincrApi(private val client: ApiClient) {
     suspend fun strategyDashboard(): StrategyDashboard = client.get("/user-product/vip/strategy-dashboard")
     /** The Owner's strategy (`strategy.scope == "owner"`): only called when `/auth/me` says owner ([StrategyContract]). */
     suspend fun ownerStrategyDashboard(): StrategyDashboard = client.get("/jarvis/premium/strategy-dashboard")
+    /** Owner only (phase 1): the same strategy applied to an amount the Owner confirms. Writes nothing. */
+    suspend fun ownerExactDistribution(request: ExactDistributionRequest): StrategyDashboard =
+        client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution", request)
+    /** Owner only: CONFIRMAR — records the distribution the Owner carried out, once per confirmation key. */
+    suspend fun ownerConfirmExactDistribution(request: ExactDistributionConfirmRequest): ExactDistributionConfirmation =
+        client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution/confirm", request)
     suspend fun salvavidas(): Salvavidas = client.get("/user-product/vip/salvavidas")
     suspend fun updateSalvavidas(update: SalvavidasUpdate): Salvavidas = client.send("PUT", "/user-product/vip/salvavidas", update)
 

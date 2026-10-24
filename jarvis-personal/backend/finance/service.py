@@ -8,6 +8,7 @@ from backend.core.time import costa_rica_today
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.finance import balance_movements, payroll_receipts
 from backend.finance.debt_automation import schedule_automation_enabled
+from backend.finance.debt_extra_payment import record_extra_payment
 from backend.finance.category_catalog import normalize_category, expense_type_for_category, owner_context
 from backend.user_product.debt_rates import rate_for_update
 
@@ -1423,6 +1424,8 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             FROM transactions
             WHERE workspace_id = %s
               AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'debt_payment'
+              -- Extra principal of a confirmed distribution is not the cycle's installment.
+              AND source IS DISTINCT FROM 'owner_distribution'
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
@@ -2316,60 +2319,15 @@ def apply_extra_payment_to_debt(
         return {"message": "El abono debe ser mayor que cero.", "status": "ERROR"}
 
     with get_connection() as conn:
-        debt = conn.execute(
-            """
-            SELECT id, name, remaining_amount, monthly_payment, installments_paid
-            FROM debts WHERE id = %s AND workspace_id = %s
-            """, (debt_id, workspace_id)
-        ).fetchone()
-        if not debt:
+        result = record_extra_payment(
+            conn, workspace_id, debt_id, amount, payment_date=date.today().isoformat(),
+            description=description, new_monthly_payment=new_monthly_payment,
+        )
+        if result is None:
             return {"message": "Deuda no encontrada o no pertenece al usuario actual.", "status": "ERROR"}
-
-        previous_balance = _as_float(debt["remaining_amount"])
-        previous_payment = _as_float(debt["monthly_payment"])
-        principal = min(amount, previous_balance)
-        final_balance = max(previous_balance - principal, 0)
-        final_payment = _as_float(new_monthly_payment) if new_monthly_payment is not None else previous_payment
-
-        conn.execute(
-            """UPDATE debts
-               SET remaining_amount = %s, monthly_payment = %s,
-                   auto_update_monthly = CASE WHEN %s <= 0 THEN FALSE ELSE auto_update_monthly END,
-                   next_payment_date = CASE WHEN %s <= 0 THEN NULL ELSE next_payment_date END,
-                   updated_at = NOW()
-               WHERE id = %s AND workspace_id = %s""",
-            (final_balance, final_payment, final_balance, final_balance, debt_id, workspace_id),
-        )
-        cursor = conn.execute(
-            """
-            INSERT INTO debt_payments (
-                workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
-                fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
-                previous_monthly_payment, new_monthly_payment, description, payment_date,
-                installment_number, source, created_at
-            ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra', NOW())
-            """,
-            (workspace_id, debt_id, principal, principal, principal, previous_balance, final_balance,
-             previous_payment, final_payment, description or "Abono extraordinario a principal",
-             date.today().isoformat(), int(debt.get("installments_paid") or 0)),
-        )
-        conn.execute(
-            """INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type,
-                                      category, account, source, notes, created_at)
-               VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
-            (workspace_id, date.today().isoformat(), f"Abono extra {debt['name']}", principal, debt['name'],
-             f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
-        )
         conn.commit()
 
-    return {
-        "message": "Abono extraordinario aplicado 100% a principal.",
-        "payment_id": cursor.lastrowid, "debt_id": debt_id, "debt_name": debt["name"],
-        "payment_amount": round(principal, 2), "principal_amount": round(principal, 2),
-        "extra_principal_amount": round(principal, 2), "interest_amount": 0, "fee_amount": 0,
-        "previous_remaining_amount": round(previous_balance, 2),
-        "new_remaining_amount": round(final_balance, 2), "status": "OK"
-    }
+    return {"message": "Abono extraordinario aplicado 100% a principal.", **result, "status": "OK"}
 
 def get_debt_by_name(name: str):
     workspace_id = get_current_workspace_id()

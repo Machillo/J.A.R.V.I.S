@@ -220,48 +220,57 @@ def delete_financial_goal(goal_id: int):
     }
 
 
+def apply_goal_contribution(conn, workspace_id: str, goal_id: int, amount: float) -> dict | None:
+    """Add ``amount`` to the workspace's goal inside the caller's transaction (no commit); None
+    when the goal is not the workspace's. The goal row is locked first."""
+    goal = conn.execute(
+        """
+        SELECT id, current_amount, target_amount
+        FROM financial_goals
+        WHERE id = %s
+        AND workspace_id = %s
+        FOR UPDATE
+        """,
+        (goal_id, workspace_id)
+    ).fetchone()
+
+    if not goal:
+        return None
+
+    new_amount = goal["current_amount"] + amount
+
+    if new_amount >= goal["target_amount"]:
+        new_status = "completed"
+    else:
+        new_status = "active"
+
+    conn.execute(
+        """
+        UPDATE financial_goals
+        SET current_amount = %s,
+            status = %s
+        WHERE id = %s
+        AND workspace_id = %s
+        """,
+        (
+            new_amount,
+            new_status,
+            goal_id,
+            workspace_id
+        )
+    )
+    return {"goal_id": goal_id, "previous_amount": goal["current_amount"], "new_amount": new_amount, "status": new_status}
+
+
 def add_goal_contribution(goal_id: int, amount: float):
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
-        goal = conn.execute(
-            """
-            SELECT id, current_amount, target_amount
-            FROM financial_goals
-            WHERE id = %s
-            AND workspace_id = %s
-            """,
-            (goal_id, workspace_id)
-        ).fetchone()
-
-        if not goal:
+        if apply_goal_contribution(conn, workspace_id, goal_id, amount) is None:
             return {
                 "message": "Meta no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
-
-        new_amount = goal["current_amount"] + amount
-
-        if new_amount >= goal["target_amount"]:
-            new_status = "completed"
-        else:
-            new_status = "active"
-
-        conn.execute(
-            """
-            UPDATE financial_goals
-            SET current_amount = %s,
-                status = %s
-            WHERE id = %s
-            AND workspace_id = %s
-            """,
-            (
-                new_amount,
-                new_status,
-                goal_id,
-                workspace_id
-            )
-        )
 
         conn.commit()
 
