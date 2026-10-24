@@ -12,6 +12,7 @@ from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
 from backend.core.i18n import tx
 from backend.core.schema_state import tables_exist
+from backend.user_product.debt_payments import UNKNOWN_PAYMENT_SQL, known_monthly_payment
 
 
 def _money(value: Any) -> float:
@@ -109,7 +110,8 @@ def get_basic_dashboard() -> dict:
                ) x GROUP BY category ORDER BY amount DESC""",
             (workspace_id,current,_next_month(current),workspace_id,current,_next_month(current)),
         ).fetchall()
-        debts = conn.execute("SELECT COALESCE(SUM(total_amount),0) original,COALESCE(SUM(remaining_amount),0) remaining,COALESCE(SUM(monthly_payment),0) monthly FROM debts WHERE workspace_id=%s",(workspace_id,)).fetchone()
+        # The monthly total only when every payment is known (an unknown one is not added as 0: debt_payments.py).
+        debts = conn.execute(f"SELECT COALESCE(SUM(total_amount),0) original,COALESCE(SUM(remaining_amount),0) remaining,CASE WHEN bool_or({UNKNOWN_PAYMENT_SQL}) THEN NULL ELSE COALESCE(SUM(monthly_payment),0) END monthly FROM debts WHERE workspace_id=%s",(workspace_id,)).fetchone()
         goals = conn.execute("SELECT COALESCE(SUM(target_amount),0) target,COALESCE(SUM(current_amount),0) current,COUNT(*) FILTER(WHERE status='active') active FROM financial_goals WHERE workspace_id=%s",(workspace_id,)).fetchone()
     now, previous = months[-1], months[-2]
     debt_original, debt_remaining = _money(debts["original"]), _money(debts["remaining"])
@@ -120,7 +122,7 @@ def get_basic_dashboard() -> dict:
     return {
         "month": current.strftime("%Y-%m"), "income": income, "recorded_income": now["income"],
         "expenses": now["expenses"], "debt_paid": now["debt_paid"], "balance": round(income-now["expenses"]-now["debt_paid"],2),
-        "debt": {"original": debt_original,"remaining": debt_remaining,"monthly":_money(debts["monthly"]),"progress":round((1-debt_remaining/debt_original)*100,1) if debt_original else 0},
+        "debt": {"original": debt_original,"remaining": debt_remaining,"monthly":None if debts["monthly"] is None else _money(debts["monthly"]),"progress":round((1-debt_remaining/debt_original)*100,1) if debt_original else 0},
         "savings": _money(profile.get("liquid_savings")),
         "goals": {"target":goal_target,"current":goal_current,"active":int(goals["active"] or 0),"progress":round(goal_current/goal_target*100,1) if goal_target else 0},
         "categories":[dict(row) for row in categories], "monthly_history":months,
@@ -226,7 +228,7 @@ def get_financial_calendar(period: str | None = None) -> dict:
     with get_connection() as conn:
         profile=_profile(conn,account_id,workspace_id)
         recurring=conn.execute("SELECT id,name,amount,item_type,due_day FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE AND due_day IS NOT NULL",(workspace_id,)).fetchall() if _basic_tables_ready(conn, "finva_recurring_items") else []
-        debts=conn.execute("SELECT id,name,monthly_payment,payment_day,next_payment_date FROM debts WHERE workspace_id=%s AND remaining_amount>0",(workspace_id,)).fetchall()
+        debts=conn.execute("SELECT id,name,monthly_payment,monthly_payment_known,payment_day,next_payment_date FROM debts WHERE workspace_id=%s AND remaining_amount>0",(workspace_id,)).fetchall()
         goals=conn.execute("SELECT id,name,target_amount,current_amount,target_date FROM financial_goals WHERE workspace_id=%s AND status='active' AND target_date IS NOT NULL",(workspace_id,)).fetchall()
     last=calendar.monthrange(start.year,start.month)[1]
     for item in recurring:
@@ -237,7 +239,9 @@ def get_financial_calendar(period: str | None = None) -> dict:
             parsed=debt["next_payment_date"] if isinstance(debt["next_payment_date"],date) else date.fromisoformat(str(debt["next_payment_date"])[:10])
             if start<=parsed<end:candidate=parsed
         if not candidate and debt.get("payment_day"):candidate=date(start.year,start.month,min(int(debt["payment_day"]),last))
-        if candidate:events.append({"date":candidate.isoformat(),"kind":"debt","name":debt["name"],"amount":_money(debt["monthly_payment"]),"source":"debt","source_id":debt["id"]})
+        # An unknown monthly payment is an event without an amount, never a ₡0 payment (debt_payments.py).
+        payment=known_monthly_payment(dict(debt))
+        if candidate:events.append({"date":candidate.isoformat(),"kind":"debt","name":debt["name"],"amount":None if payment is None else _money(payment),"source":"debt","source_id":debt["id"]})
     for goal in goals:
         try:
             parsed=date.fromisoformat(str(goal["target_date"])[:10])
@@ -248,7 +252,10 @@ def get_financial_calendar(period: str | None = None) -> dict:
     for day in sorted(set(pay_days)):
         events.append({"date":date(start.year,start.month,min(day,last)).isoformat(),"kind":"income","name":tx("Ingreso esperado","Expected income"),"amount":0,"source":"profile"})
     events.sort(key=lambda item:(item["date"],0 if item["kind"]=="income" else 1,item["name"]))
-    return {"period":start.strftime("%Y-%m"),"events":events,"summary":{"income_events":sum(e["kind"]=="income" for e in events),"payments":round(sum(e["amount"] for e in events if e["kind"] in {"expense","debt"}),2),"commitments":sum(e["kind"] in {"expense","debt"} for e in events)}}
+    owed=[e["amount"] for e in events if e["kind"] in {"expense","debt"}]
+    # The month's payments only when every one is known: an unknown one is not added as 0.
+    payments=None if any(amount is None for amount in owed) else round(sum(owed),2)
+    return {"period":start.strftime("%Y-%m"),"events":events,"summary":{"income_events":sum(e["kind"]=="income" for e in events),"payments":payments,"commitments":sum(e["kind"] in {"expense","debt"} for e in events)}}
 
 
 def get_basic_report(period: str | None = None) -> dict:
