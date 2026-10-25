@@ -527,7 +527,11 @@ class PlanRecoveryUiTest {
         tapTag("exact-distribution-calculate")
         waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
         waitForText(tx("Monto que indicaste", "Amount you entered"))
-        assertTrue("the exact answer never shows the estimate's cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))
+        // The Owner's cash line reads "Efectivo en tu cuenta de distribución" (OwnerReading.formulaLabel); the
+        // exact answer shows the typed amount instead, under neither the Owner's label nor the shared one.
+        assertTrue("the exact answer never shows the estimate's cash line",
+            !present(tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account")) &&
+                !present(tx("Efectivo disponible ahora", "Cash available now")))
         // Editing the amount drops the result of the previous one.
         compose.onNodeWithTag("exact-distribution-amount").performTextInput("5")
         waitForGone(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
@@ -535,7 +539,7 @@ class PlanRecoveryUiTest {
         waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
         click(tx("Aproximada", "Estimated"))
         waitForText(tx("Distribución aproximada", "Estimated distribution"))
-        waitForText(tx("Efectivo disponible ahora", "Cash available now"))
+        waitForText(tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account"))
         assertTrue(!present(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered")))
     }
 

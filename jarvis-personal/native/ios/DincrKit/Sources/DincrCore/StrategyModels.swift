@@ -225,6 +225,9 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     public let incomeReceivedCurrentCycle: Decimal?
     public let remainingIncomeCurrentCycle: Decimal?
     public let distributableAccountCash: Decimal?
+    /// Owner: the dates the cycle and the card statement cover (inclusive); nil when unknown.
+    public let cyclePeriod: DatePeriod?
+    public let cardStatementPeriod: DatePeriod?
     public let statementExpenses: Decimal?
     public let newExpensesAfterCut: Decimal?
     public let mandatoryFixedPending: Decimal?
@@ -246,7 +249,7 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         case estimatedDebtFreeDate, totalDebt, debtProgressPercent, investmentRecommended, rules
         case allocationBaseAmount, allocationItems, distributionFormula, distributionSource, distributionWarnings
         case recurringMonthlyIncome, currentMonthExtraNet, incomeReceivedCurrentCycle, remainingIncomeCurrentCycle
-        case distributableAccountCash, statementExpenses, newExpensesAfterCut, mandatoryFixedPending
+        case distributableAccountCash, cyclePeriod, cardStatementPeriod, statementExpenses, newExpensesAfterCut, mandatoryFixedPending
         case mandatoryFixedPendingItems, investmentPortfolio, baseTimeline, monthsSavedByCurrentExtras
         case warnings, missing
     }
@@ -284,6 +287,8 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         incomeReceivedCurrentCycle = c.lenient(Decimal.self, .incomeReceivedCurrentCycle)
         remainingIncomeCurrentCycle = c.lenient(Decimal.self, .remainingIncomeCurrentCycle)
         distributableAccountCash = c.lenient(Decimal.self, .distributableAccountCash)
+        cyclePeriod = c.lenient(DatePeriod.self, .cyclePeriod)
+        cardStatementPeriod = c.lenient(DatePeriod.self, .cardStatementPeriod)
         statementExpenses = c.lenient(Decimal.self, .statementExpenses)
         newExpensesAfterCut = c.lenient(Decimal.self, .newExpensesAfterCut)
         mandatoryFixedPending = c.lenient(Decimal.self, .mandatoryFixedPending)

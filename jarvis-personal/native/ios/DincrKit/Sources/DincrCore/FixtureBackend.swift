@@ -687,9 +687,24 @@ public actor FixtureBackend: HTTPTransport {
     private func monthlySummary(_ period: String) -> [String: Any] {
         let (income, expenses) = totals(period)
         let cats = categories(period)
-        return ["period": period, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "balance": number(income - expenses),
+        var summary: [String: Any] = ["period": period, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "balance": number(income - expenses),
                 "top_category": cats.first ?? NSNull(), "categories": cats, "savings": number(sum(savings, "saved_amount")),
                 "goals": ["current": number(sum(goals, "current_amount")), "target": number(sum(goals, "target_amount")), "progress": 40.0]]
+        guard profile["role"] as? String == "owner" else { return summary }
+        // Like the backend: only the verified Owner's month carries the ledger's reading. The current
+        // month still has a mail notice to review; a closed month has a loan received (not income) and
+        // gross payroll reported apart. Android: FakeBackend.monthlySummary.
+        let open = period == String(day(0).prefix(7))
+        let loan: Decimal = open ? 0 : 100_000
+        summary.merge([
+            "complete": !open, "incomplete_reasons": open ? ["pending_mail_review"] : [String](),
+            "gross_expenses": number(expenses), "refunds": 0, "other_inflows": number(loan), "loan_received": number(loan),
+            "receivable_payments": 0, "asset_sale_proceeds": 0, "cash_flow": number(income - expenses + loan),
+            "unclassified_count": 0, "pending_mail_count": open ? 1 : 0,
+            "payroll_accrued": open ? ["overtime_gross": 0, "vgh_gross": 0, "bonuses_gross": 0, "total_gross": 0]
+                                    : ["overtime_gross": 60_000, "vgh_gross": 0, "bonuses_gross": 25_000, "total_gross": 85_000],
+        ]) { $1 }
+        return summary
     }
 
     /// This month's recorded movements, as the command center's `reports.current`.

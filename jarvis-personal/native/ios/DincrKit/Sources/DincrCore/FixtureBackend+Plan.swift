@@ -10,6 +10,14 @@ extension FixtureBackend {
     private var isOwnerRole: Bool { role == "owner" }
     private var isInternalRole: Bool { role == "owner" }
 
+    /// `YYYY-MM-DD` for a day of this month, or of a month before (negative) or after.
+    private func monthDay(_ dayOfMonth: Int, monthsAhead: Int) -> String {
+        let calendar = Calendar(identifier: .gregorian)
+        let month = calendar.date(byAdding: .month, value: monthsAhead, to: today) ?? today
+        let parts = calendar.dateComponents([.year, .month], from: month)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, dayOfMonth)
+    }
+
     /// The routes of this file, or nil to keep routing.
     func planRoute(_ method: String, _ path: String, _ query: [String: String], _ body: [String: Any]) -> Answer? {
         switch (method, path) {
@@ -88,6 +96,8 @@ extension FixtureBackend {
                 "recurring_monthly_income": 900_000, "current_month_extra_net": 45_000, "income_received_current_cycle": 450_000,
                 "remaining_income_current_cycle": 495_000, "distributable_account_cash": 310_000, "statement_expenses": 180_000,
                 "new_expenses_after_cut": 42_000, "mandatory_fixed_pending": 120_000,
+                "cycle_period": ["start": monthDay(5, monthsAhead: 0), "end": monthDay(5, monthsAhead: 1)],
+                "card_statement_period": ["start": monthDay(21, monthsAhead: -1), "end": monthDay(21, monthsAhead: 0)],
                 "mandatory_fixed_pending_items": [["name": "Alquiler", "amount": 120_000, "due_day": 28]],
                 "investment_portfolio": ["market_value": 1_500, "contributed_capital": 1_350, "net_pnl": 150, "currency": "USD"],
                 "base_timeline": [Any](), "months_saved_by_current_extras": 3,
@@ -243,7 +253,10 @@ extension FixtureBackend {
                 "top_expense_categories": [["category": "Vivienda", "total": 1_260_000], ["category": "Comida", "total": 540_000]],
                 "expenses_by_month": months.map { row -> [String: Any] in ["month": row["month"] ?? "", "total": row["expenses"] ?? 0] },
                 "monthly_flow": months.map { row -> [String: Any] in
-                    ["month": row["month"] ?? "", "income": row["income"] ?? 0, "expenses": row["expenses"] ?? 0, "monthly_balance": row["balance"] ?? 0]
+                    // The current month is not complete yet (a notice to review), like the backend's ledger.
+                    let open = row["month"] as? String == months.last?["month"] as? String
+                    return ["month": row["month"] ?? "", "income": row["income"] ?? 0, "expenses": row["expenses"] ?? 0, "monthly_balance": row["balance"] ?? 0,
+                            "complete": !open, "incomplete_reasons": open ? ["pending_mail_review"] : [String](), "pending_mail_count": open ? 1 : 0]
                 },
                 "spending_breakdown": ["period": ["start": "\(day(0).prefix(4))-01-01", "end": day(0), "label": "\(day(0).prefix(4)) YTD"], "total": 2_480_000,
                                        "categories": [["category": "Vivienda", "total": 1_260_000, "count": 6], ["category": "Comida", "total": 540_000, "count": 22],
