@@ -70,6 +70,7 @@ class FakeBackend(
     private var mailArrived = false
     private val planRoutes = FakePlanRoutes(json, today)
     private val receivables = FakeReceivables(today) { id() }
+    private val wealth = FakeWealth(today) { id() }
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val isInternal get() = profile.role == "owner"
@@ -261,6 +262,21 @@ class FakeBackend(
                 path == "/finance/net-worth" -> ok(planRoutes.netWorth(snapshot()))
                 path == "/finance/engine" -> ok(planRoutes.engine(snapshot()))
                 else -> ok(planRoutes.analysis(snapshot()))
+            }
+            // JARVIS "Patrimonio": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path.startsWith("/finance/investment-center") || path.startsWith("/finance/business-center") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/investment-center" -> ok(wealth.investmentCenter())
+                method == "POST" && path == "/finance/investment-center/sync-ibkr" -> ok(wealth.syncIbkr())
+                method == "GET" && path == "/finance/business-center" -> ok(wealth.businessCenter())
+                method == "POST" && path == "/finance/business-center/businesses" ->
+                    wealth.createBusiness(text("name"), text("description"), money("ownership_pct"))?.let { ok(it) } ?: error(422, "Datos inválidos.")
+                method == "POST" && path == "/finance/business-center/movements" ->
+                    when (val answer = wealth.addMovement(text("business_id")?.toLongOrNull(), text("movement_type"), money("amount"), text("movement_date"), text("description"), text("category"))) {
+                        is FakeWealth.MovementAnswer.Saved -> ok(answer.result)
+                        is FakeWealth.MovementAnswer.Refused -> error(answer.status, answer.detail)
+                    }
+                else -> error(404, "Not Found")
             }
             // JARVIS "Control de dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
             path.startsWith("/finance/receivables") -> when {

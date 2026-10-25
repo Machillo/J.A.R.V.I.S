@@ -183,6 +183,18 @@ class DincrApi(private val client: ApiClient) {
     suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
     suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")
 
+    // --- JARVIS "Patrimonio" (Owner; `/finance/*` is Owner-only on the server) -----------------------
+    // The reads never write. The writes are explicit Owner commands, never retried on their own.
+    suspend fun investmentCenter(): InvestmentCenter = client.get("/finance/investment-center")
+    /** Asks the server to refresh the snapshot from IBKR (an external call that can fail). */
+    suspend fun syncIbkr(): IbkrSyncResult = client.send("POST", "/finance/investment-center/sync-ibkr")
+    suspend fun businessCenter(): BusinessCenter = client.get("/finance/business-center")
+    suspend fun createBusiness(request: BusinessCreateRequest): BusinessWriteResult =
+        client.send("POST", "/finance/business-center/businesses", request)
+    /** An income or expense also creates a transaction in the Owner's ledger. */
+    suspend fun addBusinessMovement(request: BusinessMovementRequest): BusinessWriteResult =
+        client.send("POST", "/finance/business-center/movements", request)
+
     // --- JARVIS "Control de dinero" (Owner; `/finance/*` is Owner-only on the server) ----------------
     // The writes are explicit Owner commands, never retried on their own: the backend does not deduplicate them.
     suspend fun receivables(): ReceivablesReport = client.get("/finance/receivables")

@@ -70,6 +70,7 @@ struct JarvisSectionView: View {
             case .calendar: JarvisAgendaView()
             case .analysis: OwnerAnalysisView()
             case .moneyControl: MoneyControlView()
+            case .wealth: WealthView()
             default: restoring
             }
         }
