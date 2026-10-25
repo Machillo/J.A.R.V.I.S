@@ -55,14 +55,15 @@ in `docs/native/PARITY_MATRIX.md`.
 - **Money.** `BigDecimal`/`Decimal` only; every amount is positive, ≤ 2 decimals and ≤
   9,999,999,999.99 (NUMERIC(12,2)); exchange rates are the user's own (> 0, never fetched or
   invented); creates carry an idempotency key reused only when the same submission is retried.
-- **Design tokens come from `/DESIGN.md`.** Never edit the generated files.
+- **Design tokens come from `/DESIGN.md`** and, for the personal-appearance alternatives (APP-1, the Owner only in
+  phase 1), from `design-tokens/appearance.json`. Never edit the generated files.
 - **No real data in fixtures.** Fixture mode uses invented names and amounts.
 
 ## Layout
 
 ```
 native/
-  design-tokens/generate.mjs   DESIGN.md → Swift + Kotlin tokens (--check for drift)
+  design-tokens/generate.mjs   DESIGN.md (+ appearance.json) → Swift + Kotlin tokens (--check for drift)
   ios/
     DINCR.xcodeproj            app + UI tests (folder-synchronized groups)
     DINCR/                     SwiftUI screens (App/, Features/, Resources/)

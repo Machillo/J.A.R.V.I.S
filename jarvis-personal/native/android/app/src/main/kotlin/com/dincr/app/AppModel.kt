@@ -147,6 +147,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     private val pendingSignIn = PendingSignInStore(application)
     private var fixturePkce: Pkce? = null
     private val prefs = application.getSharedPreferences("dincr.preferences", Context.MODE_PRIVATE)
+    /** APP-1: the account's personal appearance (the Owner only in phase 1). */
+    val appearance = AppearanceController(prefs, viewModelScope) { api }
 
     init {
         // A data export left over from an earlier session (or a crash) is removed at startup.
@@ -429,6 +431,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         // Another account, or an account that is no longer the Owner, never sees this chat.
         if (profile.id != previous?.id || !Jarvis.isAvailable(profile)) jarvisChat.reset()
         _profile.value = profile
+        appearance.onIdentity(profile)
         lastIdentityRefresh = System.currentTimeMillis()
         if (previous?.id != profile.id) appLock.attach(profile.id.toString())
         profile.subscription?.accessNotice?.let { notice -> notice.message?.let { _notice.value = listOfNotNull(notice.title, it).joinToString(". ") } }
@@ -506,6 +509,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         pendingSignIn.clear()
         appLock.detach()
         jarvisChat.reset()
+        appearance.clear()
         _profile.value = null
         _flags.value = FeatureFlags()
         _notice.value = null
