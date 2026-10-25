@@ -16,6 +16,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.ui.RootScreen
+import com.dincr.data.AppearancePolicy
 import com.dincr.data.MoneyFormat
 import com.dincr.design.DincrTheme
 
@@ -43,12 +44,19 @@ class MainActivity : FragmentActivity() {
         var appearance by mutableStateOf(Appearance.from(prefs.getString("appearance", null)))
         setContent {
             val profile by model.profile.collectAsStateWithLifecycle()
-            val dark = when (appearance) {
+            val personal by model.appearance.effective.collectAsStateWithLifecycle()
+            // The Owner's theme travels with its personal appearance (APP-1); everyone else keeps
+            // this device's Automático / Claro / Oscuro setting, as before.
+            val dark = if (AppearancePolicy.isPersonalizable(profile)) when (personal.theme) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            } else when (appearance) {
                 Appearance.SYSTEM -> isSystemInDarkTheme()
                 Appearance.LIGHT -> false
                 Appearance.DARK -> true
             }
-            DincrTheme(darkTheme = dark, moneyFormat = MoneyFormat.from(profile)) {
+            DincrTheme(darkTheme = dark, moneyFormat = MoneyFormat.from(profile), appearance = personal) {
                 RootScreen(model, appearance) { next ->
                     appearance = next
                     prefs.edit().putString("appearance", next.name).apply()
