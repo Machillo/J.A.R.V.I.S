@@ -31,7 +31,7 @@ extension FixtureBackend {
     private var receivablesAllowed: Bool { profile["role"] as? String == "owner" }
 
     func receivablesRoute(_ method: String, _ path: String, _ body: [String: Any]) -> Answer? {
-        guard path.hasPrefix("/finance/receivables") else { return nil }
+        guard path.hasPrefix("/finance/receivables") else { return moneyRoute(method, path, body) }
         guard receivablesAllowed else { return error(403, "No tienes permisos para realizar esta acción.") }
         switch method {
         case "GET" where path == "/finance/receivables":

@@ -70,6 +70,7 @@ class FakeBackend(
     private var mailArrived = false
     private val planRoutes = FakePlanRoutes(json, today)
     private val receivables = FakeReceivables(today) { id() }
+    private val ownerMoney = FakeMoney(today) { id() }
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val isInternal get() = profile.role == "owner"
@@ -261,6 +262,18 @@ class FakeBackend(
                 path == "/finance/net-worth" -> ok(planRoutes.netWorth(snapshot()))
                 path == "/finance/engine" -> ok(planRoutes.engine(snapshot()))
                 else -> ok(planRoutes.analysis(snapshot()))
+            }
+            // JARVIS "Mi dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path == "/finance/cycle-report" || path.startsWith("/finance/account-balances") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/cycle-report" -> ok(ownerMoney.cycleReport())
+                method == "GET" && path == "/finance/account-balances" -> ok(ownerMoney.balances())
+                method == "POST" && path == "/finance/account-balances" ->
+                    ownerMoney.save(text("account_name"), money("current_balance"), text("bank_name"), text("account_last4"), text("currency"),
+                        text("account_type"), text("include_in_net_worth")?.toBooleanStrictOrNull())?.let { ok(it) } ?: error(422, "Datos inválidos.")
+                method == "DELETE" ->
+                    ownerMoney.remove(path.substringAfterLast("/").toLongOrNull())?.let { ok(it) } ?: error(404, "Cuenta financiera no encontrada.")
+                else -> error(404, "Not Found")
             }
             // JARVIS "Control de dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
             path.startsWith("/finance/receivables") -> when {
