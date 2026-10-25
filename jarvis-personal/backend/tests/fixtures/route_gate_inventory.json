@@ -1617,6 +1617,28 @@
   ]
  },
  {
+  "method": "DELETE",
+  "path": "/user-product/appearance",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/appearance",
+  "gates": [
+   "roles:owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/appearance",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/user-product/basic/budget",
   "gates": [
