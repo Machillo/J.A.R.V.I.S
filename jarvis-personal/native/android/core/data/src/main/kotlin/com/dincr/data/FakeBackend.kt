@@ -74,6 +74,8 @@ class FakeBackend(
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val isInternal get() = profile.role == "owner"
+    /** `/user-product/appearance`: one stored choice for the fixture account; none means the defaults. */
+    private var appearance: AppearancePrefs? = null
 
     init {
         if (scenario == Scenario.POPULATED) seed()
@@ -209,6 +211,19 @@ class FakeBackend(
         return ok("""{"message":"Señor, esto es una respuesta de ejemplo.","intent":"general","status":"UNSUPPORTED","pending":false,"data":null}""")
     }
 
+    private fun appearanceRoute(method: String, body: JsonObject?): HttpResponse {
+        when (method) {
+            "PUT" -> {
+                val prefs = body?.let { runCatching { json.decodeFromJsonElement(AppearancePrefs.serializer(), it) }.getOrNull() }
+                if (prefs == null || prefs != prefs.sanitized()) return error(422, "Valor de apariencia no válido.")
+                appearance = prefs
+            }
+            "DELETE" -> appearance = null
+        }
+        return ok(AppearanceState(preferences = appearance ?: AppearancePrefs.OWNER_DEFAULT, stored = appearance != null,
+            updatedAt = appearance?.let { "${today}T12:00:00Z" }))
+    }
+
     private fun ok(value: String) = HttpResponse(200, value)
     private inline fun <reified T> ok(value: T) = HttpResponse(200, json.encodeToString(value))
     private fun error(status: Int, detail: String) = HttpResponse(status, buildJsonObject { put("detail", detail) }.toString())
@@ -228,6 +243,8 @@ class FakeBackend(
             path == "/auth/me" && method == "DELETE" -> ok("""{"status":"OK","message":"Cuenta eliminada","deletion_id":"del_demo"}""")
             // JARVIS chat: /jarvis/* admits only the verified Owner, like the backend.
             path == "/jarvis/chat" && method == "POST" -> jarvisChat(text("message").orEmpty())
+            // Personal appearance (APP-1): the Owner only, like the backend's require_owner().
+            path == "/user-product/appearance" -> if (!isOwner) error(403, "No tienes permisos para realizar esta acción.") else appearanceRoute(method, body)
             path == "/jarvis/calendar/upcoming" && method == "GET" ->
                 if (profile.role != "owner") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
             // The Owner's strategy: this fake serves it to the Owner role only.
