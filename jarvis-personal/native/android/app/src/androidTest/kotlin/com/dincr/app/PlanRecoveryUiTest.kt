@@ -543,6 +543,20 @@ class PlanRecoveryUiTest {
         assertTrue(!present(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered")))
     }
 
+    /** Debts → when each debt ends and the month all of them end (the backend's estimate), for every plan and the Owner. */
+    @Test fun everyPlanAndTheOwnerSeeWhenTheirDebtsEnd() {
+        for ((plan, role) in listOf("free" to null, "vip" to null, "vip" to "owner")) {
+            launch(plan = plan, role = role)
+            home()
+            click(tx("Plan", "Plan"))
+            click(tx("Deudas", "Debts"))
+            waitForTag("debts.payoff.summary")
+            waitForText(tx("Libre de deudas aprox.", "Debt-free around"))
+            waitForText(tx("Terminás de pagar", "Paid off by"))
+            waitForText(tx("cuotas", "instalments"), substring = true)
+        }
+    }
+
     @Test fun vipUsersHaveNoExactAmountMode() {
         launch(plan = "vip")
         home()

@@ -14,6 +14,7 @@ from backend.finance.debt_automation import schedule_automation_enabled
 from backend.finance.service import apply_monthly_payment_to_debt, get_payroll_events
 from backend.finance.category_catalog import manual_expense_category, normalize_category, expense_type_for_category
 from backend.user_product.basic_service import _require_basic_tables
+from backend.user_product.debt_payoff import payoff_estimate
 from backend.user_product.debt_rates import UNKNOWN_RATE_SQL, known_interest_rate, rate_for_create, rate_for_update, with_known_rates
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 from backend.user_product.strategy_engine import (
@@ -359,8 +360,10 @@ def list_user_debts():
             (workspace_id,),
         ).fetchall()
     # `interest_rate_known` is what DINCR knows (an unconfirmed historical 0 is not known); the
-    # stored `interest_rate` is returned as before.
-    return [_with_rate_knowledge(row) for row in rows]
+    # stored `interest_rate` is returned as before. Each debt also says when it is expected to be
+    # paid off (debt_payoff: read-only, never a date for an unknown rate).
+    today = costa_rica_today()
+    return [{**_with_rate_knowledge(row), **payoff_estimate(dict(row), today)} for row in rows]
 
 
 def _with_rate_knowledge(row) -> dict:
