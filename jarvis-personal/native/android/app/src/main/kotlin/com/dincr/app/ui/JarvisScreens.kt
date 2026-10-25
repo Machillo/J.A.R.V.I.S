@@ -64,6 +64,10 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
         JarvisAnalysisScreen(model, nav)
         return@OwnerOnly
     }
+    if (section == Jarvis.Section.RECORDS) {
+        RecordsScreen(model, nav)
+        return@OwnerOnly
+    }
     if (section == Jarvis.Section.MONEY_CONTROL) {
         MoneyControlScreen(model, nav)
         return@OwnerOnly

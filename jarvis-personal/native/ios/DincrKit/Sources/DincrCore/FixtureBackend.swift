@@ -52,6 +52,9 @@ public actor FixtureBackend: HTTPTransport {
     /// JARVIS → Control de dinero (Owner): who owes the Owner money and every charge and payment
     /// (FixtureBackend+Receivables.swift). Invented names and amounts.
     var ownerReceivables: [FixtureReceivable] = FixtureReceivable.seed
+    /// JARVIS → Registros (Owner): the real balances confirmed in the reconciliation, by account
+    /// (FixtureBackend+Records.swift). Invented accounts and amounts.
+    var ownerConfirmedBalances: [Int: Decimal] = [:]
     var ownerProtectedExpenses: Set<Int> = [62]
     private var tickets: [[String: Any]] = []
     var mailConnected: Bool

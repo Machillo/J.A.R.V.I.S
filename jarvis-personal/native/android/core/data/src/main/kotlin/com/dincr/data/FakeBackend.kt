@@ -70,6 +70,7 @@ class FakeBackend(
     private var mailArrived = false
     private val planRoutes = FakePlanRoutes(json, today)
     private val receivables = FakeReceivables(today) { id() }
+    private val records = FakeRecords(today)
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val isInternal get() = profile.role == "owner"
@@ -261,6 +262,15 @@ class FakeBackend(
                 path == "/finance/net-worth" -> ok(planRoutes.netWorth(snapshot()))
                 path == "/finance/engine" -> ok(planRoutes.engine(snapshot()))
                 else -> ok(planRoutes.analysis(snapshot()))
+            }
+            // JARVIS "Registros": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path == "/finance/timeline" || path.startsWith("/finance/reconciliation") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/timeline" -> ok(records.timeline())
+                method == "GET" && path == "/finance/reconciliation" -> ok(records.reconciliation())
+                method == "POST" && path.endsWith("/confirm") ->
+                    records.confirm(path.split("/").dropLast(1).last().toLongOrNull(), money("real_balance"))?.let { ok(it) } ?: error(404, "Cuenta financiera no encontrada.")
+                else -> error(404, "Not Found")
             }
             // JARVIS "Control de dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
             path.startsWith("/finance/receivables") -> when {
