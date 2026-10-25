@@ -551,7 +551,16 @@ class PlanRecoveryUiTest {
             click(tx("Plan", "Plan"))
             click(tx("Deudas", "Debts"))
             waitForTag("debts.payoff.summary")
-            waitForText(tx("Libre de deudas aprox.", "Debt-free around"))
+            // What has been paid of all the debts and what is left.
+            waitForText(tx("Te falta el", "of your debts left"), substring = true)
+            // Owner and VIP read their strategy's debt-free date; Free only the installments' estimate.
+            if (plan == "free") {
+                waitForText(tx("Libre de deudas aprox.", "Debt-free around"))
+                assertTrue("Free has no strategy", compose.onAllNodes(hasTestTag("debts.strategy.date"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+            } else {
+                waitForTag("debts.strategy.date")
+                waitForText(tx("Solo con las cuotas", "Installments only"))
+            }
             waitForText(tx("Terminás de pagar", "Paid off by"))
             waitForText(tx("cuotas", "instalments"), substring = true)
         }

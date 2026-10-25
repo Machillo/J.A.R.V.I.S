@@ -43,6 +43,19 @@ final class JarvisAccessUITests: XCTestCase {
         XCTAssertTrue(element("jarvis.restoring", in: app).waitForExistence(timeout: 5))
     }
 
+    func testTheOwnersPersonalStrategyOpensHisPlanForTheMonth() {
+        let app = launch(role: "owner")
+        let entry = element("profile.jarvis", in: app)
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
+        let strategy = element("jarvis.section.strategy", in: app)
+        XCTAssertTrue(strategy.waitForExistence(timeout: 5))
+        strategy.tap()
+        // The same screen as Plan → Tu plan del mes, with the Owner's strategy; never "being restored".
+        XCTAssertTrue(element("strategy.dashboard", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("jarvis.restoring", in: app).exists)
+    }
+
     func testFreeBasicAndVipNeverSeeJarvis() {
         for plan in [nil, "basic", "vip"] as [String?] {
             let app = launch(plan: plan)
