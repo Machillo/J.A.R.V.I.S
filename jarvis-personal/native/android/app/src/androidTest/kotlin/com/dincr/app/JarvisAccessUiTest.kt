@@ -77,6 +77,16 @@ class JarvisAccessUiTest {
         waitForText(tx("Esta función todavía no está disponible en la app.", "This feature isn’t available in the app yet."), substring = true)
     }
 
+    @Test fun theOwnersPersonalStrategyOpensHisPlanForTheMonth() {
+        launch(role = "owner")
+        openProfile()
+        click("JARVIS")
+        click(tx("Estrategia personal", "Personal strategy"))
+        // The same screen as Plan → Tu plan del mes, with the Owner's strategy; never "being restored".
+        waitForText(tx("Tu plan del mes", "Your plan for the month"))
+        assertTrue(!present(tx("Esta función todavía no está disponible en la app.", "This feature isn’t available in the app yet."), substring = true))
+    }
+
     @Test fun freeBasicAndVipNeverSeeJarvis() {
         listOf("free", "basic", "vip").forEach { plan ->
             launch(plan = plan)
