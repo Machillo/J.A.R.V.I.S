@@ -28,8 +28,10 @@ struct DebtsView: View {
         ScreenScroll(title: tx("Deudas", "Debts")) {
             WritesPausedBanner()
             if let notice { StatusBanner(tone: .info, title: notice, message: "").accessibilityIdentifier("plan.notice") }
-            AsyncContent(load: { try await model.service.debts() }) { debts, _ in
-                DebtList(debts: debts, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
+            // The list and, for the Owner and VIP, their strategy's debt-free date: one answer, so the
+            // date is never lost between two loads. The strategy is optional: its failure never hides the list.
+            AsyncContent(load: { DebtsScreenData(debts: try await model.service.debts(), strategyDate: await loadStrategyDate()) }) { data, _ in
+                DebtList(debts: data.debts, strategyDate: data.strategyDate, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
                          pay: { action = .payDebt($0) }, edit: { form = .edit($0) }, delete: { deleting = $0 })
             }
             .id(generation)
@@ -56,6 +58,12 @@ struct DebtsView: View {
         generation += 1
     }
 
+    private func loadStrategyDate() async -> DebtProgress.StrategyDate? {
+        let source = StrategySource.of(model.profile, flags: model.flags)
+        guard source == .ownerDashboard || source == .usersDashboard else { return nil }
+        return DebtProgress.strategyDate(try? await model.service.planStrategy(source))
+    }
+
     private func delete(_ debt: Debt) async {
         let epoch = model.currentEpoch
         do {
@@ -67,8 +75,16 @@ struct DebtsView: View {
     }
 }
 
-private struct DebtList: View {
+/// What the debts screen shows: the list and, for the Owner and VIP, the strategy's debt-free date.
+private struct DebtsScreenData: Equatable {
     let debts: [Debt]
+    let strategyDate: DebtProgress.StrategyDate?
+}
+
+private struct DebtList: View {
+    @Environment(AppModel.self) private var model
+    let debts: [Debt]
+    let strategyDate: DebtProgress.StrategyDate?
     let canWrite: Bool
     let canEdit: Bool
     let pay: (Debt) -> Void
@@ -80,7 +96,7 @@ private struct DebtList: View {
             EmptyStateView(symbol: "creditcard", title: tx("No tenés deudas registradas", "You have no debts recorded"),
                            message: tx("Agregá tarjetas o préstamos para ver tu avance y tu estrategia.", "Add cards or loans to see your progress and your strategy.")) { EmptyView() }
         }
-        DebtPayoffSummary(summary: DebtPayoff.summary(debts))
+        DebtPayoffSummary(summary: DebtPayoff.summary(debts), total: DebtProgress.total(debts), strategy: strategyDate)
         ForEach(debts) { debt in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack(alignment: .firstTextBaseline) {
@@ -93,9 +109,12 @@ private struct DebtList: View {
                 }
                 .accessibilityElement(children: .combine)
                 // The backend sends 0 % when the original amount is unknown: progress only from a known one.
-                if let percent = debt.knownProgressPercent {
-                    DincrProgressBar(fraction: percent / 100)
-                    Text(tx("\(Int(percent.rounded()))% pagado", "\(Int(percent.rounded()))% paid")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                if let amounts = DebtProgress.of(debt), let fraction = amounts.progress.fraction {
+                    DincrProgressBar(fraction: fraction)
+                    Text(tx("Pagado \(model.moneyFormat.string(amounts.paid)) de \(model.moneyFormat.string(amounts.original)) · te falta el \(Int((amounts.remainingFraction * 100).rounded())) %",
+                            "Paid \(model.moneyFormat.string(amounts.paid)) of \(model.moneyFormat.string(amounts.original)) · \(Int((amounts.remainingFraction * 100).rounded())) % left"))
+                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .accessibilityIdentifier("debt.progress.\(debt.id)")
                 }
                 if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
                 if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.label(next)) }

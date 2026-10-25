@@ -64,6 +64,11 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
         JarvisAnalysisScreen(model, nav)
         return@OwnerOnly
     }
+    // The Owner's strategy is the same screen as Plan → Tu plan del mes (one place, no copy).
+    if (section == Jarvis.Section.STRATEGY) {
+        StrategyScreen(model, nav)
+        return@OwnerOnly
+    }
     if (section == Jarvis.Section.MONEY_CONTROL) {
         MoneyControlScreen(model, nav)
         return@OwnerOnly

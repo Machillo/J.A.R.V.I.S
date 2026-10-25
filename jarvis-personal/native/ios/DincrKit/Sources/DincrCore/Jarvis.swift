@@ -25,9 +25,7 @@ public enum Jarvis {
 
         public var id: String { rawValue }
 
-        /// Ported to the native app: the chat (J1), the agenda (J2), the financial analysis, money
-        /// control (pending collections) and wealth (investments and businesses); the others still
-        /// open "being restored".
-        public var isAvailable: Bool { self == .chat || self == .calendar || self == .analysis || self == .moneyControl || self == .wealth }
+        /// Ported to the native app (the others still open "being restored"): chat, calendar, strategy, moneyControl, wealth, analysis.
+        public var isAvailable: Bool { self == .chat || self == .calendar || self == .strategy || self == .moneyControl || self == .wealth || self == .analysis }
     }
 }
