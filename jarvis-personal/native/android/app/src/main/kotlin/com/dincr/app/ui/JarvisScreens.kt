@@ -7,7 +7,6 @@ import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.PieChart
-import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.RequestQuote
 import androidx.compose.material.icons.rounded.Timeline
@@ -87,7 +86,6 @@ fun OwnerOnly(model: AppModel, nav: Navigator, content: @Composable () -> Unit) 
 
 private val Jarvis.Section.title: String get() = when (this) {
     Jarvis.Section.CHAT -> tx("Chat", "Chat")
-    Jarvis.Section.MEMORY -> tx("Memoria", "Memory")
     Jarvis.Section.CALENDAR -> tx("Agenda", "Calendar")
     Jarvis.Section.STRATEGY -> tx("Estrategia personal", "Personal strategy")
     Jarvis.Section.MONEY -> tx("Mi dinero", "My money")
@@ -99,7 +97,6 @@ private val Jarvis.Section.title: String get() = when (this) {
 
 private val Jarvis.Section.summary: String get() = when (this) {
     Jarvis.Section.CHAT -> tx("Conversar con JARVIS y registrar con tu confirmación", "Talk to JARVIS and record with your confirmation")
-    Jarvis.Section.MEMORY -> tx("Lo que JARVIS recuerda de vos", "What JARVIS remembers about you")
     Jarvis.Section.CALENDAR -> tx("Tus eventos y recordatorios", "Your events and reminders")
     Jarvis.Section.STRATEGY -> tx("Tu estrategia con tus ingresos reales", "Your strategy with your real income")
     Jarvis.Section.MONEY -> tx("Tu ciclo, tus cuentas y los pagos de tus deudas", "Your cycle, your accounts and your debt payments")
@@ -111,7 +108,6 @@ private val Jarvis.Section.summary: String get() = when (this) {
 
 private val Jarvis.Section.icon: ImageVector get() = when (this) {
     Jarvis.Section.CHAT -> Icons.AutoMirrored.Rounded.Chat
-    Jarvis.Section.MEMORY -> Icons.Rounded.Psychology
     Jarvis.Section.CALENDAR -> Icons.Rounded.CalendarMonth
     Jarvis.Section.STRATEGY -> Icons.Rounded.Insights
     Jarvis.Section.MONEY -> Icons.Rounded.AccountBalanceWallet

@@ -21,7 +21,7 @@ object Jarvis {
      * with its own tests.
      */
     enum class Section(val wire: String) {
-        CHAT("chat"), MEMORY("memory"), CALENDAR("calendar"), STRATEGY("strategy"), MONEY("money"),
+        CHAT("chat"), CALENDAR("calendar"), STRATEGY("strategy"), MONEY("money"),
         MONEY_CONTROL("money_control"), WEALTH("wealth"), RECORDS("records"),
         /** "Análisis financiero": the historical web Finanzas tab (analysis summary, net worth, engine). */
         ANALYSIS("analysis");

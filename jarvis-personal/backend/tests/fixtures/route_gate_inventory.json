@@ -1151,44 +1151,6 @@
   ]
  },
  {
-  "method": "GET",
-  "path": "/jarvis/memory",
-  "gates": [
-   "router_roles:owner"
-  ],
-  "user_get": "denied"
- },
- {
-  "method": "POST",
-  "path": "/jarvis/memory",
-  "gates": [
-   "router_roles:owner"
-  ]
- },
- {
-  "method": "GET",
-  "path": "/jarvis/memory/search",
-  "gates": [
-   "router_roles:owner"
-  ],
-  "user_get": "denied"
- },
- {
-  "method": "GET",
-  "path": "/jarvis/memory/summary",
-  "gates": [
-   "router_roles:owner"
-  ],
-  "user_get": "denied"
- },
- {
-  "method": "DELETE",
-  "path": "/jarvis/memory/{memory_id}",
-  "gates": [
-   "router_roles:owner"
-  ]
- },
- {
   "method": "POST",
   "path": "/jarvis/notifications/browser",
   "gates": [

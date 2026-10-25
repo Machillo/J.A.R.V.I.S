@@ -11,7 +11,6 @@ from backend.ai.chat_memory import (
     update_pending_action,
 )
 from backend.core.events import add_event
-from backend.ai.memory_service import create_memory_item
 from backend.finance.fixed_expenses import apply_fixed_expense_plan
 from backend.finance.service import (
     add_bonus,
@@ -162,12 +161,6 @@ ACTION_CONFIG = {
         "required": ["title", "event_date"],
         "optional_defaults": {},
         "questions": {"title": "¿Cómo se llama el compromiso?", "event_date": "¿Para qué fecha y hora?"},
-    },
-    "create_memory": {
-        "label": "nota en memoria",
-        "required": ["content"],
-        "optional_defaults": {},
-        "questions": {"content": "¿Qué querés que recuerde?"},
     },
     "create_fixed_expense": {
         "label": "gasto fijo",
@@ -555,9 +548,6 @@ def _save_action(action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         return add_event(title=final["title"], event_date=final["event_date"], event_type="personal",
                          description=final.get("description") or final["title"])
 
-    if action_type == "create_memory":
-        return create_memory_item(content=final["content"], source="chat")
-
     if action_type in {"create_fixed_expense", "update_fixed_expense"}:
         operation = "create" if action_type == "create_fixed_expense" else "update"
         return apply_fixed_expense_plan({**final, "operation": operation})
@@ -570,8 +560,6 @@ def _saved_message(action_type: str, payload: dict[str, Any], result: Any) -> st
     to save at once, the generic one otherwise."""
     if action_type == "create_calendar_event":
         return f"Señor, listo. Guardé en calendario: {payload['title']} · {payload['event_date']}."
-    if action_type == "create_memory":
-        return "Listo, lo recordaré."
     if action_type in {"create_fixed_expense", "update_fixed_expense"} and isinstance(result, dict):
         return result.get("message") or "Listo. Guardé la información."
     if payload.get(DIRECT_MARK) and action_type in {"create_bonus", "create_payroll_event"}:

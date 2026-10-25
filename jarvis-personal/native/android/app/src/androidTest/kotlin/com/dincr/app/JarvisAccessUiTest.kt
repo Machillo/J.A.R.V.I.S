@@ -1,6 +1,7 @@
 package com.dincr.app
 
 import android.content.Intent
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -72,7 +73,10 @@ class JarvisAccessUiTest {
         assertTrue("no mail row in Perfil", !present(tx("Correos financieros", "Financial emails")))
         click("JARVIS")
         assertTrue(present(tx("Chat", "Chat")))
-        click(tx("Memoria", "Memory"))
+        // The JARVIS row (its title and "En restauración" together), never the Patrimonio tab.
+        val wealth = compose.onAllNodes(hasText(tx("Patrimonio", "Wealth")) and hasText(tx("En restauración", "Being restored")) and hasClickAction())
+        waitForText(tx("En restauración", "Being restored"))
+        wealth.onFirst().also { runCatching { it.performScrollTo() } }.performClick()
         // A section not ported yet says so and shows no sample content.
         waitForText(tx("Esta función todavía no está disponible en la app.", "This feature isn’t available in the app yet."), substring = true)
     }

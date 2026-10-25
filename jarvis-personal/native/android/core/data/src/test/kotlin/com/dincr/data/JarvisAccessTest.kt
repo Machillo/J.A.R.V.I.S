@@ -58,7 +58,7 @@ class JarvisAccessTest {
         // pending collections; every other section still opens a "being restored" screen.
         assertEquals(listOf(Jarvis.Section.CALENDAR, Jarvis.Section.CHAT, Jarvis.Section.MONEY_CONTROL, Jarvis.Section.ANALYSIS).sorted(), Jarvis.Section.entries.filter { it.isAvailable }.sorted())
         // The same sections and wire names as iOS (`Jarvis.Section`).
-        assertEquals(listOf("chat", "memory", "calendar", "strategy", "money", "money_control", "wealth", "records", "analysis"), Jarvis.Section.entries.map { it.wire })
+        assertEquals(listOf("chat", "calendar", "strategy", "money", "money_control", "wealth", "records", "analysis"), Jarvis.Section.entries.map { it.wire })
         assertEquals(Jarvis.Section.MONEY_CONTROL, Jarvis.Section.from("money_control"))
         assertEquals(null, Jarvis.Section.from("admin"))
     }
