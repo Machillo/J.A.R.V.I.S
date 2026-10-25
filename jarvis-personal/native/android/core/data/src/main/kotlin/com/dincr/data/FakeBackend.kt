@@ -69,6 +69,7 @@ class FakeBackend(
     @Volatile var mailArrives: Boolean = false
     private var mailArrived = false
     private val planRoutes = FakePlanRoutes(json, today)
+    private val receivables = FakeReceivables(today) { id() }
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val isInternal get() = profile.role == "owner"
@@ -277,6 +278,16 @@ class FakeBackend(
                 path == "/finance/net-worth" -> ok(planRoutes.netWorth(snapshot()))
                 path == "/finance/engine" -> ok(planRoutes.engine(snapshot()))
                 else -> ok(planRoutes.analysis(snapshot()))
+            }
+            // JARVIS "Control de dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path.startsWith("/finance/receivables") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/receivables" -> ok(receivables.report())
+                method == "POST" && path == "/finance/receivables/entries" ->
+                    ok(receivables.addEntry(text("person_name"), money("amount"), text("description"), text("entry_kind")))
+                method == "POST" && path.endsWith("/payments") ->
+                    ok(receivables.pay(path.split("/").dropLast(1).last().toLongOrNull(), money("amount"), text("notes"), text("payment_date")))
+                else -> error(404, "Not Found")
             }
             path == "/auth/me/export" -> ok("""{"format_version":1,"generated_at":"${today}T12:00:00Z","account":{"id":1},"workspaces":[],"data":{},"truncated_tables":[],"notes":[]}""")
             path == "/auth/profile-setup" -> {

@@ -51,7 +51,8 @@
   "PR-5",
   "PR-10-A",
   "L-1",
-  "APP-1"
+  "APP-1",
+  "J-MC"
  ],
  "fixtures": {
   "ios": {
@@ -1685,7 +1686,7 @@
   {
    "id": "jarvis.money_control",
    "name": "JARVIS → Control de dinero",
-   "decision": "baseline-81fd2cc4",
+   "decision": "J-MC",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1696,6 +1697,18 @@
     {
      "method": "GET",
      "path": "/finance/receivables",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/finance/receivables/{receivable_id}/payments",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/finance/receivables/entries",
      "gate": "internal_only",
      "used_by": []
     }
@@ -1720,8 +1733,7 @@
       "JARVIS"
      ]
     }
-   },
-   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+   }
   },
   {
    "id": "jarvis.wealth",

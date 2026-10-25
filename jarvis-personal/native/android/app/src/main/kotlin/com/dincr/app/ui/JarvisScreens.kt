@@ -64,6 +64,10 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
         JarvisAnalysisScreen(model, nav)
         return@OwnerOnly
     }
+    if (section == Jarvis.Section.MONEY_CONTROL) {
+        MoneyControlScreen(model, nav)
+        return@OwnerOnly
+    }
     DetailScaffold(section.title, onBack = nav::back) {
         EmptyState(section.icon, tx("En restauración", "Being restored"),
             tx("${section.summary}. Esta función todavía no está disponible en la app.", "${section.summary}. This feature isn’t available in the app yet."))
