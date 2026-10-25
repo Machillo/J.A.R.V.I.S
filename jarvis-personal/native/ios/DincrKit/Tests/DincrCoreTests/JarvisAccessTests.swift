@@ -52,7 +52,7 @@ import Testing
     @Test func theChatTheAgendaTheAnalysisAndMoneyControlAreThePortedSections() {
         // J1 ports the chat, J2 the agenda, then the financial analysis (the web Finanzas tab) and
         // money control (pending collections); every other section still opens a "being restored" screen.
-        #expect(Jarvis.Section.allCases.filter(\.isAvailable) == [.chat, .calendar, .money, .moneyControl, .analysis])
+        #expect(Jarvis.Section.allCases.filter(\.isAvailable) == [.chat, .calendar, .strategy, .money, .moneyControl, .analysis])
         // The same sections and wire names as Android (`Jarvis.Section`).
         #expect(Jarvis.Section.allCases.map(\.rawValue) == ["chat", "memory", "calendar", "strategy", "money", "money_control", "wealth", "records", "analysis"])
     }

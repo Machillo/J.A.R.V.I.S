@@ -53,6 +53,7 @@
   "L-1",
   "APP-1",
   "J-MC",
+  "J-STR",
   "J-MON"
  ],
  "fixtures": {
@@ -1600,7 +1601,7 @@
   {
    "id": "jarvis.strategy",
    "name": "JARVIS → Estrategia personal",
-   "decision": "baseline-81fd2cc4",
+   "decision": "J-STR",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1647,8 +1648,7 @@
       "JARVIS"
      ]
     }
-   },
-   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+   }
   },
   {
    "id": "jarvis.money",
