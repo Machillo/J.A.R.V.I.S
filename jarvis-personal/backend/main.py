@@ -34,6 +34,7 @@ from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
 from backend.auth.owner_bridge_routes import router as owner_bridge_router
 from backend.user_product.routes import router as user_product_router
+from backend.user_product.appearance_routes import router as appearance_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.posthog_events import capture_backend_event_later
@@ -462,6 +463,7 @@ app.include_router(business_center_router, dependencies=INTERNAL_ONLY)
 app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
+app.include_router(appearance_router)
 app.include_router(deployment_monitor_router)
 app.include_router(product_ops_router)
 app.include_router(store_billing_router)

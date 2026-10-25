@@ -51,6 +51,7 @@
   "PR-5",
   "PR-10-A",
   "L-1",
+  "APP-1",
   "J-MC",
   "J-STR"
  ],
@@ -1380,6 +1381,48 @@
      "text": "JARVIS"
     }
    }
+  },
+  {
+   "id": "profile.appearance",
+   "name": "Perfil → Personalización (experimento visual, solo Owner)",
+   "decision": "APP-1",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/appearance",
+     "gate": "roles:owner",
+     "used_by": []
+    },
+    {
+     "method": "PUT",
+     "path": "/user-product/appearance",
+     "gate": "roles:owner",
+     "used_by": []
+    },
+    {
+     "method": "DELETE",
+     "path": "/user-product/appearance",
+     "gate": "roles:owner",
+     "used_by": []
+    }
+   ],
+   "android": {
+    "tab": "Perfil",
+    "tag": "profile.appearance",
+    "text": "Personalización",
+    "en": {
+     "tab": "Profile",
+     "text": "Personalization"
+    }
+   },
+   "ios_gap": "APP-1 phase 1 ships the iOS catalog, tokens and API client only; the Personalización screen and theming need a Mac build (MAC REQUIRED). Until then the iOS Owner keeps its current Owner scene, which equals the Owner default (Océano + Cian).",
+   "placeholder": "APP-1: Owner-only experiment; widening it to other plans is a new decision that changes this entry and the route gate."
   },
   {
    "id": "jarvis.chat",

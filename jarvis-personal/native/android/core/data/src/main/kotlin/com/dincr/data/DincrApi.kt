@@ -26,6 +26,11 @@ class DincrApi(private val client: ApiClient) {
     suspend fun choosePlan(request: PlanChangeRequest): PlanChangeResult = client.send("POST", "/auth/plan", request)
     suspend fun billingCatalog(): BillingCatalog = client.get("/product-ops/billing/catalog")
 
+    // --- Personal appearance (APP-1: the Owner only; the backend refuses everyone else) ---------
+    suspend fun appearance(): AppearanceState = client.get("/user-product/appearance")
+    suspend fun saveAppearance(prefs: AppearancePrefs): AppearanceState = client.send("PUT", "/user-product/appearance", prefs.sanitized())
+    suspend fun resetAppearance(): AppearanceState = client.send("DELETE", "/user-product/appearance")
+
     // --- Operations ------------------------------------------------------------------------------
     suspend fun featureFlags(): FeatureFlags = client.get("/product-ops/feature-flags")
     suspend fun health(): ServiceHealth = client.get("/product-ops/health")

@@ -50,6 +50,7 @@ import com.dincr.data.LaunchPolicy
 import com.dincr.data.ReleasePolicy
 import com.dincr.design.Dincr
 import com.dincr.design.DincrPrimaryButton
+import com.dincr.design.dincrScreenBackground
 import com.dincr.design.generated.DincrSpacing
 import kotlinx.coroutines.launch
 
@@ -57,7 +58,7 @@ import kotlinx.coroutines.launch
 fun RootScreen(model: AppModel, appearance: Appearance, onAppearance: (Appearance) -> Unit) {
     val phase by model.phase.collectAsStateWithLifecycle()
     val locked by model.appLock.locked.collectAsStateWithLifecycle()
-    Box(Modifier.fillMaxSize().background(Dincr.colors.bg)) {
+    Box(Modifier.fillMaxSize().dincrScreenBackground()) {
         Crossfade(targetState = phase, label = "phase") { current ->
             when (current) {
                 Phase.Booting, Phase.LoadingIdentity -> BootScreen()
