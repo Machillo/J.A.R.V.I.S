@@ -72,8 +72,16 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
         RecordsScreen(model, nav)
         return@OwnerOnly
     }
+    if (section == Jarvis.Section.MONEY) {
+        MoneyScreen(model, nav)
+        return@OwnerOnly
+    }
     if (section == Jarvis.Section.MONEY_CONTROL) {
         MoneyControlScreen(model, nav)
+        return@OwnerOnly
+    }
+    if (section == Jarvis.Section.WEALTH) {
+        OwnerWealthScreen(model, nav)
         return@OwnerOnly
     }
     DetailScaffold(section.title, onBack = nav::back) {

@@ -33,14 +33,13 @@ final class JarvisAccessUITests: XCTestCase {
         XCTAssertFalse(element("wealth.connections", in: app).label.contains("Disponible desde"))
         app.tabBars.buttons["Perfil"].tap()
         entry.tap()
-        let wealth = element("jarvis.section.wealth", in: app)
-        XCTAssertTrue(wealth.waitForExistence(timeout: 5))
-        XCTAssertTrue(element("jarvis.section.chat", in: app).exists)
-        // Memoria was removed (it fed the retired AI chat): the hub no longer lists it.
+        XCTAssertTrue(element("jarvis.section.chat", in: app).waitForExistence(timeout: 5))
+        // Memoria was removed (it fed the retired AI chat): the hub no longer lists it, not even at the
+        // bottom of the list, which is taller than the screen now that every section is recovered.
+        let analysis = element("jarvis.section.analysis", in: app)
+        for _ in 0..<4 where !analysis.isHittable { app.swipeUp() }
+        XCTAssertTrue(analysis.waitForExistence(timeout: 5))
         XCTAssertFalse(element("jarvis.section.memory", in: app).exists)
-        wealth.tap()
-        // A section not ported yet says so and shows no sample content.
-        XCTAssertTrue(element("jarvis.restoring", in: app).waitForExistence(timeout: 5))
     }
 
     func testTheOwnersPersonalStrategyOpensHisPlanForTheMonth() {

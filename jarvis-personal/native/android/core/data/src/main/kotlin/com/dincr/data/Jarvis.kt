@@ -26,8 +26,7 @@ object Jarvis {
         /** "Análisis financiero": the historical web Finanzas tab (analysis summary, net worth, engine). */
         ANALYSIS("analysis");
 
-        /** Ported to the native app: the chat (J1), the agenda (J2), the analysis and money control; the others still open "being restored". */
-        val isAvailable: Boolean get() = this == CHAT || this == CALENDAR || this == STRATEGY || this == ANALYSIS || this == MONEY_CONTROL || this == RECORDS
+        val isAvailable: Boolean get() = this == CHAT || this == CALENDAR || this == STRATEGY || this == MONEY || this == MONEY_CONTROL || this == WEALTH || this == RECORDS || this == ANALYSIS
 
         companion object {
             fun from(wire: String?): Section? = entries.firstOrNull { it.wire == wire }
