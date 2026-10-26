@@ -207,7 +207,9 @@ class FlowsTest {
         openMovements()
         openEditor("Feria del agricultor")
         waitForText(tx("Eliminar movimiento", "Delete transaction"))
-        compose.onNodeWithText(tx("Eliminar movimiento", "Delete transaction")).performClick()
+        // "Pagado con" appears once its options load and pushes the button down: wait for it, then scroll to the button.
+        waitForTag("editor.paidWith")
+        compose.onNodeWithText(tx("Eliminar movimiento", "Delete transaction")).performScrollTo().performClick()
         waitForText(tx("Esta acción no se puede deshacer.", "This can’t be undone."))
         compose.onNodeWithText(tx("Eliminar", "Delete")).performClick()
         waitForGone("Feria del agricultor")
