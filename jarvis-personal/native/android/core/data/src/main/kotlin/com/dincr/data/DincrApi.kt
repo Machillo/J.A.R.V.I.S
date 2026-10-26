@@ -188,6 +188,19 @@ class DincrApi(private val client: ApiClient) {
     suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
     suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")
 
+    // --- JARVIS "Mi dinero" (Owner; `/finance/*` is Owner-only on the server) -------------------------
+    // Saving or removing an account is an explicit Owner command, never retried on its own.
+    suspend fun cycleReport(): CycleReport = client.get("/finance/cycle-report")
+    suspend fun accountBalances(): AccountBalances = client.get("/finance/account-balances")
+    /** Creates the account, or updates the one with the same name and last 4 digits, with this balance. */
+    suspend fun saveAccountBalance(request: AccountBalanceRequest) {
+        client.send<AccountBalanceRequest, Acknowledgement>("POST", "/finance/account-balances", request)
+    }
+    /** Removes the account from the Owner's accounts (the backend deactivates it). */
+    suspend fun removeAccountBalance(id: Long) {
+        client.send<Acknowledgement>("DELETE", "/finance/account-balances/$id")
+    }
+
     // --- JARVIS "Registros" (Owner; `/finance/*` is Owner-only on the server) -------------------------
     suspend fun moneyTimeline(days: Int = 45): MoneyTimeline = client.get("/finance/timeline", mapOf("days" to days.toString()))
     suspend fun reconciliation(): Reconciliation = client.get("/finance/reconciliation")
