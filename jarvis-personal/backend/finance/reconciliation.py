@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from fastapi import HTTPException
+
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.intelligence import list_account_balances
@@ -20,8 +22,14 @@ def get_financial_reconciliation() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     accounts = list_account_balances().get("items", [])
     details = []
+    untracked = 0
     for account in accounts:
         if account.get("read_only") or account.get("account_type") == "investment":
+            continue
+        # An account whose balance DINCR does not track (detected from mail, or kept out of the
+        # net worth) has no declared balance to compare: unknown ≠ ₡0, never a "difference".
+        if not account.get("include_in_net_worth"):
+            untracked += 1
             continue
         expected = _num(account.get("calculated_balance"))
         real = _num(account.get("current_balance"))
@@ -56,7 +64,8 @@ def get_financial_reconciliation() -> dict[str, Any]:
         "accounts": details, "discrepancies": discrepancies,
         "unlinked_transactions": [dict(row) for row in unlinked],
         "possible_duplicates": [dict(row) for row in duplicate_rows],
-        "summary": {"accounts": len(details), "needs_review": len(discrepancies), "unlinked": len(unlinked), "possible_duplicates": len(duplicate_rows)},
+        "summary": {"accounts": len(details), "needs_review": len(discrepancies), "unlinked": len(unlinked), "possible_duplicates": len(duplicate_rows),
+                    "untracked_accounts": untracked},
         "note": "DINCR solo detecta y propone revisión. Ningún movimiento se borra, duplica o corrige automáticamente.",
     }
 
@@ -67,7 +76,7 @@ def confirm_account_reconciliation(account_id: int, real_balance: float, note: s
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM account_balances WHERE id=%s AND workspace_id=%s AND COALESCE(is_active,TRUE)=TRUE", (account_id, workspace_id)).fetchone()
         if not row:
-            raise ValueError("Cuenta financiera no encontrada.")
+            raise HTTPException(status_code=404, detail="Cuenta financiera no encontrada.")
         conn.execute("UPDATE account_balances SET current_balance=%s, balance_as_of=NOW(), last_reconciliation_difference=0, updated_at=NOW() WHERE id=%s AND workspace_id=%s", (real_balance, account_id, workspace_id))
         conn.execute("INSERT INTO account_balance_history(workspace_id,financial_account_id,balance,currency,source,note) VALUES(%s,%s,%s,%s,'confirmed_reconciliation',%s)", (workspace_id, account_id, real_balance, row.get("currency") or "CRC", note or "Saldo confirmado por el usuario."))
         conn.commit()

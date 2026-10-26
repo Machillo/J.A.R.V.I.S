@@ -188,6 +188,13 @@ class DincrApi(private val client: ApiClient) {
     suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
     suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")
 
+    // --- JARVIS "Registros" (Owner; `/finance/*` is Owner-only on the server) -------------------------
+    suspend fun moneyTimeline(days: Int = 45): MoneyTimeline = client.get("/finance/timeline", mapOf("days" to days.toString()))
+    suspend fun reconciliation(): Reconciliation = client.get("/finance/reconciliation")
+    /** An explicit Owner command, never retried on its own. */
+    suspend fun confirmReconciliation(accountId: Long, request: ReconciliationConfirmRequest): ReconciliationConfirmResult =
+        client.send("POST", "/finance/reconciliation/$accountId/confirm", request)
+
     // --- JARVIS "Control de dinero" (Owner; `/finance/*` is Owner-only on the server) ----------------
     // The writes are explicit Owner commands, never retried on their own: the backend does not deduplicate them.
     suspend fun receivables(): ReceivablesReport = client.get("/finance/receivables")
