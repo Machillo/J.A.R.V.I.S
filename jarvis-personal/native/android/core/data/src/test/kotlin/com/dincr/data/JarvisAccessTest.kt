@@ -54,7 +54,7 @@ class JarvisAccessTest {
     }
 
     @Test fun theChatTheAgendaTheAnalysisAndMoneyControlAreThePortedSections() {
-        assertEquals(listOf(Jarvis.Section.CHAT, Jarvis.Section.CALENDAR, Jarvis.Section.STRATEGY, Jarvis.Section.MONEY_CONTROL, Jarvis.Section.WEALTH, Jarvis.Section.ANALYSIS).sorted(), Jarvis.Section.entries.filter { it.isAvailable }.sorted())
+        assertEquals(listOf(Jarvis.Section.CHAT, Jarvis.Section.CALENDAR, Jarvis.Section.STRATEGY, Jarvis.Section.MONEY_CONTROL, Jarvis.Section.WEALTH, Jarvis.Section.RECORDS, Jarvis.Section.ANALYSIS).sorted(), Jarvis.Section.entries.filter { it.isAvailable }.sorted())
         // The same sections and wire names as iOS (`Jarvis.Section`).
         assertEquals(listOf("chat", "memory", "calendar", "strategy", "money", "money_control", "wealth", "records", "analysis"), Jarvis.Section.entries.map { it.wire })
         assertEquals(Jarvis.Section.MONEY_CONTROL, Jarvis.Section.from("money_control"))
