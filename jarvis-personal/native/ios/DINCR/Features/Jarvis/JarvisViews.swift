@@ -73,6 +73,7 @@ struct JarvisSectionView: View {
             case .strategy: PlanStrategyView()
             case .money: MoneyView()
             case .moneyControl: MoneyControlView()
+            case .records: RecordsView()
             default: restoring
             }
         }
