@@ -32,6 +32,14 @@ final class DebtScenarioUITests: XCTestCase {
         item.tap()
     }
 
+    /// "Simular" once the menu that was just used has closed (a tap while it closes finds nothing).
+    private func run(_ app: XCUIApplication) {
+        let button = element("scenario.run", in: app)
+        XCTAssertTrue(button.waitForExistence(timeout: 10), "scenario.run")
+        if !button.isHittable { app.swipeUp() }
+        button.tap()
+    }
+
     func testPayingADebtOffShowsTheMonthWithoutItsPayment() {
         let app = launch()
         openScenarios(app)
@@ -43,7 +51,7 @@ final class DebtScenarioUITests: XCTestCase {
         let first = app.buttons.matching(NSPredicate(format: "label != %@", "Elegí una deuda")).element(boundBy: 0)
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         first.tap()
-        element("scenario.run", in: app).tap()
+        run(app)
         XCTAssertTrue(element("scenario.result.leftover", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Pago único"].exists)
     }
@@ -56,12 +64,12 @@ final class DebtScenarioUITests: XCTestCase {
         XCTAssertTrue(amount.waitForExistence(timeout: 10))
         amount.tap()
         amount.typeText("1000000")
-        element("scenario.run", in: app).tap()
+        run(app)
         XCTAssertTrue(app.staticTexts["Indicá la cuota, o la tasa y el plazo."].waitForExistence(timeout: 5))
         let payment = element("scenario.new.payment", in: app)
         payment.tap()
         payment.typeText("50000")
-        element("scenario.run", in: app).tap()
+        run(app)
         XCTAssertTrue(element("scenario.result.leftover", in: app).waitForExistence(timeout: 10))
     }
 }
