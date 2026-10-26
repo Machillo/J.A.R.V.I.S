@@ -1189,6 +1189,8 @@ CREATE TABLE IF NOT EXISTS account_balances (
     balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
     include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- A credit card's declared statement cut day (1-31); NULL = not declared, never assumed (20261026120000).
+    statement_cut_day SMALLINT CONSTRAINT account_balances_statement_cut_day_check CHECK (statement_cut_day IS NULL OR statement_cut_day BETWEEN 1 AND 31),
     UNIQUE(workspace_id, account_name, account_last4)
 );
 CREATE TABLE IF NOT EXISTS account_balance_history (
