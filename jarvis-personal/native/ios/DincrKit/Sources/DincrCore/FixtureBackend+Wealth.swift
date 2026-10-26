@@ -20,7 +20,7 @@ struct FixtureWealth {
 
 extension FixtureBackend {
     func wealthRoute(_ method: String, _ path: String, _ body: [String: Any]) -> Answer? {
-        guard path.hasPrefix("/finance/investment-center") || path.hasPrefix("/finance/business-center") else { return nil }
+        guard path.hasPrefix("/finance/investment-center") || path.hasPrefix("/finance/business-center") else { return recordsRoute(method, path, body) }
         guard profile["role"] as? String == "owner" else { return error(403, "No tienes permisos para realizar esta acción.") }
         switch (method, path) {
         case ("GET", "/finance/investment-center"):
