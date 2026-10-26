@@ -25,7 +25,7 @@ public enum Jarvis {
 
         public var id: String { rawValue }
 
-        /// Ported to the native app (the others still open "being restored"): chat, calendar, strategy, moneyControl, wealth, records, analysis.
-        public var isAvailable: Bool { self == .chat || self == .calendar || self == .strategy || self == .moneyControl || self == .wealth || self == .records || self == .analysis }
+        /// Ported to the native app (the others still open "being restored"): chat, calendar, strategy, money, moneyControl, wealth, records, analysis.
+        public var isAvailable: Bool { self == .chat || self == .calendar || self == .strategy || self == .money || self == .moneyControl || self == .wealth || self == .records || self == .analysis }
     }
 }

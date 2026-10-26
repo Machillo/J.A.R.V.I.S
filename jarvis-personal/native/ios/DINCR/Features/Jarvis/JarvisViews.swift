@@ -71,6 +71,7 @@ struct JarvisSectionView: View {
             case .analysis: OwnerAnalysisView()
             // The Owner's strategy is the same screen as Plan → Tu plan del mes (one place, no copy).
             case .strategy: PlanStrategyView()
+            case .money: MoneyView()
             case .moneyControl: MoneyControlView()
             case .records: RecordsView()
             case .wealth: WealthView()
