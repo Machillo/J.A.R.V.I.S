@@ -17,7 +17,7 @@ public enum Jarvis {
     /// ported yet opens a "being restored" screen; the step that ports it makes it available here,
     /// with its own tests.
     public enum Section: String, CaseIterable, Sendable, Identifiable, Hashable {
-        case chat, memory, calendar, strategy, money
+        case chat, calendar, strategy, money
         case moneyControl = "money_control"
         case wealth, records
         /// "Análisis financiero": the historical web Finanzas tab (spending, flow, net worth, engine).

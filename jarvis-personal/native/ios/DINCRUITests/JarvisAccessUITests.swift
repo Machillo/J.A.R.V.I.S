@@ -34,13 +34,12 @@ final class JarvisAccessUITests: XCTestCase {
         app.tabBars.buttons["Perfil"].tap()
         entry.tap()
         XCTAssertTrue(element("jarvis.section.chat", in: app).waitForExistence(timeout: 5))
-        // With every recovered section the hub is taller than the screen: scroll down to the last one.
-        let memory = element("jarvis.section.memory", in: app)
-        for _ in 0..<4 where !memory.isHittable { app.swipeUp() }
-        XCTAssertTrue(memory.waitForExistence(timeout: 5))
-        memory.tap()
-        // A section not ported yet says so and shows no sample content.
-        XCTAssertTrue(element("jarvis.restoring", in: app).waitForExistence(timeout: 5))
+        // Memoria was removed (it fed the retired AI chat): the hub no longer lists it, not even at the
+        // bottom of the list, which is taller than the screen now that every section is recovered.
+        let analysis = element("jarvis.section.analysis", in: app)
+        for _ in 0..<4 where !analysis.isHittable { app.swipeUp() }
+        XCTAssertTrue(analysis.waitForExistence(timeout: 5))
+        XCTAssertFalse(element("jarvis.section.memory", in: app).exists)
     }
 
     func testTheOwnersPersonalStrategyOpensHisPlanForTheMonth() {

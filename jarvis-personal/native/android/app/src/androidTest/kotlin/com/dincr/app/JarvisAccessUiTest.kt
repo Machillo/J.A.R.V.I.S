@@ -1,6 +1,7 @@
 package com.dincr.app
 
 import android.content.Intent
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -8,6 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.printToLog
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -72,9 +74,12 @@ class JarvisAccessUiTest {
         assertTrue("no mail row in Perfil", !present(tx("Correos financieros", "Financial emails")))
         click("JARVIS")
         assertTrue(present(tx("Chat", "Chat")))
-        click(tx("Memoria", "Memory"))
-        // A section not ported yet says so and shows no sample content.
-        waitForText(tx("Esta función todavía no está disponible en la app.", "This feature isn’t available in the app yet."), substring = true)
+        // Memoria was removed (it fed the retired AI chat): the hub no longer lists it, not even at the bottom of the
+        // list, and every section is recovered, so none says "En restauración".
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText(tx("Análisis financiero", "Financial analysis")))
+        waitForText(tx("Análisis financiero", "Financial analysis"))
+        assertTrue("no Memoria section", !present(tx("Memoria", "Memory")))
+        assertTrue("no placeholder", !present(tx("En restauración", "Being restored")))
     }
 
     @Test fun theOwnersPersonalStrategyOpensHisPlanForTheMonth() {

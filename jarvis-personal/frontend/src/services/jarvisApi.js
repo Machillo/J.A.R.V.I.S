@@ -157,11 +157,6 @@ export const sendTestNotification = () => request("/notifications/test", { metho
 export const getDeploymentMonitor = () => request("/deployment-monitor");
 export const getUpcomingCalendarEvents = (days = 30) => request(`/jarvis/calendar/upcoming?days=${days}`);
 
-export const getMemorySummary = () => request("/jarvis/memory/summary");
-export const getMemoryItems = (category = "") => request(`/jarvis/memory${category ? `?category=${encodeURIComponent(category)}` : ""}`);
-export const searchMemoryItems = (query) => request(`/jarvis/memory/search?q=${encodeURIComponent(query || "")}`);
-export const createMemoryItem = (payload) => jsonRequest("/jarvis/memory", "POST", payload);
-export const deleteMemoryItem = (id) => request(`/jarvis/memory/${id}`, { method: "DELETE" });
 export const getProfilePreferences = () => request("/jarvis/preferences/profile");
 export const updateProfilePreferences = (payload) => jsonRequest("/jarvis/preferences/profile", "POST", payload);
 

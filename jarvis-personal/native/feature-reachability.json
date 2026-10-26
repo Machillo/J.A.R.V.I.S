@@ -56,7 +56,8 @@
   "J-STR",
   "J-REC",
   "J-MON",
-  "J-WEA"
+  "J-WEA",
+  "J-MEM"
  ],
  "fixtures": {
   "ios": {
@@ -1558,47 +1559,6 @@
      ]
     }
    }
-  },
-  {
-   "id": "jarvis.memory",
-   "name": "JARVIS → Memoria",
-   "decision": "baseline-81fd2cc4",
-   "plans": {
-    "free": "OWNER_ONLY",
-    "basic": "OWNER_ONLY",
-    "vip": "OWNER_ONLY",
-    "owner": "AVAILABLE"
-   },
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/jarvis/memory",
-     "gate": "router_roles:owner",
-     "used_by": []
-    }
-   ],
-   "ios": {
-    "tab": "profile",
-    "via": [
-     "profile.jarvis"
-    ],
-    "id": "jarvis.section.memory"
-   },
-   "android": {
-    "tab": "Perfil",
-    "via": [
-     "JARVIS"
-    ],
-    "text": "Memoria",
-    "en": {
-     "tab": "Profile",
-     "text": "Memory",
-     "via": [
-      "JARVIS"
-     ]
-    }
-   },
-   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
   },
   {
    "id": "jarvis.strategy",

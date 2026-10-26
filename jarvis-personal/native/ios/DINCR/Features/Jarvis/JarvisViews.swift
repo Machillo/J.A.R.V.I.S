@@ -113,7 +113,6 @@ extension Jarvis.Section {
     var title: String {
         switch self {
         case .chat: tx("Chat", "Chat")
-        case .memory: tx("Memoria", "Memory")
         case .calendar: tx("Agenda", "Calendar")
         case .strategy: tx("Estrategia personal", "Personal strategy")
         case .money: tx("Mi dinero", "My money")
@@ -127,7 +126,6 @@ extension Jarvis.Section {
     var summary: String {
         switch self {
         case .chat: tx("Conversar con JARVIS y registrar con tu confirmación", "Talk to JARVIS and record with your confirmation")
-        case .memory: tx("Lo que JARVIS recuerda de vos", "What JARVIS remembers about you")
         case .calendar: tx("Tus eventos y recordatorios", "Your events and reminders")
         case .strategy: tx("Tu estrategia con tus ingresos reales", "Your strategy with your real income")
         case .money: tx("Tu ciclo, tus cuentas y los pagos de tus deudas", "Your cycle, your accounts and your debt payments")
@@ -141,7 +139,6 @@ extension Jarvis.Section {
     var symbol: String {
         switch self {
         case .chat: "bubble.left.and.text.bubble.right"
-        case .memory: "brain"
         case .calendar: "calendar"
         case .strategy: "map"
         case .money: "banknote"
