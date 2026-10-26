@@ -53,7 +53,8 @@
   "L-1",
   "APP-1",
   "J-MC",
-  "J-STR"
+  "J-STR",
+  "J-REC"
  ],
  "fixtures": {
   "ios": {
@@ -1779,7 +1780,7 @@
   {
    "id": "jarvis.records",
    "name": "JARVIS → Registros",
-   "decision": "baseline-81fd2cc4",
+   "decision": "J-REC",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1790,6 +1791,18 @@
     {
      "method": "GET",
      "path": "/finance/timeline",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/reconciliation",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/finance/reconciliation/{account_id}/confirm",
      "gate": "internal_only",
      "used_by": []
     }
@@ -1814,8 +1827,7 @@
       "JARVIS"
      ]
     }
-   },
-   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+   }
   }
  ]
 }
