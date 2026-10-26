@@ -74,6 +74,7 @@ struct JarvisSectionView: View {
             case .money: MoneyView()
             case .moneyControl: MoneyControlView()
             case .records: RecordsView()
+            case .wealth: WealthView()
             default: restoring
             }
         }

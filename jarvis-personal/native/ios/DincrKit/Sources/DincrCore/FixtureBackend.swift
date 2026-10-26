@@ -55,6 +55,9 @@ public actor FixtureBackend: HTTPTransport {
     /// JARVIS → Mi dinero (Owner): the Owner's accounts and their declared balances
     /// (FixtureBackend+Money.swift). Invented accounts and amounts.
     var ownerAccounts: [FixtureAccount] = FixtureAccount.seed
+    /// JARVIS → Patrimonio (Owner): the businesses, their movements and the portfolio snapshot's age
+    /// (FixtureBackend+Wealth.swift). Invented names and amounts.
+    var ownerWealth = FixtureWealth()
     /// JARVIS → Registros (Owner): the real balances confirmed in the reconciliation, by account
     /// (FixtureBackend+Records.swift). Invented accounts and amounts.
     var ownerConfirmedBalances: [Int: Decimal] = [:]

@@ -55,7 +55,8 @@
   "J-MC",
   "J-STR",
   "J-REC",
-  "J-MON"
+  "J-MON",
+  "J-WEA"
  ],
  "fixtures": {
   "ios": {
@@ -1764,7 +1765,7 @@
   {
    "id": "jarvis.wealth",
    "name": "JARVIS → Patrimonio",
-   "decision": "baseline-81fd2cc4",
+   "decision": "J-WEA",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1775,6 +1776,30 @@
     {
      "method": "GET",
      "path": "/finance/investment-center",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/finance/investment-center/sync-ibkr",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/business-center",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/finance/business-center/businesses",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/finance/business-center/movements",
      "gate": "internal_only",
      "used_by": []
     }
@@ -1799,8 +1824,7 @@
       "JARVIS"
      ]
     }
-   },
-   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+   }
   },
   {
    "id": "jarvis.records",

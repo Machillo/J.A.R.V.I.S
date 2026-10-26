@@ -32,7 +32,7 @@ extension FixtureBackend {
     private static let usdRate: Decimal = 500
 
     func moneyRoute(_ method: String, _ path: String, _ body: [String: Any]) -> Answer? {
-        guard path == "/finance/cycle-report" || path.hasPrefix("/finance/account-balances") else { return recordsRoute(method, path, body) }
+        guard path == "/finance/cycle-report" || path.hasPrefix("/finance/account-balances") else { return wealthRoute(method, path, body) }
         guard profile["role"] as? String == "owner" else { return error(403, "No tienes permisos para realizar esta acción.") }
         switch method {
         case "GET" where path == "/finance/cycle-report":
