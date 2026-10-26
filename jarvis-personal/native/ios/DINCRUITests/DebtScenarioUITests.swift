@@ -44,13 +44,8 @@ final class DebtScenarioUITests: XCTestCase {
         let app = launch()
         openScenarios(app)
         choose("Pagar una deuda completa", from: "scenario.kind", in: app)
-        let debt = element("scenario.debt", in: app)
-        XCTAssertTrue(debt.waitForExistence(timeout: 10))
-        debt.tap()
-        // The first real debt in the menu (after "Elegí una deuda").
-        let first = app.buttons.matching(NSPredicate(format: "label != %@", "Elegí una deuda")).element(boundBy: 0)
-        XCTAssertTrue(first.waitForExistence(timeout: 5))
-        first.tap()
+        // A fixture debt by its name: "any button but the placeholder" can be the back button.
+        choose("Préstamo del carro", from: "scenario.debt", in: app)
         run(app)
         XCTAssertTrue(element("scenario.result.leftover", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Pago único"].exists)
