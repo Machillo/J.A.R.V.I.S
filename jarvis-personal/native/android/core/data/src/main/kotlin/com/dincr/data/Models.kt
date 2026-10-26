@@ -178,6 +178,8 @@ data class Movement(
     @SerialName("original_amount") val originalAmount: Money? = null,
     @SerialName("original_currency") val originalCurrency: String? = null,
     @SerialName("exchange_rate") val exchangeRate: Money? = null,
+    /** The own account or card a manual expense says paid it; null = not told (never inferred). */
+    @SerialName("financial_account_id") val financialAccountId: Long? = null,
 ) {
     /**
      * Whether this app may edit or delete the row. The prototype does not edit currencies (it
@@ -238,6 +240,8 @@ data class EntryCreate(
     @SerialName("entry_date") val entryDate: String?,
     val currency: String? = null,
     @SerialName("exchange_rate") val exchangeRate: Money? = null,
+    /** Only for an expense: the own account or card that paid it. Null = not told (not sent). */
+    @SerialName("financial_account_id") val financialAccountId: Long? = null,
 )
 
 /** Body of `PUT /user-product/free/movements/{id}`; currency and rate as in [EntryCreate]. */

@@ -1758,6 +1758,14 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/user-product/finance/expenses/paid-with-options",
+  "gates": [
+   "feature:spending"
+  ],
+  "user_get": "allowed"
+ },
+ {
   "method": "DELETE",
   "path": "/user-product/finance/expenses/{expense_id}",
   "gates": [

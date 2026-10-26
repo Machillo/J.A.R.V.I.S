@@ -349,6 +349,16 @@
       "basic",
       "vip"
      ]
+    },
+    {
+     "method": "GET",
+     "path": "/user-product/finance/expenses/paid-with-options",
+     "gate": "feature:spending",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
     }
    ],
    "ios": {
