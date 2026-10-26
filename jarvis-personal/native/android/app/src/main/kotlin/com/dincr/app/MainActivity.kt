@@ -2,6 +2,7 @@ package com.dincr.app
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -81,6 +82,8 @@ class MainActivity : FragmentActivity() {
      * Shortcut, assignable to Back Tap). Built at runtime so each build's own package is the target.
      */
     private fun publishShortcuts() {
+        // Launcher shortcuts exist from API 25 (Android 7.1); below that there is nothing to publish.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return
         val spanish = Locale.getDefault().language == "es"
         val shortcut = ShortcutInfoCompat.Builder(this, QuickAction.NEW_EXPENSE.route)
             .setShortLabel(if (spanish) "Añadir gasto" else "Add expense")
