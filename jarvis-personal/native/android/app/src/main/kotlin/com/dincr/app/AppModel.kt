@@ -27,6 +27,7 @@ import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
 import com.dincr.data.Pkce
 import com.dincr.data.ProductEvent
+import com.dincr.data.QuickAction
 import com.dincr.data.PullRefresh
 import com.dincr.data.Profile
 import com.dincr.data.ReleasePolicy
@@ -189,6 +190,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     }
     fun consumeNotice() { _notice.value = null }
     fun consumeRoute() { _pendingRoute.value = null }
+    /** A launcher shortcut asked for a screen; the signed-in, unlocked shell opens it (it never writes). */
+    fun requestQuickAction(action: QuickAction) { _pendingRoute.value = action.route }
     fun showNotice(message: String) { _notice.value = message }
 
     /**
