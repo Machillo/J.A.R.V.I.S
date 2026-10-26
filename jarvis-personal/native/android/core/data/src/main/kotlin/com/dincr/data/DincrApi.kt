@@ -179,6 +179,13 @@ class DincrApi(private val client: ApiClient) {
         setAccountOwnership(id, if (own) AccountOwnership.OWN else AccountOwnership.NOT_MINE)
     suspend fun setAccountOwnership(id: Long, ownership: AccountOwnership): Acknowledgement =
         client.send("PUT", "/user-product/vip/financial-identity/accounts/$id", OwnershipRequest(ownership.wire))
+    /**
+     * Sets or clears (`null`) an own credit card's statement cut day. The key always travels, even as
+     * an explicit null: the client drops null fields, so the body is built by hand.
+     */
+    suspend fun setStatementCutDay(id: Long, day: Int?): Acknowledgement =
+        client.send("PUT", "/user-product/vip/financial-identity/accounts/$id/statement-cut-day",
+            kotlinx.serialization.json.buildJsonObject { put("statement_cut_day", kotlinx.serialization.json.JsonPrimitive(day)) })
     /** Marks as own an account no notice came from; the backend re-evaluates the pending notices. */
     suspend fun declareOwnAccount(declaration: OwnAccountDeclaration): FinancialAccountResult =
         client.send("POST", "/user-product/vip/financial-identity/accounts", declaration)

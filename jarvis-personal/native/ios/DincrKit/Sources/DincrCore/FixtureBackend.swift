@@ -592,13 +592,23 @@ public actor FixtureBackend: HTTPTransport {
         case ("GET", "/user-product/vip/gmail/own-transfer-suggestions"): return ok(["items": [Any]()])
         case ("GET", "/user-product/vip/financial-identity"):
             let states = identityAccounts.map { $0["ownership_status"] as? String ?? "pending" }
-            return ok(["status": "ok", "items": identityAccounts,
+            return ok(["status": "ok", "items": identityAccounts, "statement_cut_day_available": true,
                        "summary": ["total": states.count, "pending": states.filter { $0 == "pending" }.count,
                                    "owned": states.filter { $0 == "own" }.count, "not_mine": states.filter { $0 == "not_mine" }.count]])
         default: break
         }
         if method == "POST", path == "/user-product/vip/financial-identity/accounts" {
             return declareOwnAccount(body)
+        }
+        if method == "PUT", parts.starts(with: ["user-product", "vip", "financial-identity", "accounts"]), parts.count == 6, parts[5] == "statement-cut-day" {
+            // As statement_cut.set_statement_cut_day: own, active credit cards only; 1–31 or null.
+            guard let index = identityAccounts.firstIndex(where: { $0["id"] as? Int == Int(parts[4]) }) else { return error(404, "Cuenta financiera no encontrada.") }
+            let day = body["statement_cut_day"] as? Int
+            guard body.keys.contains("statement_cut_day"), day.map({ (1...31).contains($0) }) ?? true else { return error(422, "El día de corte va de 1 a 31.") }
+            guard identityAccounts[index]["account_type"] as? String == "credit_card" else { return error(422, "Solo las tarjetas de crédito tienen día de corte.") }
+            guard identityAccounts[index]["ownership_status"] as? String == "own" else { return error(409, "Confirmá primero que la tarjeta es tuya.") }
+            identityAccounts[index]["statement_cut_day"] = day.map { $0 as Any } ?? NSNull()
+            return ok(["status": "ok", "item": identityAccounts[index]])
         }
         if parts.starts(with: ["user-product", "vip", "financial-identity", "accounts"]), parts.count == 5 {
             let status = body["ownership_status"] as? String ?? ""

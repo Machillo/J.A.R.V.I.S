@@ -310,6 +310,12 @@ public struct DincrService: Sendable {
         let _: Acknowledgement = try await client.send("PUT", "/user-product/vip/financial-identity/accounts/\(id)", body: OwnershipRequest(ownership))
     }
 
+    /// Declares (1–31) or clears (nil) one of the user's own credit cards' statement cut day.
+    public func setStatementCutDay(id: Int, day: Int?) async throws {
+        let _: Acknowledgement = try await client.send("PUT", "/user-product/vip/financial-identity/accounts/\(id)/statement-cut-day",
+                                                       body: StatementCutDayRequest(day))
+    }
+
     /// Marks as own an account no notice came from; the backend re-evaluates the pending notices.
     @discardableResult
     public func declareOwnAccount(_ declaration: OwnAccountDeclaration) async throws -> FinancialIdentity.Account? {

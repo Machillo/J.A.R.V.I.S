@@ -2041,6 +2041,13 @@
   ]
  },
  {
+  "method": "PUT",
+  "path": "/user-product/vip/financial-identity/accounts/{account_balance_id}/statement-cut-day",
+  "gates": [
+   "feature:financial_accounts"
+  ]
+ },
+ {
   "method": "DELETE",
   "path": "/user-product/vip/gmail",
   "gates": [

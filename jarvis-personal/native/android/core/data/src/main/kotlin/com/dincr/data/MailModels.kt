@@ -181,9 +181,16 @@ data class CandidateReviewResult(
     @SerialName("is_internal_transfer") val isInternalTransfer: Boolean? = null,
 )
 
-/** `GET /user-product/vip/financial-identity`. */
+/**
+ * `GET /user-product/vip/financial-identity`. [statementCutDayAvailable] is false while the server
+ * does not store cut days yet: the app then hides the control instead of offering one it cannot save.
+ */
 @Serializable
-data class FinancialIdentity(val items: List<Account> = emptyList(), val summary: Summary? = null) {
+data class FinancialIdentity(
+    val items: List<Account> = emptyList(),
+    val summary: Summary? = null,
+    @SerialName("statement_cut_day_available") val statementCutDayAvailable: Boolean = false,
+) {
     @Serializable
     data class Account(
         val id: Long,
@@ -197,7 +204,12 @@ data class FinancialIdentity(val items: List<Account> = emptyList(), val summary
         @SerialName("ownership_status") val ownershipStatus: String? = null,
         /** When the user last answered: with `pending`, the account was reviewed and not recognised. */
         @SerialName("ownership_confirmed_at") val ownershipConfirmedAt: String? = null,
+        /** The day of the month the card's statement closes; `null` = not told yet (never a default). */
+        @SerialName("statement_cut_day") val statementCutDay: Int? = null,
     ) {
+        /** Only an own credit card takes a statement cut day (iOS: `takesCutDay`). */
+        val takesCutDay: Boolean get() = accountType == "credit_card" && ownershipStatus == "own"
+
         /** The user's answer: own, not mine, "I don't recognise it", or not answered yet (`null`). */
         val ownership: AccountOwnership? get() = when (ownershipStatus) {
             "own" -> AccountOwnership.OWN

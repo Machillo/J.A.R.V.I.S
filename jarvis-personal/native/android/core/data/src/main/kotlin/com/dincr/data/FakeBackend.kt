@@ -625,8 +625,19 @@ class FakeBackend(
             }.filter { c -> query["bank"].isNullOrBlank() || c.bank.orEmpty().equals(query["bank"]!!.trim(), ignoreCase = true) }
                 .filter { c -> query["financial_account_id"]?.toLongOrNull()?.let { c.financialAccountId == it } ?: true }))
             path == "/user-product/vip/gmail/own-transfer-suggestions" -> ok(OwnTransferSuggestions())
-            path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(accounts.toList(), FinancialIdentity.Summary(accounts.size, accounts.count { it.ownershipStatus == "pending" })))
+            path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(accounts.toList(), FinancialIdentity.Summary(accounts.size, accounts.count { it.ownershipStatus == "pending" }), statementCutDayAvailable = true))
             path == "/user-product/vip/financial-identity/accounts" && method == "POST" -> declareOwnAccount(body)
+            segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") && segments.getOrNull(5) == "statement-cut-day" && method == "PUT" -> {
+                // The backend's rules: only an own credit card, and a day from 1 to 31 or null.
+                val index = accounts.indexOfFirst { it.id == segments.getOrNull(4)?.toLongOrNull() }
+                if (index < 0) return error(404, "Cuenta financiera no encontrada.")
+                if (accounts[index].accountType != "credit_card") return error(422, "Solo las tarjetas de crédito tienen día de corte.")
+                if (accounts[index].ownershipStatus != "own") return error(409, "Primero marcá la tarjeta como tuya.")
+                val day = text("statement_cut_day")?.toIntOrNull()
+                if (text("statement_cut_day") != null && (day == null || day !in 1..31)) return error(422, "El día de corte va del 1 al 31.")
+                accounts[index] = accounts[index].copy(statementCutDay = day)
+                ok("""{"status":"ok"}""")
+            }
             segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") -> {
                 val index = accounts.indexOfFirst { it.id == segments.getOrNull(4)?.toLongOrNull() }
                 val status = text("ownership_status")

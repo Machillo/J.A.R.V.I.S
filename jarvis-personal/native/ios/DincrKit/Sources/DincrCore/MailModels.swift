@@ -297,15 +297,20 @@ public struct FinancialIdentity: Decodable, Sendable, Equatable {
         public let accountType: String?
         /// When the user last answered: with `pending`, the account was reviewed and not recognised.
         public let ownershipConfirmedAt: String?
+        /// A credit card's declared statement cut day (1–31); nil = not declared, never assumed.
+        public let statementCutDay: Int?
 
         public init(id: Int, accountName: String?, bankName: String?, currency: String?, accountLast4: String?, ownershipStatus: String?,
                     institutionCode: String? = nil, institutionCountry: String? = nil, accountType: String? = nil,
-                    ownershipConfirmedAt: String? = nil) {
+                    ownershipConfirmedAt: String? = nil, statementCutDay: Int? = nil) {
             self.id = id; self.accountName = accountName; self.bankName = bankName; self.currency = currency
             self.accountLast4 = accountLast4; self.ownershipStatus = ownershipStatus
             self.institutionCode = institutionCode; self.institutionCountry = institutionCountry; self.accountType = accountType
-            self.ownershipConfirmedAt = ownershipConfirmedAt
+            self.ownershipConfirmedAt = ownershipConfirmedAt; self.statementCutDay = statementCutDay
         }
+
+        /// Only the user's own credit cards take a statement cut day.
+        public var takesCutDay: Bool { accountType == "credit_card" && ownershipStatus == "own" }
 
         /// The user's answer: own, not mine, "I don't recognise it", or not answered yet (`nil`).
         public var ownership: AccountOwnership? {
@@ -326,7 +331,23 @@ public struct FinancialIdentity: Decodable, Sendable, Equatable {
         }
     }
     public let items: [Account]?
-    public init(items: [Account]?) { self.items = items }
+    /// False until the cut-day migration is applied on the server: the app then offers no cut day.
+    public let statementCutDayAvailable: Bool?
+    public init(items: [Account]?, statementCutDayAvailable: Bool? = nil) {
+        self.items = items; self.statementCutDayAvailable = statementCutDayAvailable
+    }
+}
+
+/// `PUT /vip/financial-identity/accounts/{id}/statement-cut-day`: 1–31, or null to clear. The key is
+/// always sent (the backend requires it), so a cleared day is an explicit `null`.
+public struct StatementCutDayRequest: Encodable, Sendable, Equatable {
+    public let statementCutDay: Int?
+    public init(_ day: Int?) { self.statementCutDay = day }
+    private enum CodingKeys: String, CodingKey { case statementCutDay }
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(statementCutDay, forKey: .statementCutDay)
+    }
 }
 
 /// The answers a user can give about a detected or declared account

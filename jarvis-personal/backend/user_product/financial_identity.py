@@ -143,10 +143,13 @@ def list_financial_identity() -> dict[str, Any]:
                         bank_name,account_name,id""",
             (account_id, workspace_id),
         ).fetchall()
-    items = [dict(row) for row in rows]
+        items = [dict(row) for row in rows]
+        from backend.user_product.statement_cut import add_cut_days
+        cut_day_available = add_cut_days(conn, items, account_id=account_id, workspace_id=workspace_id)
     return {
         "status": "ok",
         "items": items,
+        "statement_cut_day_available": cut_day_available,
         "summary": {
             "total": len(items),
             "pending": sum(item["ownership_status"] == "pending" for item in items),
