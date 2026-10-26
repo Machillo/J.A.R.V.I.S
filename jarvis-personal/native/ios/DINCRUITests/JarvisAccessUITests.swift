@@ -33,9 +33,11 @@ final class JarvisAccessUITests: XCTestCase {
         XCTAssertFalse(element("wealth.connections", in: app).label.contains("Disponible desde"))
         app.tabBars.buttons["Perfil"].tap()
         entry.tap()
+        XCTAssertTrue(element("jarvis.section.chat", in: app).waitForExistence(timeout: 5))
+        // With every recovered section the hub is taller than the screen: scroll down to the last one.
         let memory = element("jarvis.section.memory", in: app)
+        for _ in 0..<4 where !memory.isHittable { app.swipeUp() }
         XCTAssertTrue(memory.waitForExistence(timeout: 5))
-        XCTAssertTrue(element("jarvis.section.chat", in: app).exists)
         memory.tap()
         // A section not ported yet says so and shows no sample content.
         XCTAssertTrue(element("jarvis.restoring", in: app).waitForExistence(timeout: 5))
