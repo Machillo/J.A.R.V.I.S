@@ -281,32 +281,39 @@ struct ScenariosView: View {
     @State private var result: ScenarioResult?
     @State private var error: String?
     @State private var running = false
+    @State private var choice: ScenarioChoice = .general
 
     var body: some View {
         ScreenScroll(title: tx("Escenarios", "Scenarios")) {
-            VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-                Text(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes. Usá − para una baja.", "Try changes without saving anything: DINCR shows how much you’d have left each month. Use − for a decrease."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                MoneyField(label: tx("Cambio mensual de ingresos", "Monthly income change"), text: $income)
-                MoneyField(label: tx("Cambio mensual de gastos", "Monthly expense change"), text: $expenses)
-                MoneyField(label: tx("Dinero extra único", "One-off extra money"), text: $extra)
-                if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
-                Button(tx("Simular", "Simulate")) { Task { await simulate() } }
-                    .buttonStyle(.dincrPrimary(loading: running))
-                    .disabled(running)
-                    .accessibilityIdentifier("scenario.run")
+            ScenarioChoicePicker(choice: $choice)
+            if choice == .general { general } else { DebtScenarioForm(choice: choice).id(choice) }
+            FinancialDisclaimer()
+        }
+    }
+
+    /// Income, expense and one-off changes (the original what-if).
+    @ViewBuilder private var general: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            Text(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes. Usá − para una baja.", "Try changes without saving anything: DINCR shows how much you’d have left each month. Use − for a decrease."))
+                .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            MoneyField(label: tx("Cambio mensual de ingresos", "Monthly income change"), text: $income)
+            MoneyField(label: tx("Cambio mensual de gastos", "Monthly expense change"), text: $expenses)
+            MoneyField(label: tx("Dinero extra único", "One-off extra money"), text: $extra)
+            if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
+            Button(tx("Simular", "Simulate")) { Task { await simulate() } }
+                .buttonStyle(.dincrPrimary(loading: running))
+                .disabled(running)
+                .accessibilityIdentifier("scenario.run")
+        }
+        .dincrCard()
+        if let result {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                SectionHeader(title: tx("Resultado", "Result"))
+                FigureRow(label: tx("Te queda libre al mes hoy", "Left each month today"), amount: result.current?.strategicMargin)
+                FigureRow(label: tx("Te quedaría libre con el cambio", "Left each month with the change"), amount: result.scenario?.strategicMargin)
+                FigureRow(label: tx("Diferencia", "Difference"), amount: result.delta?.strategicMargin)
             }
             .dincrCard()
-            if let result {
-                VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                    SectionHeader(title: tx("Resultado", "Result"))
-                    FigureRow(label: tx("Te queda libre al mes hoy", "Left each month today"), amount: result.current?.strategicMargin)
-                    FigureRow(label: tx("Te quedaría libre con el cambio", "Left each month with the change"), amount: result.scenario?.strategicMargin)
-                    FigureRow(label: tx("Diferencia", "Difference"), amount: result.delta?.strategicMargin)
-                }
-                .dincrCard()
-            }
-            FinancialDisclaimer()
         }
     }
 

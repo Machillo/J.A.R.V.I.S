@@ -3,7 +3,7 @@ from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
-    BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
+    BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, DebtScenarioRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
     FinancialAccountIdentityRequest, OwnAccountDeclareRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
@@ -28,6 +28,7 @@ from backend.user_product.free_service import (
     list_free_movements, update_free_movement,
 )
 from backend.user_product.vip_service import get_vip_command_center
+from backend.user_product.debt_scenarios import simulate_debt_scenario
 from backend.ai.strategy_dashboard import get_premium_strategy_dashboard
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
 from backend.finance.intelligence import get_debt_advisory
@@ -207,6 +208,10 @@ def strategy_vip():
 def strategy_vip_simulate(request: VipSimulationRequest):
     require_feature("strategy_vip")
     return simulate_strategy_vip(request.monthly_income_change, request.monthly_expense_change, request.one_time_extra)
+
+@router.post("/finance/strategy-vip/debt-scenario")
+def strategy_vip_debt_scenario(request: DebtScenarioRequest):
+    require_feature("strategy_vip"); return simulate_debt_scenario(request)
 
 @router.get("/vip/command-center")
 def vip_command_center():

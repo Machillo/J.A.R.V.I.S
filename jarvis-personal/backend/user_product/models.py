@@ -90,6 +90,17 @@ class BasicSimulationRequest(BaseModel):
     extra_monthly: float = Field(default=0, ge=0)
 
 
+class DebtScenarioRequest(BaseModel):
+    """A debt what-if (debt_scenarios.py): pay one off, an extra payment to one, or a new debt."""
+    kind: Literal["pay_off", "extra_payment", "new_debt"]
+    debt_id: int | None = Field(default=None, gt=0)
+    amount: float | None = Field(default=None, gt=0, le=1_000_000_000_000, allow_inf_nan=False)
+    monthly_payment: float | None = Field(default=None, gt=0, le=1_000_000_000_000, allow_inf_nan=False)
+    annual_rate: float | None = Field(default=None, ge=0, le=500, allow_inf_nan=False)
+    term_months: int | None = Field(default=None, gt=0, le=600)
+    name: str | None = Field(default=None, max_length=80)
+
+
 class VipSimulationRequest(BaseModel):
     monthly_income_change: float = 0
     monthly_expense_change: float = 0

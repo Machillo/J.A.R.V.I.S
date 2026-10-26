@@ -319,6 +319,10 @@ public actor FixtureBackend: HTTPTransport {
             if let denied = needs(.vip) { return denied }
             return mail(method, path, parts, query, body)
         }
+        if method == "POST", path == "/user-product/finance/strategy-vip/debt-scenario" {
+            if let denied = needs(.vip) { return denied }
+            return debtScenario(body)
+        }
         if path.hasPrefix("/user-product/vip") || path.hasPrefix("/user-product/finance/strategy-vip") {
             if let denied = needs(.vip) { return denied }
             return vip(path)

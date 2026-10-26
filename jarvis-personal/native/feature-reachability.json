@@ -1033,6 +1033,14 @@
      "used_by": [
       "vip"
      ]
+    },
+    {
+     "method": "POST",
+     "path": "/user-product/finance/strategy-vip/debt-scenario",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
     }
    ],
    "ios": {
