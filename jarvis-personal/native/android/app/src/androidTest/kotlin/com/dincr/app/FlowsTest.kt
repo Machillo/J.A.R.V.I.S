@@ -187,7 +187,8 @@ class FlowsTest {
         waitForGone(tx("Nuevo movimiento", "New transaction"))
         waitForTag("movements.pending.total.USD")
         waitForText("Hotel en dólares")
-        waitForText(tx("En dólares · se convierten al cierre", "In dollars · converted at the close"))
+        // One section per close: "En dólares · Octubre 2026".
+        waitForText(tx("En dólares ·", "In dollars ·"), substring = true)
     }
 
     /** The close (3d): last month's dollar expense converts with one rate and becomes a colones movement. */
@@ -203,8 +204,9 @@ class FlowsTest {
         compose.onNodeWithTag("close.rate").performTextInput("510")
         waitForText(tx("Se registran ₡61.200", "₡61.200 are recorded"), substring = true)
         compose.onNodeWithTag("close.save").performClick()
+        // Converted: no longer waiting (now a colones movement of last month, further down the list).
+        waitForText(tx("Convertidos 1 gasto(s)", "Converted 1 expense(s)"), substring = true)
         waitUntil("the close to disappear") { compose.onAllNodes(hasTestTag("movements.pending.close.$key")).fetchSemanticsNodes().isEmpty() }
-        waitForText(com.dincr.data.FAKE_PENDING_SAMPLE)
     }
 
     /** Saving only a new description must keep the stored cents and the stored category. */
