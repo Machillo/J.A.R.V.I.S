@@ -206,7 +206,7 @@ def test_a_message_the_legacy_reader_already_imported_is_not_offered_again(monke
     conn = LegacyConn(legacy_rows=[LEGACY_ROW])
     monkeypatch.setattr(gmail_service, "discover_candidate_account", lambda *_a, **_k: None)
     monkeypatch.setattr(gmail_service, "link_received_payroll", lambda *_a, **_k: None)
-    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id: {"status": "pending"})
+    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id, **_scope: {"status": "pending"})
     inserted = {"id": 77}
     original_execute = conn.execute
     conn.execute = lambda q, p=(): SimpleNamespace(fetchone=lambda: inserted) if "INSERT INTO finva_email_candidates" in q else original_execute(q, p)
@@ -224,7 +224,8 @@ def test_a_message_the_legacy_reader_already_imported_is_not_offered_again(monke
     )
 
     assert result == {"status": "duplicate", "resolution_reason": "legacy_owner_import"}
-    assert conn.updates == [("legacy_owner_import", 77)]  # only the new candidate; the transaction is untouched
+    # only the new candidate, inside its own account and workspace (SEC-06); the transaction is untouched
+    assert conn.updates == [("legacy_owner_import", 77, OWNER["account_id"], OWNER["workspace_id"])]
 
     fresh = gmail_service._insert_finva_candidate(
         conn, email_message_id=6, connection=connection, candidate=candidate, gmail_message_id="18f0ffffffffffff",
@@ -242,7 +243,7 @@ def test_legacy_matching_is_scoped_to_the_workspace_and_optional():
 @pytest.mark.parametrize("status", ["duplicate", "internal_transfer"])
 def test_only_pending_candidates_are_resolved_as_legacy_imports(status):
     conn = LegacyConn()
-    assert legacy_owner_mail.mark_legacy_duplicate(conn, candidate_id=9, resolution={"status": status}) == {"status": status}
+    assert legacy_owner_mail.mark_legacy_duplicate(conn, candidate_id=9, resolution={"status": status}, account_id=OWNER["account_id"], workspace_id=OWNER["workspace_id"]) == {"status": status}
     assert conn.updates == []
 
 
@@ -268,7 +269,7 @@ def test_same_movement_from_two_mailboxes_or_outlook_is_one_semantic_movement():
             return SimpleNamespace(fetchone=lambda: row, fetchall=lambda: [])
 
     conn = Conn()
-    assert resolve_candidate(conn, 12) == {"status": "duplicate", "related_candidate_id": 11}
+    assert resolve_candidate(conn, 12, account_id=OWNER["account_id"], workspace_id=OWNER["workspace_id"]) == {"status": "duplicate", "related_candidate_id": 11}
     duplicate_query, params = next(call for call in conn.calls if "semantic_fingerprint=%s" in call[0])
     # Scoped to the account/workspace, not to one mailbox connection.
     assert "account_id=%s AND workspace_id=%s AND semantic_fingerprint=%s" in duplicate_query and "connection_id" not in duplicate_query

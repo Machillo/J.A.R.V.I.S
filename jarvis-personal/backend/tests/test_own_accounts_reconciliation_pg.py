@@ -81,8 +81,11 @@ def _transfer(pg, ident, *, origin, destination, amount=50000, currency="CRC", o
 
 
 def _resolved(pg, candidate_id):
+    with pg.cursor() as cur:
+        cur.execute("SELECT account_id,workspace_id FROM finva_email_candidates WHERE id=%s", (candidate_id,))
+        scope = dict(cur.fetchone())
     with financial_identity.get_connection() as conn:
-        result = resolve_candidate(conn, candidate_id)
+        result = resolve_candidate(conn, candidate_id, account_id=str(scope["account_id"]), workspace_id=str(scope["workspace_id"]))
         conn.commit()
     with pg.cursor() as cur:
         cur.execute("SELECT status,is_internal_transfer,transaction_type,transaction_id,resolution_reason FROM finva_email_candidates WHERE id=%s",
