@@ -51,7 +51,9 @@ import com.dincr.app.Appearance
 import com.dincr.app.tx
 import com.dincr.data.AppLanguage
 import com.dincr.data.MessageKind
+import com.dincr.data.MovementKind
 import com.dincr.data.OpsFlag
+import com.dincr.data.QuickAction
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrMessage
@@ -127,7 +129,14 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
     val route by model.pendingRoute.collectAsStateWithLifecycle()
     var offerLock by remember { mutableStateOf(!model.appLock.onboardingSeen && !model.isFixtures) }
     LaunchedEffect(notice) { notice?.let { snackbar.showSnackbar(it); model.consumeNotice() } }
-    LaunchedEffect(route) { route?.let { nav.open(it); model.consumeRoute() } }
+    // A launcher shortcut's quick action opens the editor of a new expense; any other route navigates.
+    var quickExpense by remember { mutableStateOf(false) }
+    LaunchedEffect(route) {
+        route?.let { if (QuickAction.fromRoute(it) == QuickAction.NEW_EXPENSE) quickExpense = true else nav.open(it); model.consumeRoute() }
+    }
+    if (quickExpense) {
+        MovementEditorSheet(model, EditorMode.Create, onDismiss = { quickExpense = false }, onSaved = { quickExpense = false }, onDelete = {}, initialKind = MovementKind.EXPENSE)
+    }
     if (offerLock) AppLockOffer(model) { offerLock = false }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val expanded = maxWidth >= 600.dp

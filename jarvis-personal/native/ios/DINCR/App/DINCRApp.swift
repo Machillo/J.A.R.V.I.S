@@ -29,6 +29,14 @@ struct DINCRApp: App {
                 // A mail OAuth return opened by the system (the authentication session delivers it
                 // directly otherwise). Sign-in callbacks only ever come through the session.
                 .onOpenURL { url in Task { await model.handleOpenURL(url) } }
+                // A quick action (App Shortcut, Back Tap) only asks for a screen; the shell opens it
+                // once signed in and unlocked. `-DincrQuickAction` does the same for UI tests.
+                .onChange(of: QuickActionInbox.shared.pending, initial: true) { _, _ in
+                    if let action = QuickActionInbox.shared.take() { model.pendingRoute = action.route }
+                }
+                .task {
+                    if let action = QuickAction.fromLaunchArguments(ProcessInfo.processInfo.arguments) { model.pendingRoute = action.route }
+                }
                 .onChange(of: scenePhase) { _, phase in
                     // The app-switcher snapshot is taken while inactive: with the lock on, a window above
                     // every sheet, alert and share sheet covers the balances.

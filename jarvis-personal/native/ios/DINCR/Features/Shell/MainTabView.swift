@@ -19,6 +19,8 @@ struct MainTabView: View {
     @State private var profilePath = NavigationPath()
     @State private var wealthPath = NavigationPath()
     @State private var offeringLock = false
+    /// A quick action (App Shortcut, Back Tap) asked for the editor of a new expense.
+    @State private var quickExpense = false
 
     var body: some View {
         if model.appLock.locked {
@@ -27,20 +29,16 @@ struct MainTabView: View {
             tabs
                 .safeAreaInset(edge: .top, spacing: 0) { GlobalBanners() }
                 .overlay(alignment: .bottom) { NoticeToast() }
-                .onChange(of: model.pendingRoute) { _, route in
-                    guard route == "mail" else { return }
-                    model.pendingRoute = nil
-                    openMailConnections()
-                }
+                .onChange(of: model.pendingRoute) { _, route in openPendingRoute(route) }
                 .task {
                     // A12 — one-time offer to turn the lock on after signing in.
                     if !model.environment.isFixtures, !model.appLock.wasOffered, model.appLock.availability != .unavailable {
                         offeringLock = true
                     }
-                    if model.pendingRoute == "mail" {
-                        model.pendingRoute = nil
-                        openMailConnections()
-                    }
+                    openPendingRoute(model.pendingRoute)
+                }
+                .sheet(isPresented: $quickExpense) {
+                    MovementEditor(mode: .create, initialKind: .expense) { _ in }
                 }
                 .alert(tx("¿Proteger DINCR con bloqueo?", "Protect DINCR with a lock?"), isPresented: $offeringLock) {
                     Button(tx("Activar", "Turn on")) { model.appLock.markOffered(); Task { _ = await model.appLock.setEnabled(true) } }
@@ -48,6 +46,18 @@ struct MainTabView: View {
                 } message: {
                     Text(tx("Pedí tu Face ID, Touch ID o código al abrir DINCR y después de 5 minutos fuera.", "Ask for Face ID, Touch ID or your passcode when opening DINCR and after 5 minutes away."))
                 }
+        }
+    }
+
+    /// Acts on a pending route once this shell (signed in, unlocked) is on screen.
+    private func openPendingRoute(_ route: String?) {
+        guard let route else { return }
+        if route == "mail" {
+            model.pendingRoute = nil
+            openMailConnections()
+        } else if QuickAction(route: route) == .newExpense {
+            model.pendingRoute = nil
+            quickExpense = true
         }
     }
 
