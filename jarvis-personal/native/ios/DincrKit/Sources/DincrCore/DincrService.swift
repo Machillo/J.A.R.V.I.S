@@ -94,6 +94,11 @@ public struct DincrService: Sendable {
         let _: Acknowledgement = try await client.send("POST", path, body: entry, idempotencyKey: idempotencyKey)
     }
 
+    /// The own accounts and cards an expense can say it was paid with.
+    public func paidWithOptions() async throws -> PaidWithOptions {
+        try await client.get("/user-product/finance/expenses/paid-with-options")
+    }
+
     public func update(movementID: String, _ update: MovementUpdate) async throws {
         try WriteContract.checkAmount(update.amount)
         try WriteContract.checkDate(update.transactionDate)
@@ -159,6 +164,12 @@ public struct DincrService: Sendable {
     public func createSavingsPlan(_ request: SavingsPlanRequest, idempotencyKey: String) async throws -> SavingsPlan {
         try WriteContract.check(request)
         return try await client.send("POST", "/user-product/savings-plans", body: request, idempotencyKey: idempotencyKey)
+    }
+
+    /// PLN-04: edit a savings plan (name, monthly amount, saved, dates, status), as Android does.
+    public func updateSavingsPlan(id: Int, _ request: SavingsPlanRequest, idempotencyKey: String) async throws -> SavingsPlan {
+        try WriteContract.check(request)
+        return try await client.send("PUT", "/user-product/savings-plans/\(id)", body: request, idempotencyKey: idempotencyKey)
     }
 
     public func deleteSavingsPlan(id: Int) async throws {
@@ -303,7 +314,24 @@ public struct DincrService: Sendable {
     public func financialIdentity() async throws -> FinancialIdentity { try await client.get("/user-product/vip/financial-identity") }
 
     public func setAccountOwnership(id: Int, own: Bool) async throws {
-        let _: Acknowledgement = try await client.send("PUT", "/user-product/vip/financial-identity/accounts/\(id)", body: OwnershipRequest(own: own))
+        try await setAccountOwnership(id: id, own ? .own : .notMine)
+    }
+
+    public func setAccountOwnership(id: Int, _ ownership: AccountOwnership) async throws {
+        let _: Acknowledgement = try await client.send("PUT", "/user-product/vip/financial-identity/accounts/\(id)", body: OwnershipRequest(ownership))
+    }
+
+    /// Declares (1–31) or clears (nil) one of the user's own credit cards' statement cut day.
+    public func setStatementCutDay(id: Int, day: Int?) async throws {
+        let _: Acknowledgement = try await client.send("PUT", "/user-product/vip/financial-identity/accounts/\(id)/statement-cut-day",
+                                                       body: StatementCutDayRequest(day))
+    }
+
+    /// Marks as own an account no notice came from; the backend re-evaluates the pending notices.
+    @discardableResult
+    public func declareOwnAccount(_ declaration: OwnAccountDeclaration) async throws -> FinancialIdentity.Account? {
+        let result: FinancialAccountResult = try await client.send("POST", "/user-product/vip/financial-identity/accounts", body: declaration)
+        return result.item
     }
 
     /// Movement ids look like `expense:42`; the colon must survive as a path segment.

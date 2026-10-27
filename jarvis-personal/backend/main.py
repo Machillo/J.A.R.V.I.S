@@ -29,11 +29,13 @@ from backend.finance.daily_history_routes import router as financial_history_rou
 from backend.finance.investment_center import router as investment_center_router
 from backend.finance.business_center import router as business_center_router
 from backend.auth.current_user import require_owner, reset_current_user, set_current_user
+from backend.auth.legal import acceptance_required, acceptance_required_detail
 from backend.auth.service import authenticate_access_token
 from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
 from backend.auth.owner_bridge_routes import router as owner_bridge_router
 from backend.user_product.routes import router as user_product_router
+from backend.user_product.appearance_routes import router as appearance_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.posthog_events import capture_backend_event_later
@@ -54,7 +56,8 @@ from backend.core.idempotency import (
     safe_abandon_operation,
 )
 from backend.core.feature_flags import disabled_feature_for_request
-from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language, use_language
+from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language, tx, use_language
+from backend.core import write_limit
 
 # The web app is the only process exempt from declaring a workspace for deletes.
 _database.APPLICATION_NAME = os.getenv("DINCR_DB_APPLICATION_NAME", "dincr-backend")
@@ -319,6 +322,37 @@ async def auth_middleware(request: Request, call_next):
             },
             headers={**cors_headers, "X-Request-ID": request_id},
         )
+    # SEC-12: a technical cap on writes per account, before any work (core/write_limit.py).
+    retry_after = write_limit.retry_after_for(user, request.method, request.url.path)
+    if retry_after is not None:
+        logger.warning("Write limit reached id=%s method=%s", request_id, request.method)
+        with use_language(language_for_request(request.url.path, request.headers.get("accept-language"))):
+            detail = tx("Hiciste muchos cambios seguidos. Esperá unos segundos e intentá de nuevo.",
+                        "You made many changes in a row. Wait a few seconds and try again.")
+        return JSONResponse(
+            status_code=429,
+            content={"detail": detail, "code": "too_many_writes"},
+            headers={**cors_headers, "X-Request-ID": request_id, "Retry-After": str(int(retry_after + 0.999))},
+        )
+    # SEC-01: a commercial user acts only after accepting the current Terms and Privacy Policy
+    # (backend/auth/legal.py lists what stays open before it). The Owner is unchanged.
+    try:
+        must_accept = await run_in_threadpool(acceptance_required, user, request.method, request.url.path)
+    except Exception as exc:
+        # Unknown is not "accepted": without an answer the request does not run (the app retries).
+        logger.error("Legal acceptance check failed id=%s error=%s", request_id, _safe_exception_summary(exc))
+        ops.report("auth", "legal_check_unavailable", "error", method=request.method, status=503,
+                   error_class=type(exc).__name__, request_id=request_id)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "No pudimos verificar tu sesión en este momento. Intentá de nuevo."},
+            headers={**cors_headers, "X-Request-ID": request_id, "Retry-After": "2"},
+        )
+    if must_accept:
+        with use_language(language_for_request(request.url.path, request.headers.get("accept-language"))):
+            detail = acceptance_required_detail()
+        return JSONResponse(status_code=403, content={"detail": detail},
+                            headers={**cors_headers, "X-Request-ID": request_id})
     context_token = set_current_user(user)
     idempotency_key = request.headers.get("X-Idempotency-Key", "").strip()
     idempotency_account = str(user.get("account_id") or "")
@@ -462,6 +496,7 @@ app.include_router(business_center_router, dependencies=INTERNAL_ONLY)
 app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
+app.include_router(appearance_router)
 app.include_router(deployment_monitor_router)
 app.include_router(product_ops_router)
 app.include_router(store_billing_router)

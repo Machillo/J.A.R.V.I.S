@@ -100,6 +100,9 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
         loadHomeToday(model, tier, mailReview)
     }
     val agenda = if (owner) rememberLoad(model, fallback = tx("No pudimos cargar tu agenda.", "We couldn’t load your calendar.")) { model.api.jarvisUpcomingEvents() } else null
+    // New mail on return (AppModel.syncOnReturn): read again, keeping the screen if it fails.
+    val dataGeneration by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(dataGeneration) { if (dataGeneration > 0) home.refresh() }
     PullToRefreshBox(false, onRefresh = { home.reload(); agenda?.reload() }, modifier = Modifier.fillMaxSize().padding(padding)) {
         ScreenColumn {
             if (owner && agenda != null) {

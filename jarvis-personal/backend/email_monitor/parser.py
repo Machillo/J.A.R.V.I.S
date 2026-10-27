@@ -994,7 +994,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     if _has_rejected_movement(text):
         return _rejected("bac", subject, body, received_at, "Transferencia SINPE rechazada/no aplicada; no afecta finanzas.")
 
-    amount, _currency = _parse_context_amount(text)
+    amount, currency = _parse_context_amount(text)
     if amount is None or amount <= 0:
         return None
 
@@ -1063,6 +1063,8 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
             "transaction_time": time_value,
             "description": description_base[:240],
             "amount": round(amount, 2),
+            "original_amount": round(amount, 2) if currency == "USD" else None,
+            "original_currency": "USD" if currency == "USD" else None,
             "account": "BAC SINPE",
             "notes": " | ".join(notes),
             "dedupe_key": f"sinpe_internal|{transaction_date}|{round(amount,2)}|{reference_match.group(1) if reference_match else normalize(description_base)}|{direction}",
@@ -1105,6 +1107,8 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
         "transaction_time": time_value,
         "description": description[:240],
         "amount": round(amount, 2),
+        "original_amount": round(amount, 2) if currency == "USD" else None,
+        "original_currency": "USD" if currency == "USD" else None,
         "transaction_type": transaction_type,
         "category": category,
         "account": "BAC SINPE",

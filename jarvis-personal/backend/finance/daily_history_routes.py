@@ -28,6 +28,8 @@ def financial_history_cron(x_cron_secret: str | None = Header(default=None)):
         raise
     if result["status"] == "ALREADY_RUNNING":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El historial financiero ya se está registrando.")
-    observability.heartbeat("financial_history", ok=result["failed"] == 0,
-                            error_class=None if result["failed"] == 0 else "workspace_failures")
+    # 200 with the counts either way: the scheduler fails its check on `failed` or
+    # `installments_failed` (.github/scripts/financial_history_result.py).
+    error_class = "workspace_failures" if result["failed"] else "installment_failures" if result.get("installments_failed") else None
+    observability.heartbeat("financial_history", ok=error_class is None, error_class=error_class)
     return result

@@ -42,6 +42,14 @@ data class TransactionAnalysis(
         val expenses: Money? = null,
         @SerialName("monthly_balance") val monthlyBalance: Money? = null,
         @SerialName("cumulative_balance") val cumulativeBalance: Money? = null,
+        // The Owner ledger's reading of the month (backend owner_ledger).
+        val complete: Boolean? = null,
+        @SerialName("incomplete_reasons") val incompleteReasons: List<String> = emptyList(),
+        @SerialName("pending_mail_count") val pendingMailCount: Int? = null,
+        @SerialName("unclassified_count") val unclassifiedCount: Int? = null,
+        @SerialName("other_inflows") val otherInflows: Money? = null,
+        val refunds: Money? = null,
+        @SerialName("payroll_accrued") val payrollAccrued: PayrollAccrued? = null,
     )
 
     @Serializable

@@ -1151,44 +1151,6 @@
   ]
  },
  {
-  "method": "GET",
-  "path": "/jarvis/memory",
-  "gates": [
-   "router_roles:owner"
-  ],
-  "user_get": "denied"
- },
- {
-  "method": "POST",
-  "path": "/jarvis/memory",
-  "gates": [
-   "router_roles:owner"
-  ]
- },
- {
-  "method": "GET",
-  "path": "/jarvis/memory/search",
-  "gates": [
-   "router_roles:owner"
-  ],
-  "user_get": "denied"
- },
- {
-  "method": "GET",
-  "path": "/jarvis/memory/summary",
-  "gates": [
-   "router_roles:owner"
-  ],
-  "user_get": "denied"
- },
- {
-  "method": "DELETE",
-  "path": "/jarvis/memory/{memory_id}",
-  "gates": [
-   "router_roles:owner"
-  ]
- },
- {
   "method": "POST",
   "path": "/jarvis/notifications/browser",
   "gates": [
@@ -1239,6 +1201,20 @@
    "router_roles:owner"
   ],
   "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/premium/strategy-dashboard/exact-distribution",
+  "gates": [
+   "router_roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/premium/strategy-dashboard/exact-distribution/confirm",
+  "gates": [
+   "router_roles:owner"
+  ]
  },
  {
   "method": "GET",
@@ -1641,6 +1617,28 @@
   ]
  },
  {
+  "method": "DELETE",
+  "path": "/user-product/appearance",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/appearance",
+  "gates": [
+   "roles:owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/appearance",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/user-product/basic/budget",
   "gates": [
@@ -1760,6 +1758,14 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/user-product/finance/expenses/paid-with-options",
+  "gates": [
+   "feature:spending"
+  ],
+  "user_get": "allowed"
+ },
+ {
   "method": "DELETE",
   "path": "/user-product/finance/expenses/{expense_id}",
   "gates": [
@@ -1824,6 +1830,13 @@
    "feature:strategy_vip"
   ],
   "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/strategy-vip/debt-scenario",
+  "gates": [
+   "feature:strategy_vip"
+  ]
  },
  {
   "method": "POST",
@@ -1991,9 +2004,10 @@
   "method": "GET",
   "path": "/user-product/vip/aguinaldo",
   "gates": [
-   "feature:gmail_automation"
+   "feature:aguinaldo",
+   "mail_reading:verified_owner"
   ],
-  "user_get": "allowed"
+  "user_get": "denied"
  },
  {
   "method": "GET",
@@ -2023,15 +2037,29 @@
   "method": "GET",
   "path": "/user-product/vip/financial-identity",
   "gates": [
-   "feature:gmail_automation"
+   "feature:financial_accounts"
   ],
   "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/financial-identity/accounts",
+  "gates": [
+   "feature:financial_accounts"
+  ]
  },
  {
   "method": "PUT",
   "path": "/user-product/vip/financial-identity/accounts/{account_balance_id}",
   "gates": [
-   "feature:gmail_automation"
+   "feature:financial_accounts"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/vip/financial-identity/accounts/{account_balance_id}/statement-cut-day",
+  "gates": [
+   "feature:financial_accounts"
   ]
  },
  {
@@ -2081,14 +2109,16 @@
   "method": "POST",
   "path": "/user-product/vip/gmail/connect",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
   "method": "POST",
   "path": "/user-product/vip/gmail/consent",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
@@ -2133,7 +2163,8 @@
   "method": "POST",
   "path": "/user-product/vip/gmail/sync",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
@@ -2203,14 +2234,16 @@
   "method": "POST",
   "path": "/user-product/vip/mail/microsoft/connect",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {
   "method": "POST",
   "path": "/user-product/vip/mail/oauth/complete",
   "gates": [
-   "feature:gmail_automation"
+   "feature:gmail_automation",
+   "mail_reading:verified_owner"
   ]
  },
  {

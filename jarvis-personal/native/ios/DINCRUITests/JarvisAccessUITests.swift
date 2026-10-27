@@ -33,12 +33,26 @@ final class JarvisAccessUITests: XCTestCase {
         XCTAssertFalse(element("wealth.connections", in: app).label.contains("Disponible desde"))
         app.tabBars.buttons["Perfil"].tap()
         entry.tap()
-        let memory = element("jarvis.section.memory", in: app)
-        XCTAssertTrue(memory.waitForExistence(timeout: 5))
-        XCTAssertTrue(element("jarvis.section.chat", in: app).exists)
-        memory.tap()
-        // A section not ported yet says so and shows no sample content.
-        XCTAssertTrue(element("jarvis.restoring", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("jarvis.section.chat", in: app).waitForExistence(timeout: 5))
+        // Memoria was removed (it fed the retired AI chat): the hub no longer lists it, not even at the
+        // bottom of the list, which is taller than the screen now that every section is recovered.
+        let analysis = element("jarvis.section.analysis", in: app)
+        for _ in 0..<4 where !analysis.isHittable { app.swipeUp() }
+        XCTAssertTrue(analysis.waitForExistence(timeout: 5))
+        XCTAssertFalse(element("jarvis.section.memory", in: app).exists)
+    }
+
+    func testTheOwnersPersonalStrategyOpensHisPlanForTheMonth() {
+        let app = launch(role: "owner")
+        let entry = element("profile.jarvis", in: app)
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
+        let strategy = element("jarvis.section.strategy", in: app)
+        XCTAssertTrue(strategy.waitForExistence(timeout: 5))
+        strategy.tap()
+        // The same screen as Plan → Tu plan del mes, with the Owner's strategy; never "being restored".
+        XCTAssertTrue(element("strategy.dashboard", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("jarvis.restoring", in: app).exists)
     }
 
     func testFreeBasicAndVipNeverSeeJarvis() {

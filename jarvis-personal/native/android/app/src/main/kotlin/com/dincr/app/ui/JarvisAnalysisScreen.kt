@@ -26,6 +26,7 @@ import com.dincr.data.FinancialEngineReport
 import com.dincr.data.MessageKind
 import com.dincr.data.NetWorthReport
 import com.dincr.data.OwnerAnalysis
+import com.dincr.data.OwnerReading
 import com.dincr.data.TransactionAnalysis
 import com.dincr.design.CategoryBars
 import com.dincr.design.Dincr
@@ -95,17 +96,18 @@ private fun HealthSection(e: FinancialEngineReport) {
             ProgressLine(score / 100.0, tx("Salud financiera ${score.toInt()} de 100", "Financial health ${score.toInt()} of 100"))
         }
         e.forecast?.let { f ->
-            AmountLine(tx("Cierre de mes previsto", "Expected month-end balance"), f.projectedEndBalance, emphasize = true)
+            AmountLine(tx("Cierre de mes previsto (estimación)", "Expected month-end balance (estimate)"), f.projectedEndBalance, emphasize = true)
             f.alert?.message?.let { DincrMessage(MessageKind.financial(f.alert?.level), tx("Pronóstico", "Forecast"), it) }
         }
         e.emergencyFund?.let { f ->
             AmountLine(tx("Salvavidas", "Emergency fund"), f.current)
             AmountLine(tx("Base mensual", "Monthly base"), f.monthlyBase)
-            f.coverageMonths?.let { InfoLine(tx("Cobertura", "Coverage"), tx("${it.stripTrailingZeros().toPlainString()} meses", "${it.stripTrailingZeros().toPlainString()} months")) }
+            f.coverageMonths?.let { InfoLine(tx("Cobertura", "Coverage"), coverageMonthsLabel(it)) }
         }
         e.debts?.recommended?.priorityDebt?.let { d ->
             AmountLine(tx("Deuda prioritaria", "Priority debt") + (d.name?.let { " · $it" } ?: ""), d.remainingAmount)
         }
+        if (e.recommendations.isNotEmpty()) Caption(tx("Recomendaciones: sugerencias, no movimientos.", "Recommendations: suggestions, not movements."))
         e.recommendations.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
     }
 }
@@ -122,10 +124,11 @@ private fun AnalysisModeSections(a: OwnerAnalysis) {
     if (flow.isNotEmpty()) Column(Modifier.testTag("jarvis.analysis.flow")) {
         Section(tx("Ingresos y gastos", "Income and expenses")) {
             IncomeExpenseBars(flow.map { Triple(shortMonth(it.month), it.income, it.expenses) })
+            FlowNotes(t, flow.map { it.month })
         }
     }
     val byMonth = t.knownExpensesByMonth(6)
-    if (byMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(byMonth) }
+    if (byMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(byMonth); SameSpendingNote() }
     t.spendingBreakdown?.takeIf { it.categories.isNotEmpty() }?.let { b ->
         Column(Modifier.testTag("jarvis.analysis.spending")) {
             Section(tx("Distribución del gasto", "Spending by category")) {
@@ -141,12 +144,12 @@ private fun AnalysisModeSections(a: OwnerAnalysis) {
     }
     Column(Modifier.testTag("jarvis.analysis.monthEnd")) {
         Section(tx("Cierre del mes", "Month end")) {
-            AmountLine(tx("Saldo proyectado al cierre", "Projected month-end balance"), e.forecast?.projectedEndBalance)
+            AmountLine(tx("Saldo proyectado al cierre (estimación)", "Projected month-end balance (estimate)"), e.forecast?.projectedEndBalance)
             e.forecast?.alert?.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.warning) }
             e.emergencyFund?.let { f ->
                 AmountLine(tx("Salvavidas actual", "Current emergency fund"), f.current)
                 AmountLine(tx("Meta de 6 meses", "6-month target"), f.recommendedSixMonths)
-                f.coverageMonths?.let { InfoLine(tx("Cobertura", "Coverage"), tx("${it.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString()} meses", "${it.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString()} months")) }
+                f.coverageMonths?.let { InfoLine(tx("Cobertura", "Coverage"), coverageMonthsLabel(it)) }
             }
             e.debts?.recommended?.priorityDebt?.let { d ->
                 InfoLine(tx("Deuda prioritaria", "Priority debt"), d.name ?: "—")
@@ -157,10 +160,32 @@ private fun AnalysisModeSections(a: OwnerAnalysis) {
     val recommendations = e.recommendations + a.netWorth.recommendations
     if (recommendations.isNotEmpty()) Column(Modifier.testTag("jarvis.analysis.recommendations")) {
         Section(tx("Recomendaciones", "Recommendations")) {
+            Caption(tx("Sugerencias de DINCR: no son movimientos ni pagos hechos.", "DINCR’s suggestions: not movements or payments made."))
             recommendations.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
         }
     }
 }
+
+/**
+ * What the income and spending bars mean and which months are not complete yet (backend
+ * owner_ledger: pending mail notices, unclassified movements or payroll without a deposit).
+ */
+@Composable
+private fun FlowNotes(t: TransactionAnalysis, charted: List<String>) {
+    Caption(tx("Por mes calendario. Ingresos: dinero recibido. Gastos: ya restados los reembolsos. Préstamos, cobros y ventas no cuentan como ingreso.",
+        "By calendar month. Income: money received. Spending: refunds already taken out. Loans, collections and sales don’t count as income."))
+    val incomplete = OwnerReading.incompleteMonths(t.monthlyFlow).filter { it in charted }
+    if (incomplete.isNotEmpty()) Box(Modifier.testTag("jarvis.analysis.incomplete")) {
+        Caption(tx("Meses todavía incompletos: ", "Months not complete yet: ") + incomplete.joinToString(", ") { OwnerReading.monthLabel(it) } +
+            tx(" (avisos sin revisar, movimientos sin clasificar o nómina sin el depósito del salario).",
+            " (notices not reviewed, movements not classified or payroll without the salary deposit)."))
+    }
+}
+
+/** "Gastos por mes" is the expense movements per month (backend get_expenses_by_month), not the ledger's net spending. */
+@Composable
+private fun SameSpendingNote() = Caption(tx("Solo gastos registrados como movimientos, sin restar reembolsos: por eso puede diferir del gráfico de ingresos y gastos.",
+    "Only spending recorded as movements, refunds not taken out, so it can differ from the income and spending chart."))
 
 /** The spending bars list this many categories; beyond it the donut keeps its own legend (as iOS). */
 private const val SPENDING_BARS_LIMIT = 8
@@ -180,9 +205,10 @@ private fun SpendingSection(t: TransactionAnalysis) {
     val flow = t.flowMonths()
     if (flow.isNotEmpty()) Section(tx("Ingresos y gastos", "Income and expenses")) {
         IncomeExpenseBars(flow.map { Triple(shortMonth(it.month), it.income, it.expenses) })
+        FlowNotes(t, flow.map { it.month })
     }
     val byMonth = t.knownExpensesByMonth(12)
-    if (byMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(byMonth) }
+    if (byMonth.isNotEmpty()) Section(tx("Gastos por mes", "Expenses by month")) { MonthBars(byMonth); SameSpendingNote() }
 }
 
 /** Expenses per month in calendar order (the bars of the web tab), labelled directly. */

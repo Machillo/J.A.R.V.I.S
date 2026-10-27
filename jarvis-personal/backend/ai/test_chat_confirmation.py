@@ -52,7 +52,6 @@ def chat(monkeypatch):
     monkeypatch.setattr(action_flow, "add_payroll_event", record("payroll_event", {"status": "OK"}))
     monkeypatch.setattr(action_flow, "add_bonus", record("bonus", {"id": 9}))
     monkeypatch.setattr(action_flow, "add_event", record("event", {"id": 7}))
-    monkeypatch.setattr(action_flow, "create_memory_item", record("memory", {"id": 5}))
     monkeypatch.setattr(fixed_expenses, "create_fixed_expense", record("fixed_create", {"id": 3, "name": "internet"}))
     monkeypatch.setattr(fixed_expenses, "update_fixed_expense", record("fixed_update", {"id": 4, "name": "agua"}))
     monkeypatch.setattr(fixed_expenses, "list_fixed_expenses", lambda active_only=True: [{"id": 4, "name": "agua", "aliases": []}])

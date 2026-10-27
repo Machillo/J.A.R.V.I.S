@@ -652,13 +652,13 @@ class _MaintenanceConn:
         pass
 
 
-@pytest.mark.parametrize(("outcomes", "ok"), [
-    (["reauth", "reauth", "reauth"], True),   # only reconnects needed: the job ran fine
-    (["boom", "boom", "reauth"], False),      # everything that could sync failed
-    (["boom", "ok", "reauth"], True),         # partial failure: reported per connection, run ok
-    ([], True),
+@pytest.mark.parametrize(("outcomes", "ok", "status", "failed"), [
+    (["reauth", "reauth", "reauth"], True, "ok", 0),   # only reconnects needed: the job ran fine
+    (["boom", "boom", "reauth"], False, "partial", 2),  # everything that could sync failed
+    (["boom", "ok", "reauth"], True, "partial", 1),     # partial failure: the run is ok, the answer says so
+    ([], True, "ok", 0),
 ])
-def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outcomes, ok):
+def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outcomes, ok, status, failed):
     from fastapi import HTTPException
 
     from backend.user_product import gmail_service
@@ -667,25 +667,31 @@ def test_gmail_maintenance_heartbeat_counts_real_failures_only(monkeypatch, outc
     monkeypatch.setenv("FINVA_GMAIL_CRON_SECRET", "cron-secret-value")
     # Entitlement has its own PostgreSQL tests (test_subscription_end_required_pg); here every row is entitled.
     monkeypatch.setattr(gmail_service, "_has_active_vip_access", lambda conn, account_id: True)
+    # The plan rule mail reading returns to once it reopens (Owner-only during the launch, proven in
+    # test_mail_monitor_owner_only_pg.py): reading for VIP with the gmail_automation switch on.
+    monkeypatch.setattr(gmail_service, "MAIL_READING_OWNER_ONLY", False)
+    monkeypatch.setattr(gmail_service, "load_feature_flags", lambda: {"gmail_automation": {"enabled": True}})
     monkeypatch.setattr(gmail_service, "get_connection", lambda: _MaintenanceConn(rows))
     monkeypatch.setattr(gmail_service.mail_oauth, "discard_stale_flows", lambda conn: None)
     monkeypatch.setattr(gmail_service, "end_unentitled_mail_connections", lambda conn: 0)
     monkeypatch.setattr(gmail_service, "apply_gmail_retention", lambda: {})
-    monkeypatch.setattr(gmail_service, "_credentials", lambda token: object())
     monkeypatch.setattr(gmail_service, "_start_watch", lambda *a, **k: None)
-    monkeypatch.setattr(gmail_service, "_sync_connection", lambda *a, **k: {})
 
-    def token(connection_id):
+    # Each connection is synced once; the sync reads its token (409 = reconnect) and renews its watch.
+    def sync(connection_id, **_kwargs):
         outcome = outcomes[connection_id - 1]
         if outcome == "reauth":
             raise HTTPException(409, "reconnect")
         if outcome == "boom":
             raise RuntimeError("provider")
-        return {}, "t"
+        return {}
 
-    monkeypatch.setattr(gmail_service, "_connection_with_token", token)
+    monkeypatch.setattr(gmail_service, "_sync_connection", sync)
     beats = []
     monkeypatch.setattr(gmail_service.observability, "heartbeat", lambda job, ok, **k: beats.append((job, ok)))
     monkeypatch.setattr(gmail_service.observability, "report", lambda *a, **k: None)
-    gmail_service.gmail_maintenance("cron-secret-value")
+    result = gmail_service.gmail_maintenance("cron-secret-value")
     assert beats == [("gmail_maintenance", ok)]
+    # A mailbox that failed is never hidden behind "ok": the scheduler sees it in the counts.
+    assert (result["status"], result["failed"]) == (status, failed)
+    assert result["completed"] + result["reconnect"] + result["failed"] == result["connections"]

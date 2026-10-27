@@ -62,6 +62,8 @@ def test_gmail_connected_is_reported_only_when_the_session_completes_the_link(mo
     monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.finva.app://gmail/callback?gmail=authorized"))
     product_routes.vip_gmail_callback(code="code", state="state")
     monkeypatch.setattr(product_routes, "require_feature", lambda *_args: True)
+    # Who may complete a link is proven in test_mail_monitor_owner_only_pg.py; here: the event only.
+    monkeypatch.setattr(product_routes, "require_mail_reading", lambda: None)
     request = product_routes.MailConnectionCompleteRequest(flow="00000000-0000-0000-0000-000000000000", completion="c")
     tasks = BackgroundTasks()
     monkeypatch.setattr(product_routes, "complete_mail_connection", lambda *_args: (_ for _ in ()).throw(RuntimeError("rejected")))

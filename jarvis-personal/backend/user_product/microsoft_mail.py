@@ -23,11 +23,12 @@ from fastapi.responses import RedirectResponse
 
 from backend.core.database import get_connection
 from backend.email_monitor.gmail_content import plain_text_from_html
-from backend.user_product import mail_oauth
+from backend.finance.category_catalog import owner_account_context
+from backend.user_product import mail_oauth, owner_mail_automation
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
-    FINVA_QUERY, _connection_import_since, _has_active_vip_access, _initial_scan_scope,
-    _ingest_message, _vault_create, _vault_delete, _vault_read,
+    FINVA_QUERY, MAIL_READING_PAUSED, _connection_import_since, _has_active_vip_access, _initial_scan_scope,
+    _ingest_message, _vault_create, _vault_delete, _vault_read, already_processed, mail_reading_allowed,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
 
     account_id = str(flow["account_id"])
     with get_connection() as conn:
-        if not _has_active_vip_access(conn, account_id):
+        if not mail_reading_allowed(conn, account_id, flow.get("workspace_id")):
             return failed("vip_required")
     client_id, client_secret, redirect_uri = _config()
     try:
@@ -198,9 +199,9 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     """Attach an authorized Outlook flow to its account/workspace (caller commits)."""
     if flow["provider"] != "microsoft" or "Mail.Read" not in (flow.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="La autorización no corresponde a Outlook. Volvé a conectarlo.")
-    account_id, workspace_id = str(flow["account_id"]), str(flow["workspace_id"])
-    if not _has_active_vip_access(conn, account_id):
-        raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
+    account_id, workspace_id = str(flow["account_id"]), flow.get("workspace_id")
+    if not mail_reading_allowed(conn, account_id, workspace_id):
+        raise HTTPException(status_code=403, detail=MAIL_READING_PAUSED)
     address = str(flow["mailbox_address"]).strip().lower()  # display only
     # The principal is the mailbox: both unique live-mailbox columns carry it, so a
     # reported address can neither collide with nor take over another mailbox.
@@ -349,26 +350,9 @@ def sync_connection(connection_id: int, max_results: int = 100, trigger: str = "
     return observe_mail_sync("microsoft", trigger, lambda: _run_sync_connection(connection_id, max_results))
 
 
-def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
-    with get_connection() as conn:
-        connection = conn.execute(
-            """SELECT c.*,a.display_name FROM finva_gmail_connections c
-               JOIN accounts a ON a.id=c.account_id WHERE c.id=%s""", (connection_id,),
-        ).fetchone()
-        if not connection or "Mail.Read" not in (connection.get("granted_scopes") or []):
-            raise HTTPException(status_code=404, detail="Conexión de Outlook no encontrada.")
-        if not _has_active_vip_access(conn, str(connection["account_id"])):
-            raise HTTPException(status_code=403, detail="La lectura de correo requiere VIP.")
-        token = _vault_read(conn, str(connection["refresh_token_secret_id"]), str(connection["account_id"]))
-    connection = dict(connection)
-    access_token = _refresh(connection, token)
-    initial = not connection.get("initial_scan_completed_at")
-    chosen = _connection_import_since(connection)
-    # Later syncs keep the recent window but never reach before the chosen date.
-    since = chosen if initial else max(chosen, date.today() - timedelta(days=45))
-    results = []
-    page = connection.get("initial_scan_page_token") if initial else None
-    max_pages = 1 if initial else 10
+def _list_refs(access_token: str, since: date, page: str | None, *, max_pages: int, limit: int) -> tuple[list[tuple[str, str]], str | None]:
+    """(message id, sender) of approved bank senders, newest first, and the next page link."""
+    refs: list[tuple[str, str]] = []
     for _ in range(max_pages):
         response = _graph_get(access_token, page or "/me/messages", None if page else {
             "$filter": f"receivedDateTime ge {since:%Y-%m-%d}T00:00:00-06:00",  # Costa Rica midnight
@@ -378,26 +362,65 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
         for message in response.get("value", []):
             message_id = message.get("id")
             sender = ((message.get("from") or {}).get("emailAddress") or {}).get("address", "")
-            if not message_id or not _sender_allowed(sender):
-                continue
-            try:
-                full = _graph_get(access_token, f"/me/messages/{quote(message_id, safe='')}", {
-                    "$select": "id,subject,from,receivedDateTime,body,hasAttachments",
-                })
-                attachment_text, names = _attachments(access_token, message_id) if full.get("hasAttachments") else ("", [])
-                results.append(_ingest_message(
-                    connection, message_id, subject=full.get("subject") or "", sender=sender,
-                    body=_message_text((full.get("body") or {}).get("content") or ""),
-                    attachment_text=attachment_text, attachment_names=names,
-                    received_at=full.get("receivedDateTime"),
-                ))
-            except Exception:
-                # A fetch failure keeps the scan cursor so the message is retried;
-                # an ingestion failure never reaches here (it is recorded as 'failed').
-                raise
+            if message_id and _sender_allowed(sender):
+                refs.append((message_id, sender))
         page = response.get("@odata.nextLink")
-        if not page or initial or len(results) >= max_results:
+        if not page or len(refs) >= limit:
             break
+    return refs, page
+
+
+def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
+    with get_connection() as conn:
+        connection = conn.execute(
+            """SELECT c.*,a.display_name FROM finva_gmail_connections c
+               JOIN accounts a ON a.id=c.account_id WHERE c.id=%s""", (connection_id,),
+        ).fetchone()
+        if not connection or "Mail.Read" not in (connection.get("granted_scopes") or []):
+            raise HTTPException(status_code=404, detail="Conexión de Outlook no encontrada.")
+        if not mail_reading_allowed(conn, str(connection["account_id"]), connection.get("workspace_id")):
+            raise HTTPException(status_code=403, detail=MAIL_READING_PAUSED)
+        token = _vault_read(conn, str(connection["refresh_token_secret_id"]), str(connection["account_id"]))
+        # The Owner reads only the current month and runs no history scan (owner_mail_automation).
+        owner = owner_account_context(conn, connection.get("account_id"), connection.get("workspace_id"))
+    connection = dict(connection)
+    access_token = _refresh(connection, token)
+    initial = not owner and not connection.get("initial_scan_completed_at")
+    chosen = _connection_import_since(connection)
+    if owner:
+        # The Owner's window is the current month (owner_mail_automation).
+        recent_since = owner_mail_automation.window_since(connection, chosen)
+    else:
+        # The recent window never reaches before the chosen date.
+        recent_since = max(chosen, date.today() - timedelta(days=45))
+    page = None
+    refs: list[tuple[str, str]] = []
+    if initial:
+        # One page of the history scan per sync, from the chosen date.
+        history, page = _list_refs(access_token, chosen, connection.get("initial_scan_page_token"), max_pages=1, limit=max_results)
+        refs += history
+    # Every sync reads the newest messages as well: a history scan still in progress must
+    # never hold back what just arrived.
+    recent, _ = _list_refs(access_token, recent_since, None, max_pages=10, limit=max_results)
+    refs += recent
+    messages = dict(refs)  # one entry per message, first sender kept
+    done = already_processed(connection_id, list(messages))
+    results = ["duplicate"] * len(done)
+    for message_id, sender in messages.items():
+        if message_id in done:
+            continue
+        # A fetch failure raises and keeps the scan cursor so the message is retried;
+        # an ingestion failure never raises (it is recorded as 'failed').
+        full = _graph_get(access_token, f"/me/messages/{quote(message_id, safe='')}", {
+            "$select": "id,subject,from,receivedDateTime,body,hasAttachments",
+        })
+        attachment_text, names = _attachments(access_token, message_id) if full.get("hasAttachments") else ("", [])
+        results.append(_ingest_message(
+            connection, message_id, subject=full.get("subject") or "", sender=sender,
+            body=_message_text((full.get("body") or {}).get("content") or ""),
+            attachment_text=attachment_text, attachment_names=names,
+            received_at=full.get("receivedDateTime"),
+        ))
     with get_connection() as conn:
         conn.execute(
             """UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_success_at=NOW(),
@@ -407,7 +430,9 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
                  initial_scan_completed_at=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
                  updated_at=NOW() WHERE id=%s AND status<>'disabled'""",
             # A reconnection that widened the history while this sync ran keeps its reset.
-            (connection.get("import_since"), page if initial else None, initial and not page,
+            # The Owner runs no history scan: its stored cursor is kept as it is.
+            (connection.get("import_since"),
+             connection.get("initial_scan_page_token") if owner else (page if initial else None), initial and not page,
              connection.get("import_since"), connection_id),
         )
         conn.commit()
