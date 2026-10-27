@@ -246,8 +246,97 @@ private struct SubscriptionChoice: View {
                     }
                 }
             }
-            Text(tx("Las suscripciones desde el App Store llegan en una próxima versión.", "App Store subscriptions arrive in a coming version."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            StoreSubscriptionPanel()
+        }
+    }
+}
+
+/// BIL-03 — App Store subscription: buy, restore, manage (Android: `StoreSubscriptionPanel`, Google
+/// Play). The backend decides the plan (`StoreKitBilling`). While the `store_billing` switch is off
+/// the panel only says so.
+private struct StoreSubscriptionPanel: View {
+    @Environment(AppModel.self) private var model
+    @State private var busy = false
+    @State private var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            SectionHeader(title: tx("Suscripción en App Store", "App Store subscription"))
+            if !model.flags.isEnabled(.storeBilling) {
+                Text(model.flags.message(.storeBilling, language: model.language)
+                     ?? tx("Las compras en App Store estarán disponibles pronto.", "App Store purchases will be available soon."))
+                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .accessibilityIdentifier("store.paused")
+            } else {
+                AsyncContent(load: { try await model.storeBilling.offers() }) { offers, _ in
+                    let sellable = offers.filter { $0.product != nil }
+                    if sellable.isEmpty {
+                        Text(StoreMessages.unavailable()).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            .accessibilityIdentifier("store.unavailable")
+                    }
+                    ForEach(sellable) { offer in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(PlanLabel.name(offer.offer.plan)) · \(offer.offer.period == .monthly ? tx("mensual", "monthly") : tx("anual", "yearly"))")
+                                    .font(DincrFont.body).foregroundStyle(DincrColor.text)
+                                if let price = offer.price { Text(price).font(DincrFont.caption).foregroundStyle(DincrColor.text2) }
+                            }
+                            Spacer()
+                            Button(tx("Suscribirme", "Subscribe")) { Task { await buy(offer) } }
+                                .disabled(busy)
+                                .frame(minHeight: 44)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("store.offer.\(offer.id)")
+                    }
+                }
+                if let message {
+                    Text(message).font(DincrFont.caption).foregroundStyle(DincrColor.text2).accessibilityIdentifier("store.message")
+                }
+                HStack {
+                    Button(tx("Restaurar compras", "Restore purchases")) { Task { await restore() } }
+                        .disabled(busy).frame(minHeight: 44)
+                        .accessibilityIdentifier("store.restore")
+                    Spacer()
+                    Link(tx("Administrar", "Manage"), destination: URL(string: "https://apps.apple.com/account/subscriptions")!)
+                        .frame(minHeight: 44)
+                }
+                .font(DincrFont.bodySmall.weight(.semibold))
+                .foregroundStyle(DincrColor.tint)
+            }
+        }
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("store.panel")
+    }
+
+    private func buy(_ offer: StoreKitBilling.Offer) async {
+        busy = true; message = nil
+        defer { busy = false }
+        do {
+            switch try await model.storeBilling.purchase(offer) {
+            case .verified:
+                await model.loadIdentity()
+                model.notice = tx("Suscripción activa", "Subscription active")
+            case .pending:
+                message = StoreMessages.pending()
+            case .cancelled:
+                message = StoreMessages.cancelled()
+            }
+        } catch {
+            message = model.message(for: error, epoch: model.currentEpoch, fallback: error.localizedDescription) ?? error.localizedDescription
+        }
+    }
+
+    private func restore() async {
+        busy = true; message = nil
+        defer { busy = false }
+        do {
+            let sent = try await model.storeBilling.restore()
+            await model.loadIdentity()
+            message = tx("Revisamos tus compras (\(sent)).", "We checked your purchases (\(sent)).")
+        } catch {
+            message = model.message(for: error, epoch: model.currentEpoch, fallback: error.localizedDescription) ?? error.localizedDescription
         }
     }
 }

@@ -86,7 +86,17 @@ fun MonthlySummaryScreen(model: AppModel, nav: Navigator) {
     DetailScaffold(tx("Resumen del mes", "Monthly summary"), nav::back) {
         MonthPicker(month, { month = it })
         LoadContent(summary) { s ->
-            DincrCard {
+            if (s.isOwnerLedger) {
+                // The Owner's ledger: each figure with what it means, period and completeness (OwnerMonthViews.kt).
+                OwnerMonthSummary(s)
+                DincrCard {
+                    Column {
+                        AmountLine(tx("Ahorros", "Savings"), s.savings)
+                        OwnerSavingsNote()
+                        s.goals?.progress?.let { ProgressLine(it / 100.0, tx("Metas: ${it.toInt()} %", "Goals: ${it.toInt()} %")) }
+                    }
+                }
+            } else DincrCard {
                 Column {
                     AmountLine(tx("Ingresos", "Income"), s.income, sign = com.dincr.data.MoneyFormat.Sign.INCOME)
                     AmountLine(tx("Gastos", "Expenses"), s.expenses)

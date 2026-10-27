@@ -93,6 +93,11 @@ public struct Profile: Decodable, Sendable, Equatable {
     public var hasUnsupportedRole: Bool { guard let role, !role.isEmpty else { return false }; return role != "user" && role != "owner" }
     /// The Owner account is never deleted from the public app (DELETE /auth/me would remove it).
     public var canDeleteAccountInApp: Bool { !isOwner }
+    /// Reading a mailbox (connect, sync, the aguinaldo from CCSS notices) is the Owner's alone during
+    /// the launch; the backend refuses everyone else (`require_mail_reading`). What was already
+    /// imported stays reviewable, and a connected mailbox can always be disconnected.
+    /// Android: `Profile.canReadMail`.
+    public var canReadMail: Bool { isOwner }
     public var plan: String { subscription?.plan ?? "free" }
     /// What the app offers; the backend still decides every request. Only the server's role
     /// elevates Owner: a plan code alone never does.
@@ -177,6 +182,8 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let originalAmount: Decimal?
     public let originalCurrency: String?
     public let exchangeRate: Decimal?
+    /// The own account or card a manual expense says paid it; nil = not told (never inferred).
+    public let financialAccountId: Int?
 
     public var id: String { movementId }
     /// `YYYY-MM-DD` or nil when the backend has no usable date.
@@ -186,13 +193,13 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
         movementId: String, sourceId: Int? = nil, origin: String? = nil, transactionDate: String?,
         description: String?, amount: Decimal, transactionType: Kind, category: String?,
         notes: String? = nil, editable: Bool = true, originalAmount: Decimal? = nil, originalCurrency: String? = nil,
-        exchangeRate: Decimal? = nil
+        exchangeRate: Decimal? = nil, financialAccountId: Int? = nil
     ) {
         self.movementId = movementId; self.sourceId = sourceId; self.origin = origin
         self.transactionDate = transactionDate; self.description = description; self.amount = amount
         self.transactionType = transactionType; self.category = category; self.notes = notes
         self.editable = editable; self.originalAmount = originalAmount; self.originalCurrency = originalCurrency
-        self.exchangeRate = exchangeRate
+        self.exchangeRate = exchangeRate; self.financialAccountId = financialAccountId
     }
 
     /// Whether this app may edit or delete the row. The prototype does not edit currencies (it
@@ -236,7 +243,7 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case movementId, sourceId, origin, transactionDate, description, amount, transactionType
-        case category, notes, editable, originalAmount, originalCurrency, exchangeRate
+        case category, notes, editable, originalAmount, originalCurrency, exchangeRate, financialAccountId
     }
 
     public init(from decoder: Decoder) throws {
@@ -257,6 +264,7 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
         originalAmount = try c.decodeIfPresent(Decimal.self, forKey: .originalAmount)
         originalCurrency = try c.decodeIfPresent(String.self, forKey: .originalCurrency)
         exchangeRate = try c.decodeIfPresent(Decimal.self, forKey: .exchangeRate)
+        financialAccountId = try c.decodeIfPresent(Int.self, forKey: .financialAccountId)
     }
 }
 
@@ -271,13 +279,16 @@ public struct EntryCreate: Encodable, Sendable, Equatable {
     /// rate (colones per 1 dollar). Absent for the base currency; the backend converts and stores.
     public let currency: String?
     public let exchangeRate: Decimal?
+    /// Only for an expense: the own account or card that paid it. Absent = not told.
+    public let financialAccountId: Int?
 
-    public init(amount: Decimal, description: String, category: String, entryDate: String?, currency: String? = nil, exchangeRate: Decimal? = nil) {
+    public init(amount: Decimal, description: String, category: String, entryDate: String?, currency: String? = nil, exchangeRate: Decimal? = nil,
+                financialAccountId: Int? = nil) {
         self.amount = amount; self.description = description; self.category = category; self.entryDate = entryDate
-        self.currency = currency; self.exchangeRate = exchangeRate
+        self.currency = currency; self.exchangeRate = exchangeRate; self.financialAccountId = financialAccountId
     }
 
-    enum CodingKeys: String, CodingKey { case amount, description, category, entryDate, currency, exchangeRate }
+    enum CodingKeys: String, CodingKey { case amount, description, category, entryDate, currency, exchangeRate, financialAccountId }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -287,6 +298,7 @@ public struct EntryCreate: Encodable, Sendable, Equatable {
         try c.encodeIfPresent(entryDate, forKey: .entryDate)
         try c.encodeIfPresent(currency, forKey: .currency)
         try c.encodeIfPresent(exchangeRate, forKey: .exchangeRate)
+        try c.encodeIfPresent(financialAccountId, forKey: .financialAccountId)
     }
 }
 
@@ -302,15 +314,17 @@ public struct MovementUpdate: Encodable, Sendable, Equatable {
     /// keeps `original_*` instead of storing a plain base-currency amount.
     public let currency: String?
     public let exchangeRate: Decimal?
+    /// Only for an expense: `.unchanged` leaves the stored "paid with" as it is (the key is not sent).
+    public let paidWith: PaidWithChange
 
     public init(transactionDate: String, description: String, amount: Decimal, transactionType: Movement.Kind, category: String, notes: String = "",
-                currency: String? = nil, exchangeRate: Decimal? = nil) {
+                currency: String? = nil, exchangeRate: Decimal? = nil, paidWith: PaidWithChange = .unchanged) {
         self.transactionDate = transactionDate; self.description = description; self.amount = amount
         self.transactionType = transactionType.rawValue; self.category = category; self.notes = notes
-        self.currency = currency; self.exchangeRate = exchangeRate
+        self.currency = currency; self.exchangeRate = exchangeRate; self.paidWith = paidWith
     }
 
-    enum CodingKeys: String, CodingKey { case transactionDate, description, amount, transactionType, category, notes, currency, exchangeRate }
+    enum CodingKeys: String, CodingKey { case transactionDate, description, amount, transactionType, category, notes, currency, exchangeRate, financialAccountId }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -322,6 +336,9 @@ public struct MovementUpdate: Encodable, Sendable, Equatable {
         try c.encode(notes, forKey: .notes)
         try c.encodeIfPresent(currency, forKey: .currency)
         try c.encodeIfPresent(exchangeRate, forKey: .exchangeRate)
+        if case .set(let account) = paidWith {
+            if let account { try c.encode(account, forKey: .financialAccountId) } else { try c.encodeNil(forKey: .financialAccountId) }
+        }
     }
 }
 

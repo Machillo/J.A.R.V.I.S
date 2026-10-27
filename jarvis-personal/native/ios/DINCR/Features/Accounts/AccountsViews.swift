@@ -30,12 +30,20 @@ private struct BankListView: View {
     @Environment(AppModel.self) private var model
     @State private var generation = 0
     @State private var appeared = false
+    @State private var declaring = false
+    @State private var notice: String?
 
     var body: some View {
         ScreenScroll(title: tx("Cuentas", "Accounts")) {
             Text(tx("Las cuentas que DINCR detectó en tus avisos bancarios. DINCR no ve saldos ni números completos.",
                     "The accounts DINCR detected in your bank notices. DINCR doesn’t see balances or full numbers."))
                 .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            // An own account no notice came from (the other bank of a transfer): marking it lets
+            // DINCR recognise transfers between your accounts instead of offering them as spending.
+            Button { declaring = true } label: { Label(tx("Agregar cuenta propia", "Add an own account"), systemImage: "plus.circle") }
+                .buttonStyle(.dincrSecondary)
+                .accessibilityIdentifier("accounts.declare")
+            if let notice { StatusBanner(tone: .info, title: notice, message: "").accessibilityIdentifier("accounts.notice") }
             AsyncContent(load: { () async throws -> Snapshot in
                 let service = model.service
                 async let identity = service.financialIdentity()
@@ -60,6 +68,9 @@ private struct BankListView: View {
         }
         // Back from a bank: reload, so reviews made elsewhere are reflected.
         .onAppear { if appeared { generation += 1 } else { appeared = true } }
+        .sheet(isPresented: $declaring) {
+            DeclareOwnAccountForm { message in notice = message; generation += 1 }
+        }
     }
 }
 
@@ -108,7 +119,8 @@ private struct BankDetailView: View {
             if let error { ErrorStateView(message: error) }
             SectionHeader(title: tx("Cuentas", "Accounts"))
             ForEach(accounts) { account in
-                AccountCard(account: account, set: { own in Task { await setOwnership(account, own) } })
+                AccountCard(account: account, set: { ownership in Task { await setOwnership(account, ownership) } },
+                            setCutDay: { day in Task { await setCutDay(account, day) } })
             }
             SectionHeader(title: tx("Movimientos", "Transactions"))
             CandidateReviewList(identifier: "bank.\(group.id)") {
@@ -136,12 +148,20 @@ private struct BankDetailView: View {
         }
     }
 
-    private func setOwnership(_ account: FinancialIdentity.Account, _ own: Bool) async {
+    private func setOwnership(_ account: FinancialIdentity.Account, _ ownership: AccountOwnership) async {
+        await save { try await model.service.setAccountOwnership(id: account.id, ownership) }
+    }
+
+    private func setCutDay(_ account: FinancialIdentity.Account, _ day: Int?) async {
+        await save { try await model.service.setStatementCutDay(id: account.id, day: day) }
+    }
+
+    /// Sends one change, then reloads this bank's accounts: the backend's list is the source of truth.
+    private func save(_ change: () async throws -> Void) async {
         let epoch = model.currentEpoch
         error = nil
         do {
-            try await model.service.setAccountOwnership(id: account.id, own: own)
-            // The backend's list is the source of truth: reload this bank's accounts from it.
+            try await change()
             let identity = try await model.service.financialIdentity()
             guard epoch == model.currentEpoch else { return }
             let ids = Set(group.accounts.map(\.id))
@@ -155,7 +175,8 @@ private struct BankDetailView: View {
 /// A detected account: masked number, currency and ownership. Opens its own movements.
 private struct AccountCard: View {
     let account: FinancialIdentity.Account
-    let set: (Bool) -> Void
+    let set: (AccountOwnership) -> Void
+    var setCutDay: ((Int?) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
@@ -174,27 +195,155 @@ private struct AccountCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("accounts.account.\(account.id)")
             OwnershipControl(account: account, set: set)
+            if account.takesCutDay, let setCutDay { CutDayControl(day: account.statementCutDay, set: setCutDay, accountID: account.id) }
         }
         .dincrCard()
     }
 }
 
-/// The existing "Es mía / No es mía" answer of the detected accounts.
-private struct OwnershipControl: View {
-    let account: FinancialIdentity.Account
-    let set: (Bool) -> Void
+/// A credit card's statement cut day: USD purchases on it wait for this day to be converted.
+private struct CutDayControl: View {
+    let day: Int?
+    let set: (Int?) -> Void
+    let accountID: Int
 
     var body: some View {
-        switch account.ownershipStatus {
-        case "own": Label(tx("Es mía", "It’s mine"), systemImage: "checkmark.circle").foregroundStyle(DincrColor.positive)
-        case "not_mine": Label(tx("No es mía", "Not mine"), systemImage: "xmark.circle").foregroundStyle(DincrColor.textMuted)
-        default:
-            HStack {
-                Button(tx("Es mía", "It’s mine")) { set(true) }.buttonStyle(.dincrSecondary)
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tx("Día de corte", "Statement cut day")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                Text(tx("Las compras en dólares se convierten en el corte.", "Dollar purchases are converted at the cut."))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            }
+            Spacer(minLength: DincrSpacing.s2)
+            Menu {
+                ForEach(1...31, id: \.self) { value in Button(tx("Día \(value)", "Day \(value)")) { set(value) } }
+                if day != nil { Button(tx("Quitar", "Remove"), role: .destructive) { set(nil) } }
+            } label: {
+                Text(day.map { tx("Día \($0)", "Day \($0)") } ?? tx("Definir", "Set")).frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("accounts.cutday.\(accountID)")
+        }
+    }
+}
+
+/// The ownership answer of an account: Es mía / No es mía / No la reconozco, changeable at any time.
+/// Only "Es mía" makes the account an end of a transfer between your accounts.
+private struct OwnershipControl: View {
+    let account: FinancialIdentity.Account
+    let set: (AccountOwnership) -> Void
+
+    var body: some View {
+        HStack {
+            switch account.ownership {
+            case .own?: Label(tx("Es mía", "It’s mine"), systemImage: "checkmark.circle").foregroundStyle(DincrColor.positive)
+            case .notMine?: Label(tx("No es mía", "Not mine"), systemImage: "xmark.circle").foregroundStyle(DincrColor.textMuted)
+            case .unknown?: Label(tx("No la reconozco", "I don’t recognise it"), systemImage: "questionmark.circle").foregroundStyle(DincrColor.warning)
+            case nil:
+                Button(tx("Es mía", "It’s mine")) { set(.own) }.buttonStyle(.dincrSecondary)
                     .accessibilityIdentifier("accounts.own.\(account.id)")
-                Button(tx("No es mía", "Not mine")) { set(false) }.frame(minHeight: 44)
+                Button(tx("No es mía", "Not mine")) { set(.notMine) }.frame(minHeight: 44)
                     .accessibilityIdentifier("accounts.notMine.\(account.id)")
             }
+            Spacer(minLength: 0)
+            Menu {
+                ForEach(AccountOwnership.allCases, id: \.self) { option in
+                    if option != account.ownership { Button(option.title) { set(option) } }
+                }
+            } label: {
+                Text(account.ownership == nil ? tx("Otra opción", "Other option") : tx("Cambiar", "Change")).frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("accounts.change.\(account.id)")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("accounts.ownership.\(account.id)")
+    }
+}
+
+extension AccountOwnership {
+    var title: String {
+        switch self {
+        case .own: tx("Es mía", "It’s mine")
+        case .notMine: tx("No es mía", "Not mine")
+        case .unknown: tx("No la reconozco", "I don’t recognise it")
+        }
+    }
+}
+
+/// "Agregar cuenta propia": institution, last 4 digits and currency of an own account no notice
+/// came from. Only the last 4 digits are asked for (and stored).
+private struct DeclareOwnAccountForm: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let onDone: (String) -> Void
+    @State private var institution = "bac"
+    @State private var institutionName = ""
+    @State private var last4 = ""
+    @State private var currency = "CRC"
+    @State private var displayName = ""
+    @State private var error: String?
+    @State private var saving = false
+
+    private var declaration: OwnAccountDeclaration {
+        OwnAccountDeclaration(institutionCode: institution, institutionName: institutionName, accountLast4: last4,
+                              currency: currency, displayName: displayName)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker(tx("Institución", "Institution"), selection: $institution) {
+                        Text("BAC").tag("bac")
+                        Text("Banco Popular").tag("popular")
+                        Text("MultiMoney").tag("multimoney")
+                        Text(tx("Otra", "Other")).tag("other")
+                    }
+                    .accessibilityIdentifier("declare.institution")
+                    if institution == "other" {
+                        TextField(tx("Nombre de la institución", "Institution name"), text: $institutionName)
+                            .accessibilityIdentifier("declare.institutionName")
+                    }
+                    TextField(tx("Últimos 4 dígitos", "Last 4 digits"), text: $last4)
+                        .keyboardType(.numberPad)
+                        .onChange(of: last4) { _, value in last4 = String(value.filter(\.isNumber).prefix(4)) }
+                        .accessibilityIdentifier("declare.last4")
+                    Picker(tx("Moneda", "Currency"), selection: $currency) {
+                        Text(tx("Colones", "Colones")).tag("CRC")
+                        Text(tx("Dólares", "Dollars")).tag("USD")
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("declare.currency")
+                    TextField(tx("Nombre (opcional)", "Name (optional)"), text: $displayName)
+                } footer: {
+                    Text(tx("Solo se guardan los últimos 4 dígitos. DINCR reconocerá las transferencias entre tus cuentas y no las contará como gastos ni ingresos.",
+                            "Only the last 4 digits are stored. DINCR will recognise transfers between your accounts and won’t count them as spending or income."))
+                }
+                if let error { Section { Text(error).foregroundStyle(DincrColor.negative) } }
+            }
+            .navigationTitle(tx("Cuenta propia", "Own account"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(tx("Cancelar", "Cancel")) { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(tx("Guardar", "Save")) { Task { await save() } }
+                        .disabled(saving || !declaration.isComplete)
+                        .accessibilityIdentifier("declare.save")
+                }
+            }
+        }
+        .interactiveDismissDisabled(saving)
+    }
+
+    private func save() async {
+        let epoch = model.currentEpoch
+        saving = true; error = nil
+        defer { saving = false }
+        do {
+            try await model.service.declareOwnAccount(declaration)
+            onDone(tx("Cuenta propia guardada", "Own account saved"))
+            dismiss()
+        } catch {
+            self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardarla.", "We couldn’t save it."))
         }
     }
 }

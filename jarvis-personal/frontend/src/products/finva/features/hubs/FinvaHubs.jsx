@@ -1,5 +1,5 @@
 import {
-  BarChart3, Building2, CalendarDays, ChevronRight, CircleUserRound, CreditCard, Gift, Landmark,
+  BarChart3, Building2, CalendarDays, ChevronRight, CircleUserRound, CreditCard, Landmark,
   LifeBuoy, LogOut, Mail, ReceiptText, Repeat2, Settings, ShieldCheck,
   SlidersHorizontal, Sparkles, Target, TrendingUp, WalletCards,
 } from "lucide-react";
@@ -31,7 +31,6 @@ export function PlanHub({ plan, navigate }) {
   ];
   if (plan === "vip") organization.push(
     item(navigate, "vip-emergency", tx("Fondo de emergencia", "Emergency fund"), tx("Tu Salvavidas financiero", "Your financial safety net"), ShieldCheck),
-    item(navigate, "vip-aguinaldo", tx("Aguinaldo", "Annual bonus"), tx("Estimación basada en tus salarios", "Estimate based on your salaries"), Gift),
   );
   return <Hub eyebrow="DINCR" title={tx("Tu plan", "Your plan")} description={tx("Todo lo que estás organizando, en un solo lugar.", "Everything you are organizing, in one place.")} groups={[{ title: tx("Construí tu plan", "Build your plan"), items: planning }, { title: tx("Organización", "Organization"), items: organization }]}/>;
 }
@@ -55,7 +54,7 @@ export function ProfileHub({ plan, navigate, onLogout }) {
   ];
   if (plan === "vip") account.splice(1, 0,
     item(navigate, "accounts", tx("Cuentas", "Accounts"), tx("Bancos, cuentas y movimientos por revisar", "Banks, accounts and transactions to review"), Building2),
-    item(navigate, "gmail", tx("Correos financieros", "Financial emails"), tx("Conexión, sincronización y revisión", "Connection, sync and review"), Mail));
+    item(navigate, "gmail", tx("Correos financieros", "Financial emails"), tx("Revisión de lo importado y desconexión", "Review what was imported and disconnect"), Mail));
   const support = [item(navigate, "feedback", tx("Ayuda y sugerencias", "Help and feedback"), tx("Soporte y estado del servicio", "Support and service status"), LifeBuoy), { key: "logout", label: tx("Cerrar sesión", "Log out"), detail: tx("Salir de DINCR en este dispositivo", "Sign out of DINCR on this device"), icon: LogOut, action: onLogout }];
   return <Hub eyebrow={tx("Tu cuenta", "Your account")} title={tx("Perfil", "Profile")} description={tx("Configuración, conexiones y soporte.", "Settings, connections and support.")} groups={[{ title: tx("Cuenta", "Account"), items: account }, { title: tx("Soporte", "Support"), items: support }]}/>;
 }

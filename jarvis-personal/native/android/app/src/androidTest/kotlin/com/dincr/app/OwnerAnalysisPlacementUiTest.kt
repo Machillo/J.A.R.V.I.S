@@ -77,7 +77,7 @@ class OwnerAnalysisPlacementUiTest {
         openAnalysis()
         click(financialAnalysis)
         waitUntil("flow") { tagged("jarvis.analysis.flow") }
-        waitUntil("month end") { tagged("jarvis.analysis.monthEnd") && present(tx("Saldo proyectado al cierre", "Projected month-end balance")) }
+        waitUntil("month end") { tagged("jarvis.analysis.monthEnd") && present(tx("Saldo proyectado al cierre (estimación)", "Projected month-end balance (estimate)")) }
         assertTrue(tagged("jarvis.analysis.spending"))
         assertFalse("no net worth", tagged("analysis.networth") || present(tx("Patrimonio neto", "Net worth")))
         assertFalse("no health score", present(tx("Salud financiera", "Financial health")) || present("/ 100") || present("de 100"))

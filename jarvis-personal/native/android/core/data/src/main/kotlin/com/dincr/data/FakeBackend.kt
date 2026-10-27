@@ -12,6 +12,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
+/** The movement a bank notice adds when [FakeBackend.mailArrives] is on (mail recovery UI tests). */
+const val FAKE_ARRIVED_MOVEMENT = "Compra detectada por correo"
+
 /**
  * An in-memory DINCR backend behind the HTTP transport, for Debug demos and UI tests only
  * (`LaunchPolicy` never selects it in a Release build). The real [ApiClient] and [DincrApi] run
@@ -45,6 +48,8 @@ class FakeBackend(
     private var profile = sampleProfile(plan)
     private val movements = mutableListOf<Movement>()
     private val debts = mutableListOf<Debt>()
+    /** DEB-07a: the payments recorded per debt in this session (newest last). */
+    private val debtPayments = mutableMapOf<Long, MutableList<DebtPayment>>()
     private val goals = mutableListOf<Goal>()
     private val savings = mutableListOf<SavingsPlan>()
     private val recurring = mutableListOf<RecurringItem>()
@@ -60,6 +65,18 @@ class FakeBackend(
     val requests = mutableListOf<HttpRequest>()
     private var identityReads = 0
     /**
+     * Mail recovery UI tests: a bank notice arrives after launch, so the next mail sync finds a new
+     * movement (as the scheduled sync or the Owner's learned rules would record it).
+     */
+    @Volatile var mailArrives: Boolean = false
+    private var mailArrived = false
+    /**
+     * NAT-03 UI tests: set while the app runs (Android re-reads Hoy at start when the flags arrive, so
+     * a read count can't stand for "a pull"). While true, Hoy's main source and the movement list answer
+     * like an unreachable server.
+     */
+    @Volatile var refreshedSourcesUnreachable: Boolean = false
+    /**
      * SEC-01 UI tests: the terms change while the app is open. The next write meets the server's
      * legal gate (403 `legal_acceptance_required`) and the identity asks for acceptance again; once
      * accepted, writes run as before.
@@ -67,9 +84,15 @@ class FakeBackend(
     @Volatile var legalLapses: Boolean = false
     private var legalGateClosed = false
     private val planRoutes = FakePlanRoutes(json, today)
+    private val receivables = FakeReceivables(today) { id() }
+    private val ownerMoney = FakeMoney(today) { id() }
+    private val wealth = FakeWealth(today) { id() }
+    private val records = FakeRecords(today)
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val isInternal get() = profile.role == "owner"
+    /** `/user-product/appearance`: one stored choice for the fixture account; none means the defaults. */
+    private var appearance: AppearancePrefs? = null
 
     init {
         if (scenario == Scenario.POPULATED) seed()
@@ -90,6 +113,11 @@ class FakeBackend(
             identityReads += 1
             if (identityRefreshFails && identityReads > 1) return error(503, "Servicio no disponible.")
         }
+        if (request.method == "GET" && refreshedSourcesUnreachable && REFRESHED_SOURCES.any { request.url.substringBefore("?").endsWith(it) }) {
+            // 500, not 503: still a transient server error for the app, but not retried with a backoff
+            // delay, which Compose's test dispatcher never advances for a screen's own coroutine scope.
+            return error(500, "Ocurrió un error interno. Intentá nuevamente.")
+        }
         val path = request.url.substringAfter("://").substringAfter("/").let { "/" + it.substringBefore("?") }
         if (request.method != "GET" && "${request.method} $path" !in OPEN_BEFORE_ACCEPTANCE && (legalLapses || legalGateClosed)) {
             legalLapses = false
@@ -108,6 +136,41 @@ class FakeBackend(
     }
 
     private val replays = mutableMapOf<String, Pair<String?, HttpResponse>>()
+
+    /** Like `financial_identity.declare_own_account`: the same institution, digits and currency reuse the account. */
+    private fun declareOwnAccount(body: kotlinx.serialization.json.JsonObject?): HttpResponse {
+        fun field(name: String) = body?.get(name)?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNullSafe() }
+        val code = field("institution_code").orEmpty()
+        val last4 = field("account_last4").orEmpty()
+        val currency = field("currency") ?: "CRC"
+        if (code !in OwnAccountDeclaration.INSTITUTIONS) return error(422, "Elegí la institución de la cuenta.")
+        if (last4.length != 4 || !last4.all(Char::isDigit)) return error(422, "Indicá los últimos 4 dígitos de la cuenta.")
+        val bank = if (code == "other") field("institution_name") else mapOf("bac" to "BAC", "popular" to "Banco Popular", "multimoney" to "MultiMoney")[code]
+        if (bank.isNullOrBlank()) return error(422, "Escribí el nombre de la institución.")
+        val index = accounts.indexOfFirst { it.institutionCode == code && it.accountLast4 == last4 && it.currency == currency }
+        val account = if (index >= 0) accounts[index].copy(ownershipStatus = "own", ownershipConfirmedAt = "2026-10-21T12:00:00Z").also { accounts[index] = it }
+        else FinancialIdentity.Account((accounts.maxOfOrNull { it.id } ?: 0) + 1, field("display_name") ?: "$bank •••• $last4" + (if (currency == "USD") " (USD)" else ""),
+            bank, code, "CR", "checking", currency, last4, "own", "2026-10-21T12:00:00Z").also { accounts += it }
+        return ok(json.encodeToString(FinancialAccountResult.serializer(), FinancialAccountResult(account)))
+    }
+
+    /** The backend's "paid with" rules (`expense_account`): only own accounts; no key = left as it is. */
+    private sealed interface PaidWithLink {
+        data object Keep : PaidWithLink
+        data class Set(val accountId: Long?) : PaidWithLink
+        data class Refused(val answer: HttpResponse) : PaidWithLink
+    }
+
+    private fun paidWithLink(body: kotlinx.serialization.json.JsonObject?): PaidWithLink {
+        val value = body?.get("financial_account_id") ?: return PaidWithLink.Keep
+        if (value is kotlinx.serialization.json.JsonNull) return PaidWithLink.Set(null)
+        val id = (value as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull()
+        val account = accounts.firstOrNull { it.id == id } ?: return PaidWithLink.Refused(error(404, "Cuenta financiera no encontrada."))
+        if (account.ownershipStatus != "own") return PaidWithLink.Refused(error(409, "Confirmá primero que la cuenta es tuya."))
+        return PaidWithLink.Set(id)
+    }
+
+    private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String? = if (this is kotlinx.serialization.json.JsonNull) null else content
     /** The change the scripted JARVIS chat waits a "sí" / "no" for. */
     private var jarvisPending = false
     /** The Owner's agenda (`events` table) and the event the scripted chat waits a "sí" for. */
@@ -192,10 +255,35 @@ class FakeBackend(
         return ok("""{"message":"Señor, esto es una respuesta de ejemplo.","intent":"general","status":"UNSUPPORTED","pending":false,"data":null}""")
     }
 
+    private fun appearanceRoute(method: String, body: JsonObject?): HttpResponse {
+        when (method) {
+            "PUT" -> {
+                val prefs = body?.let { runCatching { json.decodeFromJsonElement(AppearancePrefs.serializer(), it) }.getOrNull() }
+                if (prefs == null || prefs != prefs.sanitized()) return error(422, "Valor de apariencia no válido.")
+                appearance = prefs
+            }
+            "DELETE" -> appearance = null
+        }
+        return ok(AppearanceState(preferences = appearance ?: AppearancePrefs.OWNER_DEFAULT, stored = appearance != null,
+            updatedAt = appearance?.let { "${today}T12:00:00Z" }))
+    }
+
     private fun ok(value: String) = HttpResponse(200, value)
     private inline fun <reified T> ok(value: T) = HttpResponse(200, json.encodeToString(value))
     private fun error(status: Int, detail: String) = HttpResponse(status, buildJsonObject { put("detail", detail) }.toString())
     private fun id() = ++nextId
+
+    /** `POST /finance/strategy-vip/debt-scenario` on this backend's own debts (`FakeDebtScenario`). */
+    private fun debtScenario(body: JsonObject?): HttpResponse {
+        val request = body?.let { runCatching { json.decodeFromJsonElement(DebtScenarioRequest.serializer(), it) }.getOrNull() }
+            ?: return error(422, "Revisá los datos del escenario.")
+        return when (val answer = FakeDebtScenario.answer(request, debts, strategy().strategicMargin ?: BigDecimal.ZERO)) {
+            is FakeDebtScenario.Answer.Ok -> ok(answer.result)
+            is FakeDebtScenario.Answer.Refused -> HttpResponse(answer.status, buildJsonObject {
+                put("detail", buildJsonObject { put("code", answer.code); put("message", answer.message) })
+            }.toString())
+        }
+    }
     private fun needs(tier: PlanTier): HttpResponse? = if (profile.planTier.rank < tier.rank) error(403, "Esta función no está incluida en tu plan.") else null
 
     @Suppress("CyclomaticComplexMethod")
@@ -211,9 +299,34 @@ class FakeBackend(
             path == "/auth/me" && method == "DELETE" -> ok("""{"status":"OK","message":"Cuenta eliminada","deletion_id":"del_demo"}""")
             // JARVIS chat: /jarvis/* admits only the verified Owner, like the backend.
             path == "/jarvis/chat" && method == "POST" -> jarvisChat(text("message").orEmpty())
+            // Personal appearance (APP-1): the Owner only, like the backend's require_owner().
+            path == "/user-product/appearance" -> if (!isOwner) error(403, "No tienes permisos para realizar esta acción.") else appearanceRoute(method, body)
             path == "/jarvis/calendar/upcoming" && method == "GET" ->
                 if (profile.role != "owner") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
             // The Owner's strategy: this fake serves it to the Owner role only.
+            path == "/jarvis/premium/strategy-dashboard/exact-distribution/confirm" && method == "POST" -> when {
+                profile.role != "owner" -> error(403, "La distribución por monto exacto está disponible solo para el Owner.")
+                (money("amount") ?: java.math.BigDecimal.ZERO).signum() <= 0 -> error(422, "Indicá un monto mayor que cero.")
+                text("confirmation_key").isNullOrBlank() -> error(422, "Falta la clave de confirmación.")
+                else -> {
+                    val expected = (body?.get("expected_items") as? kotlinx.serialization.json.JsonArray).orEmpty().associate { element ->
+                        val item = element as JsonObject
+                        item["key"]!!.jsonPrimitive.content to BigDecimal(item["amount"]!!.jsonPrimitive.content)
+                    }
+                    val (status, answer, payments) = planRoutes.confirmExactDistribution(snapshot(), money("amount")!!, text("confirmation_key")!!, expected, text("plan_fingerprint"))
+                    payments.forEach { (debtId, paid) ->
+                        val index = debts.indexOfFirst { it.id == debtId }
+                        if (index >= 0) debts[index] = debts[index].copy(remainingAmount = (debts[index].remainingAmount ?: BigDecimal.ZERO) - paid)
+                    }
+                    if (status == 200) ok(answer) else error(status, answer)
+                }
+            }
+            path == "/jarvis/premium/strategy-dashboard/exact-distribution" && method == "POST" -> when {
+                profile.role != "owner" -> error(403, "La distribución por monto exacto está disponible solo para el Owner.")
+                (money("amount") ?: java.math.BigDecimal.ZERO).signum() <= 0 -> error(422, "Indicá un monto mayor que cero.")
+                text("currency") != null && text("currency") != "CRC" -> error(422, "Por ahora la distribución exacta es solo en colones (CRC).")
+                else -> ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role, manualAmount = money("amount")))
+            }
             path == "/jarvis/premium/strategy-dashboard" && method == "GET" ->
                 if (!isOwner) error(403, "No tienes permisos para realizar esta acción.") else ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role))
             // JARVIS "Análisis financiero": the internal routers admit only the verified Owner (main.py INTERNAL_ONLY).
@@ -222,6 +335,52 @@ class FakeBackend(
                 path == "/finance/net-worth" -> ok(planRoutes.netWorth(snapshot()))
                 path == "/finance/engine" -> ok(planRoutes.engine(snapshot()))
                 else -> ok(planRoutes.analysis(snapshot()))
+            }
+            // JARVIS "Mi dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path == "/finance/cycle-report" || path.startsWith("/finance/account-balances") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/cycle-report" -> ok(ownerMoney.cycleReport())
+                method == "GET" && path == "/finance/account-balances" -> ok(ownerMoney.balances())
+                method == "POST" && path == "/finance/account-balances" ->
+                    ownerMoney.save(text("account_name"), money("current_balance"), text("bank_name"), text("account_last4"), text("currency"),
+                        text("account_type"), text("include_in_net_worth")?.toBooleanStrictOrNull())?.let { ok(it) } ?: error(422, "Datos inválidos.")
+                method == "DELETE" ->
+                    ownerMoney.remove(path.substringAfterLast("/").toLongOrNull())?.let { ok(it) } ?: error(404, "Cuenta financiera no encontrada.")
+                else -> error(404, "Not Found")
+            }
+            // JARVIS "Patrimonio": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path.startsWith("/finance/investment-center") || path.startsWith("/finance/business-center") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/investment-center" -> ok(wealth.investmentCenter())
+                method == "POST" && path == "/finance/investment-center/sync-ibkr" -> ok(wealth.syncIbkr())
+                method == "GET" && path == "/finance/business-center" -> ok(wealth.businessCenter())
+                method == "POST" && path == "/finance/business-center/businesses" ->
+                    wealth.createBusiness(text("name"), text("description"), money("ownership_pct"))?.let { ok(it) } ?: error(422, "Datos inválidos.")
+                method == "POST" && path == "/finance/business-center/movements" ->
+                    when (val answer = wealth.addMovement(text("business_id")?.toLongOrNull(), text("movement_type"), money("amount"), text("movement_date"), text("description"), text("category"))) {
+                        is FakeWealth.MovementAnswer.Saved -> ok(answer.result)
+                        is FakeWealth.MovementAnswer.Refused -> error(answer.status, answer.detail)
+                    }
+                else -> error(404, "Not Found")
+            }
+            // JARVIS "Registros": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path == "/finance/timeline" || path.startsWith("/finance/reconciliation") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/timeline" -> ok(records.timeline())
+                method == "GET" && path == "/finance/reconciliation" -> ok(records.reconciliation())
+                method == "POST" && path.endsWith("/confirm") ->
+                    records.confirm(path.split("/").dropLast(1).last().toLongOrNull(), money("real_balance"))?.let { ok(it) } ?: error(404, "Cuenta financiera no encontrada.")
+                else -> error(404, "Not Found")
+            }
+            // JARVIS "Control de dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path.startsWith("/finance/receivables") -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" && path == "/finance/receivables" -> ok(receivables.report())
+                method == "POST" && path == "/finance/receivables/entries" ->
+                    ok(receivables.addEntry(text("person_name"), money("amount"), text("description"), text("entry_kind")))
+                method == "POST" && path.endsWith("/payments") ->
+                    ok(receivables.pay(path.split("/").dropLast(1).last().toLongOrNull(), money("amount"), text("notes"), text("payment_date")))
+                else -> error(404, "Not Found")
             }
             path == "/auth/me/export" -> ok("""{"format_version":1,"generated_at":"${today}T12:00:00Z","account":{"id":1},"workspaces":[],"data":{},"truncated_tables":[],"notes":[]}""")
             path == "/auth/profile-setup" -> {
@@ -264,6 +423,9 @@ class FakeBackend(
             // Movements
             path == "/user-product/free/dashboard" -> ok(freeDashboard())
             path == "/user-product/free/monthly-summary" -> ok(monthlySummary(query["period"] ?: today.toString().take(7)))
+            path == "/user-product/finance/expenses/paid-with-options" -> ok(PaidWithOptions(true,
+                accounts.filter { it.ownershipStatus == "own" }.sortedBy { if (it.accountType == "credit_card") 0 else 1 }
+                    .map { PaidWithOptions.Option(it.id, it.accountName, it.bankName, it.accountType, it.accountLast4, it.currency) }))
             path == "/user-product/free/movements" -> ok(movements.sortedWith(compareByDescending<Movement> { it.transactionDate }.thenByDescending { it.sourceId }))
             (path == "/user-product/finance/income" || path == "/user-product/finance/expenses") && method == "POST" -> {
                 val income = path.endsWith("income")
@@ -274,10 +436,14 @@ class FakeBackend(
                 if (currency != null && currency != base && rate == null) return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
                 val converted = if (currency == null || currency == base) typed else convert(typed, currency, base, rate!!)
                 val origin = if (income) "salary" else "expense"
+                val link = paidWithLink(body)
+                if (link is PaidWithLink.Refused) return link.answer
+                if (income && link is PaidWithLink.Set && link.accountId != null) return error(422, "Solo un gasto indica con qué se pagó.")
                 val sid = id()
                 movements += Movement("$origin:$sid", sid, origin, text("entry_date") ?: today.toString(), text("description"), converted,
                     if (income) "income" else "expense", text("category"), "", true,
-                    if (currency != null && currency != base) typed else null, if (currency != null && currency != base) currency else null, if (currency != null && currency != base) rate else null)
+                    if (currency != null && currency != base) typed else null, if (currency != null && currency != base) currency else null, if (currency != null && currency != base) rate else null,
+                    (link as? PaidWithLink.Set)?.accountId)
                 ok("""{"id":$sid}""")
             }
             segments.take(3) == listOf("user-product", "free", "movements") && segments.size == 4 -> {
@@ -293,14 +459,17 @@ class FakeBackend(
                 val foreign = currency != null && currency != base
                 if (foreign && old.origin !in setOf("salary", "expense")) return error(422, "Este movimiento solo se puede registrar en tu moneda principal.")
                 if (foreign && rate == null) return error(422, "Indicá el tipo de cambio.")
-                movements[index] = old.copy(transactionDate = text("transaction_date"), description = text("description"), category = text("category"),
+                val link = paidWithLink(body)
+                if (link is PaidWithLink.Refused) return link.answer
+                if (old.origin != "expense" && link is PaidWithLink.Set && link.accountId != null) return error(422, "Solo un gasto indica con qué se pagó.")
+                movements[index] = old.copy(financialAccountId = if (old.origin == "expense" && link is PaidWithLink.Set) link.accountId else old.financialAccountId,transactionDate = text("transaction_date"), description = text("description"), category = text("category"),
                     amount = if (foreign) convert(typed, currency!!, base, rate!!) else typed,
                     originalAmount = if (foreign) typed else null, originalCurrency = if (foreign) currency else null, exchangeRate = if (foreign) rate else null)
                 ok("""{"status":"ok","movement_id":"$movementId"}""")
             }
 
             // Debts
-            path == "/user-product/finance/debts" && method == "GET" -> ok(debts.map { it.copy(progressPercent = progress(it)) })
+            path == "/user-product/finance/debts" && method == "GET" -> ok(debts.map { withPayoffEstimate(it.copy(progressPercent = progress(it))) })
             path == "/user-product/finance/debts" && method == "POST" -> {
                 val debt = Debt(id(), text("name"), text("debt_type") ?: "other", money("total_amount") ?: money("remaining_amount"), money("remaining_amount"),
                     money("monthly_payment"), money("interest_rate"), int("term_months"), int("payment_day"), text("next_payment_date"))
@@ -319,8 +488,11 @@ class FakeBackend(
                 val index = debts.indexOfFirst { it.id == idAt(3) }
                 if (index < 0) return error(404, "Deuda no encontrada.")
                 val remaining = debts[index].remainingAmount ?: BigDecimal.ZERO
+                if (method == "GET") return ok(debtPayments[debts[index].id].orEmpty().reversed())
                 val paid = (money("amount") ?: BigDecimal.ZERO).min(remaining)
                 debts[index] = debts[index].copy(remainingAmount = remaining - paid)
+                // As the backend: each payment leaves a record the history lists (DEB-07a).
+                debtPayments.getOrPut(debts[index].id) { mutableListOf() }.add(DebtPayment(id(), today.toString(), paid))
                 ok("""{"status":"OK","debt_id":${debts[index].id},"payment_amount":$paid,"new_remaining_amount":${remaining - paid}}""")
             }
 
@@ -388,6 +560,7 @@ class FakeBackend(
             path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
                 needs(PlanTier.VIP) ?: mail(method, path, segments, query, body)
             path == "/user-product/vip/salvavidas" -> needs(PlanTier.VIP) ?: salvavidas(method, body)
+            method == "POST" && path == "/user-product/finance/strategy-vip/debt-scenario" -> needs(PlanTier.VIP) ?: debtScenario(body)
             path.startsWith("/user-product/vip") || path.startsWith("/user-product/finance/strategy-vip") -> needs(PlanTier.VIP) ?: vip(path)
             else -> error(404, "Not Found")
         }
@@ -505,9 +678,15 @@ class FakeBackend(
             path == "/user-product/vip/gmail/consent" -> ok("""{"status":"accepted"}""")
             path == "/user-product/vip/gmail/connect" || path == "/user-product/vip/mail/microsoft/connect" -> ok("""{"authorization_url":"https://accounts.example.test/authorize?state=demo"}""")
             path == "/user-product/vip/mail/oauth/complete" -> { mailConnected = true; ok("""{"status":"connected","provider":"gmail"}""") }
-            path == "/user-product/vip/gmail/sync" -> if (!mailConnected) error(404, "No hay un correo conectado.") else ok(
+            path == "/user-product/vip/gmail/sync" -> if (!mailConnected) error(404, "No hay un correo conectado.") else {
+                if (mailArrives && !mailArrived) {
+                    mailArrived = true
+                    movements += Movement("transaction:9001", 9001, "transaction", today.toString(), FAKE_ARRIVED_MOVEMENT, BigDecimal(8750), "expense", "Comida", "", false)
+                }
+                ok(
                 """{"status":"ok","connections":1,"failed_connections":[],"scan_scope":"year_to_date","initial_scan_complete":true,""" +
                     """"found":3,"auto_saved":1,"pending":${candidates.count { it.isPending }},"payroll_reports":0,"duplicates":0}""")
+            }
             path == "/user-product/vip/gmail" && method == "DELETE" -> { mailConnected = false; ok("""{"status":"disconnected"}""") }
             // One candidate store for Email Monitor and Cuentas; the same filters as list_gmail_emails.
             path == "/user-product/vip/gmail/emails" -> ok(MailCandidateList("ok", candidates.filter { c ->
@@ -515,13 +694,25 @@ class FakeBackend(
             }.filter { c -> query["bank"].isNullOrBlank() || c.bank.orEmpty().equals(query["bank"]!!.trim(), ignoreCase = true) }
                 .filter { c -> query["financial_account_id"]?.toLongOrNull()?.let { c.financialAccountId == it } ?: true }))
             path == "/user-product/vip/gmail/own-transfer-suggestions" -> ok(OwnTransferSuggestions())
-            path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(accounts.toList(), FinancialIdentity.Summary(accounts.size, accounts.count { it.ownershipStatus == "pending" })))
+            path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(accounts.toList(), FinancialIdentity.Summary(accounts.size, accounts.count { it.ownershipStatus == "pending" }), statementCutDayAvailable = true))
+            path == "/user-product/vip/financial-identity/accounts" && method == "POST" -> declareOwnAccount(body)
+            segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") && segments.getOrNull(5) == "statement-cut-day" && method == "PUT" -> {
+                // The backend's rules: only an own credit card, and a day from 1 to 31 or null.
+                val index = accounts.indexOfFirst { it.id == segments.getOrNull(4)?.toLongOrNull() }
+                if (index < 0) return error(404, "Cuenta financiera no encontrada.")
+                if (accounts[index].accountType != "credit_card") return error(422, "Solo las tarjetas de crédito tienen día de corte.")
+                if (accounts[index].ownershipStatus != "own") return error(409, "Primero marcá la tarjeta como tuya.")
+                val day = text("statement_cut_day")?.toIntOrNull()
+                if (text("statement_cut_day") != null && (day == null || day !in 1..31)) return error(422, "El día de corte va del 1 al 31.")
+                accounts[index] = accounts[index].copy(statementCutDay = day)
+                ok("""{"status":"ok"}""")
+            }
             segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") -> {
                 val index = accounts.indexOfFirst { it.id == segments.getOrNull(4)?.toLongOrNull() }
                 val status = text("ownership_status")
                 if (index < 0) return error(404, "Cuenta financiera no encontrada.")
-                if (status !in setOf("own", "not_mine")) return error(422, "La propiedad debe confirmarse como propia o ajena.")
-                accounts[index] = accounts[index].copy(ownershipStatus = status)
+                if (status !in setOf("own", "not_mine", "pending")) return error(422, "La propiedad debe ser propia, ajena o desconocida.")
+                accounts[index] = accounts[index].copy(ownershipStatus = status, ownershipConfirmedAt = "2026-10-21T12:00:00Z")
                 ok("""{"status":"ok"}""")
             }
             segments.take(4) == listOf("user-product", "vip", "gmail", "candidates") -> {
@@ -572,11 +763,49 @@ class FakeBackend(
             categories(month).map { CategoryAmount(it.category ?: "", it.amount ?: BigDecimal.ZERO) }, history)
     }
 
+    /**
+     * Like the backend's debt_payoff.py: installments left and the last one's date, only for a known
+     * rate and a payment that covers the interest; null otherwise, never a guessed date.
+     */
+    private fun withPayoffEstimate(debt: Debt): Debt {
+        val remaining = debt.remainingAmount?.toDouble() ?: 0.0
+        val payment = debt.monthlyPayment?.toDouble() ?: 0.0
+        val monthlyRate = (debt.interestRate?.toDouble() ?: 0.0) / 100 / 12
+        var months: Int? = null
+        if (remaining <= 0) months = 0 else if (debt.interestRateKnown == true && payment > 0) {
+            var left = remaining
+            for (month in 1..1200) {
+                val interest = left * monthlyRate
+                if (payment <= interest) break
+                left += interest - payment
+                if (left <= 0.01) { months = month; break }
+            }
+        }
+        val date = months?.takeIf { it > 0 }?.let { count ->
+            val day = debt.paymentDay ?: 1
+            val first = if (today.dayOfMonth > day) today.plusMonths(1) else today
+            val last = first.plusMonths((count - 1).toLong())
+            last.withDayOfMonth(minOf(day, last.lengthOfMonth())).toString()
+        }
+        return debt.copy(estimatedPayoffMonths = months, estimatedPayoffDate = date)
+    }
+
     private fun monthlySummary(period: String): MonthlySummary {
         val (income, expenses) = totals(period)
         val cats = categories(period)
-        return MonthlySummary(period, income, expenses, BigDecimal.ZERO, income - expenses, cats.firstOrNull(), cats, savings.sumOf { it.savedAmount ?: BigDecimal.ZERO },
+        val summary = MonthlySummary(period, income, expenses, BigDecimal.ZERO, income - expenses, cats.firstOrNull(), cats, savings.sumOf { it.savedAmount ?: BigDecimal.ZERO },
             GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0))
+        if (!isOwner) return summary
+        // Like the backend: only the verified Owner's month carries the ledger's reading. The current
+        // month still has a mail notice to review; a closed month has a loan received (not income) and
+        // gross payroll reported apart. iOS: FixtureBackend.monthlySummary.
+        val open = period == today.toString().take(7)
+        val loan = if (open) BigDecimal.ZERO else BigDecimal(100_000)
+        return summary.copy(complete = !open, incompleteReasons = if (open) listOf("pending_mail_review") else emptyList(),
+            grossExpenses = expenses, refunds = BigDecimal.ZERO, otherInflows = loan, loanReceived = loan, cashFlow = income - expenses + loan,
+            unclassifiedCount = 0, pendingMailCount = if (open) 1 else 0,
+            payrollAccrued = if (open) PayrollAccrued(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO)
+            else PayrollAccrued(BigDecimal(60_000), BigDecimal.ZERO, BigDecimal(25_000), BigDecimal(85_000)))
     }
 
     private fun budgetView(): Budget {
@@ -669,6 +898,9 @@ class FakeBackend(
     )
 
     private companion object {
+        /** Hoy's main sources and the movement list ([refreshedSourcesUnreachable]). */
+        val REFRESHED_SOURCES = listOf("/user-product/free/dashboard", "/user-product/basic/dashboard",
+            "/user-product/vip/command-center", "/user-product/free/movements")
         /** The writes the server's legal gate lets through before acceptance (`auth/legal.py`). */
         val OPEN_BEFORE_ACCEPTANCE = setOf("DELETE /auth/me", "POST /auth/legal/accept", "POST /product-ops/feedback")
         const val LEGAL_REQUIRED = """{"detail":{"code":"legal_acceptance_required","message":"Antes de continuar, aceptá los Términos y la Política de Privacidad vigentes."}}"""

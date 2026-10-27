@@ -22,15 +22,18 @@ struct DebtsView: View {
     @State private var action: AmountAction?
     @State private var form: DebtForm.Mode?
     @State private var deleting: Debt?
+    @State private var history: Debt?
     @State private var notice: String?
 
     var body: some View {
         ScreenScroll(title: tx("Deudas", "Debts")) {
             WritesPausedBanner()
             if let notice { StatusBanner(tone: .info, title: notice, message: "").accessibilityIdentifier("plan.notice") }
-            AsyncContent(load: { try await model.service.debts() }) { debts, _ in
-                DebtList(debts: debts, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
-                         pay: { action = .payDebt($0) }, edit: { form = .edit($0) }, delete: { deleting = $0 })
+            // The list and, for the Owner and VIP, their strategy's debt-free date: one answer, so the
+            // date is never lost between two loads. The strategy is optional: its failure never hides the list.
+            AsyncContent(load: { DebtsScreenData(debts: try await model.service.debts(), strategyDate: await loadStrategyDate()) }) { data, _ in
+                DebtList(debts: data.debts, strategyDate: data.strategyDate, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
+                         pay: { action = .payDebt($0) }, edit: { form = .edit($0) }, delete: { deleting = $0 }, history: { history = $0 })
             }
             .id(generation)
         }
@@ -42,6 +45,7 @@ struct DebtsView: View {
         }
         .sheet(item: $action) { action in AmountSheet(action: action) { done($0) } }
         .sheet(item: $form) { mode in DebtForm(mode: mode) { done($0) } }
+        .sheet(item: $history) { debt in DebtPaymentsSheet(debt: debt) }
         .confirmationDialog(tx("¿Eliminar «\(deleting?.name ?? "")»?", "Delete “\(deleting?.name ?? "")”?"),
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(tx("Eliminar", "Delete"), role: .destructive) { if let debt = deleting { Task { await delete(debt) } } }
@@ -56,6 +60,12 @@ struct DebtsView: View {
         generation += 1
     }
 
+    private func loadStrategyDate() async -> DebtProgress.StrategyDate? {
+        let source = StrategySource.of(model.profile, flags: model.flags)
+        guard source == .ownerDashboard || source == .usersDashboard else { return nil }
+        return DebtProgress.strategyDate(try? await model.service.planStrategy(source))
+    }
+
     private func delete(_ debt: Debt) async {
         let epoch = model.currentEpoch
         do {
@@ -67,19 +77,29 @@ struct DebtsView: View {
     }
 }
 
-private struct DebtList: View {
+/// What the debts screen shows: the list and, for the Owner and VIP, the strategy's debt-free date.
+private struct DebtsScreenData: Equatable {
     let debts: [Debt]
+    let strategyDate: DebtProgress.StrategyDate?
+}
+
+private struct DebtList: View {
+    @Environment(AppModel.self) private var model
+    let debts: [Debt]
+    let strategyDate: DebtProgress.StrategyDate?
     let canWrite: Bool
     let canEdit: Bool
     let pay: (Debt) -> Void
     let edit: (Debt) -> Void
     let delete: (Debt) -> Void
+    let history: (Debt) -> Void
 
     var body: some View {
         if debts.isEmpty {
             EmptyStateView(symbol: "creditcard", title: tx("No tenés deudas registradas", "You have no debts recorded"),
                            message: tx("Agregá tarjetas o préstamos para ver tu avance y tu estrategia.", "Add cards or loans to see your progress and your strategy.")) { EmptyView() }
         }
+        DebtPayoffSummary(summary: DebtPayoff.summary(debts), total: DebtProgress.total(debts), strategy: strategyDate)
         ForEach(debts) { debt in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack(alignment: .firstTextBaseline) {
@@ -92,12 +112,21 @@ private struct DebtList: View {
                 }
                 .accessibilityElement(children: .combine)
                 // The backend sends 0 % when the original amount is unknown: progress only from a known one.
-                if let percent = debt.knownProgressPercent {
-                    DincrProgressBar(fraction: percent / 100)
-                    Text(tx("\(Int(percent.rounded()))% pagado", "\(Int(percent.rounded()))% paid")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                if let amounts = DebtProgress.of(debt), let fraction = amounts.progress.fraction {
+                    DincrProgressBar(fraction: fraction)
+                    Text(tx("Pagado \(model.moneyFormat.string(amounts.paid)) de \(model.moneyFormat.string(amounts.original)) · te falta el \(Int((amounts.remainingFraction * 100).rounded())) %",
+                            "Paid \(model.moneyFormat.string(amounts.paid)) of \(model.moneyFormat.string(amounts.original)) · \(Int((amounts.remainingFraction * 100).rounded())) % left"))
+                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .accessibilityIdentifier("debt.progress.\(debt.id)")
                 }
                 if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
                 if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.label(next)) }
+                DebtPayoffLine(debt: debt)
+                // DEB-07a: the payments recorded for this debt (read-only, every plan).
+                Button(tx("Ver pagos", "See payments")) { history(debt) }
+                    .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.tint)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("debt.history.\(debt.id)")
                 if canWrite {
                     HStack(spacing: DincrSpacing.s2) {
                         if (debt.remainingAmount ?? 0) > 0 {
@@ -116,6 +145,47 @@ private struct DebtList: View {
                 }
             }
             .dincrCard()
+        }
+    }
+}
+
+/// DEB-07a — the payments recorded in DINCR for one debt, newest first (Android: the debt's
+/// payments dialog). Only payments made with "Registrar pago" are linked to the debt.
+private struct DebtPaymentsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let debt: Debt
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll(title: tx("Pagos registrados", "Recorded payments")) {
+                Text(debt.name ?? tx("Deuda", "Debt")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+                AsyncContent(load: { try await model.service.debtPayments(id: debt.id) }) { payments, _ in
+                    if payments.isEmpty {
+                        Text(tx("Todavía no registraste pagos de esta deuda en DINCR.", "You haven’t recorded payments for this debt in DINCR yet."))
+                            .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            .accessibilityIdentifier("debt.payments.empty")
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(payments) { payment in
+                                HStack {
+                                    Text(payment.paymentDate.map(Day.label) ?? "—").font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                                    Spacer()
+                                    MoneyText(payment.amount, font: DincrFont.amount)
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityElement(children: .combine)
+                            }
+                        }
+                        .dincrCard()
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("debt.payments.list")
+                    }
+                }
+                Text(tx("Aparecen los pagos registrados con «Registrar pago».", "Payments recorded with “Record payment” appear here."))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(tx("Cerrar", "Close")) { dismiss() } } }
         }
     }
 }
@@ -236,6 +306,7 @@ struct GoalsView: View {
     @State private var action: AmountAction?
     @State private var goalForm: GoalForm.Mode?
     @State private var creatingPlan = false
+    @State private var editingPlan: SavingsPlan?
     @State private var notice: String?
     @State private var confirming: PendingDelete?
 
@@ -270,6 +341,7 @@ struct GoalsView: View {
             }) { snapshot, _ in
                 GoalsContent(snapshot: snapshot, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
                              contribute: { action = .contribute($0) }, save: { action = .save($0) }, edit: { goalForm = .edit($0) },
+                             editPlan: { editingPlan = $0 },
                              deleteGoal: { goal in confirming = PendingDelete(name: goal.name ?? "") { try await model.service.deleteGoal(id: goal.id) } },
                              deletePlan: { plan in confirming = PendingDelete(name: plan.name ?? "") { try await model.service.deleteSavingsPlan(id: plan.id) } })
             }
@@ -287,6 +359,7 @@ struct GoalsView: View {
         .sheet(item: $action) { action in AmountSheet(action: action) { done($0) } }
         .sheet(item: $goalForm) { mode in GoalForm(mode: mode) { done($0) } }
         .sheet(isPresented: $creatingPlan) { SavingsPlanForm { done($0) } }
+        .sheet(item: $editingPlan) { plan in SavingsPlanForm(plan: plan) { done($0) } }
         .confirmationDialog(tx("¿Eliminar «\(confirming?.name ?? "")»?", "Delete “\(confirming?.name ?? "")”?"),
                             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
             Button(tx("Eliminar", "Delete"), role: .destructive) {
@@ -321,6 +394,7 @@ private struct GoalsContent: View {
     let contribute: (Goal) -> Void
     let save: (SavingsPlan) -> Void
     let edit: (Goal) -> Void
+    let editPlan: (SavingsPlan) -> Void
     let deleteGoal: (Goal) -> Void
     let deletePlan: (SavingsPlan) -> Void
 
@@ -378,6 +452,10 @@ private struct GoalsContent: View {
                 if canWrite {
                     HStack {
                         Button(tx("Aportar", "Contribute")) { save(plan) }.buttonStyle(.dincrSecondary)
+                        // PLN-04: the same edit Android offers (the server gate is `goals`, every plan).
+                        Button(tx("Editar", "Edit")) { editPlan(plan) }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("plan.edit.\(plan.id)")
                         Button(tx("Eliminar", "Delete"), role: .destructive) { deletePlan(plan) }
                             .frame(minHeight: 44)
                     }
@@ -483,15 +561,19 @@ struct GoalForm: View {
     }
 }
 
-/// E7 — a new savings plan.
+/// E7 — a new savings plan; PLN-04 — edit one (Android: `SavingsPlanForm`).
 struct SavingsPlanForm: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    var plan: SavingsPlan? = nil
     let onDone: (String) -> Void
     @State private var name = ""
     @State private var monthly = ""
+    @State private var saved = ""
     @State private var start = Date.now
     @State private var end = Date.now.addingTimeInterval(86_400 * 365)
+    @State private var status = "active"
+    @State private var prefilled = false
     @State private var error: String?
     @State private var saving = false
     /// One key per form: a retry after a lost response is answered from the first request; a
@@ -501,33 +583,66 @@ struct SavingsPlanForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField(tx("Nombre", "Name"), text: $name)
-                MoneyField(label: tx("Aporte mensual", "Monthly amount"), text: $monthly)
+                TextField(tx("Nombre", "Name"), text: $name).accessibilityIdentifier("plan.name")
+                MoneyField(label: tx("Aporte mensual", "Monthly amount"), text: $monthly, identifier: "plan.monthly")
+                if plan != nil { MoneyField(label: tx("Ya ahorrado", "Already saved"), text: $saved, identifier: "plan.saved") }
                 DatePicker(tx("Inicio", "Start"), selection: $start, displayedComponents: .date)
                 DatePicker(tx("Fin", "End"), selection: $end, in: start..., displayedComponents: .date)
+                if plan != nil {
+                    Picker(tx("Estado", "Status"), selection: $status) {
+                        Text(tx("Activo", "Active")).tag("active")
+                        Text(tx("En pausa", "Paused")).tag("paused")
+                        Text(tx("Completado", "Completed")).tag("completed")
+                    }
+                }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
-            .navigationTitle(tx("Nuevo plan de ahorro", "New savings plan"))
+            .navigationTitle(plan == nil ? tx("Nuevo plan de ahorro", "New savings plan") : tx("Editar plan", "Edit plan"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(tx("Cancelar", "Cancel")) { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) { Button(tx("Guardar", "Save")) { Task { await save() } }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(tx("Guardar", "Save")) { Task { await save() } }.disabled(saving).accessibilityIdentifier("plan.save")
+                }
             }
+            .onAppear(perform: prefill)
         }
+        .interactiveDismissDisabled(saving)
+    }
+
+    private func prefill() {
+        guard let plan, !prefilled else { return }
+        prefilled = true
+        let format = model.moneyFormat
+        name = plan.name ?? ""
+        monthly = plan.monthlyAmount.map(format.inputText) ?? ""
+        saved = plan.savedAmount.map(format.inputText) ?? ""
+        if let day = plan.startDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { start = parsed }
+        if let day = plan.endDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { end = parsed }
+        status = ["active", "paused", "completed"].contains(plan.status ?? "") ? plan.status! : "active"
     }
 
     private func save() async {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = tx("Escribí un nombre.", "Enter a name."); return }
         guard let amount = AmountInput.parse(monthly, separators: model.moneyFormat.separators) else { error = model.moneyFormat.amountHint; return }
-        let request = SavingsPlanRequest(name: trimmed, monthlyAmount: amount, savedAmount: 0,
-                                         startDate: MovementEditor.dayFormatter.string(from: start), endDate: MovementEditor.dayFormatter.string(from: end))
+        // A new plan starts at 0 saved; an edit keeps what is written (empty = 0, as Android).
+        let savedAmount = saved.isEmpty ? 0 : AmountInput.parseZeroOrMore(saved, separators: model.moneyFormat.separators)
+        guard let savedAmount else { error = model.moneyFormat.amountHint; return }
+        let request = SavingsPlanRequest(name: trimmed, monthlyAmount: amount, savedAmount: plan == nil ? 0 : savedAmount,
+                                         startDate: MovementEditor.dayFormatter.string(from: start), endDate: MovementEditor.dayFormatter.string(from: end),
+                                         status: plan == nil ? nil : status)
         saving = true; error = nil
         defer { saving = false }
         let epoch = model.currentEpoch
         do {
-            _ = try await model.service.createSavingsPlan(request, idempotencyKey: key)
-            onDone(tx("Plan de ahorro creado", "Savings plan created"))
+            if let plan {
+                _ = try await model.service.updateSavingsPlan(id: plan.id, request, idempotencyKey: key)
+                onDone(tx("Plan de ahorro actualizado", "Savings plan updated"))
+            } else {
+                _ = try await model.service.createSavingsPlan(request, idempotencyKey: key)
+                onDone(tx("Plan de ahorro creado", "Savings plan created"))
+            }
             dismiss()
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))

@@ -12,7 +12,6 @@ import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -116,14 +115,17 @@ class PullToRefreshUiTest {
             tab(planTab)
             waitUntil("$context: Plan") { present(tx("Ingresos y base", "Income and base")) }
             assertEquals("$context: Tu plan del mes", plan == "free", present(locks[0]))
-            pullKeeping(listOf(tx("Aguinaldo", "Aguinaldo"), tx("Tu plan del mes", "Your plan for the month"), tx("Ingresos y base", "Income and base")), locks, "$context Plan")
+            // Aguinaldo and Conexiones de correo read mail: Owner-only rows during the launch.
+            assertEquals("$context: Aguinaldo only for the Owner", role == "owner", present(tx("Aguinaldo", "Aguinaldo")))
+            pullKeeping(listOfNotNull(tx("Aguinaldo", "Aguinaldo").takeIf { role == "owner" }, tx("Tu plan del mes", "Your plan for the month"), tx("Ingresos y base", "Income and base")), locks, "$context Plan")
             assertEquals("$context: still on Plan", planTab, selectedTab())
 
             tab(wealthTab)
             waitUntil("$context: debts") { tagged("wealth.debts.composition") }
             assertEquals("$context: Cuentas", plan != "vip", present(locks[1]))
             val debts = reads("/user-product/finance/debts")
-            pullKeeping(listOf(tx("Cuentas", "Accounts"), tx("Conexiones de correo", "Mail connections")), locks, "$context Patrimonio")
+            assertEquals("$context: Conexiones only for the Owner", role == "owner", present(tx("Conexiones de correo", "Mail connections")))
+            pullKeeping(listOfNotNull(tx("Cuentas", "Accounts"), tx("Conexiones de correo", "Mail connections").takeIf { role == "owner" }), locks, "$context Patrimonio")
             assertEquals("$context: the debts read again, once", debts + 1, reads("/user-product/finance/debts"))
             assertTrue("$context: the debts after the refresh", tagged("wealth.debts.composition"))
 
@@ -188,19 +190,30 @@ class PullToRefreshUiTest {
 
     @Test fun hoyAndMovimientosStillRefresh() {
         launch()
+        // Hoy reads its dashboard again at start when the switches arrive: let that settle before counting,
+        // so the count below is the pull's own read (NAT-03 fixed a false positive here).
+        waitUntil("Hoy's blocks") { present(tx("Accesos rápidos", "Quick access")) }
+        Thread.sleep(1_000)
         val identity = reads("/auth/me")
         val home = reads("/user-product/free/dashboard")
-        compose.onRoot().performTouchInput { swipeDown(startY = height * 0.3f, endY = height * 0.9f) }
-        waitUntil("Hoy read again") { reads("/user-product/free/dashboard") > home }
+        swipeOn("home.refresh")
+        waitUntil("Hoy read again") { reads("/user-product/free/dashboard") == home + 1 }
         assertEquals("Hoy keeps its own refresh (no identity read)", identity, reads("/auth/me"))
-        compose.waitForIdle()
         waitUntil("Hoy after the refresh") { tagged("home.today") }
         tab(tx("Movimientos", "Transactions"))
         waitUntil("a movement") { present("Supermercado") }
         val movements = reads("/user-product/free/movements")
-        compose.onRoot().performTouchInput { swipeDown(startY = height * 0.3f, endY = height * 0.9f) }
-        waitUntil("Movimientos read again") { reads("/user-product/free/movements") > movements }
+        swipeOn("movements.refresh")
+        waitUntil("Movimientos read again") { reads("/user-product/free/movements") == movements + 1 }
         waitUntil("Movimientos after the refresh") { present("Supermercado") }
         assertFalse(present(failureNotice))
     }
+
+    /** The gesture on a screen's refresh box (Hoy's and Movimientos' tags, as the tabs' `tab.refresh`). */
+    private fun swipeOn(tag: String) {
+        waitUntil(tag) { tagged(tag) }
+        compose.onAllNodes(hasTestTag(tag)).onFirst().performTouchInput { swipeDown() }
+        compose.waitForIdle()
+    }
+
 }

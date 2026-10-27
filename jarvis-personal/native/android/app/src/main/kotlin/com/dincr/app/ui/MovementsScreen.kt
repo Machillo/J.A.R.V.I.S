@@ -1,5 +1,6 @@
 package com.dincr.app.ui
 
+import com.dincr.data.PullRefresh
 import com.dincr.data.PlanTier
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -100,16 +101,24 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var deleting by remember { mutableStateOf(false) }
-    suspend fun load() {
+    // NAT-03 (B17): a reload that fails while the list is shown (pull to refresh, after a save or a
+    // delete) keeps it and says so in the app notice; only a first load without a list shows the error.
+    suspend fun load(quietly: Boolean = false) {
         model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.api.movements() }
             .onSuccess { state = Load.Ready(it) }
-            .onFailure { if (it !is AuthException.SignedOut) state = Load.Failed(it.message.orEmpty()) }
+            .onFailure {
+                if (it is AuthException.SignedOut) return@onFailure
+                if (state is Load.Ready) { if (!quietly) model.showNotice(PullRefresh.failureNotice()) } else state = Load.Failed(it.message.orEmpty())
+            }
     }
     LaunchedEffect(Unit) { load() }
+    // New mail on return (AppModel.syncOnReturn): read again, keeping the list if it fails.
+    val dataGeneration by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(dataGeneration) { if (dataGeneration > 0) load(quietly = true) }
     val plan = profile?.planTier ?: PlanTier.FREE
 
     Box(Modifier.fillMaxSize().padding(padding)) {
-        PullToRefreshBox(refreshing, onRefresh = { scope.launch { refreshing = true; load(); refreshing = false } }) {
+        PullToRefreshBox(refreshing, onRefresh = { scope.launch { refreshing = true; load(); refreshing = false } }, modifier = Modifier.testTag("movements.refresh")) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = DincrSpacing.s4, end = DincrSpacing.s4, bottom = 96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 item {
                     Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s6), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {

@@ -7,7 +7,8 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
-from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category
+from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category, owner_account_context
+from backend.user_product import expense_account, owner_ledger
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 
 
@@ -91,7 +92,11 @@ def get_free_monthly_summary(period: str | None = None) -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     start = _month(period)
     with get_connection() as conn:
-        totals = _period_totals(conn, workspace_id, start, _next_month(start))
+        # The verified Owner's month follows the single ledger (owner_ledger), decided from the
+        # stored identity of this account and workspace; everyone else keeps these totals.
+        owner = owner_account_context(conn, account_id, workspace_id)
+        totals = (owner_ledger.owner_month_totals(conn, workspace_id, start, _next_month(start)) if owner
+                  else _period_totals(conn, workspace_id, start, _next_month(start)))
         categories = _categories(conn, workspace_id, start, _next_month(start))
         goals = conn.execute(
             "SELECT COALESCE(SUM(current_amount),0) current,COALESCE(SUM(target_amount),0) target FROM financial_goals WHERE workspace_id=%s",
@@ -100,42 +105,52 @@ def get_free_monthly_summary(period: str | None = None) -> dict:
         profile = conn.execute("SELECT liquid_savings FROM financial_profiles WHERE account_id=%s AND workspace_id=%s", (account_id,workspace_id)).fetchone()
     balance = round(totals["income"]-totals["expenses"]-totals["debt_paid"],2)
     target, current = _money(goals["target"]), _money(goals["current"])
+    # UNKNOWN ≠ 0: savings nobody declared are unknown (not ₡0), and without a goal target there is no
+    # progress to report (not 0 %).
+    savings = profile.get("liquid_savings") if profile else None
     return {
         "period": start.strftime("%Y-%m"), **totals, "balance": balance,
         "top_category": categories[0] if categories else None, "categories": categories,
-        "savings": _money(profile["liquid_savings"] if profile else 0),
-        "goals": {"current":current,"target":target,"progress":round(current/target*100,1) if target else 0},
+        "savings": None if savings is None else _money(savings),
+        "goals": {"current":current,"target":target,"progress":round(current/target*100,1) if target else None},
     }
 
 
 def list_free_movements() -> list[dict]:
-    workspace_id = get_current_workspace_id()
+    account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     transaction_date = _transaction_date_sql()
     with get_connection() as conn:
+        owner = owner_account_context(conn, account_id, workspace_id)
         rows = conn.execute(
             f"""SELECT * FROM (
               SELECT 'salary:'||id movement_id,id source_id,'salary' origin,created_at::date transaction_date,
-                     source description,amount,'income' transaction_type,COALESCE(category,'Salario') category,'' notes,TRUE editable,
-                     original_amount,original_currency,exchange_rate
+                     source description,amount,'income' transaction_type,'income' ledger_type,COALESCE(category,'Salario') category,'' notes,TRUE editable,
+                     original_amount,original_currency,exchange_rate,NULL::bigint financial_account_id
               FROM salaries WHERE workspace_id=%s
               UNION ALL
-              SELECT 'expense:'||id,id,'expense',created_at::date,COALESCE(description,''),amount,'expense',category,'',TRUE,
-                     original_amount,original_currency,exchange_rate
+              SELECT 'expense:'||id,id,'expense',created_at::date,COALESCE(description,''),amount,'expense','expense',category,'',TRUE,
+                     original_amount,original_currency,exchange_rate,{expense_account.SELECT_SQL}
               FROM expenses WHERE workspace_id=%s
               UNION ALL
-              SELECT 'payroll:'||id,id,'payroll',created_at::date,COALESCE(description,'Horas extra'),amount,'income','Horas extra','',TRUE,
-                     NULL,NULL,NULL
+              SELECT 'payroll:'||id,id,'payroll',created_at::date,COALESCE(description,'Horas extra'),amount,'income','payroll_accrued','Horas extra','',TRUE,
+                     NULL,NULL,NULL,NULL
               FROM payroll_events WHERE workspace_id=%s AND amount>0
               UNION ALL
               SELECT 'transaction:'||id,id,'transaction',{transaction_date},description,amount,
-                     CASE WHEN transaction_type='income' THEN 'income' ELSE 'expense' END,category,COALESCE(notes,''),
+                     CASE WHEN transaction_type='income' THEN 'income' ELSE 'expense' END,
+                     LOWER(BTRIM(COALESCE(transaction_type,''))),category,COALESCE(notes,''),
                      (source IN ('finva','manual','manual_expense')),
-                     original_amount,original_currency,exchange_rate
+                     original_amount,original_currency,exchange_rate,NULL
               FROM transactions WHERE workspace_id=%s AND transaction_type<>'internal_transfer'
             ) movements ORDER BY transaction_date DESC,source_id DESC""",
             (workspace_id,workspace_id,workspace_id,workspace_id),
         ).fetchall()
-    return [dict(row) for row in rows]
+    # transaction_type stays income/expense (installed apps decode only those two). The Owner's
+    # rows also say what they really are and what they count in (owner_ledger); for everyone
+    # else the response is unchanged.
+    if owner:
+        return [{key: value for key, value in owner_ledger.classify_movement(dict(row)).items() if key != "ledger_type"} for row in rows]
+    return [{key: value for key, value in dict(row).items() if key != "ledger_type"} for row in rows]
 
 
 def update_free_movement(movement_id: str, payload) -> dict:
@@ -154,6 +169,11 @@ def update_free_movement(movement_id: str, payload) -> dict:
             raise HTTPException(status_code=422, detail="Este movimiento solo se puede registrar en tu moneda principal.")
         values = resolve_entry_amount(base, payload.amount, currency, getattr(payload, "exchange_rate", None))
         original = (values["original_amount"], values["original_currency"], values["exchange_rate"])
+        # Only a manual expense says what paid it (expense_account); not sent = left as it is.
+        if origin != "expense" and getattr(payload, expense_account.FIELD, None) is not None:
+            raise HTTPException(status_code=422, detail="Solo un gasto indica con qué se pagó.")
+        write, link = (expense_account.requested_link(conn, payload, account_id=get_current_account_id(), workspace_id=workspace_id)
+                       if origin == "expense" else (False, None))
         if origin == "salary":
             if payload.transaction_type != "income": raise HTTPException(status_code=422,detail="Un ingreso debe conservar su tipo.")
             row=conn.execute("""UPDATE salaries SET amount=%s,source=%s,category=%s,original_amount=%s,original_currency=%s,exchange_rate=%s,
@@ -176,6 +196,7 @@ def update_free_movement(movement_id: str, payload) -> dict:
         else:
             raise HTTPException(status_code=422,detail="Origen de movimiento inválido.")
         if not row: raise HTTPException(status_code=404,detail="Movimiento no encontrado o no editable.")
+        if write: expense_account.write_link(conn, source_id, link, workspace_id=workspace_id)
         conn.commit()
     return {"status":"ok","movement_id":movement_id}
 

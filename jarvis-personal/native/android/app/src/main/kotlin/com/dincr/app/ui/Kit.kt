@@ -54,6 +54,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -77,6 +78,7 @@ import com.dincr.design.ErrorState
 import com.dincr.design.MoneyText
 import com.dincr.design.SkeletonBlock
 import com.dincr.design.TabularNums
+import com.dincr.design.dincrScreenBackground
 import com.dincr.design.generated.DincrRadius
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
@@ -188,7 +190,7 @@ fun ScreenColumn(padding: PaddingValues = PaddingValues(), content: @Composable 
         Column(
             Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s4),
-            verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4),
+            verticalArrangement = Arrangement.spacedBy(Dincr.look.gap),
             content = content,
         )
     }
@@ -199,7 +201,7 @@ fun ScreenColumn(padding: PaddingValues = PaddingValues(), content: @Composable 
 @Composable
 fun DetailScaffold(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
     BackHandler(onBack = onBack)
-    Column(Modifier.fillMaxSize().background(Dincr.colors.bg)) {
+    Column(Modifier.fillMaxSize().dincrScreenBackground()) {
         TopAppBar(
             title = { Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, modifier = Modifier.semantics { heading() }) },
             navigationIcon = {
@@ -208,7 +210,8 @@ fun DetailScaffold(title: String, onBack: () -> Unit, actions: @Composable () ->
                 }
             },
             actions = { actions() },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Dincr.colors.bg, titleContentColor = Dincr.colors.text, navigationIconContentColor = Dincr.colors.text),
+            // Over a scene with a glow the bar is clear, so the background reads as one surface.
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = if (Dincr.look.glow != null) Color.Transparent else Dincr.colors.bg, titleContentColor = Dincr.colors.text, navigationIconContentColor = Dincr.colors.text),
         )
         ScreenColumn(content = content)
     }
@@ -242,10 +245,10 @@ fun InfoLine(label: String, value: String) {
 @Composable
 fun NavRow(icon: ImageVector, title: String, subtitle: String? = null, badge: String? = null, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(vertical = DincrSpacing.s2),
+        Modifier.fillMaxWidth().heightIn(min = Dincr.look.rowMin).clickable(onClick = onClick).padding(vertical = DincrSpacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).background(Dincr.colors.surface2, RoundedCornerShape(DincrRadius.md)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).background(Dincr.colors.surface2, RoundedCornerShape(Dincr.look.controlRadius)), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = Dincr.colors.tint, modifier = Modifier.size(22.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
@@ -294,7 +297,7 @@ fun FormField(label: String, value: String, onChange: (String) -> Unit, error: S
         isError = error != null,
         supportingText = (error ?: supporting)?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = keyboard),
-        shape = RoundedCornerShape(DincrRadius.md),
+        shape = RoundedCornerShape(Dincr.look.controlRadius),
         colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Dincr.colors.fieldBorder, focusedBorderColor = Dincr.colors.tint),
         modifier = modifier.fillMaxWidth().semantics { if (error != null) error(error) },
     )
@@ -316,7 +319,7 @@ fun DateField(label: String, value: LocalDate?, onChange: (LocalDate?) -> Unit, 
     var open by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { open = true }
-            .background(Dincr.colors.surface, RoundedCornerShape(DincrRadius.md)).padding(horizontal = DincrSpacing.s4),
+            .background(Dincr.colors.surface, RoundedCornerShape(Dincr.look.controlRadius)).padding(horizontal = DincrSpacing.s4),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {

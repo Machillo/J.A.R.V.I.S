@@ -55,13 +55,16 @@ final class PullToRefreshUITests: XCTestCase {
             let app = launch(plan: plan, role: role, tab: "plan")
             let strategy = label("plan.strategy", in: app)
             XCTAssertEqual(strategy.contains("Disponible desde Basic"), plan == nil, "\(context): Tu plan del mes")
-            pullKeeping(["plan.aguinaldo", "plan.strategy", "plan.debts", "plan.incomeBase", "plan.salvavidas", "plan.distribution"], in: app, "\(context) Plan")
+            // Aguinaldo and Conexiones de correo read mail: Owner-only rows during the launch.
+            XCTAssertEqual(element("plan.aguinaldo", in: app).exists, role == "owner", "\(context): Aguinaldo only for the Owner")
+            pullKeeping((role == "owner" ? ["plan.aguinaldo"] : []) + ["plan.strategy", "plan.debts", "plan.incomeBase", "plan.salvavidas", "plan.distribution"], in: app, "\(context) Plan")
             XCTAssertTrue(app.tabBars.buttons["Plan"].isSelected, "\(context): still on Plan")
 
             app.tabBars.buttons["Patrimonio"].tap()
             XCTAssertTrue(element("wealth.debts.composition", in: app).waitForExistence(timeout: 10), "\(context): debts")
             XCTAssertEqual(label("wealth.accounts", in: app).contains("Disponible desde VIP"), plan != "vip", "\(context): Cuentas")
-            pullKeeping(["wealth.accounts", "wealth.connections", "wealth.debts"], in: app, "\(context) Patrimonio")
+            XCTAssertEqual(element("wealth.connections", in: app).exists, role == "owner", "\(context): Conexiones only for the Owner")
+            pullKeeping(["wealth.accounts"] + (role == "owner" ? ["wealth.connections"] : []) + ["wealth.debts"], in: app, "\(context) Patrimonio")
             XCTAssertTrue(element("wealth.debts.composition", in: app).exists, "\(context): the debts after the refresh")
 
             app.tabBars.buttons["Perfil"].tap()
@@ -98,7 +101,7 @@ final class PullToRefreshUITests: XCTestCase {
         element("profile.subscription", in: app).tap()
         XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10))
         app.tabBars.buttons["Plan"].tap()
-        XCTAssertTrue(element("plan.aguinaldo", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("plan.strategy", in: app).waitForExistence(timeout: 10))
         pull(app)
         sleep(1)
         app.tabBars.buttons["Perfil"].tap()

@@ -257,8 +257,9 @@ final class DINCRUITests: XCTestCase {
     /// The flow of the Google OAuth verification video, on fixture data: Email Monitor → explanation
     /// (gmail.readonly) → consent → Connect Gmail → provider → back to DINCR → connected → sync →
     /// candidates → confirm. Only the provider page is simulated; the real one is DEVICE REQUIRED.
+    /// Reading mail is the Owner's alone during the launch, so the flow runs as the Owner.
     func testEmailMonitorConnectReviewFlow() {
-        let app = launch("mailOnboarding", extra: ["-DincrTab", "wealth"])
+        let app = launch("mailOnboarding", extra: ["-DincrTab", "wealth", "-DincrRole", "owner"])
         open("wealth.connections", in: app)
         XCTAssertTrue(app.descendants(matching: .any)["mail.readonly"].waitForExistence(timeout: 5))
         let accept = app.buttons["mail.consent.accept"]

@@ -64,7 +64,7 @@ class PullRefreshTest {
     private fun api(refreshFails: Boolean) =
         DincrApi(ApiClient("https://fixtures.invalid", { "t" }, FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP, identityRefreshFails = refreshFails), AppLanguage.SPANISH, backoff = {}))
 
-    @Test fun theFixtureFailsOnlyTheIdentityReadAgain() = runTest {
+    @Test fun theFixtureFailsOnlyWhatAPullReadsAgain() = runTest {
         val failing = api(refreshFails = true)
         failing.me()
         try {
@@ -74,6 +74,23 @@ class PullRefreshTest {
             assertTrue("like an unreachable server: the app keeps the user where they were", error.isTransient)
         }
         failing.debts()
+        failing.debts()  // not the identity: never fails
+
+        // NAT-03: Hoy's main source and the movement list fail while the test says the server is unreachable.
+        val backend = FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP)
+        val api = DincrApi(ApiClient("https://fixtures.invalid", { "t" }, backend, AppLanguage.SPANISH, backoff = {}))
+        api.freeDashboard()
+        api.movements()
+        backend.refreshedSourcesUnreachable = true
+        api.debts()  // other sources keep answering
+        for (read in listOf<suspend () -> Unit>({ api.freeDashboard() }, { api.movements() })) {
+            try {
+                read()
+                fail("a second read of a refreshed source should fail")
+            } catch (error: ApiError) {
+                assertTrue(error.isTransient)
+            }
+        }
 
         val normal = api(refreshFails = false)
         normal.me()
