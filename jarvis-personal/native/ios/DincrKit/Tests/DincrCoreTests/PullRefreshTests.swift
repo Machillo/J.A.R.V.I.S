@@ -59,7 +59,7 @@ import Testing
         #expect(calls.count == 2)
     }
 
-    @Test func theFixtureFailsOnlyTheIdentityReadAgain() async throws {
+    @Test func theFixtureFailsOnlyWhatAPullReadsAgain() async throws {
         let failing = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero, identityRefreshFails: true))
         _ = try await failing.me()
         do {
@@ -69,6 +69,18 @@ import Testing
             #expect(error.isTransient, "like an unreachable server: the app keeps the user where they were")
         }
         _ = try await failing.debts()
+        _ = try await failing.debts()  // not a refreshed source: never fails
+        // NAT-03: Hoy's main source and the movement list, read again.
+        _ = try await failing.freeDashboard()
+        _ = try await failing.movements()
+        for read in [{ _ = try await failing.freeDashboard() }, { _ = try await failing.movements() }] as [() async throws -> Void] {
+            do {
+                try await read()
+                Issue.record("a second read of a refreshed source should fail")
+            } catch let error as APIError {
+                #expect(error.isTransient)
+            }
+        }
 
         let normal = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero))
         _ = try await normal.me()
