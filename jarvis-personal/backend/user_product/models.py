@@ -41,6 +41,8 @@ class ExpenseCreateRequest(BaseModel):
     # The other currency needs the user's rate (CRC per 1 USD); DINCR never invents one.
     currency: Literal["CRC", "USD"] | None = None
     exchange_rate: float | None = Field(default=None, gt=0, le=100000)
+    # The own account or card that paid it (expense_account); not sent = left as it is.
+    financial_account_id: int | None = Field(default=None, gt=0)
 
 
 class IncomeUpdateRequest(IncomeCreateRequest):
@@ -235,3 +237,6 @@ class MovementUpdateRequest(BaseModel):
     # Only manual income and expenses accept another currency.
     currency: Literal["CRC", "USD"] | None = None
     exchange_rate: float | None = Field(default=None, gt=0, le=100000)
+    # Only manual expenses carry a "paid with" account (expense_account).
+    # The own account or card that paid it (expense_account); not sent = left as it is.
+    financial_account_id: int | None = Field(default=None, gt=0)

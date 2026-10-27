@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category, owner_account_context
-from backend.user_product import owner_ledger
+from backend.user_product import expense_account, owner_ledger
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 
 
@@ -122,22 +122,22 @@ def list_free_movements() -> list[dict]:
             f"""SELECT * FROM (
               SELECT 'salary:'||id movement_id,id source_id,'salary' origin,created_at::date transaction_date,
                      source description,amount,'income' transaction_type,'income' ledger_type,COALESCE(category,'Salario') category,'' notes,TRUE editable,
-                     original_amount,original_currency,exchange_rate
+                     original_amount,original_currency,exchange_rate,NULL::bigint financial_account_id
               FROM salaries WHERE workspace_id=%s
               UNION ALL
               SELECT 'expense:'||id,id,'expense',created_at::date,COALESCE(description,''),amount,'expense','expense',category,'',TRUE,
-                     original_amount,original_currency,exchange_rate
+                     original_amount,original_currency,exchange_rate,{expense_account.SELECT_SQL}
               FROM expenses WHERE workspace_id=%s
               UNION ALL
               SELECT 'payroll:'||id,id,'payroll',created_at::date,COALESCE(description,'Horas extra'),amount,'income','payroll_accrued','Horas extra','',TRUE,
-                     NULL,NULL,NULL
+                     NULL,NULL,NULL,NULL
               FROM payroll_events WHERE workspace_id=%s AND amount>0
               UNION ALL
               SELECT 'transaction:'||id,id,'transaction',{transaction_date},description,amount,
                      CASE WHEN transaction_type='income' THEN 'income' ELSE 'expense' END,
                      LOWER(BTRIM(COALESCE(transaction_type,''))),category,COALESCE(notes,''),
                      (source IN ('finva','manual','manual_expense')),
-                     original_amount,original_currency,exchange_rate
+                     original_amount,original_currency,exchange_rate,NULL
               FROM transactions WHERE workspace_id=%s AND transaction_type<>'internal_transfer'
             ) movements ORDER BY transaction_date DESC,source_id DESC""",
             (workspace_id,workspace_id,workspace_id,workspace_id),
@@ -166,6 +166,11 @@ def update_free_movement(movement_id: str, payload) -> dict:
             raise HTTPException(status_code=422, detail="Este movimiento solo se puede registrar en tu moneda principal.")
         values = resolve_entry_amount(base, payload.amount, currency, getattr(payload, "exchange_rate", None))
         original = (values["original_amount"], values["original_currency"], values["exchange_rate"])
+        # Only a manual expense says what paid it (expense_account); not sent = left as it is.
+        if origin != "expense" and getattr(payload, expense_account.FIELD, None) is not None:
+            raise HTTPException(status_code=422, detail="Solo un gasto indica con qué se pagó.")
+        write, link = (expense_account.requested_link(conn, payload, account_id=get_current_account_id(), workspace_id=workspace_id)
+                       if origin == "expense" else (False, None))
         if origin == "salary":
             if payload.transaction_type != "income": raise HTTPException(status_code=422,detail="Un ingreso debe conservar su tipo.")
             row=conn.execute("""UPDATE salaries SET amount=%s,source=%s,category=%s,original_amount=%s,original_currency=%s,exchange_rate=%s,
@@ -188,6 +193,7 @@ def update_free_movement(movement_id: str, payload) -> dict:
         else:
             raise HTTPException(status_code=422,detail="Origen de movimiento inválido.")
         if not row: raise HTTPException(status_code=404,detail="Movimiento no encontrado o no editable.")
+        if write: expense_account.write_link(conn, source_id, link, workspace_id=workspace_id)
         conn.commit()
     return {"status":"ok","movement_id":movement_id}
 

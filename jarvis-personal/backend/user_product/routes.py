@@ -46,6 +46,7 @@ from backend.user_product.gmail_service import (
     review_gmail_candidate,
     sync_current_gmail,
 )
+from backend.user_product.expense_account import paid_with_options
 from backend.user_product.financial_identity import confirm_financial_account, declare_own_account, list_financial_identity
 from backend.user_product.statement_cut import set_statement_cut_day
 from backend.user_product.own_transfer_review import confirm_own_transfer, list_own_transfer_suggestions
@@ -79,6 +80,10 @@ def income_delete(income_id: int):
 @router.get("/finance/expenses")
 def expenses_list():
     require_feature("spending"); return list_expenses()
+
+@router.get("/finance/expenses/paid-with-options")
+def expenses_paid_with_options():
+    require_feature("spending"); return paid_with_options()
 
 @router.post("/finance/expenses")
 def expenses_create(request: ExpenseCreateRequest):
