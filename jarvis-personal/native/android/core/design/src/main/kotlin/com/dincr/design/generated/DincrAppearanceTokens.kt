@@ -1,4 +1,4 @@
-// GENERATED from jarvis-personal/native/design-tokens/appearance.json (DINCR 2.0.0) by generate.mjs.
+// GENERATED from jarvis-personal/native/design-tokens/appearance.json (DINCR 3.0.0) by generate.mjs.
 // Do not edit. Change appearance.json and run the generator.
 package com.dincr.design.generated
 
@@ -24,8 +24,8 @@ data class AppearanceDensity(val gap: Dp, val cardPadding: Dp, val rowMin: Dp)
 object DincrAppearanceTokens {
     val palettes: Map<String, AppearancePair<AppearanceNeutrals>> = linkedMapOf(
         "clasico" to AppearancePair(
-            light = AppearanceNeutrals(bg = Color(0xFFF5F7FA), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEDF1F6), line = Color(0xFFDCE3EC), lineStrong = Color(0xFFC3CEDC), fieldBorder = Color(0xFF7A889E), text = Color(0xFF0B1526), text2 = Color(0xFF46546A), textMuted = Color(0xFF5B6980), positive = null, glow = null),
-            dark = AppearanceNeutrals(bg = Color(0xFF0A1220), surface = Color(0xFF111B2C), surface2 = Color(0xFF182438), line = Color(0xFF24324A), lineStrong = Color(0xFF34445F), fieldBorder = Color(0xFF65758F), text = Color(0xFFEEF3F9), text2 = Color(0xFFB3C0D2), textMuted = Color(0xFF93A2B8), positive = null, glow = null),
+            light = AppearanceNeutrals(bg = Color(0xFFF2F5F9), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFE8EDF4), line = Color(0xFFDCE3EC), lineStrong = Color(0xFFC2CCDA), fieldBorder = Color(0xFF6F7E96), text = Color(0xFF0A1628), text2 = Color(0xFF3F4D66), textMuted = Color(0xFF56647C), positive = null, glow = null),
+            dark = AppearanceNeutrals(bg = Color(0xFF070E1A), surface = Color(0xFF0F1A2B), surface2 = Color(0xFF172539), line = Color(0xFF22324A), lineStrong = Color(0xFF33445F), fieldBorder = Color(0xFF6A7A94), text = Color(0xFFEDF2F9), text2 = Color(0xFFB3C0D2), textMuted = Color(0xFF94A3B9), positive = null, glow = null),
         ),
         "oceano" to AppearancePair(
             light = AppearanceNeutrals(bg = Color(0xFFF0F6FA), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEAF2F8), line = Color(0xFFD3E2EE), lineStrong = Color(0xFFB6CCDD), fieldBorder = Color(0xFF6A8197), text = Color(0xFF0B1526), text2 = Color(0xFF3F5368), textMuted = Color(0xFF52677D), positive = Color(0xFF08734F), glow = Color(0xFFF6FAFD)),
@@ -43,8 +43,8 @@ object DincrAppearanceTokens {
 
     val accents: Map<String, AppearancePair<AppearanceAccent>> = linkedMapOf(
         "teal" to AppearancePair(
-            light = AppearanceAccent(tint = Color(0xFF0B6E68), tintPressed = Color(0xFF085B56), tintContainer = Color(0xFFD5F0EC), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF053B37), focusRing = Color(0xFF0B6E68)),
-            dark = AppearanceAccent(tint = Color(0xFF3CCFBF), tintPressed = Color(0xFF2DB5A6), tintContainer = Color(0xFF0E3A38), onTint = Color(0xFF04201D), onTintContainer = Color(0xFFBFF2EB), focusRing = Color(0xFF3CCFBF)),
+            light = AppearanceAccent(tint = Color(0xFF0A6B5C), tintPressed = Color(0xFF075447), tintContainer = Color(0xFFD2F0E7), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF03372E), focusRing = Color(0xFF0A6B5C)),
+            dark = AppearanceAccent(tint = Color(0xFF45D3BC), tintPressed = Color(0xFF33B9A4), tintContainer = Color(0xFF0C3A34), onTint = Color(0xFF03201B), onTintContainer = Color(0xFFC0F2E8), focusRing = Color(0xFF45D3BC)),
         ),
         "cian" to AppearancePair(
             light = AppearanceAccent(tint = Color(0xFF0068A3), tintPressed = Color(0xFF00598C), tintContainer = Color(0xFFDDF0FB), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF00405F), focusRing = Color(0xFF0068A3)),

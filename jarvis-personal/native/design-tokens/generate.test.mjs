@@ -40,15 +40,15 @@ test("the committed outputs are what DESIGN.md renders", () => {
 
 test("malformed DESIGN.md fails instead of dropping tokens", () => {
   const cases = {
-    "unparsable entry": edit('  tint: "#0B6E68"', "  tint: #0B6E68"),
+    "unparsable entry": edit('  tint: "#0A6B5C"', "  tint: #0A6B5C"),
     "unparsable scale entry": edit('  "4": "16px"', '  "4": 16px'),
     "px value that is not a size": edit('  "4": "16px"', '  "4": "0x10px"'),
     "negative px value": edit('  "4": "16px"', '  "4": "-16px"'),
     "version that is not semver": design.replace(/^version:.*$/m, 'version: 2.0.0"; evil()'),
-    "not #RRGGBB": edit('  tint: "#0B6E68"', '  tint: "teal"'),
-    "duplicate token": edit('  tint: "#0B6E68"', '  tint: "#0B6E68"\n  tint: "#0B6E69"'),
-    "missing dark counterpart": edit('  dark-tint: "#3CCFBF"\n', ""),
-    "orphan dark token": edit('  dark-tint: "#3CCFBF"', '  dark-tint: "#3CCFBF"\n  dark-extra: "#000000"'),
+    "not #RRGGBB": edit('  tint: "#0A6B5C"', '  tint: "teal"'),
+    "duplicate token": edit('  tint: "#0A6B5C"', '  tint: "#0A6B5C"\n  tint: "#0A6B5D"'),
+    "missing dark counterpart": edit('  dark-tint: "#45D3BC"\n', ""),
+    "orphan dark token": edit('  dark-tint: "#45D3BC"', '  dark-tint: "#45D3BC"\n  dark-extra: "#000000"'),
     "missing version": design.replace(/^version:.*\n/m, ""),
     "missing block": design.replace(/^spacing:/m, "spacingx:"),
   };
@@ -83,7 +83,7 @@ test("--check reports drift and never writes; the generator fixes it", () => {
     assert.equal(run("--check").status, 0);
     // A token outside the classic appearance set (changing the tint alone would also, rightly,
     // fail the classic-appearance check).
-    fs.writeFileSync(path.join(sandbox, "DESIGN.md"), edit('  vip: "#8A5A00"', '  vip: "#8A5A01"'));
+    fs.writeFileSync(path.join(sandbox, "DESIGN.md"), edit('  vip: "#845600"', '  vip: "#845601"'));
     const before = snapshot();
     const stale = run("--check");
     assert.equal(stale.status, 1, "drift must fail --check");

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import com.dincr.data.AppearancePrefs
+import androidx.compose.ui.unit.sp
 import com.dincr.data.MoneyFormat
 import com.dincr.design.generated.DincrAppearanceTokens
 import com.dincr.design.generated.DincrColorPair
@@ -37,6 +38,7 @@ data class DincrPalette(
     val positive: Color, val positiveContainer: Color, val negative: Color, val negativeContainer: Color,
     val warning: Color, val warningContainer: Color, val info: Color, val infoContainer: Color,
     val vip: Color, val vipContainer: Color, val chartIncome: Color, val chartExpense: Color,
+    val hero: Color, val hero2: Color, val onHero: Color, val onHero2: Color, val heroAccent: Color,
 )
 
 /**
@@ -56,6 +58,7 @@ internal fun palette(dark: Boolean, appearance: AppearancePrefs = AppearancePref
             n.positive ?: positive.pick(), positiveContainer.pick(), negative.pick(), negativeContainer.pick(),
             warning.pick(), warningContainer.pick(), info.pick(), infoContainer.pick(),
             vip.pick(), vipContainer.pick(), chartIncome.pick(), chartExpense.pick(),
+            hero.pick(), hero2.pick(), onHero.pick(), onHero2.pick(), heroAccent.pick(),
         )
     }
 }
@@ -78,7 +81,7 @@ private fun scheme(p: DincrPalette, dark: Boolean): ColorScheme {
 /**
  * Shapes, spacing and surfaces of an appearance (appearance.json → shapes, density). The classic
  * values are DESIGN.md's: cards `rounded.lg`, controls `rounded.md`, gaps and padding `spacing.4`,
- * rows 56, tonal cards without a border, a flat background.
+ * rows 56, tonal cards with a hairline edge (DincrCard), a flat background.
  */
 @Immutable
 data class DincrLook(
@@ -107,6 +110,17 @@ data class DincrLook(
     }
 }
 
+/**
+ * Colors inside a hero card (DESIGN.md → Hero card): the dark scheme's roles on the hero surface,
+ * so every nested component (figures, captions, bars, status text) stays readable on ink in
+ * both schemes. The pairs are in the design-token contrast gate.
+ */
+fun heroPalette(p: DincrPalette): DincrPalette = palette(true).copy(
+    bg = p.hero, surface = p.hero, surface2 = p.onHero.copy(alpha = 0.16f), line = p.hero2, lineStrong = p.hero2,
+    text = p.onHero, text2 = p.onHero2, textMuted = p.onHero2,
+    hero = p.hero, hero2 = p.hero2, onHero = p.onHero, onHero2 = p.onHero2, heroAccent = p.heroAccent,
+)
+
 val LocalDincrPalette = staticCompositionLocalOf { palette(false) }
 val LocalMoneyFormat = staticCompositionLocalOf { MoneyFormat() }
 val LocalDincrLook = staticCompositionLocalOf { DincrLook.CLASSIC }
@@ -130,13 +144,20 @@ object Dincr {
     val look: DincrLook @Composable @ReadOnlyComposable get() = LocalDincrLook.current
 }
 
-/** Typography roles (DESIGN.md → Typography) on the Material scale, in sp so font scaling applies. */
+/**
+ * Typography roles (DESIGN.md → Typography) on the Material scale, in sp so font scaling applies.
+ * DINCR 3.0: titles are set semibold and slightly tight, money figures bold, labels medium.
+ */
 private fun typography(editorial: Boolean = false): Typography {
     val t = Typography()
+    val tight = (-0.4).sp
     val base = t.copy(
-        displaySmall = t.displaySmall.copy(fontWeight = FontWeight.Bold),
-        headlineSmall = t.headlineSmall.copy(fontWeight = FontWeight.Bold),
+        displaySmall = t.displaySmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
+        headlineMedium = t.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = tight),
+        headlineSmall = t.headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = tight),
+        titleLarge = t.titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
         titleMedium = t.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        labelLarge = t.labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp),
     )
     if (!editorial) return base
     // Editorial: screen, sheet and section titles in the platform serif. Amounts (display), card

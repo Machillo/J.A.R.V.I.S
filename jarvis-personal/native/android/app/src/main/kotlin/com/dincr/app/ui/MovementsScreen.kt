@@ -1,6 +1,8 @@
 package com.dincr.app.ui
 
 import com.dincr.data.PullRefresh
+import com.dincr.design.generated.DincrRadius
+import com.dincr.design.DincrTonalButton
 import com.dincr.data.PlanTier
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -123,21 +125,26 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                 item {
                     Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s6), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
                         Text(tx("Movimientos", "Transactions"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text, modifier = Modifier.semantics { heading() })
-                        OutlinedTextField(query, { query = it }, placeholder = { Text(tx("Buscar movimientos", "Search transactions")) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(query, { query = it }, placeholder = { Text(tx("Buscar movimientos", "Search transactions")) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(DincrRadius.full),
+                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = Dincr.colors.surface, focusedContainerColor = Dincr.colors.surface,
+                                unfocusedBorderColor = Dincr.colors.fieldBorder, focusedBorderColor = Dincr.colors.tint))
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                             MovementFilter.entries.forEach { f ->
-                                FilterChip(filter == f, { filter = f }, modifier = Modifier.heightIn(min = 48.dp), label = {
+                                FilterChip(filter == f, { filter = f }, modifier = Modifier.heightIn(min = 48.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(DincrRadius.full),
+                                    colors = dincrChipColors(), border = null, leadingIcon = dincrChipCheck(filter == f), label = {
                                     Text(when (f) { MovementFilter.ALL -> tx("Todos", "All"); MovementFilter.INCOME -> tx("Ingresos", "Income"); MovementFilter.EXPENSE -> tx("Gastos", "Expenses"); MovementFilter.DEBT -> tx("Deudas", "Debts") })
                                 })
                             }
                         }
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                             // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
-                            TextButton({ nav.open("analysis") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.analysis")) { Text(tx("Análisis", "Analysis"), color = Dincr.colors.tint) }
+                            DincrTonalButton(tx("Análisis", "Analysis"), { nav.open("analysis") }, modifier = Modifier.testTag("movements.analysis"))
                             // §15 PR 6: Movimientos → Por revisar — the bank notices detected in mail, reviewed in the
                             // existing mail screen (the same as Perfil's; VIP and the Owner, locked below).
                             if (plan == PlanTier.VIP) {
-                                TextButton({ nav.open("mail") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.review")) { Text(tx("Por revisar", "To review"), color = Dincr.colors.tint) }
+                                DincrTonalButton(tx("Por revisar", "To review"), { nav.open("mail") }, modifier = Modifier.testTag("movements.review"))
                             } else {
                                 TextButton({ nav.open("plans") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.review")) {
                                     androidx.compose.foundation.layout.Column {
@@ -146,7 +153,7 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                     }
                                 }
                             }
-                            if (filter == MovementFilter.DEBT) TextButton({ nav.open("debts") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Gestionar deudas", "Manage debts"), color = Dincr.colors.tint) }
+                            if (filter == MovementFilter.DEBT) DincrTonalButton(tx("Gestionar deudas", "Manage debts"), { nav.open("debts") })
                         }
                     }
                 }
