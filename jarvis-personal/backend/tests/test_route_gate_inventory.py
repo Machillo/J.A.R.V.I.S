@@ -11,7 +11,7 @@ import json
 from backend.tests.get_route_harness import call_every_get
 from backend.tests.route_gates import INVENTORY, inventory
 
-OWNER_GATES = {"internal_only", "router_roles:owner", "roles:owner", "owner_service"}
+OWNER_GATES = {"internal_only", "router_roles:owner", "roles:owner", "owner_service", "mail_reading:verified_owner"}
 
 
 def _key(row):

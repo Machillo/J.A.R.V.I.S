@@ -113,8 +113,10 @@ jobs:
     runs-on: macos-15
     # The whole XCUITest suite runs in one xcodebuild step: about 41 of the job's minutes on a passing
     # run (2026-10-08), growing with each UI test added. At 45 the job hit the limit on main and on PRs
-    # ("exceeded the maximum execution time of 45m0s"); 75 leaves room for slower macOS runners.
-    timeout-minutes: 75
+    # ("exceeded the maximum execution time of 45m0s"). By 2026-10-26 passing runs took 63–74 minutes
+    # (main included) and PRs adding UI tests were cancelled at 75 with no failing test; 100 restores
+    # the headroom. Splitting the suite across jobs is the lasting fix once it grows again.
+    timeout-minutes: 100
     defaults:
       run:
         working-directory: jarvis-personal/native/ios

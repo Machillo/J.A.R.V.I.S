@@ -38,6 +38,10 @@ import com.dincr.data.AmountInput
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.Debt
+import com.dincr.data.DebtPayoff
+import com.dincr.data.OpsFlag
+import com.dincr.data.StrategyContract
+import com.dincr.data.DebtProgress
 import com.dincr.data.DebtRequest
 import com.dincr.data.Feature
 import com.dincr.data.IdempotencyKey
@@ -71,7 +75,8 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
     RefreshableTab(model, tx("Plan", "Plan")) {
         DincrCard {
             Column {
-                PlanRow(plan.allows(Feature.GMAIL_AUTOMATION), PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),
+                // The aguinaldo is read from CCSS notices in the mailbox: Owner-only while reading is (Profile.canReadMail).
+                if (profile?.canReadMail == true) PlanRow(true, PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),
                     tx("Estimación con las órdenes de la CCSS", "Estimate from CCSS payroll notices"), nav, "aguinaldo")
                 // §15 PR 10 (option A): locked, it opens its own locked state (Presupuesto and Calendario inside, locked).
                 PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.AutoAwesome, tx("Tu plan del mes", "Your plan for the month"),
@@ -104,6 +109,18 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val advanced = (profile?.planTier ?: PlanTier.FREE).allows(Feature.STRATEGY_BASIC)
     val debts = rememberLoad(model) { model.api.debts() }
+    // The plan's strategy debt-free date (Owner and VIP dashboards): a second, optional read that
+    // never hides the list when it fails.
+    val flags by model.flags.collectAsStateWithLifecycle()
+    val contract = StrategyContract.of(profile, flags.isEnabled(OpsFlag.VIP_INTELLIGENCE))
+    var strategyDate by remember { mutableStateOf<DebtProgress.StrategyDate?>(null) }
+    LaunchedEffect(contract, debts.state) {
+        strategyDate = when (contract) {
+            StrategyContract.OWNER -> runCatching { DebtProgress.strategyDate(model.api.ownerStrategyDashboard().strategy) }.getOrNull()
+            StrategyContract.VIP_USERS -> runCatching { DebtProgress.strategyDate(model.api.strategyDashboard().strategy) }.getOrNull()
+            else -> null
+        }
+    }
     var editing by remember { mutableStateOf<Debt?>(null) }
     var creating by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf<Debt?>(null) }
@@ -129,6 +146,7 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
                         AmountLine(tx("Cuotas del mes", "Monthly payments"), Debt.knownSum(list.map { it.monthlyPayment }))
                     }
                 }
+                DebtPayoffSummary(DebtPayoff.summary(list), DebtProgress.total(list), strategyDate)
                 list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }, onHistory = { history = debt }) }
             }
         }
@@ -171,9 +189,16 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
                 MoneyText(debt.remainingAmount)
             }
             // The backend sends 0 % when the original amount is unknown: progress only from a known one.
-            debt.knownProgressPercent?.let { ProgressLine(it / 100.0, tx("${it.toInt()} % pagado", "${it.toInt()} % paid")) }
+            DebtProgress.of(debt)?.let { amounts ->
+                val left = Math.round(amounts.remainingFraction * 100)
+                Column(Modifier.testTag("debt.progress.${debt.id}")) {
+                    ProgressLine(amounts.ratio, tx("Pagado ${Dincr.money.format(amounts.paid)} de ${Dincr.money.format(amounts.original)} · te falta el $left %",
+                        "Paid ${Dincr.money.format(amounts.paid)} of ${Dincr.money.format(amounts.original)} · $left % left"))
+                }
+            }
             debt.monthlyPayment?.let { AmountLine(tx("Cuota mensual", "Monthly payment"), it) }
             debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateLabel(it)) }
+            DebtPayoffLine(debt)
             // DEB-07a: the payments recorded for this debt (read-only, every plan).
             TextButton(onHistory, modifier = Modifier.heightIn(min = 48.dp).testTag("debt.history.${debt.id}")) { Text(tx("Ver pagos", "See payments"), color = Dincr.colors.tint) }
             Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {

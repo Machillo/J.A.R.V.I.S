@@ -26,6 +26,11 @@ class DincrApi(private val client: ApiClient) {
     suspend fun choosePlan(request: PlanChangeRequest): PlanChangeResult = client.send("POST", "/auth/plan", request)
     suspend fun billingCatalog(): BillingCatalog = client.get("/product-ops/billing/catalog")
 
+    // --- Personal appearance (APP-1: the Owner only; the backend refuses everyone else) ---------
+    suspend fun appearance(): AppearanceState = client.get("/user-product/appearance")
+    suspend fun saveAppearance(prefs: AppearancePrefs): AppearanceState = client.send("PUT", "/user-product/appearance", prefs.sanitized())
+    suspend fun resetAppearance(): AppearanceState = client.send("DELETE", "/user-product/appearance")
+
     // --- Operations ------------------------------------------------------------------------------
     suspend fun featureFlags(): FeatureFlags = client.get("/product-ops/feature-flags")
     suspend fun health(): ServiceHealth = client.get("/product-ops/health")
@@ -61,9 +66,22 @@ class DincrApi(private val client: ApiClient) {
         val path = if (kind == MovementKind.INCOME) "/user-product/finance/income" else "/user-product/finance/expenses"
         client.send<EntryCreate, JsonElement>("POST", path, entry, idempotencyKey)
     }
-    suspend fun update(movementId: String, update: MovementUpdate) {
-        client.send<MovementUpdate, Acknowledgement>("PUT", "/user-product/free/movements/${encode(movementId)}", update)
+    /**
+     * [paidWith] only for an expense: [PaidWithChange.Unchanged] leaves the stored link as it is (the
+     * key is not sent); a cleared link travels as an explicit null, so that body is built by hand.
+     */
+    suspend fun update(movementId: String, update: MovementUpdate, paidWith: PaidWithChange = PaidWithChange.Unchanged) {
+        val path = "/user-product/free/movements/${encode(movementId)}"
+        if (paidWith !is PaidWithChange.Set) {
+            client.send<MovementUpdate, Acknowledgement>("PUT", path, update)
+            return
+        }
+        val fields = client.json.encodeToJsonElement(MovementUpdate.serializer(), update) as kotlinx.serialization.json.JsonObject
+        client.send<kotlinx.serialization.json.JsonObject, Acknowledgement>("PUT", path, kotlinx.serialization.json.JsonObject(
+            fields + ("financial_account_id" to kotlinx.serialization.json.JsonPrimitive(paidWith.accountId))))
     }
+    /** The own accounts and cards an expense can say it was paid with. */
+    suspend fun paidWithOptions(): PaidWithOptions = client.get("/user-product/finance/expenses/paid-with-options")
     suspend fun delete(movementId: String) {
         client.send<Acknowledgement>("DELETE", "/user-product/free/movements/${encode(movementId)}")
     }
@@ -114,6 +132,12 @@ class DincrApi(private val client: ApiClient) {
     suspend fun strategyDashboard(): StrategyDashboard = client.get("/user-product/vip/strategy-dashboard")
     /** The Owner's strategy (`strategy.scope == "owner"`): only called when `/auth/me` says owner ([StrategyContract]). */
     suspend fun ownerStrategyDashboard(): StrategyDashboard = client.get("/jarvis/premium/strategy-dashboard")
+    /** Owner only (phase 1): the same strategy applied to an amount the Owner confirms. Writes nothing. */
+    suspend fun ownerExactDistribution(request: ExactDistributionRequest): StrategyDashboard =
+        client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution", request)
+    /** Owner only: CONFIRMAR — records the distribution the Owner carried out, once per confirmation key. */
+    suspend fun ownerConfirmExactDistribution(request: ExactDistributionConfirmRequest): ExactDistributionConfirmation =
+        client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution/confirm", request)
     suspend fun salvavidas(): Salvavidas = client.get("/user-product/vip/salvavidas")
     suspend fun updateSalvavidas(update: SalvavidasUpdate): Salvavidas = client.send("PUT", "/user-product/vip/salvavidas", update)
 
@@ -121,6 +145,7 @@ class DincrApi(private val client: ApiClient) {
     suspend fun commandCenter(): CommandCenter = client.get("/user-product/vip/command-center")
     suspend fun strategyVip(): Strategy = client.get("/user-product/finance/strategy-vip")
     suspend fun simulate(request: ScenarioRequest): ScenarioResult = client.send("POST", "/user-product/finance/strategy-vip/simulate", request)
+    suspend fun debtScenario(request: DebtScenarioRequest): DebtScenarioResult = client.send("POST", "/user-product/finance/strategy-vip/debt-scenario", request)
     suspend fun aguinaldo(): Aguinaldo = client.get("/user-product/vip/aguinaldo")
     suspend fun monthlyReview(period: String): MonthlyReview = client.get("/user-product/vip/lifecycle/monthly-review", mapOf("period" to period))
     suspend fun proactiveAdvisor(): ProactiveAdvisor = client.get("/user-product/vip/lifecycle/proactive-advisor")
@@ -167,12 +192,69 @@ class DincrApi(private val client: ApiClient) {
         client.send("POST", "/user-product/vip/gmail/candidates/$candidateId/own-transfer", request)
     suspend fun financialIdentity(): FinancialIdentity = client.get("/user-product/vip/financial-identity")
     suspend fun setAccountOwnership(id: Long, own: Boolean): Acknowledgement =
-        client.send("PUT", "/user-product/vip/financial-identity/accounts/$id", OwnershipRequest(if (own) "own" else "not_mine"))
+        setAccountOwnership(id, if (own) AccountOwnership.OWN else AccountOwnership.NOT_MINE)
+    suspend fun setAccountOwnership(id: Long, ownership: AccountOwnership): Acknowledgement =
+        client.send("PUT", "/user-product/vip/financial-identity/accounts/$id", OwnershipRequest(ownership.wire))
+    /**
+     * Sets or clears (`null`) an own credit card's statement cut day. The key always travels, even as
+     * an explicit null: the client drops null fields, so the body is built by hand.
+     */
+    suspend fun setStatementCutDay(id: Long, day: Int?): Acknowledgement =
+        client.send("PUT", "/user-product/vip/financial-identity/accounts/$id/statement-cut-day",
+            kotlinx.serialization.json.buildJsonObject { put("statement_cut_day", kotlinx.serialization.json.JsonPrimitive(day)) })
+    /** Marks as own an account no notice came from; the backend re-evaluates the pending notices. */
+    suspend fun declareOwnAccount(declaration: OwnAccountDeclaration): FinancialAccountResult =
+        client.send("POST", "/user-product/vip/financial-identity/accounts", declaration)
 
     // --- JARVIS "Análisis financiero" (Owner; the routers are Owner-only on the server) --------------
     suspend fun transactionAnalysis(): TransactionAnalysis = client.get("/transactions/analysis/summary")
     suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
     suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")
+
+    // --- JARVIS "Mi dinero" (Owner; `/finance/*` is Owner-only on the server) -------------------------
+    // Saving or removing an account is an explicit Owner command, never retried on its own.
+    suspend fun cycleReport(): CycleReport = client.get("/finance/cycle-report")
+    suspend fun accountBalances(): AccountBalances = client.get("/finance/account-balances")
+    /** Creates the account, or updates the one with the same name and last 4 digits, with this balance. */
+    suspend fun saveAccountBalance(request: AccountBalanceRequest) {
+        client.send<AccountBalanceRequest, Acknowledgement>("POST", "/finance/account-balances", request)
+    }
+    /** Removes the account from the Owner's accounts (the backend deactivates it). */
+    suspend fun removeAccountBalance(id: Long) {
+        client.send<Acknowledgement>("DELETE", "/finance/account-balances/$id")
+    }
+
+    // --- JARVIS "Patrimonio" (Owner; `/finance/*` is Owner-only on the server) -----------------------
+    // The reads never write. The writes are explicit Owner commands, never retried on their own.
+    suspend fun investmentCenter(): InvestmentCenter = client.get("/finance/investment-center")
+    /** Asks the server to refresh the snapshot from IBKR (an external call that can fail). */
+    suspend fun syncIbkr(): IbkrSyncResult = client.send("POST", "/finance/investment-center/sync-ibkr")
+    suspend fun businessCenter(): BusinessCenter = client.get("/finance/business-center")
+    suspend fun createBusiness(request: BusinessCreateRequest): BusinessWriteResult =
+        client.send("POST", "/finance/business-center/businesses", request)
+    /** An income or expense also creates a transaction in the Owner's ledger. */
+    suspend fun addBusinessMovement(request: BusinessMovementRequest): BusinessWriteResult =
+        client.send("POST", "/finance/business-center/movements", request)
+
+    // --- JARVIS "Registros" (Owner; `/finance/*` is Owner-only on the server) -------------------------
+    suspend fun moneyTimeline(days: Int = 45): MoneyTimeline = client.get("/finance/timeline", mapOf("days" to days.toString()))
+    suspend fun reconciliation(): Reconciliation = client.get("/finance/reconciliation")
+    /** An explicit Owner command, never retried on its own. */
+    suspend fun confirmReconciliation(accountId: Long, request: ReconciliationConfirmRequest): ReconciliationConfirmResult =
+        client.send("POST", "/finance/reconciliation/$accountId/confirm", request)
+
+    // --- JARVIS "Control de dinero" (Owner; `/finance/*` is Owner-only on the server) ----------------
+    // The writes are explicit Owner commands, never retried on their own: the backend does not deduplicate them.
+    suspend fun receivables(): ReceivablesReport = client.get("/finance/receivables")
+    suspend fun recordReceivablePayment(id: Long, request: ReceivablePaymentRequest) =
+        checkWrite(client.send<ReceivablePaymentRequest, ReceivableWriteResult>("POST", "/finance/receivables/$id/payments", request))
+    suspend fun addReceivableEntry(request: ReceivableEntryRequest) =
+        checkWrite(client.send<ReceivableEntryRequest, ReceivableWriteResult>("POST", "/finance/receivables/entries", request))
+
+    /** The backend refuses these writes in the body with HTTP 200: an error, never "saved". */
+    private fun checkWrite(result: ReceivableWriteResult) {
+        if (!result.succeeded) throw ApiError(ApiError.Kind.VALIDATION, code = result.status.orEmpty(), message = result.message ?: "No pudimos guardarlo.")
+    }
 
     // --- Store billing ----------------------------------------------------------------------------------
     suspend fun storeCatalog(): StoreCatalog = client.get("/product-ops/billing/store/catalog")

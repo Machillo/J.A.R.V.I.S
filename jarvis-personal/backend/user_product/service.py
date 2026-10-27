@@ -9,11 +9,15 @@ from backend.auth.current_user import get_current_account_id, get_current_user_i
 from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
-from backend.finance.service import get_payroll_events
+from backend.core.time import costa_rica_today
+from backend.finance.debt_automation import schedule_automation_enabled
+from backend.finance.service import apply_monthly_payment_to_debt, get_payroll_events
 from backend.finance.category_catalog import manual_expense_category, normalize_category, expense_type_for_category
 from backend.user_product.basic_service import _require_basic_tables
+from backend.user_product.debt_payoff import payoff_estimate
 from backend.user_product.debt_rates import UNKNOWN_RATE_SQL, known_interest_rate, rate_for_create, rate_for_update, with_known_rates
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
+from backend.user_product import expense_account
 from backend.user_product.strategy_engine import (
     build_basic_strategy,
     build_paycheck_plan,
@@ -185,7 +189,8 @@ def list_expenses():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
-            f"""SELECT id,category,expense_type,description,amount,{ORIGINAL_COLUMNS},created_at,user_id,workspace_id
+            f"""SELECT id,category,expense_type,description,amount,{ORIGINAL_COLUMNS},{expense_account.SELECT_SQL},
+                      created_at,user_id,workspace_id
                FROM expenses WHERE workspace_id=%s ORDER BY id DESC""",
             (workspace_id,),
         ).fetchall()
@@ -199,6 +204,7 @@ def create_expense_entry(payload):
     expense_type = expense_type_for_category(category)
     with get_connection() as conn:
         values = _entry_values(conn, payload)
+        write, link = expense_account.requested_link(conn, payload, account_id=get_current_account_id(), workspace_id=workspace_id)
         row = conn.execute(
             f"""INSERT INTO expenses(category,expense_type,description,amount,{ORIGINAL_COLUMNS},user_id,workspace_id,created_at)
                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
@@ -206,9 +212,11 @@ def create_expense_entry(payload):
             (category, expense_type, payload.description or "", values["amount"], values["original_amount"],
              values["original_currency"], values["exchange_rate"], user_id, workspace_id, payload.entry_date),
         ).fetchone()
+        if write:
+            expense_account.write_link(conn, row["id"], link, workspace_id=workspace_id)
         mark_applied(conn)
         conn.commit()
-    return {**row, "entry_date": payload.entry_date or str(row.get("created_at") or "")[:10]}
+    return {**row, "financial_account_id": link, "entry_date": payload.entry_date or str(row.get("created_at") or "")[:10]}
 
 
 def update_expense(expense_id: int, payload):
@@ -216,6 +224,7 @@ def update_expense(expense_id: int, payload):
     category = manual_expense_category(payload.category)
     with get_connection() as conn:
         values = _entry_values(conn, payload)
+        write, link = expense_account.requested_link(conn, payload, account_id=get_current_account_id(), workspace_id=workspace_id)
         row = conn.execute(
             f"""UPDATE expenses SET amount=%s,description=%s,category=%s,expense_type=%s,
                       original_amount=%s,original_currency=%s,exchange_rate=%s,
@@ -228,6 +237,8 @@ def update_expense(expense_id: int, payload):
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Gasto no encontrado.")
+        if write:
+            expense_account.write_link(conn, expense_id, link, workspace_id=workspace_id)
         mark_applied(conn)
         conn.commit()
     return {**row, "entry_date": str(row.get("created_at"))[:10]}
@@ -298,6 +309,8 @@ def pay_user_debt(debt_id: int, amount: float):
     payment = max(float(amount or 0), 0)
     if payment <= 0:
         raise HTTPException(status_code=400, detail="El pago debe ser mayor que cero.")
+    if schedule_automation_enabled():
+        return _pay_owner_debt(debt_id, payment)
     with get_connection() as conn:
         debt = conn.execute(
             # Locked: a concurrent payment waits and then reads the reduced balance.
@@ -325,6 +338,23 @@ def pay_user_debt(debt_id: int, amount: float):
         conn.commit()
     return {"status": "OK", "debt_id": debt_id, "payment_amount": applied, "new_remaining_amount": new_remaining}
 
+
+
+def _pay_owner_debt(debt_id: int, payment: float) -> dict:
+    """The verified Owner's debts follow their installment schedule (finance/debt_automation.py).
+
+    A payment registered from the app goes through the same amortization command as the Owner's
+    other payments: it splits interest, fees and principal, records the installment in
+    debt_payments, and never charges an installment the daily automation already recorded (nor
+    lets the automation record it again).
+    """
+    result = apply_monthly_payment_to_debt(debt_id, payment, payment_date=costa_rica_today().isoformat())
+    if result.get("status") == "ERROR":
+        message = result.get("message") or "No pudimos registrar el pago."
+        raise HTTPException(status_code=404 if "no encontrada" in message.lower() else 400, detail=message)
+    return {"status": "OK", "debt_id": debt_id, "payment_amount": result.get("payment_amount"),
+            "new_remaining_amount": result.get("new_remaining_amount"), "installment_number": result.get("installment_number"),
+            "message": result.get("message")}
 
 
 def list_user_debt_payments(debt_id: int) -> list[dict]:
@@ -360,8 +390,10 @@ def list_user_debts():
             (workspace_id,),
         ).fetchall()
     # `interest_rate_known` is what DINCR knows (an unconfirmed historical 0 is not known); the
-    # stored `interest_rate` is returned as before.
-    return [_with_rate_knowledge(row) for row in rows]
+    # stored `interest_rate` is returned as before. Each debt also says when it is expected to be
+    # paid off (debt_payoff: read-only, never a date for an unknown rate).
+    today = costa_rica_today()
+    return [{**_with_rate_knowledge(row), **payoff_estimate(dict(row), today)} for row in rows]
 
 
 def _with_rate_knowledge(row) -> dict:

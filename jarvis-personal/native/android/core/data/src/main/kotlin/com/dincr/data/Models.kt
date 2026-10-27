@@ -93,6 +93,12 @@ data class Profile(
     val hasUnsupportedRole: Boolean get() = !role.isNullOrEmpty() && role != "user" && role != "owner"
     /** The Owner account is never deleted from the public app (DELETE /auth/me would remove it). */
     val canDeleteAccountInApp: Boolean get() = !isOwner
+    /**
+     * Reading a mailbox (connect, sync, the aguinaldo from CCSS notices) is the Owner's alone during
+     * the launch; the backend refuses everyone else (require_mail_reading). What was already imported
+     * stays reviewable, and a connected mailbox can always be disconnected. iOS: `Profile.canReadMail`.
+     */
+    val canReadMail: Boolean get() = isOwner
     val plan: String get() = subscription?.plan?.lowercase() ?: "free"
     /** What the app offers; the backend still decides every request. Only the server's role elevates Owner. */
     val planTier: PlanTier get() = if (isOwner) PlanTier.VIP else PlanTier.from(plan)
@@ -172,6 +178,8 @@ data class Movement(
     @SerialName("original_amount") val originalAmount: Money? = null,
     @SerialName("original_currency") val originalCurrency: String? = null,
     @SerialName("exchange_rate") val exchangeRate: Money? = null,
+    /** The own account or card a manual expense says paid it; null = not told (never inferred). */
+    @SerialName("financial_account_id") val financialAccountId: Long? = null,
 ) {
     /**
      * Whether this app may edit or delete the row. The prototype does not edit currencies (it
@@ -232,6 +240,8 @@ data class EntryCreate(
     @SerialName("entry_date") val entryDate: String?,
     val currency: String? = null,
     @SerialName("exchange_rate") val exchangeRate: Money? = null,
+    /** Only for an expense: the own account or card that paid it. Null = not told (not sent). */
+    @SerialName("financial_account_id") val financialAccountId: Long? = null,
 )
 
 /** Body of `PUT /user-product/free/movements/{id}`; currency and rate as in [EntryCreate]. */

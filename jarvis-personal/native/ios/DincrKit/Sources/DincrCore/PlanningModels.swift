@@ -18,14 +18,21 @@ public struct Debt: Decodable, Sendable, Equatable, Identifiable {
     /// Whether DINCR knows the rate (the server's rule): false for a rate never given and for an
     /// unconfirmed historical 0. Nil from an older server (the stored rate is then shown as before).
     public let interestRateKnown: Bool?
+    /// When the backend expects the debt to be paid off (debt_payoff.py): the installments left and
+    /// the date of the last one. Nil when it cannot know (unknown rate, no payment, or a payment that
+    /// does not cover the interest), never a guessed date. 0 months: already paid.
+    public let estimatedPayoffMonths: Int?
+    public let estimatedPayoffDate: String?
 
     public init(id: Int, name: String?, debtType: String? = "other", totalAmount: Decimal? = nil, remainingAmount: Decimal?,
                 monthlyPayment: Decimal? = nil, interestRate: Decimal? = nil, paymentDay: Int? = nil,
-                nextPaymentDate: String? = nil, progressPercent: Double? = nil, interestRateKnown: Bool? = nil) {
+                nextPaymentDate: String? = nil, progressPercent: Double? = nil, interestRateKnown: Bool? = nil,
+                estimatedPayoffMonths: Int? = nil, estimatedPayoffDate: String? = nil) {
         self.id = id; self.name = name; self.debtType = debtType; self.totalAmount = totalAmount
         self.remainingAmount = remainingAmount; self.monthlyPayment = monthlyPayment; self.interestRate = interestRate
         self.paymentDay = paymentDay; self.nextPaymentDate = nextPaymentDate; self.progressPercent = progressPercent
         self.interestRateKnown = interestRateKnown
+        self.estimatedPayoffMonths = estimatedPayoffMonths; self.estimatedPayoffDate = estimatedPayoffDate
     }
 
     /// The rate the edit form starts with: an unknown rate starts empty, never as "0" (UNKNOWN ≠ 0%).

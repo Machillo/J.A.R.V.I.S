@@ -53,6 +53,10 @@ import com.dincr.data.EntryCreate
 import com.dincr.data.Movement
 import com.dincr.data.MovementKind
 import com.dincr.data.MovementUpdate
+import com.dincr.data.PaidWithChange
+import com.dincr.data.PaidWithOptions
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.CancellationException
 import com.dincr.design.Dincr
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.ErrorState
@@ -116,6 +120,14 @@ fun MovementEditorSheet(
     var saveError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var pickingDate by remember { mutableStateOf(false) }
+    // "Pagado con": the user's own accounts and cards (empty while unavailable or without any).
+    var paidWithOptions by remember { mutableStateOf(emptyList<PaidWithOptions.Option>()) }
+    var paidWith by remember { mutableStateOf(editing?.financialAccountId) }
+    LaunchedEffect(Unit) {
+        paidWithOptions = try { model.api.paidWithOptions().offered } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+    }
+    // Only a manual expense says what paid it.
+    val showsPaidWith = kind == MovementKind.EXPENSE && paidWithOptions.isNotEmpty() && (editing == null || editing.origin == "expense")
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -145,12 +157,16 @@ fun MovementEditorSheet(
         scope.launch {
             val result = model.load(tx("No pudimos guardar. Revisá tu conexión e intentá de nuevo.", "We couldn’t save. Check your connection and try again.")) {
                 if (editing == null) {
-                    val entry = EntryCreate(amount, description.trim(), category, date.toString(), sentCurrency, rate)
+                    val entry = EntryCreate(amount, description.trim(), category, date.toString(), sentCurrency, rate,
+                        financialAccountId = if (showsPaidWith) paidWith else null)
                     val key = submission?.takeIf { it.first == entry }?.second ?: IdempotencyKey.new()
                     submission = entry to key
                     model.api.create(kind, entry, key)
                 } else {
-                    model.api.update(editing.movementId, MovementUpdate(date.toString(), description.trim(), amount, editing.transactionType ?: "expense", category, editing.notes.orEmpty(), sentCurrency, rate))
+                    // Untouched, the stored link is left as it is (never rewritten by another edit).
+                    val paidWithChange = if (showsPaidWith && paidWith != editing.financialAccountId) PaidWithChange.Set(paidWith) else PaidWithChange.Unchanged
+                    model.api.update(editing.movementId, MovementUpdate(date.toString(), description.trim(), amount, editing.transactionType ?: "expense", category, editing.notes.orEmpty(), sentCurrency, rate),
+                        paidWithChange)
                 }
             }
             saving = false
@@ -225,6 +241,19 @@ fun MovementEditorSheet(
                 }
             }
             OutlinedButton({ pickingDate = true }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("${tx("Fecha", "Date")}: ${dayLabel(date.toString())}") }
+            if (showsPaidWith) {
+                var paidWithOpen by remember { mutableStateOf(false) }
+                val chosen = paidWithOptions.firstOrNull { it.id == paidWith }?.label
+                    ?: if (paidWith != null) tx("Cuenta guardada", "Saved account") else tx("Sin indicar", "Not set")
+                ExposedDropdownMenuBox(paidWithOpen, { paidWithOpen = it }) {
+                    OutlinedTextField(chosen, {}, readOnly = true, label = { Text(tx("Pagado con", "Paid with")) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(paidWithOpen) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable).testTag("editor.paidWith"))
+                    ExposedDropdownMenu(paidWithOpen, { paidWithOpen = false }) {
+                        DropdownMenuItem({ Text(tx("Sin indicar", "Not set")) }, { paidWith = null; paidWithOpen = false })
+                        paidWithOptions.forEach { option -> DropdownMenuItem({ Text(option.label) }, { paidWith = option.id; paidWithOpen = false }) }
+                    }
+                }
+            }
             saveError?.let { ErrorState(it) }
             DincrPrimaryButton(tx("Guardar", "Save"), ::save, loading = saving, modifier = Modifier.testTag("editor.save"))
             Row { if (editing != null && editing.canEdit(entryCurrencies)) TextButton({ onDelete(editing) }) { Text(tx("Eliminar movimiento", "Delete transaction"), color = Dincr.colors.negative) } }

@@ -47,6 +47,9 @@ struct MovementEditor: View {
     @State private var fieldErrors: [Field: String] = [:]
     @State private var saveError: String?
     @State private var saved = 0
+    /// "Pagado con": the user's own accounts and cards (empty while unavailable or without any).
+    @State private var paidWithOptions: [PaidWithOptions.Option] = []
+    @State private var paidWith: Int?
     @AccessibilityFocusState private var summaryFocused: Bool
 
     enum Field: Hashable { case amount, description, rate }
@@ -136,6 +139,13 @@ struct MovementEditor: View {
                         ForEach(categories, id: \.self) { Text($0).tag($0) }
                     }
                     DatePicker(tx("Fecha", "Date"), selection: $date, in: ...Date.now.addingTimeInterval(86_400 * 365), displayedComponents: .date)
+                    if showsPaidWith {
+                        Picker(tx("Pagado con", "Paid with"), selection: $paidWith) {
+                            Text(tx("Sin indicar", "Not set")).tag(Int?.none)
+                            ForEach(paidWithChoices) { Text($0.label).tag(Optional($0.id)) }
+                        }
+                        .accessibilityIdentifier("editor.paidWith")
+                    }
                 }
                 if kind == .income && !isEditing {
                     Section {
@@ -182,6 +192,7 @@ struct MovementEditor: View {
                 if newValue != base, rateText.isEmpty, let latestRate { rateText = format.inputText(latestRate) }
             }
             .onAppear(perform: prefill)
+            .task { paidWithOptions = (try? await model.service.paidWithOptions())?.offered ?? [] }
             .sensoryFeedback(.success, trigger: saved)
             .sensoryFeedback(.error, trigger: saveError)
         }
@@ -192,6 +203,21 @@ struct MovementEditor: View {
         let base = kind == .income ? Self.incomeCategories : Self.expenseCategories
         guard let storedCategory, !base.contains(storedCategory) else { return base }
         return [storedCategory] + base
+    }
+
+    /// Only a manual expense says what paid it.
+    private var showsPaidWith: Bool {
+        guard kind == .expense, !paidWithOptions.isEmpty else { return false }
+        if case .edit(let movement) = mode { return movement.origin == "expense" }
+        return true
+    }
+
+    /// The offered accounts, plus a stored one that is no longer offered (so the picker can show it).
+    private var paidWithChoices: [PaidWithOptions.Option] {
+        guard case .edit(let movement) = mode, let stored = movement.financialAccountId,
+              !paidWithOptions.contains(where: { $0.id == stored }) else { return paidWithOptions }
+        return paidWithOptions + [PaidWithOptions.Option(id: stored, accountName: tx("Cuenta guardada", "Saved account"), bankName: nil,
+                                                         accountType: nil, accountLast4: nil, currency: nil)]
     }
 
     private var hasChanges: Bool {
@@ -228,6 +254,7 @@ struct MovementEditor: View {
         description = movement.description ?? ""
         storedCategory = movement.category.flatMap { $0.isEmpty ? nil : $0 }
         category = storedCategory ?? categories[0]
+        paidWith = movement.financialAccountId
         if let day = movement.day, let parsed = Self.dayFormatter.date(from: day) { date = parsed }
     }
 
@@ -281,14 +308,17 @@ struct MovementEditor: View {
             switch mode {
             case .create:
                 let entry = EntryCreate(amount: amount, description: text, category: category, entryDate: day,
-                                        currency: isForeign ? currency : nil, exchangeRate: isForeign ? rate : nil)
+                                        currency: isForeign ? currency : nil, exchangeRate: isForeign ? rate : nil,
+                                        financialAccountId: showsPaidWith ? paidWith : nil)
                 let key = (submission?.body == entry ? submission?.key : nil) ?? IdempotencyKey.new()
                 submission = (entry, key)
                 try await model.service.create(kind, entry, idempotencyKey: key)
             case .edit(let movement):
                 try await model.service.update(movementID: movement.movementId, MovementUpdate(
                     transactionDate: day, description: text, amount: amount, transactionType: movement.transactionType,
-                    category: category, notes: movement.notes ?? "", currency: isForeign ? currency : nil, exchangeRate: isForeign ? rate : nil))
+                    category: category, notes: movement.notes ?? "", currency: isForeign ? currency : nil, exchangeRate: isForeign ? rate : nil,
+                    // Untouched, the stored link is left as it is (never rewritten by another edit).
+                    paidWith: showsPaidWith && paidWith != movement.financialAccountId ? .set(paidWith) : .unchanged))
             }
             saved += 1
             onSaved(isEditing ? tx("Cambios guardados", "Changes saved") : (kind == .income ? tx("Ingreso guardado", "Income saved") : tx("Gasto guardado", "Expense saved")))

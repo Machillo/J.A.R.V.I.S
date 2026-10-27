@@ -108,7 +108,7 @@ def test_resolving_a_legacy_raw_direction_never_writes_it_back():
         "raw_payload": {"transaction_type": "debt_payment", "movement_direction": "payment", "category": "MultiMoney"},
     }
     connection = _Connection([_Result(one=legacy), _Result(one=None), _Result(rows=[]), _Result(), _Result(), _Result()])
-    assert resolve_candidate(connection, 9) == {"status": "pending"}
+    assert resolve_candidate(connection, 9, account_id="account-a", workspace_id="workspace-a") == {"status": "pending"}
     query, params = connection.calls[-1]
     assert "movement_direction=CASE WHEN %s THEN 'internal' ELSE %s END" in query
     assert params[5] == "out" and params[5] in DIRECTIONS

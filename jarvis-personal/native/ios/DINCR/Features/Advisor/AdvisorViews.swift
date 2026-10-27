@@ -50,8 +50,11 @@ struct WealthHubView: View {
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
                            subtitle: tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"), id: "wealth.accounts") { AccountsView() }
-                GatedEntry(minimum: .vip, flag: nil, symbol: "envelope", title: tx("Conexiones de correo", "Mail connections"),
-                           subtitle: tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices"), id: "wealth.connections") { EmailMonitorView() }
+                // Reading mail is the Owner's alone during the launch: no row, not even locked, for anyone else.
+                if model.canReadMail {
+                    GatedEntry(minimum: .vip, flag: nil, symbol: "envelope", title: tx("Conexiones de correo", "Mail connections"),
+                               subtitle: tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices"), id: "wealth.connections") { EmailMonitorView() }
+                }
                 SectionHeader(title: tx("Deudas", "Debts"))
                 WealthDebtsCard(debts: debts) { Task { await loadDebts(refreshing: false) } }
                 SectionHeader(title: tx("Proyecciones", "Projections"))
@@ -178,14 +181,19 @@ private struct SummaryContent: View {
 
     var body: some View {
         let flow = SummaryVisuals.flow(summary)
-        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            FigureRow(label: tx("Ingresos", "Income"), amount: summary.income, sign: .income)
-            FigureRow(label: tx("Gastos", "Expenses"), amount: summary.expenses, sign: .expense)
-            FigureRow(label: tx("Pagado a deudas", "Paid to debts"), amount: summary.debtPaid)
-            FigureRow(label: tx("Balance", "Balance"), amount: summary.balance)
-            FigureRow(label: tx("Ahorrado", "Saved"), amount: summary.savings)
+        if summary.isOwnerLedger {
+            // The Owner's ledger: each figure with what it means, period and completeness (OwnerReadingViews.swift).
+            OwnerMonthSummary(summary: summary)
+        } else {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                FigureRow(label: tx("Ingresos", "Income"), amount: summary.income, sign: .income)
+                FigureRow(label: tx("Gastos", "Expenses"), amount: summary.expenses, sign: .expense)
+                FigureRow(label: tx("Pagado a deudas", "Paid to debts"), amount: summary.debtPaid)
+                FigureRow(label: tx("Balance", "Balance"), amount: summary.balance)
+                FigureRow(label: tx("Ahorrado", "Saved"), amount: summary.savings)
+            }
+            .dincrCard()
         }
-        .dincrCard()
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             SectionHeader(title: tx("Ingresos frente a gastos", "Income vs expenses"))
             if case .bars(let month) = flow {
@@ -273,32 +281,39 @@ struct ScenariosView: View {
     @State private var result: ScenarioResult?
     @State private var error: String?
     @State private var running = false
+    @State private var choice: ScenarioChoice = .general
 
     var body: some View {
         ScreenScroll(title: tx("Escenarios", "Scenarios")) {
-            VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-                Text(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes. Usá − para una baja.", "Try changes without saving anything: DINCR shows how much you’d have left each month. Use − for a decrease."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                MoneyField(label: tx("Cambio mensual de ingresos", "Monthly income change"), text: $income)
-                MoneyField(label: tx("Cambio mensual de gastos", "Monthly expense change"), text: $expenses)
-                MoneyField(label: tx("Dinero extra único", "One-off extra money"), text: $extra)
-                if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
-                Button(tx("Simular", "Simulate")) { Task { await simulate() } }
-                    .buttonStyle(.dincrPrimary(loading: running))
-                    .disabled(running)
-                    .accessibilityIdentifier("scenario.run")
+            ScenarioChoicePicker(choice: $choice)
+            if choice == .general { general } else { DebtScenarioForm(choice: choice).id(choice) }
+            FinancialDisclaimer()
+        }
+    }
+
+    /// Income, expense and one-off changes (the original what-if).
+    @ViewBuilder private var general: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            Text(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes. Usá − para una baja.", "Try changes without saving anything: DINCR shows how much you’d have left each month. Use − for a decrease."))
+                .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            MoneyField(label: tx("Cambio mensual de ingresos", "Monthly income change"), text: $income)
+            MoneyField(label: tx("Cambio mensual de gastos", "Monthly expense change"), text: $expenses)
+            MoneyField(label: tx("Dinero extra único", "One-off extra money"), text: $extra)
+            if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
+            Button(tx("Simular", "Simulate")) { Task { await simulate() } }
+                .buttonStyle(.dincrPrimary(loading: running))
+                .disabled(running)
+                .accessibilityIdentifier("scenario.run")
+        }
+        .dincrCard()
+        if let result {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                SectionHeader(title: tx("Resultado", "Result"))
+                FigureRow(label: tx("Te queda libre al mes hoy", "Left each month today"), amount: result.current?.strategicMargin)
+                FigureRow(label: tx("Te quedaría libre con el cambio", "Left each month with the change"), amount: result.scenario?.strategicMargin)
+                FigureRow(label: tx("Diferencia", "Difference"), amount: result.delta?.strategicMargin)
             }
             .dincrCard()
-            if let result {
-                VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                    SectionHeader(title: tx("Resultado", "Result"))
-                    FigureRow(label: tx("Te queda libre al mes hoy", "Left each month today"), amount: result.current?.strategicMargin)
-                    FigureRow(label: tx("Te quedaría libre con el cambio", "Left each month with the change"), amount: result.scenario?.strategicMargin)
-                    FigureRow(label: tx("Diferencia", "Difference"), amount: result.delta?.strategicMargin)
-                }
-                .dincrCard()
-            }
-            FinancialDisclaimer()
         }
     }
 

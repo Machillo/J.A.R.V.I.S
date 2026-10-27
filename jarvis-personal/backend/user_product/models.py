@@ -41,6 +41,8 @@ class ExpenseCreateRequest(BaseModel):
     # The other currency needs the user's rate (CRC per 1 USD); DINCR never invents one.
     currency: Literal["CRC", "USD"] | None = None
     exchange_rate: float | None = Field(default=None, gt=0, le=100000)
+    # The own account or card that paid it (expense_account); not sent = left as it is.
+    financial_account_id: int | None = Field(default=None, gt=0)
 
 
 class IncomeUpdateRequest(IncomeCreateRequest):
@@ -88,6 +90,17 @@ class GoalContributionRequest(BaseModel):
 
 class BasicSimulationRequest(BaseModel):
     extra_monthly: float = Field(default=0, ge=0)
+
+
+class DebtScenarioRequest(BaseModel):
+    """A debt what-if (debt_scenarios.py): pay one off, an extra payment to one, or a new debt."""
+    kind: Literal["pay_off", "extra_payment", "new_debt"]
+    debt_id: int | None = Field(default=None, gt=0)
+    amount: float | None = Field(default=None, gt=0, le=1_000_000_000_000, allow_inf_nan=False)
+    monthly_payment: float | None = Field(default=None, gt=0, le=1_000_000_000_000, allow_inf_nan=False)
+    annual_rate: float | None = Field(default=None, ge=0, le=500, allow_inf_nan=False)
+    term_months: int | None = Field(default=None, gt=0, le=600)
+    name: str | None = Field(default=None, max_length=80)
 
 
 class VipSimulationRequest(BaseModel):
@@ -207,7 +220,21 @@ class OwnTransferConfirmRequest(BaseModel):
 
 
 class FinancialAccountIdentityRequest(BaseModel):
-    ownership_status: Literal["own", "not_mine"]
+    # "pending" = the user does not recognise the account (kept with its review date).
+    ownership_status: Literal["own", "not_mine", "pending"]
+    display_name: str | None = Field(default=None, max_length=120)
+
+
+class StatementCutDayRequest(BaseModel):
+    """A credit card's cut day: 1–31, or null to clear it (the key is required)."""
+    statement_cut_day: int | None = Field(..., ge=1, le=31)
+
+
+class OwnAccountDeclareRequest(BaseModel):
+    institution_code: Literal["bac", "popular", "multimoney", "other"]
+    institution_name: str | None = Field(default=None, max_length=60)
+    account_last4: str = Field(pattern=r"^\d{4}$")
+    currency: Literal["CRC", "USD"] = "CRC"
     display_name: str | None = Field(default=None, max_length=120)
 
 
@@ -221,3 +248,6 @@ class MovementUpdateRequest(BaseModel):
     # Only manual income and expenses accept another currency.
     currency: Literal["CRC", "USD"] | None = None
     exchange_rate: float | None = Field(default=None, gt=0, le=100000)
+    # Only manual expenses carry a "paid with" account (expense_account).
+    # The own account or card that paid it (expense_account); not sent = left as it is.
+    financial_account_id: int | None = Field(default=None, gt=0)

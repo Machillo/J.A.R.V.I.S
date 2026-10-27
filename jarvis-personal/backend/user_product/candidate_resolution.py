@@ -49,17 +49,25 @@ def semantic_fingerprint(candidate: dict[str, Any]) -> str | None:
 
 
 def _confirmed_account(conn, candidate: dict[str, Any], reference: Any) -> int | None:
+    """The one own account these last 4 digits name, in a currency of the movement.
+
+    A transfer between a colones and a dollars account carries the amount in both currencies
+    (the converted ``currency`` and the ``original_currency``): either end may hold either one.
+    Two own accounts that fit are ambiguous: none is chosen, so the movement stays for review
+    instead of being treated as an own transfer.
+    """
     last4 = _last4(reference)
     if not last4:
         return None
-    row = conn.execute(
+    currencies = sorted({str(value).upper() for value in (candidate.get("currency") or "CRC", candidate.get("original_currency")) if value})
+    rows = conn.execute(
         """SELECT id FROM account_balances
            WHERE account_id=%s AND workspace_id=%s AND ownership_status='own'
-             AND is_active=TRUE AND account_last4=%s AND currency=%s
-           ORDER BY id LIMIT 1""",
-        (candidate["account_id"], candidate["workspace_id"], last4, candidate.get("currency") or "CRC"),
-    ).fetchone()
-    return int(row["id"]) if row else None
+             AND is_active=TRUE AND account_last4=%s AND currency = ANY(%s)
+           ORDER BY id LIMIT 2""",
+        (candidate["account_id"], candidate["workspace_id"], last4, currencies),
+    ).fetchall()
+    return int(rows[0]["id"]) if len(rows) == 1 else None
 
 
 # Notification <-> statement reconciliation (deterministic, Phase 1E follow-up).
@@ -67,6 +75,10 @@ CROSS_SOURCE_REASON = "same_movement_other_source"
 RECONCILED_REASON = "reconciled_with_existing_transaction"
 SAME_STATEMENT_ROW_REASON = "same_statement_row"
 POSSIBLE_MATCH_REASON = "possible_cross_source_match"
+# The ledger already holds a movement with this amount around this date (entered by hand or
+# imported before mail was connected). Only a review hint: the candidate stays pending.
+EXISTING_TRANSACTION_REASON = "possible_existing_transaction"
+EXISTING_TRANSACTION_DAYS = 2
 CROSS_SOURCE_REASONS = (CROSS_SOURCE_REASON, RECONCILED_REASON)
 # Statement rows can post a few days after the notification; only a review hint.
 POSSIBLE_MATCH_DAYS = 3
@@ -272,7 +284,7 @@ def release_cross_source_duplicates(conn, *, candidate_id: int, account_id: str,
             (released_id, account_id, workspace_id),
         )
     for released_id in released:
-        resolve_candidate(conn, released_id)
+        resolve_candidate(conn, released_id, account_id=account_id, workspace_id=workspace_id)
     return len(released)
 
 
@@ -350,11 +362,42 @@ def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int 
     return matches[0] if len(matches) == 1 else None
 
 
-def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
-    """Resolve semantic duplicates and own-account transfers conservatively."""
+def existing_transaction_matches(conn, candidate: dict[str, Any]) -> list[int]:
+    """Ledger rows of this workspace that may already be this movement.
+
+    Same amount in the movement's original currency (never a converted value), within
+    EXISTING_TRANSACTION_DAYS. Rows saved from a mail candidate are left out: those are
+    matched candidate to candidate. Equal amounts are not proof, so callers only flag.
+    """
+    key = _money_key(candidate)
+    if key is None or not candidate.get("transaction_date") or not candidate.get("workspace_id"):
+        return []
+    currency, amount = key
+    value = "t.amount" if currency == "CRC" else "t.original_amount"
+    rows = conn.execute(
+        f"""SELECT t.id FROM transactions t
+           WHERE t.workspace_id=%s
+             AND COALESCE(NULLIF(UPPER(t.original_currency),''),'CRC')=%s
+             AND ABS({value})=%s
+             AND t.transaction_date BETWEEN %s::date-{EXISTING_TRANSACTION_DAYS} AND %s::date+{EXISTING_TRANSACTION_DAYS}
+             AND NOT EXISTS (SELECT 1 FROM finva_email_candidates saved
+                             WHERE saved.workspace_id=t.workspace_id AND saved.transaction_id=t.id)
+           ORDER BY t.id LIMIT 5""",
+        (candidate["workspace_id"], currency, amount, candidate["transaction_date"], candidate["transaction_date"]),
+    ).fetchall()
+    return [int(row["id"]) for row in rows]
+
+
+def resolve_candidate(conn, candidate_id: int, *, account_id: str, workspace_id: str) -> dict[str, Any]:
+    """Resolve semantic duplicates and own-account transfers conservatively.
+
+    The candidate is read and written only inside the caller's account and workspace (SEC-06): an
+    id from elsewhere finds nothing, even if a stored link (`related_candidate_id`) ever pointed
+    across workspaces.
+    """
     row = conn.execute(
-        """SELECT * FROM finva_email_candidates WHERE id=%s FOR UPDATE""",
-        (candidate_id,),
+        """SELECT * FROM finva_email_candidates WHERE id=%s AND account_id=%s AND workspace_id=%s FOR UPDATE""",
+        (candidate_id, account_id, workspace_id),
     ).fetchone()
     if not row:
         return {"status": "missing"}
@@ -366,8 +409,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
             """UPDATE finva_email_candidates
                SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
                    resolution_reason=%s,updated_at=NOW()
-               WHERE id=%s""",
-            (fingerprint, same_row_id, SAME_STATEMENT_ROW_REASON, candidate_id),
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (fingerprint, same_row_id, SAME_STATEMENT_ROW_REASON, candidate_id, account_id, workspace_id),
         )
         return {"status": "duplicate", "related_candidate_id": same_row_id}
     duplicate = None
@@ -385,8 +428,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
             """UPDATE finva_email_candidates
                SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
                    resolution_reason='same_semantic_movement',updated_at=NOW()
-               WHERE id=%s""",
-            (fingerprint, duplicate_id, candidate_id),
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (fingerprint, duplicate_id, candidate_id, account_id, workspace_id),
         )
         return {"status": "duplicate", "related_candidate_id": duplicate_id}
 
@@ -396,8 +439,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
             """UPDATE finva_email_candidates
                SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
                    resolution_reason=%s,updated_at=NOW()
-               WHERE id=%s""",
-            (fingerprint, cross_id, cross_reason, candidate_id),
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (fingerprint, cross_id, cross_reason, candidate_id, account_id, workspace_id),
         )
         return {"status": "duplicate", "related_candidate_id": cross_id}
     possible_match_id = cross_id if cross_reason == POSSIBLE_MATCH_REASON else None
@@ -410,6 +453,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
     )
     is_internal = is_internal or bool(pair_id)
     reason = "paired_owned_transfer" if pair_id else "confirmed_owned_endpoints" if is_internal else POSSIBLE_MATCH_REASON if cross_reason == POSSIBLE_MATCH_REASON else None
+    if reason is None and existing_transaction_matches(conn, candidate):
+        reason = EXISTING_TRANSACTION_REASON
     raw = candidate.get("raw_payload") or {}
     base_type = str(raw.get("transaction_type") or candidate.get("transaction_type") or "transfer")
     # raw_payload may predate the canonical contract: never write a value the CHECK rejects.
@@ -422,10 +467,10 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
                movement_direction=CASE WHEN %s THEN 'internal' ELSE %s END,
                category=CASE WHEN %s THEN 'Movimiento interno' ELSE %s END,
                related_candidate_id=%s,resolution_reason=%s,updated_at=NOW()
-           WHERE id=%s""",
+           WHERE id=%s AND account_id=%s AND workspace_id=%s""",
         (
             fingerprint, is_internal, is_internal, base_type, is_internal, base_direction,
-            is_internal, base_category, pair_id or possible_match_id, reason, candidate_id,
+            is_internal, base_category, pair_id or possible_match_id, reason, candidate_id, account_id, workspace_id,
         ),
     )
     if pair_id:
@@ -450,5 +495,5 @@ def reevaluate_workspace_candidates(conn, *, account_id: str, workspace_id: str)
         (account_id, workspace_id),
     ).fetchall()
     for row in rows:
-        resolve_candidate(conn, int(row["id"]))
+        resolve_candidate(conn, int(row["id"]), account_id=account_id, workspace_id=workspace_id)
     return len(rows)
