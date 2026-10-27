@@ -1189,6 +1189,8 @@ CREATE TABLE IF NOT EXISTS account_balances (
     balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
     include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- A credit card's declared statement cut day (1-31); NULL = not declared, never assumed (20261026120000).
+    statement_cut_day SMALLINT CONSTRAINT account_balances_statement_cut_day_check CHECK (statement_cut_day IS NULL OR statement_cut_day BETWEEN 1 AND 31),
     UNIQUE(workspace_id, account_name, account_last4)
 );
 CREATE TABLE IF NOT EXISTS account_balance_history (
@@ -1201,6 +1203,9 @@ CREATE TABLE IF NOT EXISTS account_balance_history (
 );
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS financial_account_id BIGINT REFERENCES account_balances(id) ON DELETE SET NULL;
 ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS financial_account_id BIGINT REFERENCES account_balances(id) ON DELETE SET NULL;
+-- A manual expense's "paid with" account or card (20261026130000); NULL = not told.
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS financial_account_id BIGINT CONSTRAINT expenses_financial_account_id_fkey REFERENCES account_balances(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_expenses_financial_account ON expenses(workspace_id, financial_account_id) WHERE financial_account_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS net_worth_snapshots (
     id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,

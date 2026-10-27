@@ -1,0 +1,113 @@
+{
+ "version": 1,
+ "about": "Personal appearance (experimental, Owner only in phase 1). Companion of /DESIGN.md: DESIGN.md stays the normative base; this file only lists the limited set of alternatives a person may choose. generate.mjs turns it into Swift and Kotlin and validates it (WCAG contrast, the classic set equal to DESIGN.md, the Owner set equal to the iOS Owner identity). The backend accepts exactly these option ids (backend/user_product/appearance.py, test_appearance_catalog.py).",
+ "options": {
+  "theme": {
+   "default": "system",
+   "classic": "system",
+   "values": {
+    "system": { "es": "Automático", "en": "Automatic" },
+    "light": { "es": "Claro", "en": "Light" },
+    "dark": { "es": "Oscuro", "en": "Dark" }
+   }
+  },
+  "palette": {
+   "default": "oceano",
+   "classic": "clasico",
+   "values": {
+    "oceano": { "es": "Océano", "en": "Ocean" },
+    "clasico": { "es": "Clásico", "en": "Classic" },
+    "arena": { "es": "Arena", "en": "Sand" },
+    "grafito": { "es": "Grafito", "en": "Graphite" }
+   }
+  },
+  "accent": {
+   "default": "cian",
+   "classic": "teal",
+   "values": {
+    "cian": { "es": "Cian", "en": "Cyan" },
+    "teal": { "es": "Verde azulado", "en": "Teal" },
+    "ciruela": { "es": "Ciruela", "en": "Plum" },
+    "tinta": { "es": "Tinta", "en": "Ink" }
+   }
+  },
+  "text_size": {
+   "default": "m",
+   "classic": "m",
+   "values": {
+    "s": { "es": "Pequeño", "en": "Small", "scale": 0.9 },
+    "m": { "es": "Estándar", "en": "Standard", "scale": 1.0 },
+    "l": { "es": "Grande", "en": "Large", "scale": 1.15 },
+    "xl": { "es": "Muy grande", "en": "Extra large", "scale": 1.3 }
+   }
+  },
+  "typeface": {
+   "default": "system",
+   "classic": "system",
+   "values": {
+    "system": { "es": "Sistema", "en": "System" },
+    "editorial": { "es": "Editorial (títulos con serifa)", "en": "Editorial (serif headings)" }
+   }
+  },
+  "density": {
+   "default": "comfortable",
+   "classic": "comfortable",
+   "values": {
+    "comfortable": { "es": "Cómoda", "en": "Comfortable" },
+    "compact": { "es": "Compacta", "en": "Compact" }
+   }
+  },
+  "surfaces": {
+   "default": "outlined",
+   "classic": "tonal",
+   "values": {
+    "outlined": { "es": "Con contorno", "en": "Outlined" },
+    "tonal": { "es": "Tonal", "en": "Tonal" }
+   }
+  }
+ },
+ "palettes": {
+  "clasico": {
+   "light": { "bg": "#F5F7FA", "surface": "#FFFFFF", "surface-2": "#EDF1F6", "line": "#DCE3EC", "line-strong": "#C3CEDC", "field-border": "#7A889E", "text": "#0B1526", "text-2": "#46546A", "text-muted": "#5B6980" },
+   "dark": { "bg": "#0A1220", "surface": "#111B2C", "surface-2": "#182438", "line": "#24324A", "line-strong": "#34445F", "field-border": "#65758F", "text": "#EEF3F9", "text-2": "#B3C0D2", "text-muted": "#93A2B8" }
+  },
+  "oceano": {
+   "light": { "bg": "#F0F6FA", "surface": "#FFFFFF", "surface-2": "#EAF2F8", "line": "#D3E2EE", "line-strong": "#B6CCDD", "field-border": "#6A8197", "text": "#0B1526", "text-2": "#3F5368", "text-muted": "#52677D", "positive": "#08734F", "glow": "#F6FAFD" },
+   "dark": { "bg": "#021221", "surface": "#091726", "surface-2": "#0D2135", "line": "#123858", "line-strong": "#1D4B70", "field-border": "#5F84A3", "text": "#F2FAFF", "text-2": "#87A6BF", "text-muted": "#7A9CB5", "positive": "#1FEBAB", "glow": "#041C30" }
+  },
+  "arena": {
+   "light": { "bg": "#F6F3EE", "surface": "#FFFFFF", "surface-2": "#EEE9E1", "line": "#E2DBD0", "line-strong": "#CBC1B2", "field-border": "#7F7567", "text": "#1C1813", "text-2": "#4D453A", "text-muted": "#62594D" },
+   "dark": { "bg": "#12100D", "surface": "#1C1915", "surface-2": "#27231E", "line": "#343029", "line-strong": "#48423A", "field-border": "#81786B", "text": "#F4EFE8", "text-2": "#C9BFB2", "text-muted": "#A69C8F" }
+  },
+  "grafito": {
+   "light": { "bg": "#F4F4F5", "surface": "#FFFFFF", "surface-2": "#EBEBED", "line": "#DEDEE1", "line-strong": "#C4C4C9", "field-border": "#76767F", "text": "#111113", "text-2": "#45454C", "text-muted": "#5D5D66" },
+   "dark": { "bg": "#000000", "surface": "#111113", "surface-2": "#1C1C20", "line": "#28282D", "line-strong": "#3A3A41", "field-border": "#74747E", "text": "#F2F2F4", "text-2": "#BDBDC4", "text-muted": "#9A9AA3" }
+  }
+ },
+ "accents": {
+  "teal": {
+   "light": { "tint": "#0B6E68", "tint-pressed": "#085B56", "tint-container": "#D5F0EC", "on-tint": "#FFFFFF", "on-tint-container": "#053B37", "focus-ring": "#0B6E68" },
+   "dark": { "tint": "#3CCFBF", "tint-pressed": "#2DB5A6", "tint-container": "#0E3A38", "on-tint": "#04201D", "on-tint-container": "#BFF2EB", "focus-ring": "#3CCFBF" }
+  },
+  "cian": {
+   "light": { "tint": "#0068A3", "tint-pressed": "#00598C", "tint-container": "#DDF0FB", "on-tint": "#FFFFFF", "on-tint-container": "#00405F", "focus-ring": "#0068A3" },
+   "dark": { "tint": "#1FB8FF", "tint-pressed": "#1AD9FF", "tint-container": "#0D344D", "on-tint": "#021221", "on-tint-container": "#BDEBFF", "focus-ring": "#1FB8FF" }
+  },
+  "ciruela": {
+   "light": { "tint": "#7A3E9D", "tint-pressed": "#64317F", "tint-container": "#F1E4F8", "on-tint": "#FFFFFF", "on-tint-container": "#3A1650", "focus-ring": "#7A3E9D" },
+   "dark": { "tint": "#D3A6F0", "tint-pressed": "#C38CE8", "tint-container": "#33193F", "on-tint": "#22102C", "on-tint-container": "#F2DDFB", "focus-ring": "#D3A6F0" }
+  },
+  "tinta": {
+   "light": { "tint": "#1A2233", "tint-pressed": "#0E1420", "tint-container": "#E3E7EE", "on-tint": "#FFFFFF", "on-tint-container": "#1A2233", "focus-ring": "#1A2233" },
+   "dark": { "tint": "#E8ECF3", "tint-pressed": "#CDD3DD", "tint-container": "#283246", "on-tint": "#0B1020", "on-tint-container": "#E8ECF3", "focus-ring": "#E8ECF3" }
+  }
+ },
+ "shapes": {
+  "tonal": { "card": "20px", "control": "14px" },
+  "outlined": { "card": "22px", "control": "16px" }
+ },
+ "density": {
+  "comfortable": { "gap": "16px", "card-padding": "16px", "row-min": "56px" },
+  "compact": { "gap": "12px", "card-padding": "12px", "row-min": "48px" }
+ }
+}

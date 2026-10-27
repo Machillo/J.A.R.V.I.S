@@ -35,9 +35,12 @@ public struct TransactionAnalysis: Decodable, Sendable, Equatable {
         public let expenses: Decimal?
         public let total: Decimal?
         public let monthlyBalance: Decimal?
+        /// The Owner ledger's reading of the month (backend owner_ledger); nil elsewhere.
+        public let complete: Bool?
+        public let incompleteReasons: [String]?
         public var id: String { month }
 
-        enum CodingKeys: String, CodingKey { case month, income, expenses, total, monthlyBalance }
+        enum CodingKeys: String, CodingKey { case month, income, expenses, total, monthlyBalance, complete, incompleteReasons }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             month = c.lenient(String.self, .month) ?? ""
@@ -45,6 +48,8 @@ public struct TransactionAnalysis: Decodable, Sendable, Equatable {
             expenses = c.lenient(Decimal.self, .expenses)
             total = c.lenient(Decimal.self, .total)
             monthlyBalance = c.lenient(Decimal.self, .monthlyBalance)
+            complete = c.lenient(Bool.self, .complete)
+            incompleteReasons = c.lenient([String].self, .incompleteReasons)
         }
     }
     public struct CategoryTotal: Decodable, Sendable, Equatable {

@@ -112,7 +112,8 @@ class PlanRecoveryUiTest {
 
     private fun home() = waitForText(tx("Hoy", "Today"))
 
-    private val planRows get() = listOf(tx("Aguinaldo", "Aguinaldo"), tx("Tu plan del mes", "Your plan for the month"), tx("Deudas", "Debts"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
+    // The aguinaldo is read from mail: an Owner-only row during the launch, absent for every plan.
+    private val planRows get() = listOf(tx("Tu plan del mes", "Your plan for the month"), tx("Deudas", "Debts"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
 
     @Test fun planHasExactlyItsRowsAndTheRelocatedScreensAreReachable() {
         launch(plan = "basic")
@@ -130,8 +131,9 @@ class PlanRecoveryUiTest {
         planRows.forEach { waitForText(it) }
         listOf(tx("Metas y ahorros", "Goals and savings"), tx("Presupuesto", "Budget"), tx("Cuántos meses te cubre", "How many months it covers"))
             .forEach { assertTrue("$it must not be in Plan", !present(it)) }
-        // Basic: Aguinaldo and Salvavidas stay visible, locked from VIP.
+        // Basic: Salvavidas stays visible, locked from VIP; no Aguinaldo row.
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
+        assertTrue("no Aguinaldo for Basic", !present(tx("Aguinaldo", "Aguinaldo")))
         // §15 PR 5/10: Calendario inside Tu plan del mes, Movimientos recurrentes inside Ingresos y base.
         click(tx("Tu plan del mes", "Your plan for the month"))
         click(tx("Calendario financiero", "Financial calendar"))
@@ -161,7 +163,8 @@ class PlanRecoveryUiTest {
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
         // A locked row opens the subscription screen; §15 PR 10 (option A): Tu plan del mes opens its own
         // locked state first ("Ver suscripciones"), with Presupuesto and Calendario locked inside.
-        click(tx("Aguinaldo", "Aguinaldo"))
+        assertTrue("no Aguinaldo for Free", !present(tx("Aguinaldo", "Aguinaldo")))
+        click(tx("Salvavidas", "Emergency fund"))
         waitForText(tx("Suscripción actual", "Current subscription"))
         back()
         click(tx("Tu plan del mes", "Your plan for the month"))
@@ -308,14 +311,16 @@ class PlanRecoveryUiTest {
         waitForText(tx("Confirmado", "Confirmed"))
         back()
         back()
-        click(tx("Conexiones de correo", "Mail connections"))
-        waitForText(tx("Por revisar", "To review"))
+        // A VIP reviews imported notices from Movimientos → Por revisar (mail reading is the Owner's).
+        click(tx("Movimientos", "Transactions"))
+        click(tx("Por revisar", "To review"))
         waitForText("Tienda en línea")
         assertTrue("confirmed in Cuentas, no longer pending in Correos", !present("Compra en supermercado"))
         // Dismiss in Correos → Cuentas shows it dismissed.
         click(tx("Descartar", "Dismiss"))
         waitForGone("Tienda en línea")
         back()
+        click(tx("Patrimonio", "Wealth"))
         click(tx("Cuentas", "Accounts"))
         click("BAC Credomatic")
         waitForText("Tienda en línea")
@@ -501,5 +506,107 @@ class PlanRecoveryUiTest {
         click(tx("Movimientos", "Transactions"))
         // The rate follows the app language's decimal separator (507,5 / 507.5): match what both share.
         waitForText(tx("TC 507", "Rate 507"), substring = true)
+    }
+
+    /**
+     * Owner exact-amount distribution (phase 1): the estimate stays as it was, an exact amount is
+     * validated, calculated from the typed amount (marked as such) and the estimate comes back
+     * unchanged; nothing is recorded (the fake, like the backend, only answers the plan).
+     */
+    @Test fun theOwnerDistributesAnExactAmountAndTheEstimateStays() {
+        launch(role = "owner")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Distribución de dinero", "Money distribution"))
+        waitForText(tx("Distribución aproximada", "Estimated distribution"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
+        click(tx("Monto exacto", "Exact amount"))
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Escribí un monto mayor que cero", "Enter an amount above zero"), substring = true)
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("2500000")
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        waitForText(tx("Monto que indicaste", "Amount you entered"))
+        // The Owner's cash line reads "Efectivo en tu cuenta de distribución" (OwnerReading.formulaLabel); the
+        // exact answer shows the typed amount instead, under neither the Owner's label nor the shared one.
+        assertTrue("the exact answer never shows the estimate's cash line",
+            !present(tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account")) &&
+                !present(tx("Efectivo disponible ahora", "Cash available now")))
+        // Editing the amount drops the result of the previous one.
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("5")
+        waitForGone(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered"))
+        click(tx("Aproximada", "Estimated"))
+        waitForText(tx("Distribución aproximada", "Estimated distribution"))
+        waitForText(tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account"))
+        assertTrue(!present(tx("Calculado con el monto que indicaste", "Calculated from the amount you entered")))
+    }
+
+    /** Debts → when each debt ends and the month all of them end (the backend's estimate), for every plan and the Owner. */
+    @Test fun everyPlanAndTheOwnerSeeWhenTheirDebtsEnd() {
+        for ((plan, role) in listOf("free" to null, "vip" to null, "vip" to "owner")) {
+            launch(plan = plan, role = role)
+            home()
+            click(tx("Plan", "Plan"))
+            click(tx("Deudas", "Debts"))
+            waitForTag("debts.payoff.summary")
+            // What has been paid of all the debts and what is left.
+            waitForText(tx("Te falta el", "of your debts left"), substring = true)
+            // Owner and VIP read their strategy's debt-free date; Free only the installments' estimate.
+            if (plan == "free") {
+                waitForText(tx("Libre de deudas aprox.", "Debt-free around"))
+                assertTrue("Free has no strategy", compose.onAllNodes(hasTestTag("debts.strategy.date"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+            } else {
+                waitForTag("debts.strategy.date")
+                waitForText(tx("Solo con las cuotas", "Installments only"))
+            }
+            waitForText(tx("Terminás de pagar", "Paid off by"))
+            waitForText(tx("cuotas", "instalments"), substring = true)
+        }
+    }
+
+    @Test fun vipUsersHaveNoExactAmountMode() {
+        launch(plan = "vip")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Distribución de dinero", "Money distribution"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
+        assertTrue(!present(tx("Monto exacto", "Exact amount")))
+        assertTrue(!present(tx("Distribución aproximada", "Estimated distribution")))
+    }
+
+    /**
+     * CONFIRMAR: calculating shows what would be recorded and records nothing; confirming (after the
+     * question) records it once, the button goes away, and the Salvavidas screen shows the deposit.
+     */
+    @Test fun theOwnerConfirmsAnExactDistributionAndTheSalvavidasShowsIt() {
+        launch(role = "owner")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Salvavidas", "Emergency fund"))
+        waitForText("₡300.000")
+        back()
+        click(tx("Distribución de dinero", "Money distribution"))
+        click(tx("Monto exacto", "Exact amount"))
+        compose.onNodeWithTag("exact-distribution-amount").performTextInput("254698")
+        tapTag("exact-distribution-calculate")
+        waitForText(tx("Todavía no se registró nada. Si ya moviste el dinero así, presioná CONFIRMAR.", "Nothing has been recorded yet. If you already moved the money this way, press CONFIRM."))
+        waitForText(tx("Lo que se registrará al confirmar", "What CONFIRM will record"))
+        waitForText(tx("Depósito al Salvavidas", "Deposit to the Salvavidas"))
+        // A rotation (activity recreated) keeps the reviewed result and its confirmation key.
+        scenario!!.recreate()
+        waitForText(tx("Lo que se registrará al confirmar", "What CONFIRM will record"))
+        tapTag("exact-distribution-confirm")
+        waitForText(tx("¿Ya hiciste estos movimientos?", "Did you already make these movements?"))
+        click(tx("Confirmar", "Confirm"))
+        waitForText(tx("Distribución confirmada", "Distribution confirmed"))
+        waitForText(tx("Lo que se registró", "What was recorded"))
+        assertTrue("confirmed once: no second CONFIRMAR",
+            compose.onAllNodes(hasTestTag("exact-distribution-confirm")).fetchSemanticsNodes().isEmpty())
+        back()
+        click(tx("Salvavidas", "Emergency fund"))
+        // 300.000 + the Salvavidas part (40 % of 254.698 in this fake's strategy).
+        waitForText("₡401.879", substring = true)
     }
 }

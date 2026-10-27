@@ -125,6 +125,8 @@ struct MovementsView: View {
             Button(tx("Entendido", "OK"), role: .cancel) {}
         } message: { Text(deleteError ?? "") }
         .task { if case .loading = state { await load() } }
+        // New mail on return (AppModel.syncOnReturn): read again, keeping the list if it fails.
+        .onChange(of: model.dataGeneration) { _, _ in Task { await load(keepOnFailure: true) } }
         .animation(DincrMotion.standard(reduceMotion), value: state)
     }
 
@@ -176,16 +178,18 @@ struct MovementsView: View {
         return byDay.keys.sorted(by: >).map { (day: $0, rows: byDay[$0]!) }
     }
 
-    private func load() async {
+    private func load(keepOnFailure: Bool = false) async {
         do {
             state = .loaded(try await model.service.movements())
         } catch let error as APIError {
+            if keepOnFailure, case .loaded = state { return }
             state = .failed(error.message)
         } catch is CancellationError {
             return
         } catch AuthError.signedOut {
             await model.signOut()
         } catch {
+            if keepOnFailure, case .loaded = state { return }
             state = .failed(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions."))
         }
     }

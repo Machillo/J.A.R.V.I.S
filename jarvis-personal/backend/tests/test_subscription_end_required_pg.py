@@ -47,7 +47,7 @@ CREATE TABLE store_subscriptions (account_id UUID PRIMARY KEY REFERENCES account
     provider TEXT NOT NULL, plan_code TEXT NOT NULL, status TEXT NOT NULL,
     trial_ends_at TIMESTAMPTZ, current_period_end TIMESTAMPTZ);
 CREATE TABLE finva_gmail_connections (id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id),
-    google_email TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', granted_scopes TEXT[] NOT NULL DEFAULT '{}');
+    workspace_id UUID, google_email TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', granted_scopes TEXT[] NOT NULL DEFAULT '{}');
 """
 
 
@@ -185,6 +185,10 @@ def test_the_maintenance_job_only_syncs_entitled_mailboxes(db, monkeypatch):
     ids = _connections(db)
     synced = []
     monkeypatch.setenv("FINVA_GMAIL_CRON_SECRET", "s3cret")
+    # The plan rule mail reading returns to once it reopens (Owner-only during the launch, proven in
+    # test_mail_monitor_owner_only_pg.py): reading for VIP with the gmail_automation switch on.
+    monkeypatch.setattr(gmail_service, "MAIL_READING_OWNER_ONLY", False)
+    monkeypatch.setattr(gmail_service, "load_feature_flags", lambda: {"gmail_automation": {"enabled": True}})
     monkeypatch.setattr(gmail_service.mail_oauth, "discard_stale_flows", lambda conn: None)
     monkeypatch.setattr(gmail_service, "end_unentitled_mail_connections", lambda conn: 0)
     monkeypatch.setattr(gmail_service, "_connection_with_token", lambda connection_id: ({}, "token"))
@@ -201,6 +205,10 @@ def test_a_gmail_push_for_an_unentitled_mailbox_is_ignored(db, monkeypatch):
     ids = _connections(db)
     synced = []
     monkeypatch.setenv("FINVA_GMAIL_PUBSUB_VERIFICATION_TOKEN", "t0ken")
+    # The plan rule mail reading returns to once it reopens (Owner-only during the launch, proven in
+    # test_mail_monitor_owner_only_pg.py): reading for VIP with the gmail_automation switch on.
+    monkeypatch.setattr(gmail_service, "MAIL_READING_OWNER_ONLY", False)
+    monkeypatch.setattr(gmail_service, "load_feature_flags", lambda: {"gmail_automation": {"enabled": True}})
     monkeypatch.setattr(gmail_service, "_sync_connection", lambda connection_id, **kwargs: synced.append(connection_id))
 
     def push(email: str) -> dict:

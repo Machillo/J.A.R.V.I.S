@@ -18,7 +18,8 @@ SPEC = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
 PLANS = ("free", "basic", "vip", "owner")
 RANK = {"free": 1, "basic": 2, "vip": 3}
 # The verified-Owner gates (DINCR has no other administrative role).
-OWNER_GATES = ("internal_only", "router_roles:owner", "roles:owner", "owner_service")
+# mail_reading:verified_owner: reading a mailbox is the verified Owner's alone during the launch (L-1).
+OWNER_GATES = ("internal_only", "router_roles:owner", "roles:owner", "owner_service", "mail_reading:verified_owner")
 
 
 def _features():

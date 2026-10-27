@@ -11,6 +11,8 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import imported_income_by_month, income_baseline
+from backend.finance.category_catalog import owner_account_context
+from backend.user_product import owner_ledger
 from backend.user_product.basic_service import (
     _basic_tables_ready,
     _ledger_totals,
@@ -95,6 +97,16 @@ def _debt_plan(debts: list[dict], extra: float, method: str) -> dict:
     }
 
 
+def _owner_report_months(conn, workspace_id: str, months: list[dict]) -> list[dict]:
+    """The same months by the Owner's single ledger (owner_ledger). ``months`` is not modified."""
+    report = []
+    for row in months:
+        start = date.fromisoformat(f"{row['month']}-01")
+        totals = owner_ledger.owner_month_totals(conn, workspace_id, start, _next_month(start))
+        report.append({"month": row["month"], **totals})
+    return report
+
+
 def get_vip_command_center() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     today = date.today()
@@ -125,6 +137,10 @@ def get_vip_command_center() -> dict:
             start = _shift_month(current, offset)
             totals = _ledger_totals(conn, workspace_id, start, _next_month(start))
             months.append({"month": start.strftime("%Y-%m"), **totals, "balance": round(totals["income"] - totals["expenses"] - totals["debt_paid"], 2)})
+        # What Hoy shows as the month (reports) follows the Owner's single ledger; the income
+        # policy below keeps reading these months, unchanged.
+        owner = owner_account_context(conn, account_id, workspace_id)
+        report_months = _owner_report_months(conn, workspace_id, months) if owner else months
         imported_income = imported_income_by_month(conn, workspace_id, _shift_month(current, -11))
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
@@ -355,7 +371,7 @@ def get_vip_command_center() -> dict:
         "projection_status": {"complete": not projection_missing, "missing": projection_missing},
         "net_worth": {"assets": all_assets, "liabilities": debt_balance, "value": net_worth, "accounts": accounts},
         "recurring": {"items": recurring, "detected": detected_recurring, "monthly_expenses": recurring_expense, "annual_expenses": round(recurring_expense*12, 2)},
-        "reports": {"months": months, "current": months[-1], "previous": months[-2]},
+        "reports": {"months": report_months, "current": report_months[-1], "previous": report_months[-2]},
         "variable_income": {"estimated": estimated_income, "conservative": conservative_income, "variability_percent": variability, "months_observed": len(positive_incomes)},
         "automation": candidates,
         "roadmap": roadmap,

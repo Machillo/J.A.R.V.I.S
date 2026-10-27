@@ -1,0 +1,71 @@
+name: Mail maintenance
+
+# Connected mailboxes (Gmail and Outlook) are read in the background by
+# POST /user-product/vip/gmail/maintenance: it reads each active VIP connection's recent bank
+# mail into the existing candidate pipeline (confirmation for Users, the Owner's automation
+# unchanged), renews Gmail's push watch before it expires (Gmail drops it after 7 days),
+# ends connections whose plan no longer includes mail and applies retention. Outlook has no
+# push: this schedule is how its new mail arrives. Nothing called this endpoint, so new mail
+# stopped appearing after the first sync. This workflow is its scheduler.
+#
+# Needs both (a scheduled run without them fails, so a missing setting is never a green no-op):
+#   - repository variable DINCR_BACKEND_URL       (already used by Financial history)
+#   - repository secret   DINCR_GMAIL_CRON_SECRET (the value of the backend's FINVA_GMAIL_CRON_SECRET)
+# The secret is sent only in the X-Finva-Cron-Secret header and never printed. The response
+# holds only counts; only those are logged.
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # best effort: GitHub may delay scheduled runs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mail-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_URL: ${{ vars.DINCR_BACKEND_URL }}
+      CRON_SECRET: ${{ secrets.DINCR_GMAIL_CRON_SECRET }}
+    steps:
+      - name: POST /user-product/vip/gmail/maintenance
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            # A scheduled run that cannot reach the backend reads no mail: fail instead of a green no-op.
+            echo "::error::Mail maintenance not configured (set the DINCR_BACKEND_URL variable and the DINCR_GMAIL_CRON_SECRET secret)."
+            exit 1
+          fi
+          code=000
+          # Retry only transient failures (network error, a cold start or gateway timeout).
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o body.json -w '%{http_code}' -X POST "${BASE_URL%/}/user-product/vip/gmail/maintenance" \
+                   -H "X-Finva-Cron-Secret: ${CRON_SECRET}" --connect-timeout 30 --max-time 600 || echo 000)
+            case "$code" in
+              000|502|504) echo "attempt ${attempt}: HTTP ${code} (transient)"; sleep 30 ;;
+              *) break ;;
+            esac
+          done
+          case "$code" in
+            200)
+              python3 - <<'PY'
+          import json, sys
+          data = json.load(open("body.json"))
+          counts = {key: data.get(key) for key in ("status", "connections", "completed", "reconnect", "failed", "ended_without_plan")}
+          print(counts)
+          if data.get("failed"):
+              print(f"::warning::{data['failed']} connected mailbox(es) could not be read this run; see the backend logs (error class only).")
+          syncable = (data.get("connections") or 0) - (data.get("reconnect") or 0)
+          if syncable > 0 and not data.get("completed"):
+              print("::error::No connected mailbox could be read; see the backend logs (error class only).")
+              sys.exit(1)
+          PY
+              ;;
+            403|503) echo "::error::HTTP ${code}: the cron secret does not match the backend's FINVA_GMAIL_CRON_SECRET (or it is not set there)."; exit 1 ;;
+            *) echo "::error::HTTP ${code}"; exit 1 ;;
+          esac
+          rm -f body.json

@@ -101,7 +101,12 @@ def _request_flags(method: str, path: str) -> list[str]:
     method = method.upper()
     flags = []
     # Outlook and the shared OAuth completion (which runs the first sync) pause with Gmail.
-    if path.startswith(("/user-product/vip/gmail", "/user-product/vip/mail/", "/user-product/vip/financial-identity")):
+    # Disconnecting (revoke + delete the token) and maintenance (plan-lapse revocation, retention)
+    # never pause: withdrawing mail authorization and deleting data cannot depend on the switch.
+    # Maintenance reads no mailbox while the switch is off (gmail_service.mail_reading_allowed).
+    mail_withdrawal = (method, path) in {("DELETE", "/user-product/vip/gmail"),
+                                         ("POST", "/user-product/vip/gmail/maintenance")}
+    if path.startswith(("/user-product/vip/gmail", "/user-product/vip/mail/")) and not mail_withdrawal:
         flags.append("gmail_automation")
     if path.startswith("/product-ops/billing/store"):
         flags.append("store_billing")

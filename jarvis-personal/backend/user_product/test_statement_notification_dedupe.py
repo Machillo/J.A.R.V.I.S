@@ -120,9 +120,20 @@ class Conn:
             candidate_id, account, workspace = params
             c = rows.get(candidate_id)
             return _rows([{**c, "legacy_user_id": 90}] if c and (c["account_id"], c["workspace_id"]) == (account, workspace) else [])
+        if q.startswith("SELECT t.id FROM transactions t"):
+            workspace, currency, amount, first, _second = params
+            days = int(re.search(r"::date-(\d+)", q).group(1))
+            saved = {c.get("transaction_id") for c in rows.values() if c["workspace_id"] == workspace}
+            return _rows({"id": t["id"]} for t in self.work["transactions"]
+                         if t["workspace_id"] == workspace and t["id"] not in saved
+                         and (t.get("original_currency") or "CRC") == currency
+                         and abs(t["amount"] if currency == "CRC" else t["original_amount"]) == amount
+                         and abs((t["transaction_date"] - first).days) <= days)
         if q.startswith("INSERT INTO transactions"):
             transaction_id = 7000 + len(self.work["transactions"])
-            self.work["transactions"].append({"id": transaction_id, "amount": params[2], "workspace_id": params[9]})
+            self.work["transactions"].append({"id": transaction_id, "amount": params[2], "workspace_id": params[9],
+                                              "transaction_date": params[0], "original_amount": params[11],
+                                              "original_currency": params[12]})
             return _rows([{"id": transaction_id}])
         if q.startswith("INSERT INTO financial_input_events") or q.startswith("INSERT INTO notification_jobs") or q.startswith("UPDATE finva_email_messages"):
             return _rows([])
@@ -404,3 +415,42 @@ def test_a_notification_claimed_through_its_bank_reference_covers_only_one_state
     assert result["status"] == "duplicate" and candidate(db, first)["resolution_reason"] == "same_semantic_movement"
     reject(email)
     assert candidate(db, first)["status"] == "pending"  # the statement row goes back to review
+
+
+def hand_entered(db, *, amount, day=DAY, workspace=WORKSPACE, original_amount=None, original_currency=None):
+    """A ledger row typed by the user, not saved from any mail candidate."""
+    transaction_id = 9000 + len(db.state["transactions"])
+    db.state["transactions"].append({"id": transaction_id, "amount": amount, "workspace_id": workspace,
+                                     "transaction_date": day, "original_amount": original_amount,
+                                     "original_currency": original_currency})
+    return transaction_id
+
+
+def test_a_movement_already_entered_by_hand_is_flagged_and_left_for_review(db):
+    hand_entered(db, amount=12500, day=DAY - timedelta(days=1))
+    email, result = add(db)
+    assert result["status"] == "pending"
+    assert (candidate(db, email)["status"], candidate(db, email)["resolution_reason"]) == ("pending", "possible_existing_transaction")
+    assert len(db.state["transactions"]) == 1  # nothing saved or rejected automatically
+
+
+def test_a_hand_entered_movement_in_another_workspace_or_currency_is_not_a_match(db):
+    hand_entered(db, amount=12500, workspace="otro-workspace")
+    hand_entered(db, amount=12500, original_amount=12500, original_currency="USD")
+    hand_entered(db, amount=12500, day=DAY + timedelta(days=3))
+    email, _ = add(db)
+    assert candidate(db, email)["resolution_reason"] is None
+
+
+def test_a_usd_movement_entered_by_hand_matches_its_usd_mail_by_the_original_amount(db):
+    hand_entered(db, amount=22275, original_amount=45, original_currency="USD")
+    email, _ = add(db, amount=45, currency="CRC", original_amount=45, original_currency="USD",
+                   kind="transfer", transaction_type="transfer", description="REGALO SINTETICO")
+    assert candidate(db, email)["resolution_reason"] == "possible_existing_transaction"
+
+
+def test_a_transaction_saved_from_mail_stays_a_candidate_to_candidate_match(db):
+    email, _ = add(db)
+    accept(email)
+    later, _ = add(db, description="OTRO COMERCIO", time="18:30:00", card="9876")
+    assert candidate(db, later)["resolution_reason"] != "possible_existing_transaction"

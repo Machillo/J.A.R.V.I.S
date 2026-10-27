@@ -38,12 +38,15 @@ import Testing
             let feature = feature("plan.\(item.rawValue)")
             for tier in PlanTier.allCases {
                 let expected = feature.state(tier.rawValue)
-                switch item.availability(tier: tier, flags: .unknown) {
+                // A plan tier is never the Owner: no mail reading.
+                switch item.availability(tier: tier, flags: .unknown, canReadMail: false) {
                 case .available, .paused: #expect(expected == "AVAILABLE", "\(item.rawValue) \(tier.rawValue)")
                 case .locked: #expect(expected == "VISIBLE_LOCKED", "\(item.rawValue) \(tier.rawValue)")
+                case .hidden: #expect(expected == "OWNER_ONLY", "\(item.rawValue) \(tier.rawValue)")
                 }
             }
             #expect(feature.state("owner") == "AVAILABLE")
+            #expect(item.availability(tier: .vip, flags: .unknown, canReadMail: true) != .hidden, "\(item.rawValue) owner")
         }
     }
 
@@ -63,6 +66,17 @@ import Testing
         #expect(Jarvis.isAvailable(to: owner))
         for plan in ["free", "basic", "vip"] {
             #expect(!Jarvis.isAvailable(to: Profile(id: 2, role: "user", subscription: .init(plan: plan, status: "active"))))
+        }
+    }
+
+    @Test func mailReadingIsTheOwnersAlone() {
+        for id in ["wealth.connections", "plan.aguinaldo"] {
+            #expect(feature(id).state("owner") == "AVAILABLE", "\(id)")
+            for plan in ["free", "basic", "vip"] { #expect(feature(id).state(plan) == "OWNER_ONLY", "\(id) \(plan)") }
+        }
+        #expect(Profile(id: 1, role: "owner", subscription: nil).canReadMail)
+        for plan in ["free", "basic", "vip"] {
+            #expect(!Profile(id: 2, role: "user", subscription: .init(plan: plan, status: "active")).canReadMail)
         }
     }
 

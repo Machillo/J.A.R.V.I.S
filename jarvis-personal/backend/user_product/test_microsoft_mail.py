@@ -92,6 +92,7 @@ def test_sync_reuses_candidate_pipeline_and_preserves_next_page(monkeypatch):
             {"id": "other", "from": {"emailAddress": {"address": "someone@example.com"}}},
         ], "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/messages?$skiptoken=next"}
     monkeypatch.setattr(mail, "_graph_get", graph)
+    monkeypatch.setattr(mail, "already_processed", lambda *_args: set())
     ingested = []
     monkeypatch.setattr(mail, "_ingest_message", lambda *_args, **kwargs: ingested.append(kwargs) or "pending")
     result = mail.sync_connection(7)
@@ -99,7 +100,10 @@ def test_sync_reuses_candidate_pipeline_and_preserves_next_page(monkeypatch):
     assert ingested[0]["body"] == "Transferencia"
     assert graph_calls[0][1]["$filter"] == f"receivedDateTime ge {date.today().year}-01-01T00:00:00-06:00"
     assert "body" not in graph_calls[0][1]["$select"]
-    assert len(graph_calls) == 2  # Read the selected bank message, never the unrelated message.
+    # The history page and the recent window list ids only; the bank message (seen in both)
+    # is read once, the unrelated message never.
+    fetched = [url for url, _params in graph_calls if url.startswith("/me/messages/")]
+    assert fetched == ["/me/messages/bank-1"]
     assert updated.calls[0][1][1].startswith("https://graph.microsoft.com/")  # next page kept for the scanned window
     assert not result["initial_scan_complete"]
     assert updated.committed
@@ -117,6 +121,7 @@ def test_failed_message_does_not_advance_initial_cursor(monkeypatch):
     monkeypatch.setattr(mail, "_graph_get", lambda *_args, **_kwargs: {"value": [{
         "id": "bank-1", "from": {"emailAddress": {"address": "notificacion@notificacionesbaccr.com"}},
     }], "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/messages?$skiptoken=next"})
+    monkeypatch.setattr(mail, "already_processed", lambda *_args: set())
     monkeypatch.setattr(mail, "_ingest_message", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("temporary")))
     with pytest.raises(ValueError):
         mail.sync_connection(7)

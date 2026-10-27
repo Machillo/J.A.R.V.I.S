@@ -342,6 +342,83 @@ def update_salvavidas(
     return get_salvavidas_state()
 
 
+class SalvavidasDepositRefused(ValueError):
+    """A deposit that cannot be recorded without guessing: nothing is written."""
+
+
+def deposit_to_owner_salvavidas(conn, workspace_id: str, amount: float, *, note: str) -> dict[str, Any]:
+    """Owner: add money the Owner put into the Salvavidas, inside the caller's transaction.
+
+    The Salvavidas balance is the linked emergency-fund account (the one ``_owner_salvavidas_state``
+    reads); without one, it is the saved preference amount, and the account is created from it
+    as ``update_salvavidas`` does. A deposit adds to the account's balance without re-declaring
+    it, so the movements already counted after its declaration and its last reconciliation stay
+    as they were. The saved preference amount follows (compatibility). Nothing is committed here.
+
+    Refused (``SalvavidasDepositRefused``, nothing written) instead of guessed: an account in
+    another currency (colones are never added to it), no account and no saved amount (the current
+    balance is unknown, never 0), or an existing "Salvavidas" account that is inactive or of
+    another type (its real balance is never overwritten).
+    """
+    deposit = max(_f(amount), 0.0)
+    preference = conn.execute(
+        "SELECT preference_value FROM user_preferences WHERE workspace_id = %s AND preference_key = %s FOR UPDATE",
+        (workspace_id, PREFERENCE_KEY),
+    ).fetchone()
+    saved = preference.get("preference_value") if preference else None
+    account = conn.execute(
+        """SELECT id,current_balance,currency FROM account_balances
+           WHERE workspace_id=%s AND is_active=TRUE AND account_type='emergency_fund'
+           ORDER BY updated_at DESC,id DESC LIMIT 1
+           FOR UPDATE""",
+        (workspace_id,),
+    ).fetchone()
+    if account:
+        if str(account.get("currency") or "").upper() != "CRC":
+            raise SalvavidasDepositRefused(tx("Tu Salvavidas no está en colones; no se registró nada.",
+                                              "Your Salvavidas is not in colones; nothing was recorded."))
+        previous = max(_f(account.get("current_balance")), 0.0)
+        new_amount = round(previous + deposit, 2)
+        conn.execute(
+            "UPDATE account_balances SET current_balance=%s, updated_at=NOW() WHERE id=%s AND workspace_id=%s",
+            (new_amount, account["id"], workspace_id),
+        )
+        account_id = account["id"]
+    else:
+        if not isinstance(saved, dict) or saved.get("current_amount") is None:
+            raise SalvavidasDepositRefused(tx("Guardá primero el saldo actual de tu Salvavidas; no se registró nada.",
+                                              "Save your Salvavidas' current balance first; nothing was recorded."))
+        other = conn.execute(
+            """SELECT id FROM account_balances
+               WHERE workspace_id=%s AND LOWER(account_name)='salvavidas' AND COALESCE(account_last4,'')='' LIMIT 1""",
+            (workspace_id,),
+        ).fetchone()
+        if other:
+            raise SalvavidasDepositRefused(tx("Tu cuenta Salvavidas está inactiva o es de otro tipo; revisala antes de confirmar. No se registró nada.",
+                                              "Your Salvavidas account is inactive or of another type; check it before confirming. Nothing was recorded."))
+        previous = max(_f(saved.get("current_amount")), 0.0)
+        new_amount = round(previous + deposit, 2)
+        account_id = conn.execute(
+            """INSERT INTO account_balances (workspace_id, account_name, bank_name, account_type, account_last4, currency,
+                                             current_balance, annual_interest_rate, source, include_in_net_worth)
+               VALUES (%s,'Salvavidas','MultiMoney','emergency_fund','','CRC',%s,0,'salvavidas',TRUE)
+               RETURNING id""",
+            (workspace_id, new_amount),
+        ).fetchone()["id"]
+    conn.execute(
+        """INSERT INTO account_balance_history(workspace_id,financial_account_id,balance,currency,source,note)
+           VALUES(%s,%s,%s,'CRC','owner_distribution',%s)""",
+        (workspace_id, account_id, new_amount, note),
+    )
+    if isinstance(saved, dict):
+        conn.execute(
+            """UPDATE user_preferences SET preference_value=%s::jsonb, updated_at=NOW()
+               WHERE workspace_id=%s AND preference_key=%s""",
+            (json.dumps({**saved, "current_amount": new_amount}, ensure_ascii=False), workspace_id, PREFERENCE_KEY),
+        )
+    return {"account_id": account_id, "previous_amount": round(previous, 2), "new_amount": new_amount}
+
+
 # DINCR Users ----------------------------------------------------------------------------
 
 def _load_users_obligations(workspace_id: str, account_id: str) -> dict[str, Any]:
