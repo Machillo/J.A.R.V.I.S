@@ -298,8 +298,10 @@ public actor FixtureBackend: HTTPTransport {
         case ("GET", "/user-product/free/dashboard"): return ok(freeDashboard())
         case ("GET", "/user-product/free/monthly-summary"): return ok(monthlySummary(query["period"] ?? String(day(0).prefix(7))))
         case ("GET", "/user-product/free/movements"):
-            return ok(movements.sorted { ($0["transaction_date"] as? String ?? "") > ($1["transaction_date"] as? String ?? "") })
+            // Expenses waiting for the close have no colones amount: listed apart, like the backend.
+            return ok(movements.filter { !isPending($0) }.sorted { ($0["transaction_date"] as? String ?? "") > ($1["transaction_date"] as? String ?? "") })
         case ("GET", "/user-product/finance/expenses/paid-with-options"): return ok(paidWithOptions())
+        case ("GET", "/user-product/finance/expenses/pending-conversion"): return ok(pendingConversion())
         case ("POST", "/user-product/finance/income"), ("POST", "/user-product/finance/expenses"):
             return createMovement(income: path.hasSuffix("income"), body)
         // Debts
@@ -374,9 +376,11 @@ public actor FixtureBackend: HTTPTransport {
         let currency = body["currency"] as? String
         let rate = decimal(body["exchange_rate"])
         let foreign = currency != nil && currency != base
-        if foreign && rate == nil { return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.") }
-        let stored = foreign ? (ConversionPreview.baseAmount(typed: typed, currency: currency!, base: base, rate: rate) ?? typed) : typed
         let origin = income ? "salary" : "expense"
+        let pending = pendingRequested(body)
+        if pending, let refusal = pendingRefusal(body, origin: origin, base: base) { return refusal }
+        if foreign && rate == nil && !pending { return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.") }
+        let stored = foreign && !pending ? (ConversionPreview.baseAmount(typed: typed, currency: currency!, base: base, rate: rate) ?? typed) : typed
         let link = paidWithLink(body)
         if case .refused(let answer) = link { return answer }
         if income, case .set(let value) = link, !(value is NSNull) { return error(422, "Solo un gasto indica con qué se pagó.") }
@@ -384,7 +388,9 @@ public actor FixtureBackend: HTTPTransport {
         var row: [String: Any] = ["movement_id": "\(origin):\(sid)", "source_id": sid, "origin": origin, "transaction_date": body["entry_date"] ?? day(0),
                                   "description": body["description"] ?? "", "amount": number(stored), "transaction_type": income ? "income" : "expense",
                                   "category": body["category"] ?? "", "notes": "", "editable": true]
-        if foreign { row["original_amount"] = number(typed); row["original_currency"] = currency; row["exchange_rate"] = number(rate!) }
+        if pending { markPending(&row, typed: typed, currency: currency!) } else if foreign {
+            row["original_amount"] = number(typed); row["original_currency"] = currency; row["exchange_rate"] = number(rate!)
+        }
         if !income, case .set(let value) = link { row["financial_account_id"] = value }
         movements.append(row)
         return ok(["id": sid])
@@ -405,7 +411,9 @@ public actor FixtureBackend: HTTPTransport {
         let foreign = currency != nil && currency != base
         let origin = movements[index]["origin"] as? String ?? ""
         if foreign && !["salary", "expense"].contains(origin) { return error(422, "Este movimiento solo se puede registrar en tu moneda principal.") }
-        if foreign && rate == nil { return error(422, "Indicá el tipo de cambio.") }
+        let pending = pendingRequested(body)
+        if pending, let refusal = pendingRefusal(body, origin: origin, base: base) { return refusal }
+        if foreign && rate == nil && !pending { return error(422, "Indicá el tipo de cambio.") }
         let link = paidWithLink(body)
         if case .refused(let answer) = link { return answer }
         if origin != "expense", case .set(let value) = link, !(value is NSNull) { return error(422, "Solo un gasto indica con qué se pagó.") }
@@ -417,6 +425,8 @@ public actor FixtureBackend: HTTPTransport {
         row["original_amount"] = foreign ? number(typed) : NSNull()
         row["original_currency"] = foreign ? currency! : NSNull()
         row["exchange_rate"] = foreign ? number(rate!) : NSNull()
+        row[Self.pendingFlag] = nil
+        if pending { markPending(&row, typed: typed, currency: currency!) }
         movements[index] = row
         return ok(["status": "ok", "movement_id": movementID])
     }

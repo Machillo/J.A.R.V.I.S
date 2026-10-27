@@ -113,7 +113,7 @@ def get_basic_dashboard() -> dict:
             months.append({"month": start.strftime("%Y-%m"), **values, "balance": round(values["income"]-values["expenses"]-values["debt_paid"],2)})
         categories = conn.execute(
             """SELECT category,ROUND(SUM(amount),2) AS amount FROM (
-                 SELECT category,amount FROM expenses WHERE workspace_id=%s AND created_at >= %s AND created_at < %s
+                 SELECT category,amount FROM expenses WHERE workspace_id=%s AND amount IS NOT NULL AND created_at >= %s AND created_at < %s
                  UNION ALL SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date::date >= %s AND transaction_date::date < %s
                ) x GROUP BY category ORDER BY amount DESC""",
             (workspace_id,current,_next_month(current),workspace_id,current,_next_month(current)),
@@ -151,7 +151,7 @@ def get_guided_budget() -> dict:
         recurring_income = round(sum(_monthly_equivalent(_money(r["amount"]),r["frequency"]) for r in recurring_rows if r["item_type"]=="income"),2)
         items = conn.execute("SELECT category,monthly_limit,is_system FROM finva_budget_items WHERE workspace_id=%s ORDER BY is_system DESC,category",(workspace_id,)).fetchall() if budget_ready else []
         actual = conn.execute("""SELECT category,ROUND(SUM(amount),2) amount FROM (
-            SELECT category,amount FROM expenses WHERE workspace_id=%s AND created_at >= %s AND created_at < %s
+            SELECT category,amount FROM expenses WHERE workspace_id=%s AND amount IS NOT NULL AND created_at >= %s AND created_at < %s
             UNION ALL SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date::date >= %s AND transaction_date::date < %s
         ) q GROUP BY category""",(workspace_id,current,_next_month(current),workspace_id,current,_next_month(current))).fetchall()
     # Unknown income (nothing declared and no recurring income) stays unknown: no amount available and
@@ -273,7 +273,7 @@ def get_basic_report(period: str | None = None) -> dict:
         contributions_ready=_basic_tables_ready(conn, "finva_goal_contributions")
         current=_ledger_totals(conn,workspace_id,start,_next_month(start)); prior=_ledger_totals(conn,workspace_id,previous,start)
         categories=conn.execute("""SELECT category,ROUND(SUM(amount),2) amount FROM (
-          SELECT category,amount FROM expenses WHERE workspace_id=%s AND created_at >= %s AND created_at < %s
+          SELECT category,amount FROM expenses WHERE workspace_id=%s AND amount IS NOT NULL AND created_at >= %s AND created_at < %s
           UNION ALL SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date::date >= %s AND transaction_date::date < %s) q GROUP BY category ORDER BY amount DESC""",(workspace_id,start,_next_month(start),workspace_id,start,_next_month(start))).fetchall()
         contributions=_money(conn.execute("SELECT COALESCE(SUM(amount),0) total FROM finva_goal_contributions WHERE workspace_id=%s AND contribution_date >= %s AND contribution_date < %s",(workspace_id,start,_next_month(start))).fetchone()["total"]) if contributions_ready else 0.0
         debt=conn.execute("SELECT COALESCE(SUM(total_amount),0) original,COALESCE(SUM(remaining_amount),0) remaining FROM debts WHERE workspace_id=%s",(workspace_id,)).fetchone()

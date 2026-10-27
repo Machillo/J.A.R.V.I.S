@@ -171,6 +171,7 @@ def _fetch_expenses_table() -> list[dict[str, Any]]:
             SELECT id, category, expense_type, description, amount, created_at
             FROM expenses
             WHERE workspace_id = %s
+            AND amount IS NOT NULL  -- an expense pending conversion has no base amount yet
             ORDER BY id ASC
             """,
             (workspace_id,),

@@ -104,7 +104,8 @@ public struct DincrService: Sendable {
     public func create(_ kind: Movement.Kind, _ entry: EntryCreate, idempotencyKey: String) async throws {
         try WriteContract.checkAmount(entry.amount)
         if let rate = entry.exchangeRate { try WriteContract.checkRate(rate) }
-        if entry.currency != nil, entry.exchangeRate == nil { throw WriteContract.invalid }
+        // Another currency needs the user's rate, unless the expense waits for the close (PendingConversion).
+        if entry.currency != nil, entry.exchangeRate == nil, !entry.convertAtClose { throw WriteContract.invalid }
         let path = kind == .income ? "/user-product/finance/income" : "/user-product/finance/expenses"
         let _: Acknowledgement = try await client.send("POST", path, body: entry, idempotencyKey: idempotencyKey)
     }
@@ -114,11 +115,15 @@ public struct DincrService: Sendable {
         try await client.get("/user-product/finance/expenses/paid-with-options")
     }
 
+    public func pendingConversion() async throws -> PendingConversion {
+        try await client.get("/user-product/finance/expenses/pending-conversion")
+    }
+
     public func update(movementID: String, _ update: MovementUpdate) async throws {
         try WriteContract.checkAmount(update.amount)
         try WriteContract.checkDate(update.transactionDate)
         if let rate = update.exchangeRate { try WriteContract.checkRate(rate) }
-        if update.currency != nil, update.exchangeRate == nil { throw WriteContract.invalid }
+        if update.currency != nil, update.exchangeRate == nil, !update.convertAtClose { throw WriteContract.invalid }
         let _: Acknowledgement = try await client.send("PUT", "/user-product/free/movements/\(Self.encode(movementID))", body: update)
     }
 
