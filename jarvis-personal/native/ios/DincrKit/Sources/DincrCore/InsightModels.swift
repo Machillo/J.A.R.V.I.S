@@ -30,6 +30,22 @@ public struct MonthlySummary: Decodable, Sendable, Equatable {
     public let categories: [CategoryTotal]?
     public let savings: Decimal?
     public let goals: GoalProgress?
+    // The verified Owner's month (backend owner_ledger); nil for every other account.
+    public let complete: Bool?
+    public let incompleteReasons: [String]?
+    public let grossExpenses: Decimal?
+    public let refunds: Decimal?
+    public let otherInflows: Decimal?
+    public let loanReceived: Decimal?
+    public let receivablePayments: Decimal?
+    public let assetSaleProceeds: Decimal?
+    public let cashFlow: Decimal?
+    public let unclassifiedCount: Int?
+    public let pendingMailCount: Int?
+    public let payrollAccrued: PayrollAccrued?
+
+    /// The answer follows the Owner's single ledger (only the verified Owner's does).
+    public var isOwnerLedger: Bool { complete != nil }
 }
 
 /// `GET /user-product/basic/dashboard` (Basic).

@@ -86,15 +86,20 @@ def get_financial_timeline(days: int = 45) -> dict[str, Any]:
                           if item.get("include_in_net_worth") and item.get("account_type") != "investment"), 2)
     events: list[dict[str, Any]] = []
 
+    assumptions: list[str] = []
     salary = calculate_monthly_salary_projection()
     salary_amount = _money((salary.get("results") or {}).get("projected_net")) if isinstance(salary, dict) else 0
     schedule = get_pay_schedule()
     pay_event_amount = _salary_amount_per_event(
         salary_amount, (schedule or {}).get("pay_frequency")
     )
-    pay_dates = [when for when in _events_for_pay_schedule(schedule, start, end, pay_event_amount) if when <= end]
-    for when in pay_dates:
-        events.append({"date": when.isoformat(), "name": "Ingreso de salario", "kind": "income", "amount": pay_event_amount, "impact": pay_event_amount, "source": "pay_schedule"})
+    if pay_event_amount > 0:
+        pay_dates = [when for when in _events_for_pay_schedule(schedule, start, end, pay_event_amount) if when <= end]
+        for when in pay_dates:
+            events.append({"date": when.isoformat(), "name": "Ingreso de salario", "kind": "income", "amount": pay_event_amount, "impact": pay_event_amount, "source": "pay_schedule"})
+    else:
+        # Unknown ≠ 0: no projected salary is never shown as a ₡0 deposit.
+        assumptions.append("No hay proyección de salario: la línea de tiempo no suma ningún ingreso de salario.")
 
     debts = get_debts() or []
     for expense in list_fixed_expenses(active_only=True):
@@ -128,4 +133,4 @@ def get_financial_timeline(days: int = 45) -> dict[str, Any]:
     for event in events:
         projected = round(projected + _money(event["impact"]), 2)
         event["projected_balance"] = projected
-    return {"status": "OK", "start_date": start.isoformat(), "end_date": end.isoformat(), "opening_available": available, "events": events, "ending_available": projected, "event_count": len(events), "assumptions": ["Solo se proyectan ingresos con calendario configurado y obligaciones activas con fecha y monto.", "Metas se muestran como recordatorio y no descuentan saldo automáticamente.", "IBKR/inversiones quedan fuera de liquidez disponible; se reflejan en Patrimonio." ]}
+    return {"status": "OK", "start_date": start.isoformat(), "end_date": end.isoformat(), "opening_available": available, "events": events, "ending_available": projected, "event_count": len(events), "assumptions": assumptions + ["Solo se proyectan ingresos con calendario configurado y obligaciones activas con fecha y monto.", "Metas se muestran como recordatorio y no descuentan saldo automáticamente.", "IBKR/inversiones quedan fuera de liquidez disponible; se reflejan en Patrimonio." ]}

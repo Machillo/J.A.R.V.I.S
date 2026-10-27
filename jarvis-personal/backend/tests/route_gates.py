@@ -7,6 +7,8 @@ Reads the gate of every route from the app itself, deterministically:
 - ``feature:<code>``: the endpoint calls ``require_feature("<code>")``;
 - ``roles:<roles>``: the endpoint calls ``require_roles(...)`` (``require_owner()`` is ``roles:owner``);
 - ``owner_service``: the endpoint calls an Owner guard helper (``_require_owner_user``, ``_owner_only``);
+- ``mail_reading:verified_owner``: the endpoint calls ``require_mail_reading()`` (mailbox reading is
+  limited to the verified Owner while the Google OAuth app is in testing);
 - ``public``: none of the above (auth middleware only, or explicitly public routes).
 
 For GET routes the written inventory also records ``user_get``: ``denied`` when a regular
@@ -31,6 +33,7 @@ _ROLES = re.compile(r"require_roles\(([^)]*)\)")
 _OWNER_SERVICE = re.compile(r"_require_owner_user\(|_owner_only\(")
 # The canonical verified-Owner guard (backend/auth/current_user.py): require_roles("owner").
 _REQUIRE_OWNER = re.compile(r"\brequire_owner\(\)")
+_MAIL_READING = re.compile(r"\brequire_mail_reading\(\)")
 
 
 def _roles(arguments: str) -> str:
@@ -63,6 +66,8 @@ def gates_of(route, internal_only) -> list[str]:
         gates.append("roles:owner")
     if _OWNER_SERVICE.search(source):
         gates.append("owner_service")
+    if _MAIL_READING.search(source):
+        gates.append("mail_reading:verified_owner")
     return sorted(set(gates)) or ["public"]
 
 

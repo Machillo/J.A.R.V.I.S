@@ -16,7 +16,7 @@ public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
     /// Deudas: every plan (`debts`: everyone can record and keep their real debts). Ingresos y base:
     /// every plan (`finance_overview`: everyone declares their own reality).
     /// Estrategia and Distribución: Basic (`strategy_basic`). Salvavidas: VIP (`strategy_vip`).
-    /// Aguinaldo: VIP (`gmail_automation`).
+    /// Aguinaldo: VIP, and only where mail is read (`readsMail`): the Owner's alone during the launch.
     public var minimum: PlanTier {
         switch self {
         case .debts, .incomeBase: .free
@@ -34,14 +34,22 @@ public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    /// The row is computed from mail DINCR reads (CCSS payroll notices): shown only with mail reading.
+    public var readsMail: Bool { self == .aguinaldo }
+
     public enum Availability: Equatable, Sendable {
+        /// Not shown at all (an Owner-only row for anyone else).
+        case hidden
         case available
         /// Not in the plan: shown locked ("Disponible desde …"), opening the plans screen.
         case locked(PlanTier)
         case paused(OpsFlag)
     }
 
-    public func availability(tier: PlanTier, flags: FeatureFlags) -> Availability {
+    /// `canReadMail` is `Profile.canReadMail`; it defaults to false so a caller that forgets it hides
+    /// the mail rows rather than offering them.
+    public func availability(tier: PlanTier, flags: FeatureFlags, canReadMail: Bool = false) -> Availability {
+        if readsMail && !canReadMail { return .hidden }
         guard tier.rank >= minimum.rank else { return .locked(minimum) }
         if let killSwitch, !flags.isEnabled(killSwitch) { return .paused(killSwitch) }
         return .available

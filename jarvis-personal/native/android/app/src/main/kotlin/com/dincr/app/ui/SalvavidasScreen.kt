@@ -127,7 +127,7 @@ private fun FundCard(s: Salvavidas, onEdit: () -> Unit, onSituation: () -> Unit)
             Text(tx("Tu fondo", "Your fund"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
             if (s.isAmountKnown) {
                 MoneyText(s.currentAmount, style = MaterialTheme.typography.displaySmall)
-                s.coverageMonths?.let { InfoLine(tx("Te cubre", "Covers you for"), monthsLabel(it)) }
+                s.coverageMonths?.let { InfoLine(tx("Te cubre", "Covers you for"), coverageMonthsLabel(it)) }
                 s.progressPercent?.let { ProgressLine(it / 100.0, tx("${it.toInt()} % de tu meta", "${it.toInt()} % of your target")) }
                 s.missingAmount?.takeIf { it.signum() > 0 }?.let { AmountLine(tx("Te falta", "Still to go"), it) }
             } else {
@@ -143,8 +143,8 @@ private fun FundCard(s: Salvavidas, onEdit: () -> Unit, onSituation: () -> Unit)
     }
 }
 
-/** "2,5 meses": the backend's coverage, only rounded for display. */
-private fun monthsLabel(months: BigDecimal): String {
+/** "2,5 meses": the backend's coverage, only rounded for display. Every screen that shows coverage uses it. */
+internal fun coverageMonthsLabel(months: BigDecimal): String {
     val shown = months.setScale(1, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString().let { if (tx("es", "en") == "es") it.replace('.', ',') else it }
     return tx("$shown ${if (months.compareTo(BigDecimal.ONE) == 0) "mes" else "meses"}", "$shown month${if (months.compareTo(BigDecimal.ONE) == 0) "" else "s"}")
 }

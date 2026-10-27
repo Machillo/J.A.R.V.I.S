@@ -135,6 +135,15 @@ class LedgerConnection:
             return self._result(one={"count": 0, "current": 0, "target": 0}) if "COUNT(*)" in q else self._result([])
         if "FROM account_balances WHERE workspace_id=%s AND is_active=TRUE" in q:
             return self._result([dict(a) for a in work["accounts"] if a["workspace_id"] == params[0] and a["is_active"]])
+        if "to_regclass('public.' || name) IS NOT NULL" in q:  # the Owner ledger's other tables: not modelled here
+            return self._result([])
+        if "AS ledger_type" in q:  # the Owner ledger: this month's transactions by type
+            start, end, groups = params[1], params[2], {}
+            for t in work["transactions"]:
+                if t["workspace_id"] == params[0] and start <= t["transaction_date"] < end:
+                    total, count = groups.get(t["transaction_type"], (0, 0))
+                    groups[t["transaction_type"]] = (total + t["amount"], count + 1)
+            return self._result([{"ledger_type": kind, "total": total, "count": count} for kind, (total, count) in groups.items()])
         if q.startswith("SELECT COALESCE((SELECT SUM(amount) FROM salaries"):
             start, end = params[1], params[2]
             total = lambda kind: sum(t["amount"] for t in self._transactions(start, end, kind))

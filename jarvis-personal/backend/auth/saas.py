@@ -42,7 +42,12 @@ BUILTIN_FEATURE_MIN_PLAN = {
     "recurring_items": "free",
     "basic_reports": "basic",
     "strategy_vip": "vip",
+    # Mail reading itself is also limited to the verified Owner while the Google OAuth app is in
+    # testing (user_product.gmail_service.require_mail_reading). Reviewing what was already
+    # imported, Cuentas and the aguinaldo keep their own VIP keys, so they do not depend on it.
     "gmail_automation": "vip",
+    "financial_accounts": "vip",
+    "aguinaldo": "vip",
 }
 
 

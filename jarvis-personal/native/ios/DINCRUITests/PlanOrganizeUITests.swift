@@ -37,8 +37,11 @@ final class PlanOrganizeUITests: XCTestCase {
     func testPlanKeepsItsSixEntriesInOrder() {
         for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), ("vip", "owner")] as [(String?, String?)] {
             let app = launch(plan: plan, role: role)
-            XCTAssertTrue(element(Self.entries[0], in: app).waitForExistence(timeout: 10))
-            let frames = Self.entries.map { element($0, in: app).frame.minY }
+            // The aguinaldo is read from mail: an Owner-only entry during the launch (L-1).
+            let entries = role == "owner" ? Self.entries : Self.entries.filter { $0 != "plan.aguinaldo" }
+            XCTAssertTrue(element(entries[0], in: app).waitForExistence(timeout: 10))
+            XCTAssertEqual(element("plan.aguinaldo", in: app).exists, role == "owner", "\(role ?? plan ?? "free"): Aguinaldo only for the Owner")
+            let frames = entries.map { element($0, in: app).frame.minY }
             XCTAssertEqual(frames, frames.sorted(), "\(role ?? plan ?? "free"): order")
             for id in ["plan.budget", "plan.calendar", "plan.recurring", "plan.goals"] { XCTAssertFalse(element(id, in: app).exists, id) }
             app.terminate()

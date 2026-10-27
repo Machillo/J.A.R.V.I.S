@@ -48,11 +48,13 @@ private struct PublicHomeView: View {
         .navigationTitle(tx("Hola, \(model.profile?.firstName ?? "")", "Hi, \(model.profile?.firstName ?? "")"))
         .refreshable { await load(tier) }
         .task(id: tier) { await load(tier) }
+        // New mail on return (AppModel.syncOnReturn): read again, keeping the screen if it fails.
+        .onChange(of: model.dataGeneration) { _, _ in Task { await load(tier, keepOnFailure: true) } }
     }
 
     /// A reload that fails while Hoy is shown (pull to refresh, after a save) keeps it and says so
     /// in the app notice (B17, `PullRefresh`); only a first load without content shows the error.
-    private func load(_ tier: HomeToday.Tier) async {
+    private func load(_ tier: HomeToday.Tier, keepOnFailure: Bool = false) async {
         let epoch = model.currentEpoch
         let shown: HomeToday? = if case .loaded(let home) = state { home } else { nil }
         do {
@@ -61,6 +63,7 @@ private struct PublicHomeView: View {
         } catch is CancellationError {
             return
         } catch {
+            if keepOnFailure, case .loaded = state { return }
             if let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar tu resumen.", "We couldn’t load your overview.")) {
                 if PullRefresh.kept(shown, after: .failure(error)) != nil {
                     model.notice = PullRefresh.failureNotice()

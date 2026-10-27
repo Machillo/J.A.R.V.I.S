@@ -249,6 +249,32 @@ def test_sinpe_debit_is_an_outbound_transfer_not_an_expense():
     assert parsed["origin_account"].endswith("2222")
 
 
+@pytest.mark.parametrize("monto", ["45.00 Dólares", "USD 45.00", "$45.00"])
+def test_a_usd_sinpe_keeps_its_currency_and_is_never_read_as_colones(monto):
+    parsed = parse(
+        "notificaciones@baccredomatic.cr", "Notificación de Transferencia",
+        bac_sinpe(f"Hola MARIA PRUEBA SOLANO : BAC le comunica que la transferencia SINPE en tiempo real con el número de "
+                  f"referencia {REF_A}, se acreditó en la cuenta IBAN CR0001XXXXXXXXXXXX1111 por un monto de {monto}, "
+                  "por concepto de regalo______.Día y hora 20/10/2026 09:15:00 a.m."),
+        "2026-10-20T15:15:10Z",
+    )
+    assert (parsed["original_amount"], parsed["original_currency"]) == (45.0, "USD")
+    assert parsed["movement_direction"] == "in" and parsed["transaction_type"] == "transfer"
+    candidate = canonical_candidate(parsed, provider_message_id="m-usd", subject="aviso")
+    assert (candidate["original_amount"], candidate["original_currency"]) == (45.0, "USD")
+
+
+def test_a_colones_sinpe_has_no_original_currency():
+    parsed = parse(
+        "notificaciones@baccredomatic.cr", "Notificación de Transferencia",
+        bac_sinpe(f"Hola: MARIA PRUEBA SOLA : BAC le comunica que la transferencia SINPE en tiempo real con el número de referencia {REF_B}, "
+                  "debitando su cuenta IBAN CR0001XXXXXXXXXXXX2222 por un monto de 40,507.00 Colones. "
+                  "Día y hora: 20/10/2026 11:04:21 a.m. fue aplicada correctamente."),
+        "2026-10-20T17:04:32Z",
+    )
+    assert parsed["original_currency"] is None and parsed["amount"] == 40_507.0
+
+
 def test_old_sinpe_sender_with_reference_in_the_subject_and_no_time():
     parsed = parse(
         "sinpe@notificacionesbaccr.com", f"Notificación de Transferencia{REF_A}",

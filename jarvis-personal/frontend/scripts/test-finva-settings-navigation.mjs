@@ -18,9 +18,10 @@ assert.match(free, /onNavigate\("plan-settings"\)/, "Free must expose account an
 assert.match(free, /onNavigate\("feedback"\)/, "Free must expose support reporting");
 assert.match(vip, /Debes sincronizar tu email/, "VIP aguinaldo must explain that email sync is required");
 assert.match(vip, /onNavigate\?\.\("gmail"\)/, "VIP aguinaldo must link to Gmail setup");
-assert.match(registry, /"vip-aguinaldo": plan === "vip" \? advisory\(gated\("gmail_automation", .*\), "aguinaldo"\)/, "Aguinaldo must remain VIP-only, Gmail-gated and show its estimate disclaimer");
+// L-1: the aguinaldo is read from mail, which only the Owner's account reads; UsersApp never serves the Owner.
+assert.match(registry, /"vip-aguinaldo": <SettingsPage /, "Users never reach the Aguinaldo while mail reading is the Owner's alone");
 assert.match(registry, /strategy: advisory\(/, "Strategy must show the not-financial-advice disclaimer");
-assert.match(hubs, /item\(navigate, "vip-aguinaldo", tx\("Aguinaldo"/, "VIP Plan hub must expose Aguinaldo");
+assert.doesNotMatch(hubs, /item\(navigate, "vip-aguinaldo"/, "the Plan hub offers no Aguinaldo to Users (L-1)");
 assert.match(hubs, /if \(plan === "vip"\).*item\(navigate, "gmail"/s, "Financial email review must remain VIP-only");
 for (const key of ["overview", "finance", "plan", "advisor", "profile"]) {
   assert.match(navigation, new RegExp(`key: "${key}"`), `Primary navigation must expose ${key}`);

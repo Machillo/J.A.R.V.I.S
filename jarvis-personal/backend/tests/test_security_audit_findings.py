@@ -94,7 +94,11 @@ def test_owner_grant_details_never_reach_the_user(monkeypatch):
     ("PUT", "/user-product/basic/budget", {"financial_writes"}),
     ("POST", "/user-product/basic/recurring", {"financial_writes"}),
     ("PUT", "/user-product/vip/salvavidas", {"vip_intelligence", "financial_writes"}),
-    ("PUT", "/user-product/vip/financial-identity/accounts/7", {"gmail_automation", "vip_intelligence", "financial_writes"}),
+    # Cuentas is not mail reading: it pauses with VIP intelligence and writes, not with Gmail.
+    ("PUT", "/user-product/vip/financial-identity/accounts/7", {"vip_intelligence", "financial_writes"}),
+    # Withdrawing mail authorization and maintenance (revocation, retention) never pause.
+    ("DELETE", "/user-product/vip/gmail", set()),
+    ("POST", "/user-product/vip/gmail/maintenance", set()),
     ("POST", "/user-product/vip/lifecycle/snapshots", {"vip_intelligence", "financial_writes"}),
     ("POST", "/auth/onboarding", {"financial_writes"}),
     ("GET", "/user-product/basic/budget", set()),

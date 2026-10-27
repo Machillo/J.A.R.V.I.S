@@ -64,7 +64,12 @@ assert.match(users, /getVipGmailEmails\(accountsView \? "" : filter\)/);
 // The list endpoint returns the newest 200 messages: pending items are loaded too.
 assert.match(users, /accountsView \? getVipGmailEmails\("pending"\) : null/);
 assert.match(users, /if \(bankId && !institutions\.some\(\(entry\) => entry\.bank\.id === bankId\)\) setBankId\(null\);/);
-assert.match(users, /accountsView && gmail\?\.needs_reauthorization/);
+// L-1: Users never connect, re-authorize or sync mail; review and Disconnect stay.
+assert.match(users, /const MAIL_READING_AVAILABLE = false;/);
+assert.match(users, /accountsView && MAIL_READING_AVAILABLE && gmail\?\.needs_reauthorization/);
+assert.match(users, /\{MAIL_READING_AVAILABLE && <div className="gmail-provider-actions">/);
+assert.match(users, /\{MAIL_READING_AVAILABLE && <div className="gmail-connection-actions"><button type="button" disabled=\{Boolean\(busy\)\} onClick=\{sync\}>/);
+assert.match(users, /onClick=\{\(\) => disconnect\(item\.id\)\}/);
 // Amounts keep their own currency (CRC and USD are never mixed).
 assert.match(users, /currency: String\(currency \|\| ""\)\.toUpperCase\(\) === "USD" \? "USD" : "CRC"/);
 // A USD movement shows its USD amount, not the parser's converted colones (test-mail-currency.mjs).

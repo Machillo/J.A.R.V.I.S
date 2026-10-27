@@ -2,6 +2,7 @@ package com.dincr.app
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -10,13 +11,19 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.ui.RootScreen
+import com.dincr.data.AppearancePolicy
 import com.dincr.data.MoneyFormat
+import com.dincr.data.QuickAction
+import java.util.Locale
 import com.dincr.design.DincrTheme
 
 /**
@@ -38,17 +45,25 @@ class MainActivity : FragmentActivity() {
         model.configure(AppEnvironment.from(intent))
         // A recreated activity re-delivers its launch intent: only a fresh launch handles it.
         if (savedInstanceState == null) handleIntent(intent)
+        publishShortcuts()
         ProcessLifecycleOwner.get().lifecycle.addObserver(processObserver)
         val prefs = getSharedPreferences("dincr.preferences", Context.MODE_PRIVATE)
         var appearance by mutableStateOf(Appearance.from(prefs.getString("appearance", null)))
         setContent {
             val profile by model.profile.collectAsStateWithLifecycle()
-            val dark = when (appearance) {
+            val personal by model.appearance.effective.collectAsStateWithLifecycle()
+            // The Owner's theme travels with its personal appearance (APP-1); everyone else keeps
+            // this device's Automático / Claro / Oscuro setting, as before.
+            val dark = if (AppearancePolicy.isPersonalizable(profile)) when (personal.theme) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            } else when (appearance) {
                 Appearance.SYSTEM -> isSystemInDarkTheme()
                 Appearance.LIGHT -> false
                 Appearance.DARK -> true
             }
-            DincrTheme(darkTheme = dark, moneyFormat = MoneyFormat.from(profile)) {
+            DincrTheme(darkTheme = dark, moneyFormat = MoneyFormat.from(profile), appearance = personal) {
                 RootScreen(model, appearance) { next ->
                     appearance = next
                     prefs.edit().putString("appearance", next.name).apply()
@@ -62,6 +77,23 @@ class MainActivity : FragmentActivity() {
         super.onDestroy()
     }
 
+    /**
+     * Long-press the app icon: "Añadir gasto" opens the editor of a new expense (iOS: the App
+     * Shortcut, assignable to Back Tap). Built at runtime so each build's own package is the target.
+     */
+    private fun publishShortcuts() {
+        // Launcher shortcuts exist from API 25 (Android 7.1); below that there is nothing to publish.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return
+        val spanish = Locale.getDefault().language == "es"
+        val shortcut = ShortcutInfoCompat.Builder(this, QuickAction.NEW_EXPENSE.route)
+            .setShortLabel(if (spanish) "Añadir gasto" else "Add expense")
+            .setLongLabel(if (spanish) "Añadir un gasto" else "Add an expense")
+            .setIcon(IconCompat.createWithResource(this, R.mipmap.ic_launcher))
+            .setIntent(Intent(this, MainActivity::class.java).setAction(QuickAction.NEW_EXPENSE.intentAction))
+            .build()
+        runCatching { ShortcutManagerCompat.setDynamicShortcuts(this, listOf(shortcut)) }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
@@ -72,6 +104,8 @@ class MainActivity : FragmentActivity() {
      * started is pending; a mail return only as `<scheme>://gmail/callback`, redeemed once.
      */
     private fun handleIntent(intent: Intent?) {
+        // A launcher shortcut only asks for a screen; the signed-in, unlocked shell opens it.
+        QuickAction.fromIntentAction(intent?.action)?.let { model.requestQuickAction(it); return }
         val data = intent?.dataString ?: return
         when (intent.action) {
             MailReturnActivity.ACTION_MAIL_RETURN -> model.handleMailReturn(data)

@@ -103,15 +103,18 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     var deleting by remember { mutableStateOf(false) }
     // NAT-03 (B17): a reload that fails while the list is shown (pull to refresh, after a save or a
     // delete) keeps it and says so in the app notice; only a first load without a list shows the error.
-    suspend fun load() {
+    suspend fun load(quietly: Boolean = false) {
         model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.api.movements() }
             .onSuccess { state = Load.Ready(it) }
             .onFailure {
                 if (it is AuthException.SignedOut) return@onFailure
-                if (state is Load.Ready) model.showNotice(PullRefresh.failureNotice()) else state = Load.Failed(it.message.orEmpty())
+                if (state is Load.Ready) { if (!quietly) model.showNotice(PullRefresh.failureNotice()) } else state = Load.Failed(it.message.orEmpty())
             }
     }
     LaunchedEffect(Unit) { load() }
+    // New mail on return (AppModel.syncOnReturn): read again, keeping the list if it fails.
+    val dataGeneration by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(dataGeneration) { if (dataGeneration > 0) load(quietly = true) }
     val plan = profile?.planTier ?: PlanTier.FREE
 
     Box(Modifier.fillMaxSize().padding(padding)) {

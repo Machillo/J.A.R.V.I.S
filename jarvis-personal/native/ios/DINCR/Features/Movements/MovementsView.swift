@@ -125,6 +125,8 @@ struct MovementsView: View {
             Button(tx("Entendido", "OK"), role: .cancel) {}
         } message: { Text(deleteError ?? "") }
         .task { if case .loading = state { await load() } }
+        // New mail on return (AppModel.syncOnReturn): read again, keeping the list if it fails.
+        .onChange(of: model.dataGeneration) { _, _ in Task { await load(keepOnFailure: true) } }
         .animation(DincrMotion.standard(reduceMotion), value: state)
     }
 
@@ -179,7 +181,7 @@ struct MovementsView: View {
     /// Loads the list. A reload that fails while the list is shown (pull to refresh, after a save
     /// or a delete) keeps it and says so in the app notice (B17, `PullRefresh`); only a first load
     /// without a list shows the error. An answer from another session is dropped.
-    private func load() async {
+    private func load(keepOnFailure: Bool = false) async {
         let epoch = model.currentEpoch
         let shown: [Movement]? = if case .loaded(let rows) = state { rows } else { nil }
         do {
@@ -188,6 +190,7 @@ struct MovementsView: View {
         } catch is CancellationError {
             return
         } catch {
+            if keepOnFailure, case .loaded = state { return }
             guard let message = model.message(for: error, epoch: epoch,
                                               fallback: tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) else { return }
             if PullRefresh.kept(shown, after: .failure(error)) != nil {

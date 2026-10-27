@@ -58,7 +58,8 @@ export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange,
     "vip-monthly-review": advisory(gated("vip_intelligence", <VipScreens view="monthly-review" user={user} onNavigate={navigate} />)),
     "vip-today": gated("vip_intelligence", <VipScreens view="today" user={user} onNavigate={navigate} />),
     "vip-emergency": gated("vip_intelligence", <VipScreens view="emergency" user={user} onNavigate={navigate} />),
-    "vip-aguinaldo": plan === "vip" ? advisory(gated("gmail_automation", <VipScreens view="aguinaldo" user={user} onNavigate={navigate} />), "aguinaldo") : <SettingsPage user={user} onUserChange={onUserChange} onLogout={onLogout} />,
+    // L-1: the aguinaldo is read from mail, which only the Owner's account reads (UsersApp never serves the Owner).
+    "vip-aguinaldo": <SettingsPage user={user} onUserChange={onUserChange} onLogout={onLogout} />,
     "vip-preferences": gated("vip_intelligence", <VipScreens view="preferences" user={user} onNavigate={navigate} />),
   };
 }

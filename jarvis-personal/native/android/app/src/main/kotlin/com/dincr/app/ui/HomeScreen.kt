@@ -103,6 +103,9 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
         loadHomeToday(model, tier, mailReview)
     }
     val agenda = if (owner) rememberLoad(model, fallback = tx("No pudimos cargar tu agenda.", "We couldn’t load your calendar.")) { model.api.jarvisUpcomingEvents() } else null
+    // New mail on return (AppModel.syncOnReturn): read again, keeping the screen if it fails.
+    val dataGeneration by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(dataGeneration) { if (dataGeneration > 0) home.refresh() }
     // NAT-03 (B17): a refresh of the public Hoy shows the indicator, and when it fails it keeps what Hoy
     // shows and says so in the app notice (iOS: HomeView). The Owner's Hoy keeps its own behavior.
     var refreshing by remember { mutableStateOf(false) }
