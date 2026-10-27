@@ -50,6 +50,9 @@ struct MovementEditor: View {
     /// "Pagado con": the user's own accounts and cards (empty while unavailable or without any).
     @State private var paidWithOptions: [PaidWithOptions.Option] = []
     @State private var paidWith: Int?
+    /// A dollar expense may keep its dollars until the close (`PendingConversion`), while the server allows it.
+    @State private var pendingAvailable = false
+    @State private var waitsForClose = true
     @AccessibilityFocusState private var summaryFocused: Bool
 
     enum Field: Hashable { case amount, description, rate }
@@ -112,7 +115,18 @@ struct MovementEditor: View {
                         }
                         if let error = fieldErrors[.amount] { fieldError(error) }
                     }
-                    if isForeign {
+                    if offersWaitForClose {
+                        VStack(alignment: .leading, spacing: DincrSpacing.s1) {
+                            Toggle(tx("Convertir al cierre", "Convert at the close"), isOn: $waitsForClose)
+                                .accessibilityIdentifier("editor.waitForClose")
+                            Text(waits
+                                 ? tx("Queda en dólares hasta el corte de la tarjeta (o fin de mes sin tarjeta); ahí se convierte con un solo tipo de cambio.",
+                                      "It stays in dollars until the card’s statement cut (or month end without a card), then converts with one rate.")
+                                 : tx("Se convierte ahora con tu tipo de cambio.", "It converts now with your rate."))
+                                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        }
+                    }
+                    if isForeign && !waits {
                         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                             Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
                             TextField(tx("Tipo de cambio", "Exchange rate"), text: $rateText, prompt: Text(format.inputText(Decimal(string: "507.5")!)))
@@ -192,7 +206,15 @@ struct MovementEditor: View {
                 if newValue != base, rateText.isEmpty, let latestRate { rateText = format.inputText(latestRate) }
             }
             .onAppear(perform: prefill)
-            .task { paidWithOptions = (try? await model.service.paidWithOptions())?.offered ?? [] }
+            .task {
+                // Read together, so the editor settles once (a late second answer would redraw it mid-typing).
+                let service = model.service
+                async let options = try? await service.paidWithOptions()
+                async let pending = try? await service.pendingConversion()
+                let (offered, available) = await (options?.offered ?? [], pending?.available ?? false)
+                paidWithOptions = offered
+                pendingAvailable = available
+            }
             .sensoryFeedback(.success, trigger: saved)
             .sensoryFeedback(.error, trigger: saveError)
         }
@@ -204,6 +226,16 @@ struct MovementEditor: View {
         guard let storedCategory, !base.contains(storedCategory) else { return base }
         return [storedCategory] + base
     }
+
+    /// Only a manual expense in the other currency may wait for the close; an expense already waiting
+    /// is offered it even if the server can no longer keep new ones (so its edit can still convert it).
+    private var offersWaitForClose: Bool {
+        guard kind == .expense, isForeign else { return false }
+        if case .edit(let movement) = mode { return movement.origin == "expense" && (pendingAvailable || movement.isPendingConversion) }
+        return pendingAvailable
+    }
+
+    private var waits: Bool { offersWaitForClose && waitsForClose }
 
     /// Only a manual expense says what paid it.
     private var showsPaidWith: Bool {
@@ -239,12 +271,18 @@ struct MovementEditor: View {
             return
         }
         kind = movement.transactionType
-        if movement.isCurrencyEditable(entryCurrencies: model.profile?.entryCurrencies ?? []),
+        if movement.isPendingConversion, let original = movement.originalAmount, let code = movement.originalCurrency {
+            // Still waiting for the close: edited in its own currency, without a rate.
+            currency = code.uppercased()
+            amountText = format.inputText(original)
+            waitsForClose = true
+        } else if movement.isCurrencyEditable(entryCurrencies: model.profile?.entryCurrencies ?? []),
            let original = movement.originalAmount, let code = movement.originalCurrency, let rate = movement.exchangeRate {
             // A row typed in another currency is edited in that currency, with its stored rate.
             currency = code.uppercased()
             amountText = format.inputText(original)
             rateText = format.inputText(rate)
+            waitsForClose = false
         } else {
             currency = base
             amountText = format.inputText(movement.amount)
@@ -276,7 +314,7 @@ struct MovementEditor: View {
                                  "Enter an amount above zero, for example \(format.string(18_450).replacingOccurrences(of: format.symbol, with: "")).")
         }
         var rate: Decimal?
-        if isForeign {
+        if isForeign && !waits {
             if case .edit(let movement) = mode, storedForeign, rateText == prefilledRateText {
                 rate = movement.exchangeRate // untouched stored rate
             } else {
@@ -308,17 +346,19 @@ struct MovementEditor: View {
             switch mode {
             case .create:
                 let entry = EntryCreate(amount: amount, description: text, category: category, entryDate: day,
-                                        currency: isForeign ? currency : nil, exchangeRate: isForeign ? rate : nil,
-                                        financialAccountId: showsPaidWith ? paidWith : nil)
+                                        currency: isForeign ? currency : nil, exchangeRate: isForeign && !waits ? rate : nil,
+                                        financialAccountId: showsPaidWith ? paidWith : nil, convertAtClose: waits)
                 let key = (submission?.body == entry ? submission?.key : nil) ?? IdempotencyKey.new()
                 submission = (entry, key)
                 try await model.service.create(kind, entry, idempotencyKey: key)
             case .edit(let movement):
                 try await model.service.update(movementID: movement.movementId, MovementUpdate(
                     transactionDate: day, description: text, amount: amount, transactionType: movement.transactionType,
-                    category: category, notes: movement.notes ?? "", currency: isForeign ? currency : nil, exchangeRate: isForeign ? rate : nil,
+                    category: category, notes: movement.notes ?? "", currency: isForeign ? currency : nil,
+                    exchangeRate: isForeign && !waits ? rate : nil,
                     // Untouched, the stored link is left as it is (never rewritten by another edit).
-                    paidWith: showsPaidWith && paidWith != movement.financialAccountId ? .set(paidWith) : .unchanged))
+                    paidWith: showsPaidWith && paidWith != movement.financialAccountId ? .set(paidWith) : .unchanged,
+                    convertAtClose: waits))
             }
             saved += 1
             onSaved(isEditing ? tx("Cambios guardados", "Changes saved") : (kind == .income ? tx("Ingreso guardado", "Income saved") : tx("Gasto guardado", "Expense saved")))

@@ -28,6 +28,8 @@ struct MovementsView: View {
     @State private var pendingDelete: Movement?
     @State private var status: String?
     @State private var deleteError: String?
+    /// Dollar expenses waiting for the close: no colones amount yet, so listed apart (never ₡0).
+    @State private var pending: PendingConversion = .unavailable
 
     var body: some View {
         List {
@@ -86,6 +88,7 @@ struct MovementsView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                 }
+                if filter != .income, !visiblePending.isEmpty { pendingSection }
                 ForEach(groups, id: \.day) { group in
                     Section(DayLabel.format(group.day)) {
                         ForEach(group.rows) { row($0) }
@@ -156,6 +159,45 @@ struct MovementsView: View {
         }
     }
 
+    private var visiblePending: [PendingConversion.Item] {
+        pending.items.filter { SearchText.matches(query, in: [$0.description, $0.category]) }
+    }
+
+    /// The dollars that accumulate until the close, beside the colones list: their total per currency
+    /// and each expense (tap to edit or convert it now with your rate).
+    private var pendingSection: some View {
+        Section {
+            ForEach(pending.totals) { total in
+                HStack {
+                    Text(tx("Total por convertir", "Total to convert")).font(DincrFont.body.weight(.semibold))
+                    Spacer()
+                    Text(model.moneyFormat.string(total.amount, currency: total.currency)).font(DincrFont.amount)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("movements.pending.total.\(total.currency)")
+            }
+            ForEach(visiblePending) { item in
+                Button { editor = .edit(item.movement) } label: {
+                    MoneyRow(title: item.description.isEmpty ? CategoryStyle.label(item.category) : item.description,
+                             subtitle: [CategoryStyle.label(item.category), DayLabel.format(item.entryDate)].joined(separator: " · "),
+                             amount: item.originalAmount, kind: .expense,
+                             symbol: CategoryStyle.symbol(for: item.category, kind: .expense), currency: item.originalCurrency)
+                }
+                .buttonStyle(.plain)
+                .swipeActions(edge: .trailing) {
+                    Button(tx("Eliminar", "Delete"), role: .destructive) { pendingDelete = item.movement }
+                }
+                .accessibilityIdentifier("movements.pending.\(item.id)")
+                .accessibilityHint(tx("Tocá para editar", "Tap to edit"))
+            }
+        } header: {
+            Text(tx("En dólares · se convierten al cierre", "In dollars · converted at the close"))
+        } footer: {
+            Text(tx("No suman en colones hasta el cierre: el corte de la tarjeta, o fin de mes sin tarjeta.",
+                    "They don’t add up in colones until the close: the card’s statement cut, or month end without a card."))
+        }
+    }
+
     /// "US$10 × 507,5" for a row typed in another currency: the original figure and the user's rate.
     private func originalLabel(_ movement: Movement) -> String? {
         guard let original = movement.originalAmount, let code = movement.originalCurrency else { return nil }
@@ -186,7 +228,9 @@ struct MovementsView: View {
         let shown: [Movement]? = if case .loaded(let rows) = state { rows } else { nil }
         do {
             let rows = try await model.service.movements()
-            if epoch == model.currentEpoch { state = .loaded(rows) }
+            // Optional: the pending dollars never hide the colones list when they can't be read.
+            let waiting = (try? await model.service.pendingConversion()) ?? .unavailable
+            if epoch == model.currentEpoch { pending = waiting; state = .loaded(rows) }
         } catch is CancellationError {
             return
         } catch {

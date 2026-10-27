@@ -82,6 +82,8 @@ class DincrApi(private val client: ApiClient) {
     }
     /** The own accounts and cards an expense can say it was paid with. */
     suspend fun paidWithOptions(): PaidWithOptions = client.get("/user-product/finance/expenses/paid-with-options")
+    /** The dollar expenses waiting for the close, with their totals per currency. */
+    suspend fun pendingConversion(): PendingConversion = client.get("/user-product/finance/expenses/pending-conversion")
     suspend fun delete(movementId: String) {
         client.send<Acknowledgement>("DELETE", "/user-product/free/movements/${encode(movementId)}")
     }

@@ -241,6 +241,12 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     /// Manual rows may be switched to another entry currency on edit (the backend converts).
     public var acceptsCurrency: Bool { origin.map { Self.manualOrigins.contains($0) } ?? false }
 
+    /// A manual expense kept in the other currency until the close (`PendingConversion`): what the
+    /// user typed, without a rate. Its `amount` is that typed figure, never a colones amount.
+    public var isPendingConversion: Bool {
+        origin == "expense" && originalAmount != nil && originalCurrency != nil && exchangeRate == nil
+    }
+
     enum CodingKeys: String, CodingKey {
         case movementId, sourceId, origin, transactionDate, description, amount, transactionType
         case category, notes, editable, originalAmount, originalCurrency, exchangeRate, financialAccountId
@@ -281,14 +287,18 @@ public struct EntryCreate: Encodable, Sendable, Equatable {
     public let exchangeRate: Decimal?
     /// Only for an expense: the own account or card that paid it. Absent = not told.
     public let financialAccountId: Int?
+    /// Only for an expense in the other currency, without a rate: it waits for the close to be
+    /// converted (`PendingConversion`). Sent only when true.
+    public let convertAtClose: Bool
 
     public init(amount: Decimal, description: String, category: String, entryDate: String?, currency: String? = nil, exchangeRate: Decimal? = nil,
-                financialAccountId: Int? = nil) {
+                financialAccountId: Int? = nil, convertAtClose: Bool = false) {
         self.amount = amount; self.description = description; self.category = category; self.entryDate = entryDate
         self.currency = currency; self.exchangeRate = exchangeRate; self.financialAccountId = financialAccountId
+        self.convertAtClose = convertAtClose
     }
 
-    enum CodingKeys: String, CodingKey { case amount, description, category, entryDate, currency, exchangeRate, financialAccountId }
+    enum CodingKeys: String, CodingKey { case amount, description, category, entryDate, currency, exchangeRate, financialAccountId, convertAtClose }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -299,6 +309,7 @@ public struct EntryCreate: Encodable, Sendable, Equatable {
         try c.encodeIfPresent(currency, forKey: .currency)
         try c.encodeIfPresent(exchangeRate, forKey: .exchangeRate)
         try c.encodeIfPresent(financialAccountId, forKey: .financialAccountId)
+        if convertAtClose { try c.encode(true, forKey: .convertAtClose) }
     }
 }
 
@@ -316,15 +327,19 @@ public struct MovementUpdate: Encodable, Sendable, Equatable {
     public let exchangeRate: Decimal?
     /// Only for an expense: `.unchanged` leaves the stored "paid with" as it is (the key is not sent).
     public let paidWith: PaidWithChange
+    /// Only for an expense in the other currency, without a rate: it keeps waiting for the close.
+    public let convertAtClose: Bool
 
     public init(transactionDate: String, description: String, amount: Decimal, transactionType: Movement.Kind, category: String, notes: String = "",
-                currency: String? = nil, exchangeRate: Decimal? = nil, paidWith: PaidWithChange = .unchanged) {
+                currency: String? = nil, exchangeRate: Decimal? = nil, paidWith: PaidWithChange = .unchanged, convertAtClose: Bool = false) {
         self.transactionDate = transactionDate; self.description = description; self.amount = amount
         self.transactionType = transactionType.rawValue; self.category = category; self.notes = notes
-        self.currency = currency; self.exchangeRate = exchangeRate; self.paidWith = paidWith
+        self.currency = currency; self.exchangeRate = exchangeRate; self.paidWith = paidWith; self.convertAtClose = convertAtClose
     }
 
-    enum CodingKeys: String, CodingKey { case transactionDate, description, amount, transactionType, category, notes, currency, exchangeRate, financialAccountId }
+    enum CodingKeys: String, CodingKey {
+        case transactionDate, description, amount, transactionType, category, notes, currency, exchangeRate, financialAccountId, convertAtClose
+    }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -339,6 +354,7 @@ public struct MovementUpdate: Encodable, Sendable, Equatable {
         if case .set(let account) = paidWith {
             if let account { try c.encode(account, forKey: .financialAccountId) } else { try c.encodeNil(forKey: .financialAccountId) }
         }
+        if convertAtClose { try c.encode(true, forKey: .convertAtClose) }
     }
 }
 

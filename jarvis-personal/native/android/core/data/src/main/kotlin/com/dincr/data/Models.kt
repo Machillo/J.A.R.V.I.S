@@ -217,6 +217,13 @@ data class Movement(
     /** Manual income/expense rows may switch to another currency on edit (the backend converts). */
     val acceptsCurrency: Boolean get() = origin in MANUAL_ORIGINS
 
+    /**
+     * A manual expense kept in the other currency until the close ([PendingConversion]): what the user
+     * typed, without a rate. Its [amount] is that typed figure, never a colones amount.
+     */
+    val isPendingConversion: Boolean
+        get() = origin == "expense" && originalAmount != null && originalCurrency != null && exchangeRate == null
+
     /** The backend sends only "income" or "expense"; anything else is money leaving. */
     val kind: MovementKind get() = if (transactionType == "income") MovementKind.INCOME else MovementKind.EXPENSE
     val day: String? get() = transactionDate?.take(10)
@@ -242,6 +249,8 @@ data class EntryCreate(
     @SerialName("exchange_rate") val exchangeRate: Money? = null,
     /** Only for an expense: the own account or card that paid it. Null = not told (not sent). */
     @SerialName("financial_account_id") val financialAccountId: Long? = null,
+    /** Only for an expense in the other currency without a rate: it waits for the close. Sent only when true. */
+    @SerialName("convert_at_close") val convertAtClose: Boolean? = null,
 )
 
 /** Body of `PUT /user-product/free/movements/{id}`; currency and rate as in [EntryCreate]. */
@@ -255,6 +264,8 @@ data class MovementUpdate(
     val notes: String = "",
     val currency: String? = null,
     @SerialName("exchange_rate") val exchangeRate: Money? = null,
+    /** Only for an expense in the other currency without a rate: it keeps waiting for the close. */
+    @SerialName("convert_at_close") val convertAtClose: Boolean? = null,
 )
 
 /** Body of `POST /auth/profile-setup`. */

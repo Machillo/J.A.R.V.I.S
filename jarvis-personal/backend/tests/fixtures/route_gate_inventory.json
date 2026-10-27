@@ -1774,6 +1774,14 @@
   "user_get": "allowed"
  },
  {
+  "method": "GET",
+  "path": "/user-product/finance/expenses/pending-conversion",
+  "gates": [
+   "feature:spending"
+  ],
+  "user_get": "allowed"
+ },
+ {
   "method": "DELETE",
   "path": "/user-product/finance/expenses/{expense_id}",
   "gates": [

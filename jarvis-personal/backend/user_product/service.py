@@ -17,7 +17,7 @@ from backend.user_product.basic_service import _require_basic_tables
 from backend.user_product.debt_payoff import payoff_estimate
 from backend.user_product.debt_rates import UNKNOWN_RATE_SQL, known_interest_rate, rate_for_create, rate_for_update, with_known_rates
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
-from backend.user_product import expense_account
+from backend.user_product import expense_account, pending_conversion
 from backend.user_product.strategy_engine import (
     build_basic_strategy,
     build_paycheck_plan,
@@ -125,6 +125,13 @@ def _entry_values(conn, payload) -> dict:
     return resolve_entry_amount(base, payload.amount, currency, getattr(payload, "exchange_rate", None))
 
 
+def _expense_values(conn, payload) -> dict:
+    """An expense's stored amounts: converted now, or (asked for) waiting for the close."""
+    if pending_conversion.requested(payload):
+        return pending_conversion.pending_values(conn, account_base_currency(conn, get_current_account_id()), payload)
+    return _entry_values(conn, payload)
+
+
 def list_income():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
@@ -191,7 +198,7 @@ def list_expenses():
         rows = conn.execute(
             f"""SELECT id,category,expense_type,description,amount,{ORIGINAL_COLUMNS},{expense_account.SELECT_SQL},
                       created_at,user_id,workspace_id
-               FROM expenses WHERE workspace_id=%s ORDER BY id DESC""",
+               FROM expenses WHERE workspace_id=%s AND amount IS NOT NULL ORDER BY id DESC""",
             (workspace_id,),
         ).fetchall()
     return [{**row, "entry_date": str(row.get("created_at") or "")[:10]} for row in rows]
@@ -203,7 +210,7 @@ def create_expense_entry(payload):
     category = manual_expense_category(payload.category)
     expense_type = expense_type_for_category(category)
     with get_connection() as conn:
-        values = _entry_values(conn, payload)
+        values = _expense_values(conn, payload)
         write, link = expense_account.requested_link(conn, payload, account_id=get_current_account_id(), workspace_id=workspace_id)
         row = conn.execute(
             f"""INSERT INTO expenses(category,expense_type,description,amount,{ORIGINAL_COLUMNS},user_id,workspace_id,created_at)
@@ -223,7 +230,7 @@ def update_expense(expense_id: int, payload):
     workspace_id = get_current_workspace_id()
     category = manual_expense_category(payload.category)
     with get_connection() as conn:
-        values = _entry_values(conn, payload)
+        values = _expense_values(conn, payload)
         write, link = expense_account.requested_link(conn, payload, account_id=get_current_account_id(), workspace_id=workspace_id)
         row = conn.execute(
             f"""UPDATE expenses SET amount=%s,description=%s,category=%s,expense_type=%s,

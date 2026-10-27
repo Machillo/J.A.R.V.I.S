@@ -234,8 +234,12 @@ final class DINCRUITests: XCTestCase {
         let currency = app.segmentedControls["editor.currency"]
         XCTAssertTrue(currency.waitForExistence(timeout: 5))
         currency.buttons["USD"].tap()
+        // A dollar expense waits for the close by default (PendingConversionUITests); converted now, it asks for the rate.
+        let waits = app.switches["editor.waitForClose"]
+        XCTAssertTrue(waits.waitForExistence(timeout: 5))
+        waits.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()  // the control itself, not its label
         let rate = app.textFields["editor.rate"]
-        XCTAssertTrue(rate.waitForExistence(timeout: 2))
+        XCTAssertTrue(rate.waitForExistence(timeout: 5))
         XCTAssertEqual(rate.value as? String, "507,5", "prefilled with the user's own latest rate, never a market rate")
         rate.tap()
         rate.clearAndType("")
