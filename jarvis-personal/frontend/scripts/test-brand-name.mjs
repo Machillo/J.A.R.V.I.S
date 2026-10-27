@@ -18,6 +18,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const LEGACY = /finva/i;
 const SCHEME = "mail OAuth return scheme the backend still sends (FINVA_GMAIL_RETURN_URL); production config, human gate (audit C7)";
 const METHOD = "debt-plan method value of the VIP strategy API, in the fixture backends; never rendered (audit C9)";
+const STORE = "store product id the backend's catalog defaults to, mirrored by the fixture backend; the stores show the product's title, never its id (audit C8)";
 /** file (repo-relative) → token → reason. A token is the exact string literal (code) or word (config). */
 export const ALLOWED = {
   "jarvis-personal/native/android/app/src/main/kotlin/com/dincr/app/AppModel.kt": { "com.finva.app": SCHEME },
@@ -25,7 +26,9 @@ export const ALLOWED = {
   "jarvis-personal/native/android/core/data/src/main/kotlin/com/dincr/data/FakeBackend.kt": { finva: METHOD },
   "jarvis-personal/native/ios/Config/Info.plist": { "com.finva.app": SCHEME },
   "jarvis-personal/native/ios/DINCR/App/AppModel.swift": { "com.finva.app": SCHEME },
-  "jarvis-personal/native/ios/DincrKit/Sources/DincrCore/FixtureBackend.swift": { finva: METHOD, "com.finva.app": SCHEME },
+  "jarvis-personal/native/ios/DincrKit/Sources/DincrCore/FixtureBackend.swift": {
+    finva: METHOD, "com.finva.app": SCHEME, "finva.\\($0).monthly": STORE, "finva.\\($0).annual": STORE,
+  },
   "jarvis-personal/frontend/android/app/src/main/AndroidManifest.xml": { "com.finva.app": SCHEME },
   "jarvis-personal/frontend/ios-dincr/App/App/Info.plist": { "com.finva.app": SCHEME },
 };
