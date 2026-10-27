@@ -1,9 +1,10 @@
-# Native DINCR — release identity (pending decisions)
+# Native DINCR — release identity
 
-The native apps can run against the real backend, but **shipping them in place of the Capacitor
-app is a release decision that has not been made.** This file lists everything that changes when
-the native app takes the store identity, and what must exist first. Nothing here has been done:
-no console, store, Supabase or backend setting was changed by the native RC.
+**Decided (V1-1, recorded in `docs/product/DINCR_V1_MASTER_EXECUTION.md`): the native iOS (Swift) and
+Android (Kotlin) apps are DINCR's official store apps; Capacitor is not the store client.** Taking the
+store identity still needs everything below. This file lists what changes when the native app takes
+the store identity, and what must exist first. Nothing in the checklist has been done: no console,
+store, Supabase or backend setting was changed by the native RC.
 
 ## Identities today
 
@@ -102,7 +103,7 @@ and `com.finva.app`, Face ID text (ES/EN) and a privacy manifest. What only a pe
 
 ## Checklist before a native build reaches users
 
-- [ ] Kenneth decides the native app replaces Capacitor on Android (and when).
+- [x] Kenneth decides the native apps replace Capacitor (V1-1). When it ships is still a release decision.
 - [ ] Release signing with the Play upload key; versionCode/versionName decided.
 - [ ] Physical-device pass (see the PR's Android physical-test list).
 - [ ] Mail return URL decision and coordinated backend setting change (if any).
