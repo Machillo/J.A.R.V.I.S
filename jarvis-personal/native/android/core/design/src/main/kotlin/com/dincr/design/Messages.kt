@@ -1,5 +1,8 @@
 package com.dincr.design
 
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,14 +41,16 @@ import com.dincr.design.generated.DincrSpacing
 fun DincrMessage(kind: MessageKind, title: String, message: String = "") {
     val style = messageStyle(kind)
     Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(Dincr.look.controlRadius)).background(style.fill)
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(Dincr.look.cardRadius)).background(style.fill)
             .semantics(mergeDescendants = true) {},
     ) {
         // Attention carries a leading accent bar: it reads as "look here", never as a failure.
         if (kind == MessageKind.ATTENTION) Box(Modifier.width(4.dp).fillMaxHeight().background(style.color))
         Row(Modifier.padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s3)) {
             // The icon carries the spoken kind, so TalkBack reads it before the title.
-            Icon(style.icon, contentDescription = style.spokenKind, tint = style.color)
+            Box(Modifier.size(36.dp).background(Dincr.colors.surface, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(style.icon, contentDescription = style.spokenKind, tint = style.color, modifier = Modifier.size(20.dp))
+            }
             Column(Modifier.padding(start = DincrSpacing.s3)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
                 if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)

@@ -1,4 +1,4 @@
-// GENERATED from jarvis-personal/native/design-tokens/appearance.json (DINCR 2.0.0) by generate.mjs.
+// GENERATED from jarvis-personal/native/design-tokens/appearance.json (DINCR 3.0.0) by generate.mjs.
 // Do not edit. Change appearance.json and run the generator.
 import SwiftUI
 
@@ -22,15 +22,15 @@ public struct AppearanceDensity: Sendable {
 public enum DincrAppearanceTokens {
     public static let palettes: [String: AppearanceNeutrals] = [
         "clasico": AppearanceNeutrals(
-            bg: Color(light: 0xF5F7FA, dark: 0x0A1220),
-            surface: Color(light: 0xFFFFFF, dark: 0x111B2C),
-            surface2: Color(light: 0xEDF1F6, dark: 0x182438),
-            line: Color(light: 0xDCE3EC, dark: 0x24324A),
-            lineStrong: Color(light: 0xC3CEDC, dark: 0x34445F),
-            fieldBorder: Color(light: 0x7A889E, dark: 0x65758F),
-            text: Color(light: 0x0B1526, dark: 0xEEF3F9),
-            text2: Color(light: 0x46546A, dark: 0xB3C0D2),
-            textMuted: Color(light: 0x5B6980, dark: 0x93A2B8),
+            bg: Color(light: 0xF2F5F9, dark: 0x070E1A),
+            surface: Color(light: 0xFFFFFF, dark: 0x0F1A2B),
+            surface2: Color(light: 0xE8EDF4, dark: 0x172539),
+            line: Color(light: 0xDCE3EC, dark: 0x22324A),
+            lineStrong: Color(light: 0xC2CCDA, dark: 0x33445F),
+            fieldBorder: Color(light: 0x6F7E96, dark: 0x6A7A94),
+            text: Color(light: 0x0A1628, dark: 0xEDF2F9),
+            text2: Color(light: 0x3F4D66, dark: 0xB3C0D2),
+            textMuted: Color(light: 0x56647C, dark: 0x94A3B9),
             positive: nil,
             glow: nil
         ),
@@ -77,12 +77,12 @@ public enum DincrAppearanceTokens {
 
     public static let accents: [String: AppearanceAccent] = [
         "teal": AppearanceAccent(
-            tint: Color(light: 0x0B6E68, dark: 0x3CCFBF),
-            tintPressed: Color(light: 0x085B56, dark: 0x2DB5A6),
-            tintContainer: Color(light: 0xD5F0EC, dark: 0x0E3A38),
-            onTint: Color(light: 0xFFFFFF, dark: 0x04201D),
-            onTintContainer: Color(light: 0x053B37, dark: 0xBFF2EB),
-            focusRing: Color(light: 0x0B6E68, dark: 0x3CCFBF)
+            tint: Color(light: 0x0A6B5C, dark: 0x45D3BC),
+            tintPressed: Color(light: 0x075447, dark: 0x33B9A4),
+            tintContainer: Color(light: 0xD2F0E7, dark: 0x0C3A34),
+            onTint: Color(light: 0xFFFFFF, dark: 0x03201B),
+            onTintContainer: Color(light: 0x03372E, dark: 0xC0F2E8),
+            focusRing: Color(light: 0x0A6B5C, dark: 0x45D3BC)
         ),
         "cian": AppearanceAccent(
             tint: Color(light: 0x0068A3, dark: 0x1FB8FF),

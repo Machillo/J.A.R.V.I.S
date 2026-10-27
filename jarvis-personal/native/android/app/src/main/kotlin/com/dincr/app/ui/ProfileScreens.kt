@@ -83,10 +83,10 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     var confirming by remember { mutableStateOf(false) }
     RefreshableTab(model, tx("Perfil", "Profile")) {
-        DincrCard {
+        com.dincr.design.DincrHeroCard {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
-                Box(Modifier.size(44.dp).background(Dincr.colors.tintContainer, CircleShape), contentAlignment = Alignment.Center) {
-                    Text(profile?.firstName?.take(1) ?: "D", color = Dincr.colors.onTintContainer, style = MaterialTheme.typography.titleMedium)
+                Box(Modifier.size(52.dp).background(Dincr.colors.heroAccent, CircleShape), contentAlignment = Alignment.Center) {
+                    Text(profile?.firstName?.take(1) ?: "D", color = Dincr.colors.hero, style = MaterialTheme.typography.titleLarge)
                 }
                 Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
                     Text(profile?.displayName ?: tx("Tu cuenta", "Your account"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)

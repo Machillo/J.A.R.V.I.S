@@ -346,7 +346,8 @@ class FlowsTest {
         // goal is chosen): on a slow emulator a tap before that is ignored and the flow stalls.
         continueSetup()
         waitForText(tx("¿Qué querés lograr primero?", "What do you want to achieve first?"))
-        compose.onNodeWithText(tx("Tomar control de mis finanzas", "Take control of my finances")).performClick()
+        // Scrolled into view first: on a small screen (CI's API 24 emulator) this option sits below the fold.
+        click(tx("Tomar control de mis finanzas", "Take control of my finances"))
         continueSetup()
         waitForText(tx("¿Cómo querés ver tu dinero?", "How do you want to see your money?"))
         continueSetup()

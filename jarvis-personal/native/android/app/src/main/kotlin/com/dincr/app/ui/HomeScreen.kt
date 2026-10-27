@@ -67,6 +67,7 @@ import com.dincr.data.PlanTier
 import com.dincr.data.TrendMeaning
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
+import com.dincr.design.DincrHeroCard
 import com.dincr.design.DincrProgressBar
 import com.dincr.design.MoneyText
 import com.dincr.design.generated.DincrSpacing
@@ -241,7 +242,7 @@ private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) 
     var explains by remember { mutableStateOf(false) }
     Column(Modifier.testTag("home.status"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
         SectionTitle(tx("Estado de hoy", "Today’s status"))
-        DincrCard {
+        DincrHeroCard {
             Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
                 Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
                     Text(

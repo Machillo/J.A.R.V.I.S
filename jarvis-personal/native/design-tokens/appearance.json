@@ -68,8 +68,8 @@
  },
  "palettes": {
   "clasico": {
-   "light": { "bg": "#F5F7FA", "surface": "#FFFFFF", "surface-2": "#EDF1F6", "line": "#DCE3EC", "line-strong": "#C3CEDC", "field-border": "#7A889E", "text": "#0B1526", "text-2": "#46546A", "text-muted": "#5B6980" },
-   "dark": { "bg": "#0A1220", "surface": "#111B2C", "surface-2": "#182438", "line": "#24324A", "line-strong": "#34445F", "field-border": "#65758F", "text": "#EEF3F9", "text-2": "#B3C0D2", "text-muted": "#93A2B8" }
+   "light": { "bg": "#F2F5F9", "surface": "#FFFFFF", "surface-2": "#E8EDF4", "line": "#DCE3EC", "line-strong": "#C2CCDA", "field-border": "#6F7E96", "text": "#0A1628", "text-2": "#3F4D66", "text-muted": "#56647C" },
+   "dark": { "bg": "#070E1A", "surface": "#0F1A2B", "surface-2": "#172539", "line": "#22324A", "line-strong": "#33445F", "field-border": "#6A7A94", "text": "#EDF2F9", "text-2": "#B3C0D2", "text-muted": "#94A3B9" }
   },
   "oceano": {
    "light": { "bg": "#F0F6FA", "surface": "#FFFFFF", "surface-2": "#EAF2F8", "line": "#D3E2EE", "line-strong": "#B6CCDD", "field-border": "#6A8197", "text": "#0B1526", "text-2": "#3F5368", "text-muted": "#52677D", "positive": "#08734F", "glow": "#F6FAFD" },
@@ -86,8 +86,8 @@
  },
  "accents": {
   "teal": {
-   "light": { "tint": "#0B6E68", "tint-pressed": "#085B56", "tint-container": "#D5F0EC", "on-tint": "#FFFFFF", "on-tint-container": "#053B37", "focus-ring": "#0B6E68" },
-   "dark": { "tint": "#3CCFBF", "tint-pressed": "#2DB5A6", "tint-container": "#0E3A38", "on-tint": "#04201D", "on-tint-container": "#BFF2EB", "focus-ring": "#3CCFBF" }
+   "light": { "tint": "#0A6B5C", "tint-pressed": "#075447", "tint-container": "#D2F0E7", "on-tint": "#FFFFFF", "on-tint-container": "#03372E", "focus-ring": "#0A6B5C" },
+   "dark": { "tint": "#45D3BC", "tint-pressed": "#33B9A4", "tint-container": "#0C3A34", "on-tint": "#03201B", "on-tint-container": "#C0F2E8", "focus-ring": "#45D3BC" }
   },
   "cian": {
    "light": { "tint": "#0068A3", "tint-pressed": "#00598C", "tint-container": "#DDF0FB", "on-tint": "#FFFFFF", "on-tint-container": "#00405F", "focus-ring": "#0068A3" },

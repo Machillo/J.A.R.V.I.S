@@ -1,5 +1,7 @@
 package com.dincr.app.ui
 
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.foundation.border
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -219,7 +221,7 @@ fun DetailScaffold(title: String, onBack: () -> Unit, actions: @Composable () ->
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, modifier = modifier.semantics { heading() })
+    Text(text, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, modifier = modifier.padding(top = DincrSpacing.s2).semantics { heading() })
 }
 
 /** Label on the left, amount on the right (tabular). */
@@ -248,11 +250,11 @@ fun NavRow(icon: ImageVector, title: String, subtitle: String? = null, badge: St
         Modifier.fillMaxWidth().heightIn(min = Dincr.look.rowMin).clickable(onClick = onClick).padding(vertical = DincrSpacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).background(Dincr.colors.surface2, RoundedCornerShape(Dincr.look.controlRadius)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).background(Dincr.colors.tintContainer, RoundedCornerShape(Dincr.look.controlRadius)), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = Dincr.colors.tint, modifier = Modifier.size(22.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text)
+            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), color = Dincr.colors.text)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted) }
         }
         badge?.let { PlanBadge(it) }
@@ -267,8 +269,8 @@ fun PlanBadge(text: String) {
     Text(
         text, style = MaterialTheme.typography.labelMedium,
         color = if (vip) Dincr.colors.vip else Dincr.colors.onTintContainer,
-        modifier = Modifier.background(if (vip) Dincr.colors.vipContainer else Dincr.colors.tintContainer, RoundedCornerShape(DincrRadius.xs))
-            .padding(horizontal = DincrSpacing.s2, vertical = 2.dp),
+        modifier = Modifier.background(if (vip) Dincr.colors.vipContainer else Dincr.colors.tintContainer, RoundedCornerShape(DincrRadius.full))
+            .padding(horizontal = DincrSpacing.s2 + 2.dp, vertical = 2.dp),
     )
 }
 
@@ -319,7 +321,8 @@ fun DateField(label: String, value: LocalDate?, onChange: (LocalDate?) -> Unit, 
     var open by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { open = true }
-            .background(Dincr.colors.surface, RoundedCornerShape(Dincr.look.controlRadius)).padding(horizontal = DincrSpacing.s4),
+            .background(Dincr.colors.surface, RoundedCornerShape(Dincr.look.controlRadius))
+            .border(1.dp, Dincr.colors.fieldBorder, RoundedCornerShape(Dincr.look.controlRadius)).padding(horizontal = DincrSpacing.s4),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -359,13 +362,44 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -
             options.forEach { (value, text) ->
                 FilterChip(
                     selected = value == selected, onClick = { onSelect(value) }, label = { Text(text) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Dincr.colors.tintContainer, selectedLabelColor = Dincr.colors.onTintContainer),
+                    leadingIcon = dincrChipCheck(value == selected),
+                    modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(DincrRadius.full),
+                    colors = dincrChipColors(), border = null,
                 )
             }
         }
     }
 }
+
+/**
+ * DINCR 3.0 chips: tonal, no outline; the selected one in the tint container with a check
+ * ([dincrChipCheck]), so the selection never depends on color alone (the two fills differ mostly
+ * in hue). Assistive technologies get the selected state from the chip itself.
+ */
+@Composable
+fun dincrChipColors() = FilterChipDefaults.filterChipColors(
+    containerColor = Dincr.colors.surface2, labelColor = Dincr.colors.text2,
+    selectedContainerColor = Dincr.colors.tintContainer, selectedLabelColor = Dincr.colors.onTintContainer,
+    selectedLeadingIconColor = Dincr.colors.onTintContainer,
+)
+
+/** The selected chip's check (WCAG 1.4.1: the state is shown by shape, not only by color). */
+fun dincrChipCheck(selected: Boolean): (@Composable () -> Unit)? =
+    if (selected) { { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) } } else null
+
+/** Bottom bar item colors: the tint container marks the current tab, label always shown. */
+@Composable
+fun dincrNavBarItemColors() = androidx.compose.material3.NavigationBarItemDefaults.colors(
+    selectedIconColor = Dincr.colors.onTintContainer, selectedTextColor = Dincr.colors.text, indicatorColor = Dincr.colors.tintContainer,
+    unselectedIconColor = Dincr.colors.textMuted, unselectedTextColor = Dincr.colors.textMuted,
+)
+
+/** Navigation rail item colors (large screens), matching [dincrNavBarItemColors]. */
+@Composable
+fun dincrNavRailItemColors() = androidx.compose.material3.NavigationRailItemDefaults.colors(
+    selectedIconColor = Dincr.colors.onTintContainer, selectedTextColor = Dincr.colors.text, indicatorColor = Dincr.colors.tintContainer,
+    unselectedIconColor = Dincr.colors.textMuted, unselectedTextColor = Dincr.colors.textMuted,
+)
 
 /** Destructive or important confirmation. */
 @Composable

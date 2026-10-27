@@ -1,4 +1,4 @@
-// GENERATED from jarvis-personal/native/design-tokens/appearance.json (DINCR 2.0.0) by generate.mjs.
+// GENERATED from jarvis-personal/native/design-tokens/appearance.json (DINCR 3.0.0) by generate.mjs.
 // Do not edit. Change appearance.json and run the generator.
 import Foundation
 
