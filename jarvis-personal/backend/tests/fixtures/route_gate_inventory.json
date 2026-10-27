@@ -1833,6 +1833,13 @@
  },
  {
   "method": "POST",
+  "path": "/user-product/finance/strategy-vip/debt-scenario",
+  "gates": [
+   "feature:strategy_vip"
+  ]
+ },
+ {
+  "method": "POST",
   "path": "/user-product/finance/strategy-vip/simulate",
   "gates": [
    "feature:strategy_vip"

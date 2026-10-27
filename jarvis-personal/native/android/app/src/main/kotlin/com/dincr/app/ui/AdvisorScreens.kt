@@ -180,8 +180,15 @@ fun ScenariosScreen(model: AppModel, nav: Navigator) {
     var result by remember { mutableStateOf<ScenarioResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var choice by remember { mutableStateOf(ScenarioChoice.GENERAL) }
     val scope = rememberCoroutineScope()
     DetailScaffold(tx("Escenarios", "Scenarios"), nav::back) {
+        ScenarioChoicePicker(choice) { choice = it }
+        if (choice != ScenarioChoice.GENERAL) {
+            DebtScenarioForm(model, choice)
+            FinancialDisclaimer()
+            return@DetailScaffold
+        }
         Caption(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes.", "Try changes without saving anything: DINCR shows how much you’d have left each month."))
         fun value(text: String) = if (text.isBlank()) BigDecimal.ZERO else com.dincr.data.AmountInput.parseZeroOrMore(text, format.separators)
         ChoiceChips(listOf(false to tx("Ingreso sube", "Income rises"), true to tx("Ingreso baja", "Income falls")), incomeDown, { incomeDown = it })

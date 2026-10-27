@@ -143,6 +143,7 @@ class DincrApi(private val client: ApiClient) {
     suspend fun commandCenter(): CommandCenter = client.get("/user-product/vip/command-center")
     suspend fun strategyVip(): Strategy = client.get("/user-product/finance/strategy-vip")
     suspend fun simulate(request: ScenarioRequest): ScenarioResult = client.send("POST", "/user-product/finance/strategy-vip/simulate", request)
+    suspend fun debtScenario(request: DebtScenarioRequest): DebtScenarioResult = client.send("POST", "/user-product/finance/strategy-vip/debt-scenario", request)
     suspend fun aguinaldo(): Aguinaldo = client.get("/user-product/vip/aguinaldo")
     suspend fun monthlyReview(period: String): MonthlyReview = client.get("/user-product/vip/lifecycle/monthly-review", mapOf("period" to period))
     suspend fun proactiveAdvisor(): ProactiveAdvisor = client.get("/user-product/vip/lifecycle/proactive-advisor")

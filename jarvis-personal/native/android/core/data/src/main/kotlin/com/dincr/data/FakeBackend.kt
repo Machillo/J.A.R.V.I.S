@@ -246,6 +246,18 @@ class FakeBackend(
     private inline fun <reified T> ok(value: T) = HttpResponse(200, json.encodeToString(value))
     private fun error(status: Int, detail: String) = HttpResponse(status, buildJsonObject { put("detail", detail) }.toString())
     private fun id() = ++nextId
+
+    /** `POST /finance/strategy-vip/debt-scenario` on this backend's own debts (`FakeDebtScenario`). */
+    private fun debtScenario(body: JsonObject?): HttpResponse {
+        val request = body?.let { runCatching { json.decodeFromJsonElement(DebtScenarioRequest.serializer(), it) }.getOrNull() }
+            ?: return error(422, "Revisá los datos del escenario.")
+        return when (val answer = FakeDebtScenario.answer(request, debts, strategy().strategicMargin ?: BigDecimal.ZERO)) {
+            is FakeDebtScenario.Answer.Ok -> ok(answer.result)
+            is FakeDebtScenario.Answer.Refused -> HttpResponse(answer.status, buildJsonObject {
+                put("detail", buildJsonObject { put("code", answer.code); put("message", answer.message) })
+            }.toString())
+        }
+    }
     private fun needs(tier: PlanTier): HttpResponse? = if (profile.planTier.rank < tier.rank) error(403, "Esta función no está incluida en tu plan.") else null
 
     @Suppress("CyclomaticComplexMethod")
@@ -518,6 +530,7 @@ class FakeBackend(
             path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
                 needs(PlanTier.VIP) ?: mail(method, path, segments, query, body)
             path == "/user-product/vip/salvavidas" -> needs(PlanTier.VIP) ?: salvavidas(method, body)
+            method == "POST" && path == "/user-product/finance/strategy-vip/debt-scenario" -> needs(PlanTier.VIP) ?: debtScenario(body)
             path.startsWith("/user-product/vip") || path.startsWith("/user-product/finance/strategy-vip") -> needs(PlanTier.VIP) ?: vip(path)
             else -> error(404, "Not Found")
         }
