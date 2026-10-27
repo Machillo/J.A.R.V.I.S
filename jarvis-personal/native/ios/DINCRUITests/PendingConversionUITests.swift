@@ -14,6 +14,16 @@ final class PendingConversionUITests: XCTestCase {
         return app
     }
 
+    /// Types once the field has the keyboard focus (a busy simulator can drop the first tap).
+    private func type(_ text: String, into field: XCUIElement) {
+        for _ in 0..<3 {
+            field.tap()
+            if field.value(forKey: "hasKeyboardFocus") as? Bool == true { break }
+            _ = field.waitForExistence(timeout: 1)
+        }
+        field.typeText(text)
+    }
+
     private func openEditorInDollars(_ app: XCUIApplication) {
         app.tabBars.buttons["Movimientos"].firstMatch.tap()
         let add = app.buttons["movements.add"]
@@ -32,12 +42,8 @@ final class PendingConversionUITests: XCTestCase {
         XCTAssertEqual(waits.value as? String, "1", "a dollar expense waits for the close by default")
         XCTAssertFalse(app.textFields["editor.rate"].exists, "no rate is asked while it waits")
 
-        let amount = app.textFields["editor.amount"]
-        amount.tap()
-        amount.typeText("120")
-        let description = app.textFields["editor.description"]
-        description.tap()
-        description.typeText("Hotel en dólares")
+        type("120", into: app.textFields["editor.amount"])
+        type("Hotel en dólares", into: app.textFields["editor.description"])
         app.buttons["editor.save"].tap()
         XCTAssertTrue(app.buttons["editor.save"].waitForNonExistence(timeout: 10))
 
@@ -52,7 +58,7 @@ final class PendingConversionUITests: XCTestCase {
         openEditorInDollars(app)
         let waits = app.switches["editor.waitForClose"]
         XCTAssertTrue(waits.waitForExistence(timeout: 5))
-        waits.switches.firstMatch.exists ? waits.switches.firstMatch.tap() : waits.tap()
-        XCTAssertTrue(app.textFields["editor.rate"].waitForExistence(timeout: 3))
+        waits.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()  // the control itself, not its label
+        XCTAssertTrue(app.textFields["editor.rate"].waitForExistence(timeout: 5))
     }
 }

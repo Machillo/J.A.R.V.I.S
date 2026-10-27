@@ -2,6 +2,7 @@ package com.dincr.app
 
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollToNodeAction
@@ -154,6 +155,9 @@ class FlowsTest {
         openMovements()
         compose.onNodeWithTag("movements.add").performClick()
         click(tx("Dólares", "Dollars"))
+        // A dollar expense waits for the close by default (PendingConversionUiTest); converted now, it asks for the rate.
+        waitForTag("editor.waitForClose")
+        compose.onNodeWithTag("editor.waitForClose").performClick()
         compose.onNodeWithTag("editor.amount").performTextInput("10")
         compose.onNodeWithTag("editor.description").performTextInput("Libro en línea")
         // Prefilled with the user's latest own rate (never a market rate); cleared, it is required.
@@ -166,6 +170,24 @@ class FlowsTest {
         compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForText("Libro en línea")
         waitForText(tx("TC 507,5", "Rate 507,5"), substring = true)
+    }
+
+    /** A dollar expense waits for the close by default: no rate asked, listed apart with its dollar total. */
+    @Test fun dollarExpenseWaitsForTheCloseAndIsListedApart() {
+        launch()
+        openMovements()
+        compose.onNodeWithTag("movements.add").performClick()
+        click(tx("Dólares", "Dollars"))
+        waitForTag("editor.waitForClose")
+        compose.onNodeWithTag("editor.waitForClose").assertIsOn()
+        check(compose.onAllNodes(hasTestTag("editor.rate")).fetchSemanticsNodes().isEmpty()) { "no rate is asked while it waits" }
+        compose.onNodeWithTag("editor.amount").performTextInput("120")
+        compose.onNodeWithTag("editor.description").performTextInput("Hotel en dólares")
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
+        waitForGone(tx("Nuevo movimiento", "New transaction"))
+        waitForTag("movements.pending.total.USD")
+        waitForText("Hotel en dólares")
+        waitForText(tx("En dólares · se convierten al cierre", "In dollars · converted at the close"))
     }
 
     /** Saving only a new description must keep the stored cents and the stored category. */

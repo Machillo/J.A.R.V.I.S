@@ -64,12 +64,15 @@ import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.SearchText
 import com.dincr.data.Movement
+import com.dincr.data.PendingConversion
+import kotlinx.coroutines.CancellationException
 import com.dincr.data.MovementKind
 import com.dincr.design.Dincr
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.ErrorState
 import com.dincr.design.MoneyRow
+import com.dincr.design.TabularNums
 import com.dincr.design.SkeletonBlock
 import com.dincr.design.generated.DincrSpacing
 import java.time.LocalDate
@@ -101,11 +104,17 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var deleting by remember { mutableStateOf(false) }
+    // Dollar expenses waiting for the close: no colones amount yet, so listed apart (never ₡0).
+    var pending by remember { mutableStateOf(PendingConversion.UNAVAILABLE) }
     // NAT-03 (B17): a reload that fails while the list is shown (pull to refresh, after a save or a
     // delete) keeps it and says so in the app notice; only a first load without a list shows the error.
     suspend fun load(quietly: Boolean = false) {
         model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.api.movements() }
-            .onSuccess { state = Load.Ready(it) }
+            .onSuccess {
+                // Optional: the pending dollars never hide the colones list when they can't be read.
+                pending = try { model.api.pendingConversion() } catch (e: CancellationException) { throw e } catch (_: Exception) { PendingConversion.UNAVAILABLE }
+                state = Load.Ready(it)
+            }
             .onFailure {
                 if (it is AuthException.SignedOut) return@onFailure
                 if (state is Load.Ready) { if (!quietly) model.showNotice(PullRefresh.failureNotice()) } else state = Load.Failed(it.message.orEmpty())
@@ -170,6 +179,37 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                     if (none) tx("Todavía no hay movimientos", "No transactions yet") else tx("Nada coincide con tu búsqueda", "Nothing matches your search"),
                                     if (none) tx("Registrá tu primer ingreso o gasto para empezar.", "Record your first income or expense to begin.") else tx("Probá otra palabra o cambiá el filtro.", "Try another word or change the filter."),
                                     if (none) ({ DincrPrimaryButton(tx("Agregar movimiento", "Add transaction"), { editing = EditorMode.Create }) }) else null)
+                            }
+                        }
+                        val waiting = pending.items.filter { SearchText.matches(query, listOf(it.description, it.category)) }
+                        if ((filter == MovementFilter.ALL || filter == MovementFilter.EXPENSE) && waiting.isNotEmpty()) {
+                            item(key = "pending-header") {
+                                Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s5, bottom = DincrSpacing.s1)) {
+                                    Text(tx("En dólares · se convierten al cierre", "In dollars · converted at the close"), style = MaterialTheme.typography.labelLarge,
+                                        color = Dincr.colors.text2, modifier = Modifier.semantics { heading() })
+                                    Text(tx("No suman en colones hasta el cierre: el corte de la tarjeta, o fin de mes sin tarjeta.",
+                                        "They don’t add up in colones until the close: the card’s statement cut, or month end without a card."),
+                                        style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                                    pending.totals.forEach { total ->
+                                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("movements.pending.total.${total.currency}"), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(tx("Total por convertir", "Total to convert"), style = MaterialTheme.typography.titleSmall, color = Dincr.colors.text, modifier = Modifier.weight(1f))
+                                            Text(Dincr.money.copy(currency = total.currency).format(total.amount), style = MaterialTheme.typography.titleSmall.merge(TabularNums), color = Dincr.colors.text)
+                                        }
+                                    }
+                                }
+                            }
+                            items(waiting, key = { "pending-${it.movementId}" }) { item ->
+                                val movement = item.movement
+                                val edit = CustomAccessibilityAction(tx("Editar", "Edit")) { editing = EditorMode.Edit(movement); true }
+                                val delete = CustomAccessibilityAction(tx("Eliminar", "Delete")) { pendingDelete = movement; true }
+                                MoneyRow(
+                                    title = item.description.takeIf { it.isNotBlank() } ?: item.category ?: tx("Gasto", "Expense"),
+                                    subtitle = listOfNotNull(item.category, dayLabel(item.entryDate)).joinToString(" · "),
+                                    amount = item.originalAmount, kind = MovementKind.EXPENSE, icon = iconFor(movement), readOnly = false,
+                                    currency = item.originalCurrency,
+                                    modifier = Modifier.widthIn(max = 600.dp).testTag("movements.pending.${item.id}")
+                                        .clickable { editing = EditorMode.Edit(movement) }.semantics { customActions = listOf(edit, delete) },
+                                )
                             }
                         }
                         visible.groupBy { it.day.orEmpty() }.toSortedMap(compareByDescending { it }).forEach { (day, rows) ->

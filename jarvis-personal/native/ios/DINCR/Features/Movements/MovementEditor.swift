@@ -207,8 +207,13 @@ struct MovementEditor: View {
             }
             .onAppear(perform: prefill)
             .task {
-                paidWithOptions = (try? await model.service.paidWithOptions())?.offered ?? []
-                pendingAvailable = (try? await model.service.pendingConversion())?.available ?? false
+                // Read together, so the editor settles once (a late second answer would redraw it mid-typing).
+                let service = model.service
+                async let options = try? await service.paidWithOptions()
+                async let pending = try? await service.pendingConversion()
+                let (offered, available) = await (options?.offered ?? [], pending?.available ?? false)
+                paidWithOptions = offered
+                pendingAvailable = available
             }
             .sensoryFeedback(.success, trigger: saved)
             .sensoryFeedback(.error, trigger: saveError)
