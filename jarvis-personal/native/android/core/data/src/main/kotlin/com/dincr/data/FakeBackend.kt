@@ -13,6 +13,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /** The movement a bank notice adds when [FakeBackend.mailArrives] is on (mail recovery UI tests). */
+/** The dollar expense [FakeBackend.pendingSampleArrives] adds (3d UI tests). */
+const val FAKE_PENDING_SAMPLE = "Hotel en dólares"
 const val FAKE_ARRIVED_MOVEMENT = "Compra detectada por correo"
 
 /**
@@ -105,6 +107,11 @@ class FakeBackend(
     override suspend fun send(request: HttpRequest): HttpResponse {
         if (latencyMs > 0) delay(latencyMs)
         requests += request
+        if (pendingSampleArrives) {
+            pendingSampleArrives = false
+            movements += Movement("expense:9100", 9100, "expense", today.minusMonths(1).toString(), FAKE_PENDING_SAMPLE, BigDecimal(120), "expense", "Compras", "", true,
+                originalAmount = BigDecimal(120), originalCurrency = "USD")
+        }
         if (request.headers["Authorization"] == null && !request.url.contains("/product-ops/release-policy")) return error(401, "Falta Authorization")
         if (scenario == Scenario.FAILING && !request.url.contains("release-policy")) {
             return error(500, "Ocurrió un error interno. Intentá nuevamente.")
@@ -429,6 +436,7 @@ class FakeBackend(
             // Expenses waiting for the close have no colones amount: listed apart, like the backend.
             path == "/user-product/free/movements" -> ok(colonesMovements.sortedWith(compareByDescending<Movement> { it.transactionDate }.thenByDescending { it.sourceId }))
             path == "/user-product/finance/expenses/pending-conversion" -> ok(pendingConversion())
+            path == "/user-product/finance/expenses/pending-conversion/close" && method == "POST" -> closePending(text("period_key").orEmpty(), money("exchange_rate"))
             (path == "/user-product/finance/income" || path == "/user-product/finance/expenses") && method == "POST" -> {
                 val income = path.endsWith("income")
                 val typed = money("amount") ?: return error(422, "Monto inválido")
@@ -760,16 +768,66 @@ class FakeBackend(
         else -> null
     }
 
+    /** The close of a pending row, with the backend's rule (conversion_periods): a card's cut, or the calendar month. */
+    private fun pendingPeriod(row: Movement): PendingConversion.Period {
+        val day = row.transactionDate?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today
+        val card = accounts.firstOrNull { it.id == row.financialAccountId }?.takeIf { it.accountType == "credit_card" }
+        val cut = card?.statementCutDay
+        if (card != null && cut != null) {
+            fun cutOf(month: LocalDate) = month.withDayOfMonth(minOf(cut, month.lengthOfMonth()))
+            val thisCut = cutOf(day)
+            val end = if (!day.isAfter(thisCut)) thisCut else cutOf(day.plusMonths(1))
+            val start = cutOf(end.minusMonths(1)).plusDays(1)
+            return PendingConversion.Period("card:${card.id}:$end", "card", start.toString(), end.toString(), !end.isAfter(today),
+                accountId = card.id, accountName = card.accountName, accountLast4 = card.accountLast4)
+        }
+        val start = day.withDayOfMonth(1)
+        val end = day.withDayOfMonth(day.lengthOfMonth())
+        return PendingConversion.Period("month:${start.toString().take(7)}", "month", start.toString(), end.toString(), !end.isAfter(today),
+            cutDayMissing = card != null)
+    }
+
+    private fun pendingTotals(rows: List<Movement>) = rows.groupBy { it.originalCurrency!! }.toSortedMap()
+        .map { (currency, list) -> PendingConversion.Total(currency, list.sumOf { it.originalAmount!! }, list.size) }
+
     private fun pendingConversion(): PendingConversion {
         val waiting = movements.filter { it.isPendingConversion }.sortedByDescending { it.transactionDate }
         val items = waiting.map {
             PendingConversion.Item(it.movementId, it.sourceId ?: 0, it.transactionDate.orEmpty(), it.description.orEmpty(), it.category,
-                it.originalAmount!!, it.originalCurrency!!, it.financialAccountId)
+                it.originalAmount!!, it.originalCurrency!!, it.financialAccountId, pendingPeriod(it).key)
         }
-        val totals = waiting.groupBy { it.originalCurrency!! }.toSortedMap()
-            .map { (currency, rows) -> PendingConversion.Total(currency, rows.sumOf { it.originalAmount!! }, rows.size) }
-        return PendingConversion(true, items, totals)
+        val periods = waiting.groupBy { pendingPeriod(it).key }.values
+            .map { rows -> pendingPeriod(rows.first()).copy(totals = pendingTotals(rows), count = rows.size) }
+            .sortedBy { it.end }
+        return PendingConversion(true, items, pendingTotals(waiting), periods)
     }
+
+    /** The close: one rate converts every row still waiting in the period, once it has ended. */
+    private fun closePending(key: String, rate: BigDecimal?): HttpResponse {
+        if (rate == null || rate.signum() <= 0) return error(422, "Indicá el tipo de cambio.")
+        val rows = movements.withIndex().filter { (_, row) -> row.isPendingConversion && pendingPeriod(row).key == key }
+        if (rows.isEmpty()) return error(404, "No hay gastos por convertir en ese cierre.")
+        val period = pendingPeriod(rows.first().value)
+        if (!period.closable) return error(409, "Este cierre termina el ${period.end}: se convierte desde ese día.")
+        val base = profile.baseCurrency ?: "CRC"
+        var total = BigDecimal.ZERO
+        rows.forEach { (index, row) ->
+            val converted = convert(row.originalAmount!!, row.originalCurrency!!, base, rate)
+            movements[index] = row.copy(amount = converted, exchangeRate = rate)
+            total += converted
+        }
+        return ok(PendingCloseResult(rows.size, total, base, rate))
+    }
+
+    /** 3d tests: one of the user's own credit cards (the sample has none), with its declared cut day. */
+    internal fun addOwnCard(cutDay: Int?): Long {
+        val id = (accounts.maxOfOrNull { it.id } ?: 0) + 1
+        accounts += FinancialIdentity.Account(id, "Tarjeta de crédito", "BAC", "bac", "CR", "credit_card", "USD", "4321", "own", statementCutDay = cutDay)
+        return id
+    }
+
+    /** 3d UI tests: set while the app runs; the next request finds a dollar expense from last month still waiting. */
+    @Volatile var pendingSampleArrives: Boolean = false
 
     private fun totals(period: String): Pair<BigDecimal, BigDecimal> {
         val rows = colonesMovements.filter { it.transactionDate?.startsWith(period) == true }

@@ -119,6 +119,12 @@ public struct DincrService: Sendable {
         try await client.get("/user-product/finance/expenses/pending-conversion")
     }
 
+    /// The close (3d): converts every expense waiting in one period with the user's one rate.
+    public func closePending(_ close: PendingClose, idempotencyKey: String) async throws -> PendingCloseResult {
+        try WriteContract.checkRate(close.exchangeRate)
+        return try await client.send("POST", "/user-product/finance/expenses/pending-conversion/close", body: close, idempotencyKey: idempotencyKey)
+    }
+
     public func update(movementID: String, _ update: MovementUpdate) async throws {
         try WriteContract.checkAmount(update.amount)
         try WriteContract.checkDate(update.transactionDate)

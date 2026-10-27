@@ -30,6 +30,8 @@ struct MovementsView: View {
     @State private var deleteError: String?
     /// Dollar expenses waiting for the close: no colones amount yet, so listed apart (never ₡0).
     @State private var pending: PendingConversion = .unavailable
+    /// The close being confirmed (one rate for one period).
+    @State private var closing: PendingConversion.Period?
 
     var body: some View {
         List {
@@ -114,6 +116,12 @@ struct MovementsView: View {
                 Task { await load() }
             }
         }
+        .sheet(item: $closing) { period in
+            ClosePeriodSheet(period: period, latestRate: latestRate) { message in
+                announce(message)
+                Task { await load() }
+            }
+        }
         .confirmationDialog(
             pendingDelete.map { tx("¿Eliminar «\($0.description ?? "movimiento")»?", "Delete “\($0.description ?? "transaction")”?") } ?? "",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
@@ -163,39 +171,72 @@ struct MovementsView: View {
         pending.items.filter { SearchText.matches(query, in: [$0.description, $0.category]) }
     }
 
-    /// The dollars that accumulate until the close, beside the colones list: their total per currency
-    /// and each expense (tap to edit or convert it now with your rate).
+    /// The dollars that accumulate until the close, beside the colones list: one section per close
+    /// (a card's statement cycle, or a calendar month), with its total and, once it has ended, the
+    /// conversion with one rate. A server without the close lists them in one section.
+    @ViewBuilder
     private var pendingSection: some View {
-        Section {
-            ForEach(pending.totals) { total in
-                HStack {
-                    Text(tx("Total por convertir", "Total to convert")).font(DincrFont.body.weight(.semibold))
-                    Spacer()
-                    Text(model.moneyFormat.string(total.amount, currency: total.currency)).font(DincrFont.amount)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("movements.pending.total.\(total.currency)")
+        if pending.periods.isEmpty {
+            Section {
+                ForEach(pending.totals) { pendingTotal($0) }
+                ForEach(visiblePending) { pendingRow($0) }
+            } header: {
+                Text(tx("En dólares · se convierten al cierre", "In dollars · converted at the close"))
             }
-            ForEach(visiblePending) { item in
-                Button { editor = .edit(item.movement) } label: {
-                    MoneyRow(title: item.description.isEmpty ? CategoryStyle.label(item.category) : item.description,
-                             subtitle: [CategoryStyle.label(item.category), DayLabel.format(item.entryDate)].joined(separator: " · "),
-                             amount: item.originalAmount, kind: .expense,
-                             symbol: CategoryStyle.symbol(for: item.category, kind: .expense), currency: item.originalCurrency)
+        } else {
+            ForEach(pending.periods) { period in
+                let items = visiblePending.filter { $0.periodKey == period.key }
+                if !items.isEmpty {
+                    Section {
+                        ForEach(period.totals) { pendingTotal($0) }
+                        ForEach(items) { pendingRow($0) }
+                        if period.closable {
+                            Button(tx("Convertir a colones", "Convert to colones")) { closing = period }
+                                .fontWeight(.semibold)
+                                .accessibilityIdentifier("movements.pending.close.\(period.key)")
+                        }
+                    } header: {
+                        Text(tx("En dólares · \(PendingPeriodLabel.title(period))", "In dollars · \(PendingPeriodLabel.title(period))"))
+                    } footer: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            if !period.closable {
+                                Text(tx("Se convierte desde el \(DayLabel.format(period.end)), con un solo tipo de cambio.",
+                                        "It converts from \(DayLabel.format(period.end)), with one rate."))
+                            }
+                            if period.cutDayMissing {
+                                Text(tx("Una tarjeta no tiene día de corte: se cierra a fin de mes. Declaralo en Cuentas para cerrarla por su corte.",
+                                        "A card has no cut day: it closes at month end. Declare it in Accounts to close it by its cut."))
+                            }
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
-                .swipeActions(edge: .trailing) {
-                    Button(tx("Eliminar", "Delete"), role: .destructive) { pendingDelete = item.movement }
-                }
-                .accessibilityIdentifier("movements.pending.\(item.id)")
-                .accessibilityHint(tx("Tocá para editar", "Tap to edit"))
             }
-        } header: {
-            Text(tx("En dólares · se convierten al cierre", "In dollars · converted at the close"))
-        } footer: {
-            Text(tx("No suman en colones hasta el cierre: el corte de la tarjeta, o fin de mes sin tarjeta.",
-                    "They don’t add up in colones until the close: the card’s statement cut, or month end without a card."))
         }
+    }
+
+    private func pendingTotal(_ total: PendingConversion.Total) -> some View {
+        HStack {
+            Text(tx("Total por convertir", "Total to convert")).font(DincrFont.body.weight(.semibold))
+            Spacer()
+            Text(model.moneyFormat.string(total.amount, currency: total.currency)).font(DincrFont.amount)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("movements.pending.total.\(total.currency)")
+    }
+
+    private func pendingRow(_ item: PendingConversion.Item) -> some View {
+        Button { editor = .edit(item.movement) } label: {
+            MoneyRow(title: item.description.isEmpty ? CategoryStyle.label(item.category) : item.description,
+                     subtitle: [CategoryStyle.label(item.category), DayLabel.format(item.entryDate)].joined(separator: " · "),
+                     amount: item.originalAmount, kind: .expense,
+                     symbol: CategoryStyle.symbol(for: item.category, kind: .expense), currency: item.originalCurrency)
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing) {
+            Button(tx("Eliminar", "Delete"), role: .destructive) { pendingDelete = item.movement }
+        }
+        .accessibilityIdentifier("movements.pending.\(item.id)")
+        .accessibilityHint(tx("Tocá para editar", "Tap to edit"))
     }
 
     /// "US$10 × 507,5" for a row typed in another currency: the original figure and the user's rate.

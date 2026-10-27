@@ -84,6 +84,9 @@ class DincrApi(private val client: ApiClient) {
     suspend fun paidWithOptions(): PaidWithOptions = client.get("/user-product/finance/expenses/paid-with-options")
     /** The dollar expenses waiting for the close, with their totals per currency. */
     suspend fun pendingConversion(): PendingConversion = client.get("/user-product/finance/expenses/pending-conversion")
+    /** The close (3d): converts every expense waiting in one period with the user's one rate. */
+    suspend fun closePending(close: PendingClose, idempotencyKey: String): PendingCloseResult =
+        client.send("POST", "/user-product/finance/expenses/pending-conversion/close", close, idempotencyKey)
     suspend fun delete(movementId: String) {
         client.send<Acknowledgement>("DELETE", "/user-product/free/movements/${encode(movementId)}")
     }

@@ -70,4 +70,44 @@ class PendingConversionTest {
         assertEquals(BigDecimal("120.5"), pending.items.single().originalAmount)
         assertEquals(PendingConversion.Total("USD", BigDecimal("120.5"), 1), pending.totals.single())
     }
+
+    // --- The close (3d) ---
+
+    private fun october22() = FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP, currentDate = java.time.LocalDate.of(2026, 10, 22))
+    private fun expense(description: String, amount: Int, day: String, card: Long? = null) =
+        EntryCreate(BigDecimal(amount), description, "Compras", day, currency = "USD", financialAccountId = card, convertAtClose = true)
+
+    @Test fun pendingExpensesAreGroupedByCardCutOrMonth() = runTest {
+        val backend = october22()
+        val api = api(backend)
+        val card = backend.addOwnCard(cutDay = 21)
+        api.create(MovementKind.EXPENSE, expense("Hotel", 120, "2026-10-12", card), IdempotencyKey.new())
+        api.create(MovementKind.EXPENSE, expense("Taxi", 30, "2026-10-25", card), IdempotencyKey.new())
+        api.create(MovementKind.EXPENSE, expense("Propina", 5, "2026-10-03"), IdempotencyKey.new())
+        val periods = api.pendingConversion().periods
+        assertEquals(listOf("card:$card:2026-10-21", "month:2026-10", "card:$card:2026-11-21"), periods.map { it.key })
+        assertEquals(listOf(true, false, false), periods.map { it.closable })
+        assertEquals("2026-09-22", periods.first().start)
+    }
+
+    @Test fun aCloseConvertsItsPeriodWithOneRateOnce() = runTest {
+        val backend = october22()
+        val api = api(backend)
+        val card = backend.addOwnCard(cutDay = 21)
+        api.create(MovementKind.EXPENSE, expense("Hotel", 120, "2026-10-12", card), IdempotencyKey.new())
+        api.create(MovementKind.EXPENSE, expense("Taxi", 30, "2026-10-25", card), IdempotencyKey.new())
+        val result = api.closePending(PendingClose("card:$card:2026-10-21", BigDecimal(510)), IdempotencyKey.new())
+        assertEquals(1, result.converted)
+        assertEquals(0, BigDecimal(61200).compareTo(result.amount))
+        assertEquals(listOf("Taxi"), api.pendingConversion().items.map { it.description })
+        val hotel = api.movements().first { it.description == "Hotel" }
+        assertEquals(0, BigDecimal(61200).compareTo(hotel.amount))
+        assertEquals(404, status { api.closePending(PendingClose("card:$card:2026-10-21", BigDecimal(600)), IdempotencyKey.new()) })
+        assertEquals(409, status { api.closePending(PendingClose("card:$card:2026-11-21", BigDecimal(600)), IdempotencyKey.new()) })
+    }
+
+    @Test fun aServerWithoutTheCloseSendsNoPeriods() {
+        val pending = Json { ignoreUnknownKeys = true }.decodeFromString(PendingConversion.serializer(), """{"available":true,"items":[],"totals":[]}""")
+        assertTrue(pending.periods.isEmpty())
+    }
 }

@@ -4,7 +4,7 @@ from backend.product_ops.posthog_events import capture_backend_event
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, DebtScenarioRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
-    FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
+    FinancialSituationRequest, PendingCloseRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
     FinancialAccountIdentityRequest, OwnAccountDeclareRequest, StatementCutDayRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
@@ -48,7 +48,7 @@ from backend.user_product.gmail_service import (
     sync_current_gmail,
 )
 from backend.user_product.expense_account import paid_with_options
-from backend.user_product.pending_conversion import list_pending
+from backend.user_product.pending_conversion import close_period, list_pending
 from backend.user_product.financial_identity import confirm_financial_account, declare_own_account, list_financial_identity
 from backend.user_product.statement_cut import set_statement_cut_day
 from backend.user_product.own_transfer_review import confirm_own_transfer, list_own_transfer_suggestions
@@ -90,6 +90,10 @@ def expenses_paid_with_options():
 @router.get("/finance/expenses/pending-conversion")
 def expenses_pending_conversion():
     require_feature("spending"); return list_pending()
+
+@router.post("/finance/expenses/pending-conversion/close")
+def expenses_pending_conversion_close(request: PendingCloseRequest):
+    require_feature("spending"); return close_period(request.period_key, request.exchange_rate)
 
 @router.post("/finance/expenses")
 def expenses_create(request: ExpenseCreateRequest):

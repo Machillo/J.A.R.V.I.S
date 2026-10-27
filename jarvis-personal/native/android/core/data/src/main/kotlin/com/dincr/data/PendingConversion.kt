@@ -15,6 +15,8 @@ data class PendingConversion(
     val available: Boolean = false,
     val items: List<Item> = emptyList(),
     val totals: List<Total> = emptyList(),
+    /** The closes the waiting expenses belong to (3d), oldest first; empty from a server without the close. */
+    val periods: List<Period> = emptyList(),
 ) {
     @Serializable
     data class Item(
@@ -26,6 +28,8 @@ data class PendingConversion(
         @SerialName("original_amount") val originalAmount: Money,
         @SerialName("original_currency") val originalCurrency: String,
         @SerialName("financial_account_id") val financialAccountId: Long? = null,
+        /** The close it belongs to ([Period.key]); null from a server without the close. */
+        @SerialName("period_key") val periodKey: String? = null,
     ) {
         /** The expense as the editor opens it: in its own currency, still waiting for the close. */
         val movement: Movement
@@ -39,7 +43,36 @@ data class PendingConversion(
     @Serializable
     data class Total(val currency: String, val amount: Money, val count: Int)
 
+    /**
+     * One close: a card's statement cycle, or a calendar month without a card. It converts once it has
+     * ended ([closable]). A card without a declared cut day falls in its month ([cutDayMissing]).
+     */
+    @Serializable
+    data class Period(
+        val key: String,
+        val kind: String,
+        val start: String,
+        val end: String,
+        val closable: Boolean = false,
+        @SerialName("cut_day_missing") val cutDayMissing: Boolean = false,
+        @SerialName("account_id") val accountId: Long? = null,
+        @SerialName("account_name") val accountName: String? = null,
+        @SerialName("account_last4") val accountLast4: String? = null,
+        val totals: List<Total> = emptyList(),
+        val count: Int = 0,
+    ) {
+        val isCard: Boolean get() = kind == "card"
+    }
+
     companion object {
         val UNAVAILABLE = PendingConversion()
     }
 }
+
+/** Body of `POST /user-product/finance/expenses/pending-conversion/close`: one rate for one close. */
+@Serializable
+data class PendingClose(@SerialName("period_key") val periodKey: String, @SerialName("exchange_rate") val exchangeRate: Money)
+
+/** What a close converted: how many expenses and their total in the base currency. */
+@Serializable
+data class PendingCloseResult(val converted: Int = 0, val amount: Money, val currency: String, @SerialName("exchange_rate") val exchangeRate: Money)

@@ -255,3 +255,9 @@ class MovementUpdateRequest(BaseModel):
     financial_account_id: int | None = Field(default=None, gt=0)
     # Only a manual expense may wait for the close to be converted (pending_conversion).
     convert_at_close: bool = False
+
+
+class PendingCloseRequest(BaseModel):
+    """The close of one period of dollar expenses (pending_conversion.close_period): one rate for all."""
+    period_key: str = Field(min_length=1, max_length=80)
+    exchange_rate: float = Field(gt=0, le=100000)
