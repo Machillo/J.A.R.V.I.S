@@ -1,7 +1,7 @@
 """Shared test isolation for the backend suite."""
 import pytest
 
-from backend.core import database
+from backend.core import database, write_limit
 
 
 @pytest.fixture(autouse=True)
@@ -10,3 +10,30 @@ def _no_connection_leaks_between_tests():
     database.close_idle_connections()
     yield
     database.close_idle_connections()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_write_limit():
+    """The SEC-12 write window is per process: each test starts with none of the earlier writes."""
+    write_limit.limiter.clear()
+    yield
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "legal_gate: run the real SEC-01 legal acceptance check (backend/auth/legal.py)")
+
+
+@pytest.fixture(autouse=True)
+def _accounts_have_accepted_the_current_terms(request, monkeypatch):
+    """Tests that exercise other contracts through the app act as accounts that already accepted.
+
+    The acceptance gate itself (SEC-01) is tested with `@pytest.mark.legal_gate`, which runs the
+    real check against PostgreSQL (backend/tests/test_legal_acceptance_gate_pg.py).
+    """
+    from backend.auth import legal
+
+    legal.forget_acceptances()
+    if request.node.get_closest_marker("legal_gate") is None:
+        monkeypatch.setattr(legal, "_has_accepted", lambda account_id: True)
+    yield
+    legal.forget_acceptances()

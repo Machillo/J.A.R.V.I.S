@@ -51,6 +51,8 @@ final class AppModel {
     /// Whether `mailOutcome` is a failure of the connection (technical-error look) or a neutral notice.
     private(set) var mailOutcomeIsFailure = true
     var planTier: PlanTier { profile?.planTier ?? .free }
+    /// Mail reading is the Owner's alone during the launch (`Profile.canReadMail`).
+    var canReadMail: Bool { profile?.canReadMail == true }
 
     let service: DincrService
     /// The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the
@@ -94,10 +96,14 @@ final class AppModel {
             let latency: Duration = ProcessInfo.processInfo.arguments.contains("-DincrDisableAnimations") ? .milliseconds(50) : .milliseconds(300)
             // `-DincrRefreshFails`: a pull to refresh finds the server unreachable (B17 UI tests).
             let refreshFails = ProcessInfo.processInfo.arguments.contains("-DincrRefreshFails")
+            // `-DincrMailArrives`: a bank notice arrives after launch (mail recovery UI tests).
+            let mailArrives = ProcessInfo.processInfo.arguments.contains("-DincrMailArrives")
             // `-DincrStoreBilling`: the fixture server turns the `store_billing` switch on (BIL-03 UI tests).
             let storeBilling = ProcessInfo.processInfo.arguments.contains("-DincrStoreBilling")
             service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency,
-                                                            identityRefreshFails: refreshFails, storeBillingOn: storeBilling))
+                                                            identityRefreshFails: refreshFails, mailArrives: mailArrives,
+                                                            storeBillingOn: storeBilling))
+            returnSyncInterval = 0  // fixtures: every return reads again (UI tests do not wait a minute)
         case let .unconfigured(reason):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
@@ -145,6 +151,29 @@ final class AppModel {
             lastIdentityRefresh = .now
             await loadIdentity()
         }
+        await syncOnReturn()
+    }
+
+    // MARK: New mail on return
+
+    /// Bumped each time the app starts or comes back: Hoy, Movimientos and the mail review read again
+    /// (keeping what they show if a read fails), so movements the scheduled sync or this sync found
+    /// appear without a manual refresh. Android: `AppModel.dataGeneration`.
+    private(set) var dataGeneration = 0
+    private var lastReturnSync = Date.distantPast
+    /// At most one new-mail read per minute when the app comes back.
+    private var returnSyncInterval: TimeInterval = 60
+
+    /// Reads the connected mailboxes (where mail is part of the plan and switched on), then asks the
+    /// visible screens to read again. A failure or no mailbox changes nothing on screen.
+    func syncOnReturn() async {
+        guard phase == .ready, Date.now.timeIntervalSince(lastReturnSync) >= returnSyncInterval else { return }
+        lastReturnSync = .now
+        let epoch = sessionEpoch
+        if planTier.allows(.gmailAutomation), flags.isEnabled(.gmailAutomation), canReadMail {
+            _ = try? await service.syncMail()
+        }
+        if epoch == sessionEpoch, phase == .ready { dataGeneration += 1 }
     }
 
     func onBackground() { appLock.onBackground() }
@@ -263,6 +292,7 @@ final class AppModel {
                     await refreshFlags()
                     // A mail return that arrived before the app was ready (cold start) is redeemed now.
                     if let pending = retryMailReturn { await handleMailReturn(pending) }
+                    await syncOnReturn()
                 }
             }
         }

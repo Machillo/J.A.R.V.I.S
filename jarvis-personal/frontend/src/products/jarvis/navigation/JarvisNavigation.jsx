@@ -5,7 +5,7 @@ import NativeBottomBar from "../../../ui/native/NativeBottomBar";
 import { deviceLanguage, t } from "../../../lib/locale";
 
 const wealthKeys = ["wealth", "investments", "businesses", "netWorth", "financialTimeline", "reconciliation", "deterioration"];
-const profileKeys = ["receivables", "emails", "transactions", "additionalCards", "chats", "moneyControl", "goals", "memory", "settings", "profile", "userManagement", "productOperations"];
+const profileKeys = ["receivables", "emails", "transactions", "additionalCards", "chats", "moneyControl", "goals", "settings", "profile", "userManagement", "productOperations"];
 
 const groupFor = (page) => {
   if (profileKeys.includes(page)) return "profile";

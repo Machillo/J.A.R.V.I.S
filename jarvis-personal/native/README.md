@@ -17,11 +17,14 @@ in `docs/native/PARITY_MATRIX.md`.
   tested in CI on a macOS runner (unit tests and XCUITest in a simulator); it has not run on a
   device yet (MAC/DEVICE REQUIRED list in the PR and `RELEASE_IDENTITY.md`).
 
-## Status: RC, not yet the store app
+## Status: the official store apps (V1-1), release still pending
 
-- DINCR in the stores is still the **Capacitor app** (`jarvis-personal/frontend`, native shells
-  `frontend/ios-dincr` and `frontend/android`). The native apps never modify it.
-- Taking the store identity is a pending human decision: see [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md)
+- **Decided:** these native apps are DINCR's official store apps; Capacitor is not the store client
+  (V1-1, `docs/product/DINCR_V1_MASTER_EXECUTION.md`).
+- Until the native release ships, the build in the stores (if any) is still the **Capacitor app**
+  (`jarvis-personal/frontend`, native shells `frontend/ios-dincr` and `frontend/android`). The native
+  apps never modify it.
+- Taking the store identity still needs the release steps in [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md)
   (signing, versionCode, mail return URL, billing, iOS 15 vs 17, session not migrated).
 - Android has two flavors: `dincr` (`com.dincr.app`, the redirect the Capacitor app already uses)
   and `nativedev` (`com.dincr.app.nativedev`, side-by-side, fixtures or a development project).
@@ -55,14 +58,15 @@ in `docs/native/PARITY_MATRIX.md`.
 - **Money.** `BigDecimal`/`Decimal` only; every amount is positive, ≤ 2 decimals and ≤
   9,999,999,999.99 (NUMERIC(12,2)); exchange rates are the user's own (> 0, never fetched or
   invented); creates carry an idempotency key reused only when the same submission is retried.
-- **Design tokens come from `/DESIGN.md`.** Never edit the generated files.
+- **Design tokens come from `/DESIGN.md`** and, for the personal-appearance alternatives (APP-1, the Owner only in
+  phase 1), from `design-tokens/appearance.json`. Never edit the generated files.
 - **No real data in fixtures.** Fixture mode uses invented names and amounts.
 
 ## Layout
 
 ```
 native/
-  design-tokens/generate.mjs   DESIGN.md → Swift + Kotlin tokens (--check for drift)
+  design-tokens/generate.mjs   DESIGN.md (+ appearance.json) → Swift + Kotlin tokens (--check for drift)
   ios/
     DINCR.xcodeproj            app + UI tests (folder-synchronized groups)
     DINCR/                     SwiftUI screens (App/, Features/, Resources/)

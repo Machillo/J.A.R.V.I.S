@@ -402,10 +402,10 @@ struct AguinaldoView: View {
                 // 409: not applicable yet (no connected mailbox); shown as an empty state, not an error.
                 do { return try await model.service.aguinaldo() } catch let error as APIError where error.status == 409 { return nil }
             }) { aguinaldo, _ in
-                AguinaldoContent(aguinaldo: aguinaldo)
+                AguinaldoContent(aguinaldo: aguinaldo, canReadMail: model.canReadMail)
             }
             .id(generation)
-            if model.flags.isEnabled(.gmailAutomation) {
+            if model.flags.isEnabled(.gmailAutomation), model.canReadMail {
                 Button(tx("Sincronizar y recalcular", "Sync and recalculate")) { Task { await syncAndReload() } }
                     .buttonStyle(.dincrPrimary(loading: syncing))
                     .disabled(syncing)
@@ -434,6 +434,7 @@ struct AguinaldoView: View {
 
 private struct AguinaldoContent: View {
     let aguinaldo: Aguinaldo?
+    let canReadMail: Bool
 
     var body: some View {
         if let aguinaldo {
@@ -453,7 +454,9 @@ private struct AguinaldoContent: View {
         } else {
             EmptyStateView(symbol: "gift", title: tx("Todavía no podemos estimarlo", "We can’t estimate it yet"),
                            message: tx("Conectá tu correo en el Monitor de correo para detectar tus salarios.", "Connect your mail in the Email Monitor to detect your salaries.")) {
-                NavigationLink(tx("Abrir Monitor de correo", "Open Email Monitor")) { EmailMonitorView() }.buttonStyle(.dincrPrimary)
+                if canReadMail {
+                    NavigationLink(tx("Abrir Monitor de correo", "Open Email Monitor")) { EmailMonitorView() }.buttonStyle(.dincrPrimary)
+                }
             }
         }
     }

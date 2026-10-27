@@ -3,9 +3,9 @@ from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
-    BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
+    BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, DebtScenarioRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, OwnAccountDeclareRequest, StatementCutDayRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -14,7 +14,7 @@ from backend.user_product.service import (
     create_user_transaction, delete_expense, delete_income, delete_user_debt, delete_user_goal, delete_user_transaction,
     get_financial_situation, get_strategy_basic, get_strategy_vip, get_user_finance_summary,
     list_expenses, list_income, list_user_debts, list_user_goals, list_user_transactions,
-    pay_user_debt, simulate_strategy_vip, update_expense, update_financial_situation, update_income,
+    list_user_debt_payments, pay_user_debt, simulate_strategy_vip, update_expense, update_financial_situation, update_income,
     update_user_debt, update_user_goal, contribute_user_goal, create_savings_plan,
     delete_savings_plan, contribute_savings_plan, list_savings_plans, update_savings_plan,
 )
@@ -28,6 +28,7 @@ from backend.user_product.free_service import (
     list_free_movements, update_free_movement,
 )
 from backend.user_product.vip_service import get_vip_command_center
+from backend.user_product.debt_scenarios import simulate_debt_scenario
 from backend.ai.strategy_dashboard import get_premium_strategy_dashboard
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
 from backend.finance.intelligence import get_debt_advisory
@@ -42,10 +43,13 @@ from backend.user_product.gmail_service import (
     gmail_status,
     list_gmail_emails,
     process_gmail_push,
+    require_mail_reading,
     review_gmail_candidate,
     sync_current_gmail,
 )
-from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
+from backend.user_product.expense_account import paid_with_options
+from backend.user_product.financial_identity import confirm_financial_account, declare_own_account, list_financial_identity
+from backend.user_product.statement_cut import set_statement_cut_day
 from backend.user_product.own_transfer_review import confirm_own_transfer, list_own_transfer_suggestions
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
@@ -78,6 +82,10 @@ def income_delete(income_id: int):
 def expenses_list():
     require_feature("spending"); return list_expenses()
 
+@router.get("/finance/expenses/paid-with-options")
+def expenses_paid_with_options():
+    require_feature("spending"); return paid_with_options()
+
 @router.post("/finance/expenses")
 def expenses_create(request: ExpenseCreateRequest):
     require_feature("spending"); return create_expense_entry(request)
@@ -109,6 +117,10 @@ def debts_delete(debt_id: int):
 @router.post("/finance/debts/{debt_id}/payments")
 def debt_payment(debt_id: int, request: DebtPaymentRequest):
     require_feature("debts"); return pay_user_debt(debt_id, request.amount)
+
+@router.get("/finance/debts/{debt_id}/payments")
+def debt_payments_list(debt_id: int):
+    require_feature("debts"); return list_user_debt_payments(debt_id)
 
 @router.get("/goals")
 def goals_list():
@@ -207,6 +219,10 @@ def strategy_vip_simulate(request: VipSimulationRequest):
     require_feature("strategy_vip")
     return simulate_strategy_vip(request.monthly_income_change, request.monthly_expense_change, request.one_time_extra)
 
+@router.post("/finance/strategy-vip/debt-scenario")
+def strategy_vip_debt_scenario(request: DebtScenarioRequest):
+    require_feature("strategy_vip"); return simulate_debt_scenario(request)
+
 @router.get("/vip/command-center")
 def vip_command_center():
     require_feature("strategy_vip"); return get_vip_command_center()
@@ -238,7 +254,8 @@ def vip_salvavidas_update(request: SalvavidasUpdateRequest):
 
 @router.get("/vip/aguinaldo")
 def vip_aguinaldo():
-    require_feature("gmail_automation")
+    # Estimated from CCSS notices in the mailbox: Owner-only while mail reading is (L-1).
+    require_feature("aguinaldo"); require_mail_reading()
     if not gmail_status().get("connected"):
         raise HTTPException(status_code=409, detail="Debes sincronizar tu email para calcular el aguinaldo.")
     return calculate_aguinaldo()
@@ -251,13 +268,13 @@ def vip_gmail_status():
 def vip_gmail_connect(request: MailConnectRequest | None = None, accept_language: str | None = Header(default=None)):
     # No body (older app versions) keeps the previous current-year window, and their
     # Accept-Language (the app's own language) sets the language of Google's screens.
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     body = request or MailConnectRequest()
     return begin_gmail_connection(body.import_scope, locale=oauth_locale(body.locale, accept_language))
 
 @router.post("/vip/gmail/consent")
 def vip_gmail_consent(request: GmailConsentRequest):
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     return accept_gmail_consent(accepted=request.accepted, version=request.version)
 
 @router.get("/vip/gmail/callback")
@@ -269,7 +286,7 @@ def vip_gmail_callback(code: str | None = None, state: str | None = None, error:
 @router.post("/vip/mail/oauth/complete")
 def vip_mail_oauth_complete(request: MailConnectionCompleteRequest, background_tasks: BackgroundTasks):
     # Authenticated: only the DINCR session that started the flow can attach the mailbox.
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     result = complete_mail_connection(request.flow, request.completion)
     if result["provider"] == "gmail":
         background_tasks.add_task(capture_backend_event, "gmail_connected")
@@ -277,7 +294,7 @@ def vip_mail_oauth_complete(request: MailConnectionCompleteRequest, background_t
 
 @router.post("/vip/mail/microsoft/connect")
 def vip_microsoft_connect(request: MailConnectRequest | None = None):
-    require_feature("gmail_automation")
+    require_feature("gmail_automation"); require_mail_reading()
     return begin_microsoft_connection((request or MailConnectRequest()).import_scope)
 
 @router.get("/vip/mail/microsoft/callback")
@@ -286,7 +303,7 @@ def vip_microsoft_callback(code: str | None = None, state: str | None = None, er
 
 @router.post("/vip/gmail/sync")
 def vip_gmail_sync():
-    require_feature("gmail_automation"); return sync_current_gmail()
+    require_feature("gmail_automation"); require_mail_reading(); return sync_current_gmail()
 
 @router.get("/vip/gmail/emails")
 def vip_gmail_emails(status: str | None = None, bank: str | None = Query(default=None, max_length=80),
@@ -308,12 +325,22 @@ def vip_gmail_trust_analytics():
 
 @router.get("/vip/financial-identity")
 def vip_financial_identity():
-    require_feature("gmail_automation"); return list_financial_identity()
+    require_feature("financial_accounts"); return list_financial_identity()
+
+@router.post("/vip/financial-identity/accounts")
+def vip_financial_identity_declare(request: OwnAccountDeclareRequest):
+    require_feature("financial_accounts")
+    return declare_own_account(request.institution_code, request.account_last4, request.currency,
+                               request.institution_name, request.display_name)
 
 @router.put("/vip/financial-identity/accounts/{account_balance_id}")
 def vip_financial_identity_confirm(account_balance_id: int, request: FinancialAccountIdentityRequest):
-    require_feature("gmail_automation")
+    require_feature("financial_accounts")
     return confirm_financial_account(account_balance_id, request.ownership_status, request.display_name)
+
+@router.put("/vip/financial-identity/accounts/{account_balance_id}/statement-cut-day")
+def vip_financial_identity_cut_day(account_balance_id: int, request: StatementCutDayRequest):
+    require_feature("financial_accounts"); return set_statement_cut_day(account_balance_id, request.statement_cut_day)
 
 @router.post("/vip/gmail/candidates/{candidate_id}/accept")
 def vip_gmail_candidate_accept(candidate_id: int):

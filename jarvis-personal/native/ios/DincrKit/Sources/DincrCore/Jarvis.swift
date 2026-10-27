@@ -17,7 +17,7 @@ public enum Jarvis {
     /// ported yet opens a "being restored" screen; the step that ports it makes it available here,
     /// with its own tests.
     public enum Section: String, CaseIterable, Sendable, Identifiable, Hashable {
-        case chat, memory, calendar, strategy, money
+        case chat, calendar, strategy, money
         case moneyControl = "money_control"
         case wealth, records
         /// "Análisis financiero": the historical web Finanzas tab (spending, flow, net worth, engine).
@@ -25,8 +25,7 @@ public enum Jarvis {
 
         public var id: String { rawValue }
 
-        /// Ported to the native app: the chat (J1), the agenda (J2) and the financial analysis; the
-        /// others still open "being restored".
-        public var isAvailable: Bool { self == .chat || self == .calendar || self == .analysis }
+        /// Ported to the native app (the others still open "being restored"): chat, calendar, strategy, money, moneyControl, wealth, records, analysis.
+        public var isAvailable: Bool { self == .chat || self == .calendar || self == .strategy || self == .money || self == .moneyControl || self == .wealth || self == .records || self == .analysis }
     }
 }

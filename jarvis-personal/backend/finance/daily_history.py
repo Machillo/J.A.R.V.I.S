@@ -11,6 +11,9 @@ kept, and so its future effects (deterioration history signals, strategy history
   - the Owner workspace: the stored, allowlisted Owner identity (`is_verified_owner_account`);
 - the strategy, only for the verified Owner. VIP reads computed the strategy without storing
   it, so the job stores none for them: no new personal data.
+- the verified Owner's scheduled debt installments due on the Costa Rica date, first, each
+  recorded once (`finance/service.apply_due_installments`). It is this job's explicit command
+  (CLAUDE.md §4C); no VIP or other account ever gets it.
 
 DINCR's identities are Free, Basic, VIP and the single Owner: any account that is not the
 verified Owner is eligible only through its own VIP plan, exactly like any VIP.
@@ -36,6 +39,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import DEFAULT_LANGUAGE, reset_dincr_users, set_dincr_users, use_language
 from backend.core.time import costa_rica_today
 from backend.finance.deterioration import record_daily_health_snapshot
+from backend.finance.service import apply_due_installments
 
 logger = logging.getLogger(__name__)
 
@@ -94,14 +98,36 @@ def eligible_workspaces(conn) -> list[dict[str, Any]]:
     return eligible
 
 
+def _apply_owner_installments(identity: dict[str, Any], today: date) -> dict[str, Any]:
+    """The verified Owner's debt installments due on `today` (Costa Rica), each recorded once.
+
+    Before #307 the Owner's debt reads applied them; now this daily POST job is their caller.
+    A failure never blocks the day's observation: it is reported by its error class only (no
+    financial data) and makes the run's result fail. The command commits once at its end, so a
+    failure leaves nothing half-applied and the next run (or a retry) is safe.
+    """
+    counts: dict[str, Any] = {"debt_installments": 0, "installments_failed": 0, "error": None}
+    if identity["role"] != "owner":
+        return counts
+    try:
+        result = apply_due_installments(identity["workspace_id"], dry_run=False, today=today)
+    except Exception as exc:  # no financial data in the log or the result
+        counts["installments_failed"], counts["error"] = 1, type(exc).__name__
+        logger.error("Owner debt installments failed error=%s", counts["error"])
+        return counts
+    counts["debt_installments"] = len(result.get("installments") or [])
+    return counts
+
+
 def _record_workspace(identity: dict[str, Any], today: date) -> dict[str, Any]:
-    """Health observation, then strategy, for one workspace, inside its own identity."""
+    """Owner installments, then health observation, then strategy, for one workspace, inside its own identity."""
     token = set_current_user(identity)
     # The text context of the app the data belongs to: the public DINCR app for a VIP (as
     # its /user-product reads), the internal one for the Owner.
     users_token = set_dincr_users(identity["role"] == "user")
     try:
         with use_language(DEFAULT_LANGUAGE):
+            installments = _apply_owner_installments(identity, today)
             health = record_daily_health_snapshot(today)
             persistence = (_persist_strategy(compute_advisor_strategy())
                            if identity["role"] in STRATEGY_HISTORY_ROLES else {"changed": False, "persisted": False})
@@ -109,7 +135,7 @@ def _record_workspace(identity: dict[str, Any], today: date) -> dict[str, Any]:
         reset_dincr_users(users_token)
         reset_current_user(token)
     return {"health": health["health"], "strategy_changed": bool(persistence.get("changed")),
-            "strategy_persisted": bool(persistence.get("persisted"))}
+            "strategy_persisted": bool(persistence.get("persisted")), "installments": installments}
 
 
 def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
@@ -127,7 +153,9 @@ def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
         if not (acquired or {}).get("acquired"):
             return {"status": "ALREADY_RUNNING", "date": day.isoformat()}
         workspaces = eligible_workspaces(guard)
-        counts = {"eligible": len(workspaces), "recorded": 0, "strategy_changed": 0, "failed": 0}
+        counts = {"eligible": len(workspaces), "recorded": 0, "strategy_changed": 0, "failed": 0,
+                  "debt_installments": 0, "installments_failed": 0}
+        installment_errors: set[str] = set()
         for identity in workspaces:
             try:
                 result = contextvars.copy_context().run(_record_workspace, identity, day)
@@ -137,4 +165,10 @@ def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
                 continue
             counts["recorded"] += 1
             counts["strategy_changed"] += int(result["strategy_changed"])
-    return {"status": "OK", "date": day.isoformat(), **counts}
+            installments = result["installments"]
+            counts["debt_installments"] += installments["debt_installments"]
+            counts["installments_failed"] += installments["installments_failed"]
+            if installments["error"]:
+                installment_errors.add(installments["error"])
+    # Error classes only (e.g. "OperationalError"): what failed, never which debt or amount.
+    return {"status": "OK", "date": day.isoformat(), **counts, "installments_errors": sorted(installment_errors)}

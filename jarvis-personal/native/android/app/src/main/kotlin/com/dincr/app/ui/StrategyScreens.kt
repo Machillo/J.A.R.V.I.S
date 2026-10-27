@@ -41,6 +41,7 @@ import com.dincr.data.Distribution
 import com.dincr.data.MessageKind
 import com.dincr.data.MonthPlan
 import com.dincr.data.OpsFlag
+import com.dincr.data.OwnerReading
 import com.dincr.data.ProgressValue
 import com.dincr.data.Strategy
 import com.dincr.data.StrategyContract
@@ -217,17 +218,28 @@ private fun DirectorMonthPlan(s: DirectorStrategy, plan: MonthPlan, nav: Navigat
         val language = AppLanguage.current()
         val lines = Distribution.formulaLines(s)
         if (lines.isNotEmpty()) Section(tx("De dónde sale", "Where it comes from")) {
-            lines.forEach { (key, amount) -> AmountLine(Distribution.formulaLabel(key, language), amount, emphasize = key == "surplus") }
+            lines.forEach { (key, amount) -> AmountLine(OwnerReading.formulaLabel(key, s, language), amount, emphasize = key == "surplus") }
         }
     }
     Disclosure(tx("Ver todo el detalle", "See full details"), "plan.month.detail") {
         Section(if (s.isOwnerScope) tx("Este ciclo", "This cycle") else tx("Este mes", "This month")) {
-            AmountLine(tx("Ingresos del mes", "Monthly income"), s.monthlyIncome, emphasize = true)
+            if (s.isOwnerScope) OwnerPeriodNote(tx("Ciclo", "Cycle"), s.cyclePeriod)
+            // The Owner's cycle income is what the cycle expects (a projection), not a calendar month's.
+            AmountLine(if (s.isOwnerScope) tx("Ingresos esperados del ciclo", "Income expected this cycle") else tx("Ingresos del mes", "Monthly income"), s.monthlyIncome, emphasize = true)
             incomeSourceNote(s.incomePolicy?.source)?.let { Caption(it) }
+            if (s.isOwnerScope) Caption(tx("Salario y extras previstos para el ciclo (proyección).", "Salary and extras expected for the cycle (projection)."))
             AmountLine(if (s.isOwnerScope) tx("Gastos comprometidos", "Committed spending") else tx("Gastos registrados este mes", "Spending recorded this month"), s.monthlyExpenses)
+            if (s.isOwnerScope) Caption(tx("Gastos del período del estado de cuenta más los gastos registrados después del corte.",
+                "Spending in the statement period plus spending recorded after the cut."))
             AmountLine(tx("Compromiso de deudas", "Debt commitment"), s.debtCommitmentCurrentCycle)
+            if (s.isOwnerScope) Caption(tx("Cuotas de deuda que faltan por pagar en este ciclo.", "Debt instalments still to pay this cycle."))
             s.pendingRecurringTotal?.let { AmountLine(tx("Pagos recurrentes pendientes", "Pending recurring payments"), it) }
-            AmountLine(tx("Podés gastar con tranquilidad", "Safe to spend"), s.safeToSpend, emphasize = true)
+            if (s.isOwnerScope) {
+                // Not Hoy's "Podés gastar con tranquilidad" (another calculation): the strategy's own share.
+                AmountLine(tx("Para uso libre en este ciclo", "Free to use this cycle"), s.safeToSpend, emphasize = true)
+                Caption(tx("La parte de tu sobrante que la estrategia deja para gastos personales. «Podés gastar con tranquilidad» en Hoy se calcula aparte, con tus próximos 45 días.",
+                    "The share of your surplus the strategy leaves for personal spending. Hoy’s “Safe to spend” is calculated separately, from your next 45 days."))
+            } else AmountLine(tx("Podés gastar con tranquilidad", "Safe to spend"), s.safeToSpend, emphasize = true)
         }
         if (s.isOwnerScope) OwnerCycle(s)
         s.emergencyFund?.let { e ->
@@ -361,16 +373,28 @@ private fun emergencyLevel(level: String?): String? = when (level) {
 @Composable
 private fun OwnerCycle(s: DirectorStrategy) {
     Section(tx("Tu ciclo", "Your cycle")) {
+        OwnerPeriodNote(tx("Ciclo", "Cycle"), s.cyclePeriod)
+        // Income: what is expected (projection) and what already arrived (records).
         AmountLine(tx("Ingreso recurrente", "Recurring income"), s.recurringMonthlyIncome)
-        AmountLine(tx("Extras del mes (OT, bonos, feriados)", "This month’s extras (OT, bonuses, holidays)"), s.currentMonthExtraNet)
+        Caption(tx("Salario neto mensual proyectado.", "Projected monthly net salary."))
+        AmountLine(tx("Extras esperados del ciclo (horas extra, bonos, feriados)", "Extras expected this cycle (overtime, bonuses, holidays)"), s.currentMonthExtraNet)
         AmountLine(tx("Recibido en el ciclo", "Received this cycle"), s.incomeReceivedCurrentCycle)
+        Caption(tx("Ingresos ya registrados en este ciclo.", "Income already recorded this cycle."))
         AmountLine(tx("Por recibir en el ciclo", "Still to receive this cycle"), s.remainingIncomeCurrentCycle)
-        AmountLine(tx("Efectivo distribuible", "Distributable cash"), s.distributableAccountCash)
-        AmountLine(tx("Gastos del estado de cuenta", "Statement spending"), s.statementExpenses)
-        AmountLine(tx("Gastos nuevos después del corte", "New spending after the cut"), s.newExpensesAfterCut)
-        AmountLine(tx("Fijos obligatorios pendientes", "Pending mandatory fixed expenses"), s.mandatoryFixedPending)
+        // Money available today and what is already committed from it.
+        AmountLine(tx("Efectivo en tu cuenta de distribución", "Cash in your distribution account"), s.distributableAccountCash)
+        Caption(tx("Saldo actual de la cuenta de la que parte la distribución.", "The current balance of the account the distribution starts from."))
+        AmountLine(tx("Gastos del período del estado de cuenta", "Spending in the statement period"), s.statementExpenses)
+        OwnerPeriodNote(tx("Estado de cuenta", "Statement"), s.cardStatementPeriod)
+        AmountLine(tx("Gastos después del corte", "Spending after the statement cut"), s.newExpensesAfterCut)
+        Caption(tx("Gastos registrados después de la fecha de corte: ya reducen lo que se puede repartir.",
+            "Spending recorded after the cut date: it already reduces what can be split."))
+        AmountLine(tx("Gastos fijos obligatorios pendientes", "Pending mandatory fixed expenses"), s.mandatoryFixedPending)
         s.mandatoryFixedPendingItems.forEach { Caption("• ${it.name.orEmpty()} · ${it.amount?.let(Dincr.money::format) ?: "—"}" + (it.dueDate?.let { d -> " · " + dateLabel(d) } ?: "")) }
-        s.monthsSavedByCurrentExtras?.takeIf { it > 0 }?.let { InfoLine(tx("Meses ahorrados por los extras", "Months saved by the extras"), it.toString()) }
+        s.monthsSavedByCurrentExtras?.takeIf { it > 0 }?.let {
+            InfoLine(tx("Meses ahorrados por los extras", "Months saved by the extras"), it.toString())
+            Caption(tx("Estimación: lo que adelantan los extras tu salida de deudas.", "Estimate: how much the extras bring your debt-free date forward."))
+        }
     }
     s.investmentPortfolio?.let { p ->
         Section(tx("Portafolio de inversión", "Investment portfolio")) {
@@ -379,6 +403,14 @@ private fun OwnerCycle(s: DirectorStrategy) {
             AmountLine(tx("Resultado neto", "Net result"), p.netPnl, currency = p.currency)
         }
     }
+}
+
+/** "Ciclo: 6 oct – 5 nov": the dates the Owner's figures cover; nothing when the backend does not know them. */
+@Composable
+private fun OwnerPeriodNote(label: String, period: com.dincr.data.DatePeriod?) {
+    val start = period?.start ?: return
+    val end = period.end ?: return
+    Caption("$label: ${dateLabel(start)} – ${dateLabel(end)}")
 }
 
 /** Plan → Distribución de dinero: the allocations of the same strategy response. */
@@ -390,7 +422,12 @@ fun DistributionScreen(model: AppModel, nav: Navigator) {
         LoadContent(strategy) { data ->
             when (data) {
                 is StrategyData.Basic -> BasicDistribution(data.strategy, nav)
-                is StrategyData.Director -> data.dashboard.strategy?.let { DirectorDistribution(it, nav) }
+                // The Owner chooses the estimate or an exact amount (OwnerExactDistribution.kt).
+                is StrategyData.Director -> data.dashboard.strategy?.let {
+                    // A confirmed distribution changes the records: the estimate is read again, in place.
+                    if (contract == StrategyContract.OWNER) OwnerDistributionModes(model, it, nav, onRecorded = { strategy.refresh() })
+                    else DirectorDistribution(it, nav)
+                }
             }
         }
         FinancialDisclaimer()
@@ -414,7 +451,7 @@ private fun BasicDistribution(s: Strategy, nav: Navigator) {
 }
 
 @Composable
-private fun DirectorDistribution(s: DirectorStrategy, nav: Navigator) {
+internal fun DirectorDistribution(s: DirectorStrategy, nav: Navigator) {
     if (s.status == "needs_income") { NeedsIncome(s.objective, nav); return }
     val language = AppLanguage.current()
     AmountCard(tx("Sobrante para repartir", "Surplus to allocate"), s.allocationBaseAmount)
@@ -426,7 +463,7 @@ private fun DirectorDistribution(s: DirectorStrategy, nav: Navigator) {
     }
     val lines = Distribution.formulaLines(s)
     if (lines.isNotEmpty()) Section(tx("De dónde sale", "Where it comes from")) {
-        lines.forEach { (key, amount) -> AmountLine(Distribution.formulaLabel(key, language), amount, emphasize = key == "surplus") }
+        lines.forEach { (key, amount) -> AmountLine(OwnerReading.formulaLabel(key, s, language), amount, emphasize = key == "surplus") }
     }
 }
 

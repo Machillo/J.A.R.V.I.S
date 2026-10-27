@@ -98,6 +98,13 @@ function MailProviderLogo({ provider }) {
   return <img className="mail-provider-logo" src={provider === "microsoft" ? outlookLogo : gmailLogo} alt="" aria-hidden="true" />;
 }
 
+// L-1: reading a mailbox is the Owner's alone during the launch (the backend refuses everyone else,
+// require_mail_reading). UsersApp never serves the Owner (App.jsx routes the Owner to PersonalApp),
+// so here mail is never connected, re-authorized or synced: what was imported stays reviewable and
+// each mailbox can still be disconnected.
+const MAIL_READING_AVAILABLE = false;
+const MAIL_READING_UNAVAILABLE = () => tx("Por ahora DINCR no lee correos en tu cuenta. Podés revisar lo ya importado o desconectar tu correo.", "For now DINCR doesn’t read mail on your account. You can review what was already imported or disconnect your mail.");
+
 export default function GmailAutomation({ view = "mail", onNavigate }) {
   // "accounts" shows the same review flow grouped by bank and account.
   const accountsView = view === "accounts";
@@ -348,10 +355,12 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       <span>{tx("DINCR revisa los correos financieros de cada buzón compatible que autoricés.", "DINCR reviews financial messages in each supported mailbox you authorize.")}</span>
     </div>}
     {accountsView && gmail && !gmail.connected && <article className="gmail-connection-card bank-accounts-empty">
-      <p>{tx("Conectá tu correo para que DINCR encuentre tus bancos, cuentas y movimientos.", "Connect your email so DINCR can find your banks, accounts and transactions.")}</p>
-      <button type="button" className="finva-button finva-button-primary" onClick={() => onNavigate?.("gmail")}><Mail size={18}/>{tx("Conectar correo", "Connect email")}</button>
+      {MAIL_READING_AVAILABLE ? <>
+        <p>{tx("Conectá tu correo para que DINCR encuentre tus bancos, cuentas y movimientos.", "Connect your email so DINCR can find your banks, accounts and transactions.")}</p>
+        <button type="button" className="finva-button finva-button-primary" onClick={() => onNavigate?.("gmail")}><Mail size={18}/>{tx("Conectar correo", "Connect email")}</button>
+      </> : <p>{MAIL_READING_UNAVAILABLE()}</p>}
     </article>}
-    {accountsView && gmail?.needs_reauthorization && <p className="onboarding-error" role="alert">{tx("Un correo conectado necesita volver a autorizarse para seguir encontrando movimientos.", "A connected mailbox needs to be authorized again to keep finding transactions.")} <button type="button" className="bank-accounts-manage" onClick={() => onNavigate?.("gmail")}>{tx("Reconectar", "Reconnect")}</button></p>}
+    {accountsView && MAIL_READING_AVAILABLE && gmail?.needs_reauthorization && <p className="onboarding-error" role="alert">{tx("Un correo conectado necesita volver a autorizarse para seguir encontrando movimientos.", "A connected mailbox needs to be authorized again to keep finding transactions.")} <button type="button" className="bank-accounts-manage" onClick={() => onNavigate?.("gmail")}>{tx("Reconectar", "Reconnect")}</button></p>}
     {accountsView && gmail?.connected && <section className="bank-institutions" aria-label={tx("Instituciones detectadas", "Detected institutions")}>
       {!institutions.length && <div className="gmail-inbox-empty"><Building2 size={25}/><strong>{tx("Todavía no encontramos bancos", "No banks found yet")}</strong><small>{tx("Cuando DINCR detecte un correo bancario, su banco aparecerá acá.", "When DINCR detects a bank email, its bank will appear here.")}</small></div>}
       {institutions.map(({ bank, accounts, movements, pending }) => <button type="button" key={bank.id} className={`bank-institution-card ${bankId === bank.id ? "active" : ""}`} aria-pressed={bankId === bank.id} onClick={() => setBankId(bankId === bank.id ? null : bank.id)}>
@@ -369,22 +378,23 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     {!accountsView && <article className={`gmail-connection-card ${gmail?.needs_reauthorization ? "needs-attention" : ""}`}>
       <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>{tx("Tus correos bancarios", "Your banking emails")}</strong><small>{tx("Permiso individual · solo lectura", "Individual permission · read only")}</small></div></div>
       <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Podés conectar varios Gmail y Outlook/Hotmail que controlés. DINCR solicita acceso de lectura, sin permiso para enviar, modificar ni borrar correos.", "You can connect multiple Gmail and Outlook/Hotmail accounts you control. DINCR requests read access, without permission to send, edit or delete emails.")}</p></div>
-      {!gmail?.connected && <p>{tx("DINCR revisará los avisos financieros de los buzones que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial notices in the mailboxes you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
+      {!MAIL_READING_AVAILABLE && <p className="gmail-reading-unavailable" role="status">{MAIL_READING_UNAVAILABLE()}</p>}
+      {MAIL_READING_AVAILABLE && !gmail?.connected && <p>{tx("DINCR revisará los avisos financieros de los buzones que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial notices in the mailboxes you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
       {gmail?.connections?.filter((item) => item.status !== "disabled").map((item) => <div className="gmail-connected-item" key={item.id}>
         <div className="gmail-connection-status"><MailProviderLogo provider={item.provider}/><span><strong>{item.google_email}</strong><small>{item.provider === "microsoft" ? "Outlook / Hotmail · " : "Gmail · "}{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small>{item.import_since && <small>{tx("Historial desde", "History from")} {importSinceLabel(item.import_since)}</small>}</span><CheckCircle2 className="mail-provider-status" size={18} aria-hidden="true"/></div>
         <div className="gmail-connection-actions"><button type="button" className="danger" disabled={Boolean(busy)} onClick={() => disconnect(item.id)}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </div>)}
         <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. El detalle técnico usado para revisar un hallazgo se elimina después de 30 días y los datos identificativos del correo después de 90 días, cuando no haya revisiones pendientes. El movimiento financiero confirmado se conserva hasta que eliminés tu cuenta. Podés desconectar cada correo cuando querás.", "Access is read-only. Technical evidence used to review a finding is removed after 30 days and identifying email metadata after 90 days when no review is pending. Confirmed financial history is retained until you delete your account. You can disconnect each mailbox at any time.")}</p></div>
         <p className="gmail-legal-links"><LegalLink kind="terms">{tx("Términos", "Terms")}</LegalLink> · <LegalLink kind="privacy">{tx("Privacidad", "Privacy")}</LegalLink></p>
-        {gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que DINCR analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that DINCR may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
-        <div className="gmail-provider-actions">
+        {MAIL_READING_AVAILABLE && gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que DINCR analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that DINCR may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
+        {MAIL_READING_AVAILABLE && <div className="gmail-provider-actions">
           <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("gmail")}><MailProviderLogo provider="gmail"/>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Conectar Gmail", "Connect Gmail")}</button>
           <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || !gmail?.microsoft_available || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("microsoft")}><MailProviderLogo provider="microsoft"/>{gmail?.microsoft_available ? tx("Conectar Outlook / Hotmail", "Connect Outlook / Hotmail") : tx("Outlook / Hotmail: pendiente de configurar", "Outlook / Hotmail: setup pending")}</button>
-        </div>
-        <p>{tx("Yahoo aún no está disponible: su permiso para leer buzones requiere aprobación de Yahoo. No ingresés tu contraseña de Yahoo en DINCR.", "Yahoo is not available yet: mailbox read access requires Yahoo approval. Do not enter your Yahoo password in DINCR.")}</p>
+        </div>}
+        {MAIL_READING_AVAILABLE && <p>{tx("Yahoo aún no está disponible: su permiso para leer buzones requiere aprobación de Yahoo. No ingresés tu contraseña de Yahoo en DINCR.", "Yahoo is not available yet: mailbox read access requires Yahoo approval. Do not enter your Yahoo password in DINCR.")}</p>}
       {gmail?.connected && <>
         {gmail.pending > 0 && <p>{gmail.pending} {tx("movimiento(s) necesitan revisión.", "transaction(s) need review.")}</p>}
-        <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar todos", "Refresh all")}</button></div>
+        {MAIL_READING_AVAILABLE && <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar todos", "Refresh all")}</button></div>}
       </>}
     </article>}
     {gmail?.connected && identityItems.length > 0 && <section className="gmail-identity" aria-label={tx("Cuentas detectadas", "Detected accounts")}>
@@ -420,6 +430,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
           {pending && item.candidate_id && needsRate(item) && <p className="gmail-resolution-note">{tx(`Este movimiento está en ${nativeMoney(item).currency}. Tocá Corregir e indicá el tipo de cambio que usaste para guardarlo en tu moneda principal.`, `This transaction is in ${nativeMoney(item).currency}. Tap Edit and enter the exchange rate you used to save it in your main currency.`)}</p>}
           {item.source_type === "statement" && <p className="gmail-resolution-note">{tx("Detectado en un estado de cuenta PDF. Revisalo igual que cualquier otro movimiento antes de guardarlo.", "Detected in a PDF statement. Review it like any other movement before saving it.")}</p>}
           {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
+          {item.resolution_reason === "possible_existing_transaction" && <p className="gmail-resolution-note">{tx("Ya tenés un movimiento con este monto en esas fechas. Revisá tu historial antes de confirmarlo para no contarlo dos veces.", "You already have a movement with this amount around these dates. Check your history before confirming it so it isn’t counted twice.")}</p>}
           {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: categoryValue(form.get("category")), exchange_rate: needsRate(item) ? Number(form.get("exchange_rate")) : null }); }} className="gmail-candidate-editor">
             <input name="description" defaultValue={item.description} required aria-label={tx("Descripción", "Description")}/>
             <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={nativeMoney(item).amount} required aria-label={`${tx("Monto", "Amount")} (${nativeMoney(item).currency})`}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>

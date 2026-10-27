@@ -41,11 +41,19 @@ final class PlanAccountsUITests: XCTestCase {
 
     func testPlanHasExactlyItsRows() {
         let app = launch(plan: "vip", tab: "plan")
-        for id in ["plan.aguinaldo", "plan.strategy", "plan.debts", "plan.salvavidas", "plan.distribution"] {
+        for id in ["plan.strategy", "plan.debts", "plan.salvavidas", "plan.distribution"] {
             XCTAssertTrue(element(id, in: app).waitForExistence(timeout: 5), id)
         }
+        // The aguinaldo is read from mail: an Owner-only row during the launch.
+        XCTAssertFalse(element("plan.aguinaldo", in: app).exists, "no Aguinaldo for a VIP")
+        app.terminate()
+        let owner = launch(role: "owner", tab: "plan")
+        XCTAssertTrue(element("plan.aguinaldo", in: owner).waitForExistence(timeout: 5), "the Owner keeps the Aguinaldo")
+        owner.terminate()
+        let again = launch(plan: "vip", tab: "plan")
+        XCTAssertTrue(element("plan.strategy", in: again).waitForExistence(timeout: 5))
         for id in ["plan.goals", "plan.budget", "plan.calendar", "plan.recurring", "plan.emergency"] {
-            XCTAssertFalse(element(id, in: app).exists, "\(id) left the Plan tab")
+            XCTAssertFalse(element(id, in: again).exists, "\(id) left the Plan tab")
         }
     }
 
@@ -274,17 +282,22 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(element("candidate.status.21", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(text("Confirmado", in: app).exists)
         back(app); back(app)
-        open("wealth.connections", in: app)
+        // A VIP reviews imported notices from Movimientos → Por revisar (mail reading is the Owner's).
+        app.tabBars.buttons["Movimientos"].tap()
+        open("movements.review", in: app)
         XCTAssertTrue(element("mail.correct.22", in: app).waitForExistence(timeout: 10))
         XCTAssertFalse(element("mail.accept.21", in: app).exists, "reviewed in Cuentas: no longer pending in the Email Monitor")
     }
 
     func testRejectingInTheEmailMonitorShowsInCuentas() {
-        let app = launch(plan: "vip", tab: "wealth")
-        open("wealth.connections", in: app)
+        let app = launch(plan: "vip", tab: "movements")
+        open("movements.review", in: app)
+        XCTAssertTrue(element("mail.readingUnavailable", in: app).waitForExistence(timeout: 10), "no mail reading for a VIP")
+        XCTAssertFalse(element("mail.sync", in: app).exists, "no sync for a VIP")
         open("mail.reject.21", in: app)
         XCTAssertTrue(element("mail.notice", in: app).waitForExistence(timeout: 10))
         back(app)
+        app.tabBars.buttons["Patrimonio"].tap()
         open("wealth.accounts", in: app)
         open("accounts.bank.bac", in: app)
         XCTAssertTrue(element("candidate.status.21", in: app).waitForExistence(timeout: 10))

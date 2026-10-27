@@ -26,6 +26,13 @@ data class Debt(
      * unconfirmed historical 0. Null from an older server (the stored rate is then shown as before).
      */
     @SerialName("interest_rate_known") val interestRateKnown: Boolean? = null,
+    /**
+     * When the backend expects the debt to be paid off (debt_payoff.py): the installments left and
+     * the date of the last one. Null when it cannot know (unknown rate, no payment, or a payment that
+     * does not cover the interest), never a guessed date. 0 months: already paid. iOS: same fields.
+     */
+    @SerialName("estimated_payoff_months") val estimatedPayoffMonths: Int? = null,
+    @SerialName("estimated_payoff_date") val estimatedPayoffDate: String? = null,
 ) {
     /** The rate the edit form starts with: an unknown rate starts empty, never as "0". iOS: `Debt.rateForEditing`. */
     val rateForEditing: Money? get() = if (interestRateKnown == false) null else interestRate
@@ -74,6 +81,13 @@ data class DebtRequest(
 
 @Serializable
 data class AmountRequest(val amount: Money)
+
+/**
+ * DEB-07a — one payment recorded in DINCR for a debt (`GET /finance/debts/{id}/payments`), newest
+ * first: the date and the amount actually applied. iOS: `DebtPayment`.
+ */
+@Serializable
+data class DebtPayment(val id: Long, @SerialName("payment_date") val paymentDate: String? = null, val amount: Money? = null)
 
 @Serializable
 data class DebtPaymentResult(

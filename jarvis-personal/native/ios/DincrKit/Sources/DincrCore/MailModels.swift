@@ -183,6 +183,42 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
 
     public var isPending: Bool { reviewStatus == "pending" }
 
+    /// How the amount is styled: only a notice read as income or spending gets a sign. A transfer may be
+    /// the user's own money moving, so it stays neutral (Android: `CandidateReview` amount sign).
+    public var amountSign: MoneyFormat.Sign {
+        switch transactionType {
+        case "income": .income
+        case "expense", "debt_payment": .expense
+        default: .none
+        }
+    }
+
+    /// The type the correction sheet starts from. A transfer (own or not) and an unknown type start as a
+    /// transfer, which counts as neither income nor expense: never as an expense by default.
+    public var correctionType: String {
+        switch transactionType {
+        case "expense", "income", "debt_payment": transactionType ?? "transfer"
+        default: "transfer"
+        }
+    }
+
+    /// What `resolution_reason` means for the user (Android: `MailCandidate.resolutionNote`). The field is
+    /// an internal code: only the reasons a pending notice can carry get a note.
+    public enum ResolutionNote: Sendable { case possibleMatch, alreadyInHistory, pairedOwnTransfer, ownAccounts }
+    public var resolutionNote: ResolutionNote? {
+        switch resolutionReason {
+        case "possible_cross_source_match": return .possibleMatch
+        case "possible_existing_transaction": return .alreadyInHistory
+        default: break
+        }
+        guard isInternalTransfer == true else { return nil }
+        switch resolutionReason {
+        case "paired_owned_transfer": return .pairedOwnTransfer
+        case "confirmed_owned_endpoints": return .ownAccounts
+        default: return nil
+        }
+    }
+
     /// Another convertible currency than the account's: accepting needs the user's own rate.
     public var needsRate: Bool {
         guard let native = nativeCurrency else { return false }
@@ -259,12 +295,31 @@ public struct FinancialIdentity: Decodable, Sendable, Equatable {
         public let institutionCode: String?
         public let institutionCountry: String?
         public let accountType: String?
+        /// When the user last answered: with `pending`, the account was reviewed and not recognised.
+        public let ownershipConfirmedAt: String?
+        /// A credit card's declared statement cut day (1–31); nil = not declared, never assumed.
+        public let statementCutDay: Int?
 
         public init(id: Int, accountName: String?, bankName: String?, currency: String?, accountLast4: String?, ownershipStatus: String?,
-                    institutionCode: String? = nil, institutionCountry: String? = nil, accountType: String? = nil) {
+                    institutionCode: String? = nil, institutionCountry: String? = nil, accountType: String? = nil,
+                    ownershipConfirmedAt: String? = nil, statementCutDay: Int? = nil) {
             self.id = id; self.accountName = accountName; self.bankName = bankName; self.currency = currency
             self.accountLast4 = accountLast4; self.ownershipStatus = ownershipStatus
             self.institutionCode = institutionCode; self.institutionCountry = institutionCountry; self.accountType = accountType
+            self.ownershipConfirmedAt = ownershipConfirmedAt; self.statementCutDay = statementCutDay
+        }
+
+        /// Only the user's own credit cards take a statement cut day.
+        public var takesCutDay: Bool { accountType == "credit_card" && ownershipStatus == "own" }
+
+        /// The user's answer: own, not mine, "I don't recognise it", or not answered yet (`nil`).
+        public var ownership: AccountOwnership? {
+            switch ownershipStatus {
+            case "own": .own
+            case "not_mine": .notMine
+            case "pending" where ownershipConfirmedAt != nil: .unknown
+            default: nil
+            }
         }
 
         /// The bank's branding: the institution code first, then the bank name.
@@ -276,13 +331,70 @@ public struct FinancialIdentity: Decodable, Sendable, Equatable {
         }
     }
     public let items: [Account]?
-    public init(items: [Account]?) { self.items = items }
+    /// False until the cut-day migration is applied on the server: the app then offers no cut day.
+    public let statementCutDayAvailable: Bool?
+    public init(items: [Account]?, statementCutDayAvailable: Bool? = nil) {
+        self.items = items; self.statementCutDayAvailable = statementCutDayAvailable
+    }
+}
+
+/// `PUT /vip/financial-identity/accounts/{id}/statement-cut-day`: 1–31, or null to clear. The key is
+/// always sent (the backend requires it), so a cleared day is an explicit `null`.
+public struct StatementCutDayRequest: Encodable, Sendable, Equatable {
+    public let statementCutDay: Int?
+    public init(_ day: Int?) { self.statementCutDay = day }
+    private enum CodingKeys: String, CodingKey { case statementCutDay }
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(statementCutDay, forKey: .statementCutDay)
+    }
+}
+
+/// The answers a user can give about a detected or declared account
+/// (`financial_identity.confirm_financial_account`). "I don't recognise it" is stored as `pending`
+/// with its review date: it is never treated as an own account.
+public enum AccountOwnership: String, Sendable, CaseIterable {
+    case own
+    case notMine = "not_mine"
+    case unknown = "pending"
 }
 
 public struct OwnershipRequest: Encodable, Sendable, Equatable {
     public let ownershipStatus: String
-    /// `own` or `not_mine` (`financial_identity.confirm_financial_account`).
-    public init(own: Bool) { self.ownershipStatus = own ? "own" : "not_mine" }
+    public init(_ ownership: AccountOwnership) { self.ownershipStatus = ownership.rawValue }
+    public init(own: Bool) { self.init(own ? .own : .notMine) }
+}
+
+/// `POST /vip/financial-identity/accounts`: an own account no notice came from (e.g. the other bank
+/// of a transfer). Only the last 4 digits ever leave the device.
+public struct OwnAccountDeclaration: Encodable, Sendable, Equatable {
+    public static let institutions = ["bac", "popular", "multimoney", "other"]
+    public let institutionCode: String
+    public let institutionName: String?
+    public let accountLast4: String
+    public let currency: String
+    public let displayName: String?
+
+    public init(institutionCode: String, institutionName: String? = nil, accountLast4: String, currency: String, displayName: String? = nil) {
+        self.institutionCode = institutionCode
+        let name = institutionName?.trimmingCharacters(in: .whitespaces) ?? ""
+        self.institutionName = institutionCode == "other" && !name.isEmpty ? name : nil
+        self.accountLast4 = accountLast4
+        self.currency = currency
+        let display = displayName?.trimmingCharacters(in: .whitespaces) ?? ""
+        self.displayName = display.isEmpty ? nil : display
+    }
+
+    /// Exactly four digits, an institution (with its name when it is "other") and CRC or USD.
+    public var isComplete: Bool {
+        accountLast4.count == 4 && accountLast4.allSatisfy(\.isNumber) && Self.institutions.contains(institutionCode)
+            && (institutionCode != "other" || institutionName != nil) && ["CRC", "USD"].contains(currency)
+    }
+}
+
+/// `{status, item}` of the account commands.
+public struct FinancialAccountResult: Decodable, Sendable, Equatable {
+    public let item: FinancialIdentity.Account?
 }
 
 /// `GET /vip/gmail/own-transfer-suggestions`.
