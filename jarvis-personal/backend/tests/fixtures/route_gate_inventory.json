@@ -1782,6 +1782,13 @@
   "user_get": "allowed"
  },
  {
+  "method": "POST",
+  "path": "/user-product/finance/expenses/pending-conversion/close",
+  "gates": [
+   "feature:spending"
+  ]
+ },
+ {
   "method": "DELETE",
   "path": "/user-product/finance/expenses/{expense_id}",
   "gates": [

@@ -1,6 +1,6 @@
 """The close a dollar expense waiting for its conversion belongs to (pure, no database).
 
-Kenneth's rule: a dollar expense paid with a credit card is converted at that card's statement cut;
+The product rule: a dollar expense paid with a credit card is converted at that card's statement cut;
 one without a card (cash, debit, a dollar account) at the end of its calendar month. One rate then
 converts every expense of that close.
 

@@ -27,7 +27,7 @@ TABLES = """
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS base_currency TEXT NOT NULL DEFAULT 'CRC';
 CREATE TABLE IF NOT EXISTS account_balances (
     id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    account_name TEXT NOT NULL
+    account_name TEXT NOT NULL, account_type TEXT NOT NULL DEFAULT 'checking', account_last4 TEXT NOT NULL DEFAULT ''
 );
 -- The test baseline has a narrower `expenses`: production's columns and its two-shape currency check.
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_type TEXT,
@@ -144,7 +144,7 @@ def _base_reads(conn) -> dict:
 def test_before_the_migration_the_state_cannot_exist_and_nothing_else_changes(db):
     from backend.user_product import pending_conversion, service
 
-    assert pending_conversion.list_pending() == {"status": "ok", "available": False, "items": [], "totals": []}
+    assert pending_conversion.list_pending() == {"status": "ok", "available": False, "items": [], "totals": [], "periods": []}
     status, detail = _refused(lambda: service.create_expense_entry(_expense(convert_at_close=True)))
     assert (status, detail["code"]) == (503, "pending_conversion_unavailable")
     # Without the flag a dollar expense still needs its rate, as before.

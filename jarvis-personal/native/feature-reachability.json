@@ -369,6 +369,16 @@
       "basic",
       "vip"
      ]
+    },
+    {
+     "method": "POST",
+     "path": "/user-product/finance/expenses/pending-conversion/close",
+     "gate": "feature:spending",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
     }
    ],
    "ios": {
