@@ -5,7 +5,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, OwnAccountDeclareRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, OwnAccountDeclareRequest, StatementCutDayRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -47,6 +47,7 @@ from backend.user_product.gmail_service import (
     sync_current_gmail,
 )
 from backend.user_product.financial_identity import confirm_financial_account, declare_own_account, list_financial_identity
+from backend.user_product.statement_cut import set_statement_cut_day
 from backend.user_product.own_transfer_review import confirm_own_transfer, list_own_transfer_suggestions
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
@@ -322,6 +323,10 @@ def vip_financial_identity_declare(request: OwnAccountDeclareRequest):
 def vip_financial_identity_confirm(account_balance_id: int, request: FinancialAccountIdentityRequest):
     require_feature("financial_accounts")
     return confirm_financial_account(account_balance_id, request.ownership_status, request.display_name)
+
+@router.put("/vip/financial-identity/accounts/{account_balance_id}/statement-cut-day")
+def vip_financial_identity_cut_day(account_balance_id: int, request: StatementCutDayRequest):
+    require_feature("financial_accounts"); return set_statement_cut_day(account_balance_id, request.statement_cut_day)
 
 @router.post("/vip/gmail/candidates/{candidate_id}/accept")
 def vip_gmail_candidate_accept(candidate_id: int):

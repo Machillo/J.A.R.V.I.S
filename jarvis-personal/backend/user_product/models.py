@@ -212,6 +212,11 @@ class FinancialAccountIdentityRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=120)
 
 
+class StatementCutDayRequest(BaseModel):
+    """A credit card's cut day: 1–31, or null to clear it (the key is required)."""
+    statement_cut_day: int | None = Field(..., ge=1, le=31)
+
+
 class OwnAccountDeclareRequest(BaseModel):
     institution_code: Literal["bac", "popular", "multimoney", "other"]
     institution_name: str | None = Field(default=None, max_length=60)

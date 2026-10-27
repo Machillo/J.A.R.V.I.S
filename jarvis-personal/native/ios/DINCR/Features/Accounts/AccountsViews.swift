@@ -119,7 +119,8 @@ private struct BankDetailView: View {
             if let error { ErrorStateView(message: error) }
             SectionHeader(title: tx("Cuentas", "Accounts"))
             ForEach(accounts) { account in
-                AccountCard(account: account, set: { ownership in Task { await setOwnership(account, ownership) } })
+                AccountCard(account: account, set: { ownership in Task { await setOwnership(account, ownership) } },
+                            setCutDay: { day in Task { await setCutDay(account, day) } })
             }
             SectionHeader(title: tx("Movimientos", "Transactions"))
             CandidateReviewList(identifier: "bank.\(group.id)") {
@@ -148,11 +149,19 @@ private struct BankDetailView: View {
     }
 
     private func setOwnership(_ account: FinancialIdentity.Account, _ ownership: AccountOwnership) async {
+        await save { try await model.service.setAccountOwnership(id: account.id, ownership) }
+    }
+
+    private func setCutDay(_ account: FinancialIdentity.Account, _ day: Int?) async {
+        await save { try await model.service.setStatementCutDay(id: account.id, day: day) }
+    }
+
+    /// Sends one change, then reloads this bank's accounts: the backend's list is the source of truth.
+    private func save(_ change: () async throws -> Void) async {
         let epoch = model.currentEpoch
         error = nil
         do {
-            try await model.service.setAccountOwnership(id: account.id, ownership)
-            // The backend's list is the source of truth: reload this bank's accounts from it.
+            try await change()
             let identity = try await model.service.financialIdentity()
             guard epoch == model.currentEpoch else { return }
             let ids = Set(group.accounts.map(\.id))
@@ -167,6 +176,7 @@ private struct BankDetailView: View {
 private struct AccountCard: View {
     let account: FinancialIdentity.Account
     let set: (AccountOwnership) -> Void
+    var setCutDay: ((Int?) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
@@ -185,8 +195,34 @@ private struct AccountCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("accounts.account.\(account.id)")
             OwnershipControl(account: account, set: set)
+            if account.takesCutDay, let setCutDay { CutDayControl(day: account.statementCutDay, set: setCutDay, accountID: account.id) }
         }
         .dincrCard()
+    }
+}
+
+/// A credit card's statement cut day: USD purchases on it wait for this day to be converted.
+private struct CutDayControl: View {
+    let day: Int?
+    let set: (Int?) -> Void
+    let accountID: Int
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tx("Día de corte", "Statement cut day")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                Text(tx("Las compras en dólares se convierten en el corte.", "Dollar purchases are converted at the cut."))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            }
+            Spacer(minLength: DincrSpacing.s2)
+            Menu {
+                ForEach(1...31, id: \.self) { value in Button(tx("Día \(value)", "Day \(value)")) { set(value) } }
+                if day != nil { Button(tx("Quitar", "Remove"), role: .destructive) { set(nil) } }
+            } label: {
+                Text(day.map { tx("Día \($0)", "Day \($0)") } ?? tx("Definir", "Set")).frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("accounts.cutday.\(accountID)")
+        }
     }
 }
 

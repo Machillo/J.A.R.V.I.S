@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.MarkEmailRead
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -178,7 +181,7 @@ fun BankAccountsScreen(model: AppModel, nav: Navigator, key: String?) {
     val title = (data.state as? Load.Ready)?.value?.second?.let(::bankGroupName) ?: tx("Cuentas", "Accounts")
     DetailScaffold(title, nav::back) {
         if (accountsPaused(model)) return@DetailScaffold
-        LoadContent(data) { (_, group, movements) ->
+        LoadContent(data) { (base, group, movements) ->
             if (group == null) {
                 EmptyState(Icons.Rounded.AccountBalance, tx("Sin datos de este banco", "No data for this bank"), tx("Volvé a Cuentas para ver tus bancos.", "Go back to Accounts to see your banks."))
                 return@LoadContent
@@ -190,13 +193,18 @@ fun BankAccountsScreen(model: AppModel, nav: Navigator, key: String?) {
             SectionTitle(tx("Cuentas", "Accounts"))
             if (group.accounts.isEmpty()) Caption(tx("Todavía no hay cuentas detectadas de este banco.", "No accounts detected for this bank yet."))
             group.accounts.forEach { account ->
-                AccountCard(account, busy = busy != null, onOpen = { nav.push("accounts/account/${account.id}") }) { ownership ->
+                fun save(write: suspend () -> Unit) {
                     busy = account.id
                     scope.launch {
-                        model.load(tx("No pudimos guardarlo.", "We couldn’t save it.")) { model.api.setAccountOwnership(account.id, ownership) }
+                        model.load(tx("No pudimos guardarlo.", "We couldn’t save it.")) { write() }
                             .onFailure { if (it !is AuthException.SignedOut) model.showNotice(it.message.orEmpty()) }
                         busy = null; data.reload()
                     }
+                }
+                AccountCard(account, busy = busy != null, cutDayAvailable = base.identity.statementCutDayAvailable,
+                    onOpen = { nav.push("accounts/account/${account.id}") },
+                    onCutDay = { day -> save { model.api.setStatementCutDay(account.id, day) } }) { ownership ->
+                    save { model.api.setAccountOwnership(account.id, ownership) }
                 }
             }
             SectionTitle(tx("Movimientos", "Transactions"))
@@ -237,7 +245,14 @@ fun AccountMovementsScreen(model: AppModel, nav: Navigator, id: Long?) {
 }
 
 @Composable
-private fun AccountCard(account: FinancialIdentity.Account, busy: Boolean, onOpen: () -> Unit, onOwnership: (AccountOwnership) -> Unit) {
+private fun AccountCard(
+    account: FinancialIdentity.Account,
+    busy: Boolean,
+    cutDayAvailable: Boolean,
+    onOpen: () -> Unit,
+    onCutDay: (Int?) -> Unit,
+    onOwnership: (AccountOwnership) -> Unit,
+) {
     DincrCard {
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
@@ -254,6 +269,22 @@ private fun AccountCard(account: FinancialIdentity.Account, busy: Boolean, onOpe
                         modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.${option.wire}.${account.id}")) { Text(ownershipAction(option), color = Dincr.colors.tint) }
                 }
             }
+            if (cutDayAvailable && account.takesCutDay) CutDayControl(account, busy, onCutDay)
+        }
+    }
+}
+
+/** An own credit card's statement cut day: a day from 1 to 31, or cleared. iOS: `CutDayControl`. */
+@Composable
+private fun CutDayControl(account: FinancialIdentity.Account, busy: Boolean, onCutDay: (Int?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val label = account.statementCutDay?.let { tx("Día de corte: $it", "Statement day: $it") } ?: tx("Indicar día de corte", "Set statement day")
+    Box {
+        TextButton(enabled = !busy, onClick = { open = true },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.cutday.${account.id}")) { Text(label, color = Dincr.colors.tint) }
+        DropdownMenu(open, { open = false }) {
+            if (account.statementCutDay != null) DropdownMenuItem({ Text(tx("Quitar", "Remove")) }, { open = false; onCutDay(null) })
+            (1..31).forEach { day -> DropdownMenuItem({ Text(tx("Día $day", "Day $day")) }, { open = false; onCutDay(day) }) }
         }
     }
 }
