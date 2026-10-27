@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category, owner_account_context
-from backend.user_product import expense_account, owner_ledger
+from backend.user_product import expense_account, owner_ledger, pending_conversion
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 
 
@@ -58,7 +58,7 @@ def _categories(conn, workspace_id: str, start: date, end: date) -> list[dict]:
     rows = conn.execute(
         f"""SELECT COALESCE(NULLIF(BTRIM(category),''),'Sin categoría') category,ROUND(SUM(amount),2) amount
            FROM (
-             SELECT category,amount FROM expenses WHERE workspace_id=%s AND created_at::date >= %s AND created_at::date < %s
+             SELECT category,amount FROM expenses WHERE workspace_id=%s AND amount IS NOT NULL AND created_at::date >= %s AND created_at::date < %s
              UNION ALL
              SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense'
                AND {transaction_date} >= %s AND {transaction_date} < %s
@@ -130,7 +130,7 @@ def list_free_movements() -> list[dict]:
               UNION ALL
               SELECT 'expense:'||id,id,'expense',created_at::date,COALESCE(description,''),amount,'expense','expense',category,'',TRUE,
                      original_amount,original_currency,exchange_rate,{expense_account.SELECT_SQL}
-              FROM expenses WHERE workspace_id=%s
+              FROM expenses WHERE workspace_id=%s AND amount IS NOT NULL  -- pending conversion: listed apart
               UNION ALL
               SELECT 'payroll:'||id,id,'payroll',created_at::date,COALESCE(description,'Horas extra'),amount,'income','payroll_accrued','Horas extra','',TRUE,
                      NULL,NULL,NULL,NULL
@@ -167,7 +167,13 @@ def update_free_movement(movement_id: str, payload) -> dict:
         base = account_base_currency(conn, get_current_account_id()) if currency else None
         if origin not in ("salary", "expense") and currency not in (None, base):
             raise HTTPException(status_code=422, detail="Este movimiento solo se puede registrar en tu moneda principal.")
-        values = resolve_entry_amount(base, payload.amount, currency, getattr(payload, "exchange_rate", None))
+        # Only a manual expense may wait for the close to be converted (pending_conversion).
+        if pending_conversion.requested(payload):
+            if origin != "expense":
+                raise HTTPException(status_code=422, detail="Solo un gasto puede esperar al cierre para convertirse.")
+            values = pending_conversion.pending_values(conn, account_base_currency(conn, get_current_account_id()), payload)
+        else:
+            values = resolve_entry_amount(base, payload.amount, currency, getattr(payload, "exchange_rate", None))
         original = (values["original_amount"], values["original_currency"], values["exchange_rate"])
         # Only a manual expense says what paid it (expense_account); not sent = left as it is.
         if origin != "expense" and getattr(payload, expense_account.FIELD, None) is not None:

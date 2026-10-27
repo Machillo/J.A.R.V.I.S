@@ -1149,6 +1149,7 @@ def get_expenses():
                    workspace_id
             FROM expenses
             WHERE workspace_id = %s
+            AND amount IS NOT NULL  -- an expense pending conversion has no base amount yet
             ORDER BY id DESC
             """,
             (workspace_id,)

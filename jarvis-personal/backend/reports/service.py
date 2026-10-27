@@ -13,6 +13,7 @@ def get_expense_breakdown():
             SELECT category, expense_type, SUM(amount) AS total
             FROM expenses
             WHERE workspace_id = %s
+            AND amount IS NOT NULL  -- an expense pending conversion has no base amount yet
             GROUP BY category, expense_type
             ORDER BY total DESC
             """,

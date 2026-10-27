@@ -43,6 +43,8 @@ class ExpenseCreateRequest(BaseModel):
     exchange_rate: float | None = Field(default=None, gt=0, le=100000)
     # The own account or card that paid it (expense_account); not sent = left as it is.
     financial_account_id: int | None = Field(default=None, gt=0)
+    # In the other currency without a rate: it waits for the close to be converted (pending_conversion).
+    convert_at_close: bool = False
 
 
 class IncomeUpdateRequest(IncomeCreateRequest):
@@ -251,3 +253,5 @@ class MovementUpdateRequest(BaseModel):
     # Only manual expenses carry a "paid with" account (expense_account).
     # The own account or card that paid it (expense_account); not sent = left as it is.
     financial_account_id: int | None = Field(default=None, gt=0)
+    # Only a manual expense may wait for the close to be converted (pending_conversion).
+    convert_at_close: bool = False
