@@ -34,6 +34,7 @@ private struct PublicHomeView: View {
                 case .failed(let message):
                     ErrorStateView(message: message) { Task { await load(tier) } }
                 case .loaded(let home):
+                    PendingDollarsCard(openMovements: openMovements)
                     HomeBlocks(home: home, openMovements: openMovements) { await load(tier) }
                 }
             }

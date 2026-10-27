@@ -88,7 +88,7 @@ class FakeBackend(
     private val ownerMoney = FakeMoney(today) { id() }
     private val wealth = FakeWealth(today) { id() }
     private val records = FakeRecords(today)
-    private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
+    private fun snapshot() = FakePlanRoutes.Snapshot(colonesMovements, debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val isInternal get() = profile.role == "owner"
     /** `/user-product/appearance`: one stored choice for the fixture account; none means the defaults. */
@@ -426,16 +426,20 @@ class FakeBackend(
             path == "/user-product/finance/expenses/paid-with-options" -> ok(PaidWithOptions(true,
                 accounts.filter { it.ownershipStatus == "own" }.sortedBy { if (it.accountType == "credit_card") 0 else 1 }
                     .map { PaidWithOptions.Option(it.id, it.accountName, it.bankName, it.accountType, it.accountLast4, it.currency) }))
-            path == "/user-product/free/movements" -> ok(movements.sortedWith(compareByDescending<Movement> { it.transactionDate }.thenByDescending { it.sourceId }))
+            // Expenses waiting for the close have no colones amount: listed apart, like the backend.
+            path == "/user-product/free/movements" -> ok(colonesMovements.sortedWith(compareByDescending<Movement> { it.transactionDate }.thenByDescending { it.sourceId }))
+            path == "/user-product/finance/expenses/pending-conversion" -> ok(pendingConversion())
             (path == "/user-product/finance/income" || path == "/user-product/finance/expenses") && method == "POST" -> {
                 val income = path.endsWith("income")
                 val typed = money("amount") ?: return error(422, "Monto inválido")
                 val currency = text("currency")
                 val rate = money("exchange_rate")
                 val base = profile.baseCurrency ?: "CRC"
-                if (currency != null && currency != base && rate == null) return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
-                val converted = if (currency == null || currency == base) typed else convert(typed, currency, base, rate!!)
                 val origin = if (income) "salary" else "expense"
+                val waits = body?.get("convert_at_close")?.jsonPrimitive?.content == "true"
+                if (waits) pendingRefusal(origin, currency, rate, base)?.let { return it }
+                if (currency != null && currency != base && rate == null && !waits) return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
+                val converted = if (currency == null || currency == base || waits) typed else convert(typed, currency, base, rate!!)
                 val link = paidWithLink(body)
                 if (link is PaidWithLink.Refused) return link.answer
                 if (income && link is PaidWithLink.Set && link.accountId != null) return error(422, "Solo un gasto indica con qué se pagó.")
@@ -458,12 +462,14 @@ class FakeBackend(
                 val base = profile.baseCurrency ?: "CRC"
                 val foreign = currency != null && currency != base
                 if (foreign && old.origin !in setOf("salary", "expense")) return error(422, "Este movimiento solo se puede registrar en tu moneda principal.")
-                if (foreign && rate == null) return error(422, "Indicá el tipo de cambio.")
+                val waits = body?.get("convert_at_close")?.jsonPrimitive?.content == "true"
+                if (waits) pendingRefusal(old.origin, currency, rate, base)?.let { return it }
+                if (foreign && rate == null && !waits) return error(422, "Indicá el tipo de cambio.")
                 val link = paidWithLink(body)
                 if (link is PaidWithLink.Refused) return link.answer
                 if (old.origin != "expense" && link is PaidWithLink.Set && link.accountId != null) return error(422, "Solo un gasto indica con qué se pagó.")
                 movements[index] = old.copy(financialAccountId = if (old.origin == "expense" && link is PaidWithLink.Set) link.accountId else old.financialAccountId,transactionDate = text("transaction_date"), description = text("description"), category = text("category"),
-                    amount = if (foreign) convert(typed, currency!!, base, rate!!) else typed,
+                    amount = if (foreign && !waits) convert(typed, currency!!, base, rate!!) else typed,
                     originalAmount = if (foreign) typed else null, originalCurrency = if (foreign) currency else null, exchangeRate = if (foreign) rate else null)
                 ok("""{"status":"ok","movement_id":"$movementId"}""")
             }
@@ -743,12 +749,34 @@ class FakeBackend(
 
     // --- read models ----------------------------------------------------------------------------------
 
+    /** The movements with a colones amount: an expense waiting for the close is not one of them (backend: pending_conversion). */
+    private val colonesMovements: List<Movement> get() = movements.filterNot { it.isPendingConversion }
+
+    /** The backend's refusal for an expense that can't wait for the close, or null. */
+    private fun pendingRefusal(origin: String?, currency: String?, rate: BigDecimal?, base: String): HttpResponse? = when {
+        origin != "expense" -> error(422, "Solo un gasto puede esperar al cierre para convertirse.")
+        currency == null || currency == base -> error(422, "Solo un gasto en la otra moneda puede esperar al cierre para convertirse.")
+        rate != null -> error(422, "Con tipo de cambio el gasto se convierte ahora; sin él, espera al cierre.")
+        else -> null
+    }
+
+    private fun pendingConversion(): PendingConversion {
+        val waiting = movements.filter { it.isPendingConversion }.sortedByDescending { it.transactionDate }
+        val items = waiting.map {
+            PendingConversion.Item(it.movementId, it.sourceId ?: 0, it.transactionDate.orEmpty(), it.description.orEmpty(), it.category,
+                it.originalAmount!!, it.originalCurrency!!, it.financialAccountId)
+        }
+        val totals = waiting.groupBy { it.originalCurrency!! }.toSortedMap()
+            .map { (currency, rows) -> PendingConversion.Total(currency, rows.sumOf { it.originalAmount!! }, rows.size) }
+        return PendingConversion(true, items, totals)
+    }
+
     private fun totals(period: String): Pair<BigDecimal, BigDecimal> {
-        val rows = movements.filter { it.transactionDate?.startsWith(period) == true }
+        val rows = colonesMovements.filter { it.transactionDate?.startsWith(period) == true }
         return rows.filter { it.kind == MovementKind.INCOME }.sumOf { it.amount } to rows.filter { it.kind == MovementKind.EXPENSE }.sumOf { it.amount }
     }
 
-    private fun categories(period: String) = movements.filter { it.kind == MovementKind.EXPENSE && it.transactionDate?.startsWith(period) == true }
+    private fun categories(period: String) = colonesMovements.filter { it.kind == MovementKind.EXPENSE && it.transactionDate?.startsWith(period) == true }
         .groupBy { it.category ?: "Sin categoría" }.map { (category, rows) -> CategoryTotal(category, rows.sumOf { it.amount }) }.sortedByDescending { it.amount }
 
     private fun freeDashboard(): FreeDashboard {

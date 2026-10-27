@@ -23,6 +23,7 @@ struct OwnerHomeView: View {
                 header
                 jarvisSection
                 upcomingSection
+                PendingDollarsCard(openMovements: openMovements)
                 financesSection(tier)
             }
             .padding(.horizontal, DincrSpacing.s4)
