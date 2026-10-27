@@ -22,6 +22,7 @@ struct DebtsView: View {
     @State private var action: AmountAction?
     @State private var form: DebtForm.Mode?
     @State private var deleting: Debt?
+    @State private var history: Debt?
     @State private var notice: String?
 
     var body: some View {
@@ -32,7 +33,7 @@ struct DebtsView: View {
             // date is never lost between two loads. The strategy is optional: its failure never hides the list.
             AsyncContent(load: { DebtsScreenData(debts: try await model.service.debts(), strategyDate: await loadStrategyDate()) }) { data, _ in
                 DebtList(debts: data.debts, strategyDate: data.strategyDate, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
-                         pay: { action = .payDebt($0) }, edit: { form = .edit($0) }, delete: { deleting = $0 })
+                         pay: { action = .payDebt($0) }, edit: { form = .edit($0) }, delete: { deleting = $0 }, history: { history = $0 })
             }
             .id(generation)
         }
@@ -44,6 +45,7 @@ struct DebtsView: View {
         }
         .sheet(item: $action) { action in AmountSheet(action: action) { done($0) } }
         .sheet(item: $form) { mode in DebtForm(mode: mode) { done($0) } }
+        .sheet(item: $history) { debt in DebtPaymentsSheet(debt: debt) }
         .confirmationDialog(tx("¿Eliminar «\(deleting?.name ?? "")»?", "Delete “\(deleting?.name ?? "")”?"),
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(tx("Eliminar", "Delete"), role: .destructive) { if let debt = deleting { Task { await delete(debt) } } }
@@ -90,6 +92,7 @@ private struct DebtList: View {
     let pay: (Debt) -> Void
     let edit: (Debt) -> Void
     let delete: (Debt) -> Void
+    let history: (Debt) -> Void
 
     var body: some View {
         if debts.isEmpty {
@@ -119,6 +122,11 @@ private struct DebtList: View {
                 if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
                 if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.label(next)) }
                 DebtPayoffLine(debt: debt)
+                // DEB-07a: the payments recorded for this debt (read-only, every plan).
+                Button(tx("Ver pagos", "See payments")) { history(debt) }
+                    .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.tint)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("debt.history.\(debt.id)")
                 if canWrite {
                     HStack(spacing: DincrSpacing.s2) {
                         if (debt.remainingAmount ?? 0) > 0 {
@@ -137,6 +145,47 @@ private struct DebtList: View {
                 }
             }
             .dincrCard()
+        }
+    }
+}
+
+/// DEB-07a — the payments recorded in DINCR for one debt, newest first (Android: the debt's
+/// payments dialog). Only payments made with "Registrar pago" are linked to the debt.
+private struct DebtPaymentsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let debt: Debt
+
+    var body: some View {
+        NavigationStack {
+            ScreenScroll(title: tx("Pagos registrados", "Recorded payments")) {
+                Text(debt.name ?? tx("Deuda", "Debt")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+                AsyncContent(load: { try await model.service.debtPayments(id: debt.id) }) { payments, _ in
+                    if payments.isEmpty {
+                        Text(tx("Todavía no registraste pagos de esta deuda en DINCR.", "You haven’t recorded payments for this debt in DINCR yet."))
+                            .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            .accessibilityIdentifier("debt.payments.empty")
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(payments) { payment in
+                                HStack {
+                                    Text(payment.paymentDate.map(Day.label) ?? "—").font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                                    Spacer()
+                                    MoneyText(payment.amount, font: DincrFont.amount)
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityElement(children: .combine)
+                            }
+                        }
+                        .dincrCard()
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("debt.payments.list")
+                    }
+                }
+                Text(tx("Aparecen los pagos registrados con «Registrar pago».", "Payments recorded with “Record payment” appear here."))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(tx("Cerrar", "Close")) { dismiss() } } }
         }
     }
 }
