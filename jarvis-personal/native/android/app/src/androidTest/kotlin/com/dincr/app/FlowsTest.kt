@@ -190,6 +190,23 @@ class FlowsTest {
         waitForText(tx("En dólares · se convierten al cierre", "In dollars · converted at the close"))
     }
 
+    /** The close (3d): last month's dollar expense converts with one rate and becomes a colones movement. */
+    @Test fun anEndedCloseConvertsWithOneRate() {
+        launch()
+        scenario!!.onActivity { androidx.lifecycle.ViewModelProvider(it)[AppModel::class.java].fixtureBackend!!.pendingSampleArrives = true }
+        openMovements()
+        val key = "month:${java.time.LocalDate.now().minusMonths(1).toString().take(7)}"
+        waitForTag("movements.pending.close.$key")
+        compose.onNodeWithTag("movements.pending.close.$key").performScrollTo().performClick()
+        waitForTag("close.rate")
+        compose.onNodeWithTag("close.rate").performTextClearance()
+        compose.onNodeWithTag("close.rate").performTextInput("510")
+        waitForText(tx("Se registran ₡61.200", "₡61.200 are recorded"), substring = true)
+        compose.onNodeWithTag("close.save").performClick()
+        waitUntil("the close to disappear") { compose.onAllNodes(hasTestTag("movements.pending.close.$key")).fetchSemanticsNodes().isEmpty() }
+        waitForText(com.dincr.data.FAKE_PENDING_SAMPLE)
+    }
+
     /** Saving only a new description must keep the stored cents and the stored category. */
     @Test fun editKeepsTheStoredAmountAndCategory() {
         launch()

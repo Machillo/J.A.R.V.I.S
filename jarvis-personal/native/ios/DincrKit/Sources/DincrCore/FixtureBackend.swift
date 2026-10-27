@@ -105,7 +105,8 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
-                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, mailArrives: Bool = false, storeBillingOn: Bool = false, legalLapses: Bool = false) {
+                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, mailArrives: Bool = false, storeBillingOn: Bool = false, legalLapses: Bool = false,
+                pendingSample: Bool = false) {
         self.scenario = scenario
         self.identityRefreshFails = identityRefreshFails
         self.mailArrives = mailArrives
@@ -125,6 +126,8 @@ public actor FixtureBackend: HTTPTransport {
             let seed = Self.seed(today: today)
             movements = seed.movements; debts = seed.debts; goals = seed.goals; savings = seed.savings; recurring = seed.recurring
             if scenario == .populated && vip { candidates = Self.sampleCandidates(today: today) }
+            // 3d UI tests: a dollar expense from last month, still waiting for its (already ended) close.
+            if pendingSample { movements.append(Self.pendingSample(today: today)) }
         }
         if scenario == .store {
             profile = StoreSample.profile(plan: plan, language: language)
@@ -302,6 +305,7 @@ public actor FixtureBackend: HTTPTransport {
             return ok(movements.filter { !isPending($0) }.sorted { ($0["transaction_date"] as? String ?? "") > ($1["transaction_date"] as? String ?? "") })
         case ("GET", "/user-product/finance/expenses/paid-with-options"): return ok(paidWithOptions())
         case ("GET", "/user-product/finance/expenses/pending-conversion"): return ok(pendingConversion())
+        case ("POST", "/user-product/finance/expenses/pending-conversion/close"): return closePending(body)
         case ("POST", "/user-product/finance/income"), ("POST", "/user-product/finance/expenses"):
             return createMovement(income: path.hasSuffix("income"), body)
         // Debts

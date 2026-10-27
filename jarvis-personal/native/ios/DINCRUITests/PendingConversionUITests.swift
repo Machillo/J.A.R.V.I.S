@@ -50,7 +50,8 @@ final class PendingConversionUITests: XCTestCase {
         let total = app.descendants(matching: .any)["movements.pending.total.USD"]
         XCTAssertTrue(total.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Hotel en dólares"].exists)
-        XCTAssertTrue(app.staticTexts["En dólares · se convierten al cierre"].exists || app.staticTexts["EN DÓLARES · SE CONVIERTEN AL CIERRE"].exists)
+        // One section per close: "En dólares · Octubre 2026" (the header may be shown in capitals).
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "En dólares ·")).firstMatch.exists)
     }
 
     func testTurningItOffAsksForTheRate() {

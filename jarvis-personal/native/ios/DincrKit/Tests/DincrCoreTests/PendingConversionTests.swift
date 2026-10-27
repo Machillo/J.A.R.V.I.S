@@ -60,4 +60,48 @@ import Testing
         }
         #expect(try await service.pendingConversion().items.isEmpty)
     }
+
+    // MARK: The close (3d)
+
+    private static let october22 = FixtureBackend.utc.date(from: DateComponents(year: 2026, month: 10, day: 22))!
+
+    private func expense(_ description: String, _ amount: Decimal, on day: String, card: Int? = nil) -> EntryCreate {
+        EntryCreate(amount: amount, description: description, category: "Compras", entryDate: day, currency: "USD",
+                    financialAccountId: card, convertAtClose: true)
+    }
+
+    @Test func pendingExpensesAreGroupedByCardCutOrMonth() async throws {
+        let service = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero, today: Self.october22))
+        try await service.setStatementCutDay(id: 2, day: 21)
+        try await service.create(.expense, expense("Hotel", 120, on: "2026-10-12", card: 2), idempotencyKey: IdempotencyKey.new())
+        try await service.create(.expense, expense("Taxi", 30, on: "2026-10-25", card: 2), idempotencyKey: IdempotencyKey.new())
+        try await service.create(.expense, expense("Propina", 5, on: "2026-10-03"), idempotencyKey: IdempotencyKey.new())
+        let periods = try await service.pendingConversion().periods
+        #expect(periods.map(\.key) == ["card:2:2026-10-21", "month:2026-10", "card:2:2026-11-21"])
+        #expect(periods.map(\.closable) == [true, false, false])
+        #expect(periods.first?.start == "2026-09-22" && periods.first?.totals.first?.amount == 120)
+    }
+
+    @Test func aCloseConvertsItsPeriodWithOneRateOnce() async throws {
+        let service = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero, today: Self.october22))
+        try await service.setStatementCutDay(id: 2, day: 21)
+        try await service.create(.expense, expense("Hotel", 120, on: "2026-10-12", card: 2), idempotencyKey: IdempotencyKey.new())
+        try await service.create(.expense, expense("Taxi", 30, on: "2026-10-25", card: 2), idempotencyKey: IdempotencyKey.new())
+        let result = try await service.closePending(PendingClose(periodKey: "card:2:2026-10-21", exchangeRate: 510), idempotencyKey: IdempotencyKey.new())
+        #expect(result.converted == 1 && result.amount == 61_200 && result.currency == "CRC")
+        #expect(try await service.pendingConversion().items.map(\.description) == ["Taxi"])
+        let hotel = try #require(try await service.movements().first { $0.description == "Hotel" })
+        #expect(hotel.amount == 61_200 && hotel.exchangeRate == 510 && hotel.originalAmount == 120)
+        await #expect(throws: APIError.self) {  // closed once; the next cycle has not ended
+            _ = try await service.closePending(PendingClose(periodKey: "card:2:2026-10-21", exchangeRate: 600), idempotencyKey: IdempotencyKey.new())
+        }
+        await #expect(throws: APIError.self) {
+            _ = try await service.closePending(PendingClose(periodKey: "card:2:2026-11-21", exchangeRate: 600), idempotencyKey: IdempotencyKey.new())
+        }
+    }
+
+    @Test func aServerWithoutTheCloseSendsNoPeriods() throws {
+        let body = #"{"status":"ok","available":true,"items":[],"totals":[]}"#
+        #expect(try APIClient.decoder.decode(PendingConversion.self, from: Data(body.utf8)).periods.isEmpty)
+    }
 }

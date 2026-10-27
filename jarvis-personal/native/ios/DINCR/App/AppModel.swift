@@ -98,13 +98,16 @@ final class AppModel {
             let refreshFails = ProcessInfo.processInfo.arguments.contains("-DincrRefreshFails")
             // `-DincrMailArrives`: a bank notice arrives after launch (mail recovery UI tests).
             let mailArrives = ProcessInfo.processInfo.arguments.contains("-DincrMailArrives")
+            // `-DincrPendingSample`: a dollar expense from last month waits for its close (3d UI tests).
+            let pendingSample = ProcessInfo.processInfo.arguments.contains("-DincrPendingSample")
             // `-DincrLegalLapses`: the terms change while the app is open (SEC-01 UI tests).
             let legalLapses = ProcessInfo.processInfo.arguments.contains("-DincrLegalLapses")
             // `-DincrStoreBilling`: the fixture server turns the `store_billing` switch on (BIL-03 UI tests).
             let storeBilling = ProcessInfo.processInfo.arguments.contains("-DincrStoreBilling")
             service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency,
                                                             identityRefreshFails: refreshFails, mailArrives: mailArrives,
-                                                            storeBillingOn: storeBilling, legalLapses: legalLapses))
+                                                            storeBillingOn: storeBilling, legalLapses: legalLapses,
+                                                            pendingSample: pendingSample))
             returnSyncInterval = 0  // fixtures: every return reads again (UI tests do not wait a minute)
         case let .unconfigured(reason):
             self.auth = nil
