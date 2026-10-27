@@ -35,7 +35,6 @@ READ_INTENTS = [
     "create_calendar_event",
     "calendar_summary",
     "sports_schedule",
-    "memory",
     "email",
     "fixed_expense",
     "general",
@@ -303,15 +302,9 @@ def _fallback_detect(user_message: str) -> dict[str, Any]:
     if finance_read:
         return finance_read
 
-    # 7. Correos / memoria / gastos fijos.
+    # 7. Correos / gastos fijos.
     if any(word in text for word in ["correo", "correos", "gmail", "email", "mail"]):
         return {"intent": "email", "entity": None, "confidence": 0.75, "source": "deterministic"}
-    if any(phrase in text for phrase in [
-        "recuerda que", "recorda que", "recordá que", "memoria", "acordate", "acuérdate",
-        "que recuerdas", "qué recuerdas", "que sabes de mi", "qué sabes de mí",
-        "que sabes sobre", "qué sabes sobre", "guarda en memoria", "agrega a memoria", "memoriza"
-    ]):
-        return {"intent": "memory", "entity": user_message.strip(), "confidence": 0.88, "source": "deterministic"}
     return {"intent": "general", "entity": user_message.strip(), "confidence": 0.4, "source": "deterministic"}
 
 
@@ -350,6 +343,5 @@ def is_pending_interrupt(intent_result: dict[str, Any], user_message: str) -> bo
         "create_calendar_event",
         "calendar_summary",
         "email",
-        "memory",
         "fixed_expense",
     }

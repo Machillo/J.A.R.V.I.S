@@ -227,7 +227,8 @@ def test_asset_sale_is_cash_in_but_never_earned_income(db):
 
     q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, category) VALUES (%s, %s, 'Venta de vehículo (transferencia + efectivo)', 775000, 'asset_sale', 'Venta de activo')", (WS_A, TODAY))
     [month] = analyzer.get_monthly_flow()
-    assert month["asset_sale_proceeds"] == 775000.0 and month["income"] == 775000.0
+    # Owner audit, Fase 1 §2.1: an asset sale is other inflow, never income (earned or not).
+    assert month["asset_sale_proceeds"] == 775000.0 and month["other_inflows"] == 775000.0 and month["income"] == 0
     assert month["earned_income"] == 0
     summary = analyzer.get_transaction_summary()
     assert summary["income"] == 0 and summary["asset_sale_proceeds"] == 775000.0

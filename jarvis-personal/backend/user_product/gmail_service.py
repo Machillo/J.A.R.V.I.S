@@ -23,7 +23,9 @@ from backend.auth.current_user import (
     get_current_user_id,
     get_current_workspace_id,
 )
+from backend.auth import owner_role
 from backend.core import observability
+from backend.core.feature_flags import load_feature_flags
 from backend.core.database import get_connection
 from backend.email_monitor.parser import normalize as normalize_mail_text, parse_financial_email
 from backend.email_monitor.parser_identity import for_account_holder
@@ -205,6 +207,42 @@ def _has_active_vip_access(conn, account_id: str) -> bool:
 
         return has_store_entitlement(conn, account_id, "vip")
     return True
+
+
+# Launch decision (2026-10-22): while DINCR's Google OAuth app stays in testing, only the
+# verified Owner has a mailbox read (Gmail or Outlook): connect, sync, push and maintenance.
+# The plan alone still decides when a stored authorization ends (end_unentitled_mail_connections),
+# so pausing reading for everyone else revokes, disconnects and deletes nothing.
+MAIL_READING_OWNER_ONLY = True
+MAIL_READING_PAUSED = (
+    "Por ahora, la lectura de correos está disponible solo en pruebas internas. "
+    "Podés revisar lo ya importado o desconectar tu correo."
+)
+
+
+def mail_reading_allowed(conn, account_id: str, workspace_id: object) -> bool:
+    """Whether DINCR may read this account's mailbox now. Decided from stored records only.
+
+    The verified Owner (stored role, active, deployment allowlist, own workspace) is exempt from
+    the gmail_automation kill switch, as on interactive routes; nobody else reads while
+    MAIL_READING_OWNER_ONLY holds, and afterwards only a VIP with the switch on.
+    """
+    if not _has_active_vip_access(conn, account_id):
+        return False
+    if owner_role.is_verified_owner_account(conn, account_id, workspace_id):
+        return True
+    if MAIL_READING_OWNER_ONLY:
+        return False
+    flag = load_feature_flags().get("gmail_automation") or {}
+    return bool(flag.get("enabled"))
+
+
+def require_mail_reading() -> None:
+    """Route guard for starting or running mailbox reading: the server decides, never the app."""
+    with get_connection() as conn:
+        allowed = mail_reading_allowed(conn, str(get_current_account_id()), str(get_current_workspace_id()))
+    if not allowed:
+        raise HTTPException(status_code=403, detail=MAIL_READING_PAUSED)
 
 
 def _google_config() -> tuple[str, str, str]:
@@ -546,7 +584,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             )
             conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
             if candidate.get("resolution_reason") == "paired_owned_transfer" and candidate.get("related_candidate_id"):
-                resolve_candidate(conn, int(candidate["related_candidate_id"]))
+                resolve_candidate(conn, int(candidate["related_candidate_id"]), account_id=account_id, workspace_id=workspace_id)
             release_cross_source_duplicates(conn, candidate_id=candidate_id, account_id=account_id, workspace_id=workspace_id)
             conn.commit()
             return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
@@ -685,7 +723,7 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
 
     account_id = str(flow["account_id"])
     with get_connection() as conn:
-        if not _has_active_vip_access(conn, account_id):
+        if not mail_reading_allowed(conn, account_id, flow.get("workspace_id")):
             return failed("vip_required")
 
     client_id, client_secret, redirect_uri = _google_config()
@@ -735,10 +773,10 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
     """Attach an authorized Gmail flow to its account/workspace (caller commits)."""
     if flow["provider"] != "gmail" or GMAIL_SCOPE not in (flow.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="La autorización no corresponde a Gmail. Volvé a conectarlo.")
-    account_id, workspace_id = str(flow["account_id"]), str(flow["workspace_id"])
+    account_id, workspace_id = str(flow["account_id"]), flow.get("workspace_id")
     # Recheck at completion so a downgrade after consent cannot attach a mailbox.
-    if not _has_active_vip_access(conn, account_id):
-        raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
+    if not mail_reading_allowed(conn, account_id, workspace_id):
+        raise HTTPException(status_code=403, detail=MAIL_READING_PAUSED)
     google_email = str(flow["mailbox_address"]).strip().lower()  # display only
     email = mail_oauth.mailbox_email("gmail", google_email)
     key = mail_oauth.mailbox_key("gmail", google_email, flow.get("provider_subject"))
@@ -890,11 +928,12 @@ def _insert_finva_candidate(
         conn, candidate_id=candidate_id, candidate=candidate,
         workspace_id=str(connection["workspace_id"]),
     )
-    resolution = resolve_candidate(conn, candidate_id)
+    scope = {"account_id": str(connection["account_id"]), "workspace_id": str(connection["workspace_id"])}
+    resolution = resolve_candidate(conn, candidate_id, **scope)
     if gmail_message_id and legacy_transaction_for_message(
         conn, workspace_id=str(connection["workspace_id"]), provider_message_id=gmail_message_id,
     ):
-        resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution)
+        resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution, **scope)
     if resolution.get("status") == "pending":
         # Owner only (stored records): the learned rules may save the movement (owner_mail_automation).
         owner = owner_account_context(conn, connection["account_id"], connection["workspace_id"])
@@ -1184,11 +1223,8 @@ def _connection_with_token(connection_id: int) -> tuple[dict[str, Any], str]:
             raise RuntimeError("Conexión Gmail no encontrada.")
         if GMAIL_SCOPE not in (row.get("granted_scopes") or []):
             raise RuntimeError("Este correo no está conectado mediante Gmail.")
-        if not _has_active_vip_access(conn, str(row["account_id"])):
-            raise HTTPException(
-                status_code=403,
-                detail="La automatización de Gmail está disponible únicamente en el plan VIP.",
-            )
+        if not mail_reading_allowed(conn, str(row["account_id"]), row.get("workspace_id")):
+            raise HTTPException(status_code=403, detail=MAIL_READING_PAUSED)
         token = _vault_read(conn, str(row["refresh_token_secret_id"]), str(row["account_id"]))
     return dict(row), token
 
@@ -1420,7 +1456,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         conn.commit()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT c.id,c.account_id,c.granted_scopes
+            """SELECT c.id,c.account_id,c.workspace_id,c.granted_scopes
                FROM finva_gmail_connections c
                JOIN account_subscriptions s ON s.account_id=c.account_id
                JOIN plans p ON p.id=s.plan_id
@@ -1433,8 +1469,9 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
                  )
                ORDER BY c.id"""
         ).fetchall()
-        # The same entitlement as every other path (a paid VIP needs a live store subscription).
-        rows = [row for row in rows if _has_active_vip_access(conn, str(row["account_id"]))]
+        # The same rule as every other reading path (Owner-only for now; a paid VIP needs a live
+        # store subscription). A paused connection stays as it is: maintenance never ends it here.
+        rows = [row for row in rows if mail_reading_allowed(conn, str(row["account_id"]), row.get("workspace_id"))]
     completed = 0
     reconnect = 0
     failed = 0
@@ -1482,7 +1519,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
     email = str(notification.get("emailAddress") or "").lower()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT c.id,c.account_id
+            """SELECT c.id,c.account_id,c.workspace_id
                FROM finva_gmail_connections c
                JOIN account_subscriptions s ON s.account_id=c.account_id
                JOIN plans p ON p.id=s.plan_id
@@ -1496,7 +1533,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
                  )""",
             (email, GMAIL_SCOPE),
         ).fetchall()
-        rows = [row for row in rows if _has_active_vip_access(conn, str(row["account_id"]))]
+        rows = [row for row in rows if mail_reading_allowed(conn, str(row["account_id"]), row.get("workspace_id"))]
     if not rows:
         return {"status": "ignored"}
     completed = 0

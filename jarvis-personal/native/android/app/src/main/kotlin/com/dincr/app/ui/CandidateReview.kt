@@ -141,6 +141,7 @@ fun CandidateCard(candidate: MailCandidate, busy: Boolean, message: String?, onA
             }
             when (candidate.resolutionNote) {
                 MailCandidate.ResolutionNote.POSSIBLE_MATCH -> Caption(tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR lo deja para tu revisión en vez de descartarlo solo.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of dismissing it on its own."))
+                MailCandidate.ResolutionNote.ALREADY_IN_HISTORY -> Caption(tx("Ya tenés un movimiento con este monto en esas fechas. Revisá tu historial antes de confirmarlo para no contarlo dos veces.", "You already have a movement with this amount around these dates. Check your history before confirming it so it isn’t counted twice."))
                 MailCandidate.ResolutionNote.PAIRED_OWN_TRANSFER -> Caption(tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, no se suma a ingresos ni gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming won’t add income or expense."))
                 MailCandidate.ResolutionNote.OWN_ACCOUNTS -> Caption(tx("Ambas cuentas son de las que confirmaste como tuyas. Al confirmar, no se registra como ingreso ni gasto.", "Both accounts are ones you confirmed as yours. Confirming won’t record income or expense."))
                 null -> Unit
@@ -167,7 +168,7 @@ fun CorrectionSheet(candidate: MailCandidate, saving: Boolean, onDismiss: () -> 
     var amount by remember { mutableStateOf(candidate.nativeAmount?.let(format::inputText).orEmpty()) }
     var description by remember { mutableStateOf(candidate.description ?: candidate.subject.orEmpty()) }
     var category by remember { mutableStateOf(candidate.category ?: "") }
-    var type by remember { mutableStateOf(candidate.transactionType?.takeIf { it in setOf("expense", "income", "debt_payment", "transfer") } ?: "expense") }
+    var type by remember { mutableStateOf(candidate.correctionType) }
     var date by remember { mutableStateOf(candidate.transactionDate?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() } ?: LocalDate.now()) }
     var rate by remember { mutableStateOf("") }
     var errors by remember { mutableStateOf(mapOf<String, String>()) }

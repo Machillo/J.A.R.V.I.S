@@ -44,9 +44,10 @@ class FlowsTest {
 
     @After fun close() { scenario?.close() }
 
-    private fun launch(fixture: String = "POPULATED", skipLogin: Boolean = true, plan: String = "free"): ActivityScenario<MainActivity> {
+    private fun launch(fixture: String = "POPULATED", skipLogin: Boolean = true, plan: String = "free", role: String? = null): ActivityScenario<MainActivity> {
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
             .putExtra("dincrFixtures", fixture).putExtra("dincrSkipLogin", skipLogin).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
+        role?.let { intent.putExtra("dincrRole", it) }
         return ActivityScenario.launch<MainActivity>(intent).also { scenario = it }
     }
 
@@ -206,7 +207,9 @@ class FlowsTest {
         openMovements()
         openEditor("Feria del agricultor")
         waitForText(tx("Eliminar movimiento", "Delete transaction"))
-        compose.onNodeWithText(tx("Eliminar movimiento", "Delete transaction")).performClick()
+        // "Pagado con" appears once its options load and pushes the button down: wait for it, then scroll to the button.
+        waitForTag("editor.paidWith")
+        compose.onNodeWithText(tx("Eliminar movimiento", "Delete transaction")).performScrollTo().performClick()
         waitForText(tx("Esta acción no se puede deshacer.", "This can’t be undone."))
         compose.onNodeWithText(tx("Eliminar", "Delete")).performClick()
         waitForGone("Feria del agricultor")
@@ -263,19 +266,34 @@ class FlowsTest {
         // next_45_days_minimum is the lowest projected balance, never labelled as the commitments.
         waitForText(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"))
         compose.onAllNodes(hasText(tx("Compromisos próximos 45 días", "Commitments next 45 days")), useUnmergedTree = true).assertCountEquals(0)
+        // Reading mail is the Owner's alone during the launch: no Conexiones de correo for a VIP.
         tab(tx("Patrimonio", "Wealth"))
-        click(tx("Conexiones de correo", "Mail connections"))
+        waitForText(tx("Cuentas", "Accounts"))
+        assertTrue(compose.onAllNodes(hasText(tx("Conexiones de correo", "Mail connections")), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        // What was already imported stays reviewable from Movimientos, with the mailbox and Desconectar.
+        tab(tx("Movimientos", "Transactions"))
+        click(tx("Por revisar", "To review"))
         waitForText("Compra en supermercado")
+        waitForText(tx("Lectura de correos no disponible", "Mail reading unavailable"))
         // A mailbox the user disconnected earlier (status "disabled") is not listed.
         waitForText("ejemplo@correo.test")
+        waitForText(tx("Desconectar", "Disconnect"))
         assertTrue(compose.onAllNodes(hasText("anterior@correo.test"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
-        // The sync answer's failed_connections is a list of ids; an empty one is a plain success.
-        click(tx("Buscar avisos nuevos", "Check for new notices"))
-        waitForText(tx("Encontramos 3 avisos", "Found 3 notices"), substring = true)
+        assertTrue(compose.onAllNodes(hasText(tx("Buscar avisos nuevos", "Check for new notices")), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
         click(tx("Confirmar", "Confirm"))
         waitForText(tx("Movimiento guardado.", "Transaction saved."))
         // The dollar notice cannot be confirmed as is: it needs the user's rate.
         waitForText(tx("tocá Corregir e indicá tu tipo de cambio", "tap Correct and enter your exchange rate"), substring = true)
+    }
+
+    @Test fun theOwnerReadsMailFromPatrimonio() {
+        launch(plan = "vip", role = "owner")
+        tab(tx("Patrimonio", "Wealth"))
+        click(tx("Conexiones de correo", "Mail connections"))
+        waitForText("ejemplo@correo.test")
+        // The sync answer's failed_connections is a list of ids; an empty one is a plain success.
+        click(tx("Buscar avisos nuevos", "Check for new notices"))
+        waitForText(tx("Encontramos 3 avisos", "Found 3 notices"), substring = true)
     }
 
     @Test fun legalConsentIsRequiredBeforeTheApp() {

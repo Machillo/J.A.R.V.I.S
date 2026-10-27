@@ -27,6 +27,7 @@ import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
 import com.dincr.data.Pkce
 import com.dincr.data.ProductEvent
+import com.dincr.data.QuickAction
 import com.dincr.data.PullRefresh
 import com.dincr.data.Profile
 import com.dincr.data.ReleasePolicy
@@ -147,6 +148,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     private val pendingSignIn = PendingSignInStore(application)
     private var fixturePkce: Pkce? = null
     private val prefs = application.getSharedPreferences("dincr.preferences", Context.MODE_PRIVATE)
+    /** APP-1: the account's personal appearance (the Owner only in phase 1). */
+    val appearance = AppearanceController(prefs, viewModelScope) { api }
 
     init {
         // A data export left over from an earlier session (or a crash) is removed at startup.
@@ -187,6 +190,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     }
     fun consumeNotice() { _notice.value = null }
     fun consumeRoute() { _pendingRoute.value = null }
+    /** A launcher shortcut asked for a screen; the signed-in, unlocked shell opens it (it never writes). */
+    fun requestQuickAction(action: QuickAction) { _pendingRoute.value = action.route }
     fun showNotice(message: String) { _notice.value = message }
 
     /**
@@ -202,6 +207,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         Result.failure(error)
     } catch (error: ApiError) {
         if (error.kind == ApiError.Kind.FEATURE_UNAVAILABLE) viewModelScope.launch { refreshFlags() }
+        // SEC-01: the server's legal gate refused the call (the terms changed while the app was
+        // open). Reading the identity again moves the gate to the acceptance screen.
+        if (error.code == ApiError.LEGAL_ACCEPTANCE_REQUIRED_CODE) viewModelScope.launch { loadIdentity() }
         Result.failure(error)
     } catch (error: Exception) {
         Result.failure(IllegalStateException(fallback))
@@ -248,7 +256,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 refreshFlags()
                 reconcileStore()
                 val now = System.currentTimeMillis()
-                if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity() }
+                // NAT-02: a transient failure on resume keeps the user where they were (as iOS); any
+                // other answer moves the gate as always.
+                if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity(keepOnTransient = true) }
                 syncOnReturn()
             }
         }
@@ -429,6 +439,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         // Another account, or an account that is no longer the Owner, never sees this chat.
         if (profile.id != previous?.id || !Jarvis.isAvailable(profile)) jarvisChat.reset()
         _profile.value = profile
+        appearance.onIdentity(profile)
         lastIdentityRefresh = System.currentTimeMillis()
         if (previous?.id != profile.id) appLock.attach(profile.id.toString())
         profile.subscription?.accessNotice?.let { notice -> notice.message?.let { _notice.value = listOfNotNull(notice.title, it).joinToString(". ") } }
@@ -473,7 +484,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         lastReturnSync = now
         val epoch = sessionEpoch
         val plan = _profile.value?.planTier ?: PlanTier.FREE
-        if (plan.allows(Feature.GMAIL_AUTOMATION) && isOn(OpsFlag.GMAIL_AUTOMATION)) {
+        if (plan.allows(Feature.GMAIL_AUTOMATION) && isOn(OpsFlag.GMAIL_AUTOMATION) && _profile.value?.canReadMail == true) {
             runCatching { api.syncMail() }
         }
         if (epoch == sessionEpoch && _phase.value is Phase.Ready) _dataGeneration.value += 1
@@ -506,6 +517,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         pendingSignIn.clear()
         appLock.detach()
         jarvisChat.reset()
+        appearance.clear()
         _profile.value = null
         _flags.value = FeatureFlags()
         _notice.value = null

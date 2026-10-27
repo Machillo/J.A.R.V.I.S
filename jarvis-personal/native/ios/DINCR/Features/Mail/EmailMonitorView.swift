@@ -71,7 +71,14 @@ private struct MailMonitorContent: View {
             case .failed(let message):
                 ErrorStateView(message: message) { generation += 1 }
             case .loaded(let snapshot):
-                if snapshot.status.isConnected {
+                if !model.canReadMail {
+                    // Mail reading is the Owner's alone during the launch: review and Disconnect only.
+                    StatusBanner(tone: .info, title: tx("Lectura de correos no disponible", "Mail reading unavailable"),
+                                 message: tx("Por ahora DINCR no lee correos en tu cuenta. Podés revisar lo ya importado o desconectar tu correo.",
+                                             "For now DINCR doesn’t read mail on your account. You can review what was already imported or disconnect your mail."))
+                        .accessibilityIdentifier("mail.readingUnavailable")
+                    connected(snapshot)
+                } else if snapshot.status.isConnected {
                     connected(snapshot)
                 } else {
                     onboarding(snapshot.status)
@@ -161,35 +168,39 @@ private struct MailMonitorContent: View {
 
     @ViewBuilder
     private func connected(_ snapshot: Snapshot) -> some View {
-        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            SectionHeader(title: tx("Correos conectados", "Connected mailboxes"))
-            ForEach(snapshot.status.mailboxes) { mailbox in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(mailbox.googleEmail ?? tx("Correo", "Mailbox")).font(DincrFont.body.weight(.semibold))
-                        Text(mailbox.needsReconnect ? tx("Necesita reconectarse", "Needs to reconnect") : tx("Activo · solo lectura", "Active · read-only"))
-                            .font(DincrFont.caption).foregroundStyle(mailbox.needsReconnect ? DincrColor.warning : DincrColor.positive)
-                            .accessibilityIdentifier("mail.status.connected")
+        if model.canReadMail || !snapshot.status.mailboxes.isEmpty {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                SectionHeader(title: tx("Correos conectados", "Connected mailboxes"))
+                ForEach(snapshot.status.mailboxes) { mailbox in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(mailbox.googleEmail ?? tx("Correo", "Mailbox")).font(DincrFont.body.weight(.semibold))
+                            Text(mailbox.needsReconnect ? tx("Necesita reconectarse", "Needs to reconnect") : tx("Activo · solo lectura", "Active · read-only"))
+                                .font(DincrFont.caption).foregroundStyle(mailbox.needsReconnect ? DincrColor.warning : DincrColor.positive)
+                                .accessibilityIdentifier("mail.status.connected")
+                        }
+                        Spacer()
+                        if mailbox.needsReconnect, model.canReadMail {
+                            Button(tx("Reconectar", "Reconnect")) { scopeSheet = mailbox.provider == "microsoft" ? .microsoft : .gmail }
+                        }
+                        Menu {
+                            Button(tx("Desconectar", "Disconnect"), systemImage: "xmark.circle", role: .destructive) { disconnecting = mailbox }
+                        } label: { Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 44) }
+                        .accessibilityLabel(tx("Opciones del correo", "Mailbox options"))
                     }
-                    Spacer()
-                    if mailbox.needsReconnect {
-                        Button(tx("Reconectar", "Reconnect")) { scopeSheet = mailbox.provider == "microsoft" ? .microsoft : .gmail }
-                    }
-                    Menu {
-                        Button(tx("Desconectar", "Disconnect"), systemImage: "xmark.circle", role: .destructive) { disconnecting = mailbox }
-                    } label: { Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 44) }
-                    .accessibilityLabel(tx("Opciones del correo", "Mailbox options"))
+                }
+                if model.canReadMail {
+                    Button { Task { await sync() } } label: { Label(tx("Buscar avisos nuevos", "Look for new notices"), systemImage: "arrow.clockwise") }
+                        .buttonStyle(.dincrSecondary)
+                        .disabled(busy != nil)
+                        .accessibilityIdentifier("mail.sync")
+                }
+                if let syncSummary {
+                    Text(syncSummary).font(DincrFont.caption).foregroundStyle(DincrColor.text2).accessibilityIdentifier("mail.syncSummary")
                 }
             }
-            Button { Task { await sync() } } label: { Label(tx("Buscar avisos nuevos", "Look for new notices"), systemImage: "arrow.clockwise") }
-                .buttonStyle(.dincrSecondary)
-                .disabled(busy != nil)
-                .accessibilityIdentifier("mail.sync")
-            if let syncSummary {
-                Text(syncSummary).font(DincrFont.caption).foregroundStyle(DincrColor.text2).accessibilityIdentifier("mail.syncSummary")
-            }
+            .dincrCard()
         }
-        .dincrCard()
 
         SectionHeader(title: tx("Por revisar", "To review"))
         let pending = snapshot.candidates.filter(\.isPending)
@@ -227,7 +238,8 @@ private struct MailMonitorContent: View {
             let status = try await service.mailStatus()
             var candidates: [MailCandidate] = []
             var transfers: [OwnTransferSuggestions.Pair] = []
-            if status.isConnected {
+            // Without mail reading, what was already imported stays reviewable even with no mailbox left.
+            if status.isConnected || !model.canReadMail {
                 async let list = service.mailCandidates(pendingOnly: true)
                 async let suggestions = service.ownTransferSuggestions()
                 candidates = try await list
@@ -393,6 +405,16 @@ struct CandidateCard: View {
     let correct: () -> Void
     let reject: () -> Void
 
+    /// Same wording as Android's `CandidateReview` notes.
+    static func text(for note: MailCandidate.ResolutionNote) -> String {
+        switch note {
+        case .possibleMatch: tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR lo deja para tu revisión en vez de descartarlo solo.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of dismissing it on its own.")
+        case .alreadyInHistory: tx("Ya tenés un movimiento con este monto en esas fechas. Revisá tu historial antes de confirmarlo para no contarlo dos veces.", "You already have a movement with this amount around these dates. Check your history before confirming it so it isn’t counted twice.")
+        case .pairedOwnTransfer: tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, no se suma a ingresos ni gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming won’t add income or expense.")
+        case .ownAccounts: tx("Ambas cuentas son de las que confirmaste como tuyas. Al confirmar, no se registra como ingreso ni gasto.", "Both accounts are ones you confirmed as yours. Confirming won’t record income or expense.")
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             HStack(alignment: .firstTextBaseline) {
@@ -403,7 +425,7 @@ struct CandidateCard: View {
                         .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                 }
                 Spacer()
-                MoneyText(candidate.nativeAmount, sign: candidate.transactionType == "income" ? .income : .expense, currency: candidate.nativeCurrency)
+                MoneyText(candidate.nativeAmount, sign: candidate.amountSign, currency: candidate.nativeCurrency)
             }
             .accessibilityElement(children: .combine)
             if !candidate.isPending {
@@ -417,6 +439,10 @@ struct CandidateCard: View {
                 } else if candidate.needsRate {
                     Text(tx("Está en \(candidate.nativeCurrency ?? ""). Tocá Corregir e indicá tu tipo de cambio.", "It’s in \(candidate.nativeCurrency ?? ""). Tap Correct and enter your exchange rate."))
                         .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
+                }
+                if let note = candidate.resolutionNote {
+                    Text(Self.text(for: note)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .accessibilityIdentifier("candidate.note.\(candidate.candidateId ?? 0)")
                 }
                 HStack(spacing: DincrSpacing.s2) {
                     if !candidate.needsRate && !candidate.cannotConvert {
@@ -496,7 +522,7 @@ struct CorrectionSheet: View {
         guard description.isEmpty else { return }
         description = candidate.description ?? ""
         amount = candidate.nativeAmount.map(model.moneyFormat.inputText) ?? ""
-        type = ["expense", "income", "debt_payment", "transfer"].contains(candidate.transactionType ?? "") ? candidate.transactionType! : "expense"
+        type = candidate.correctionType
         category = candidate.category ?? "general"
         if let day = candidate.transactionDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { date = parsed }
     }

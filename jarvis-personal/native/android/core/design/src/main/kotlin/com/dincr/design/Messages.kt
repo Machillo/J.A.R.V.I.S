@@ -31,7 +31,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dincr.data.AppLanguage
 import com.dincr.data.MessageKind
-import com.dincr.design.generated.DincrRadius
 import com.dincr.design.generated.DincrSpacing
 
 /**
@@ -42,7 +41,7 @@ import com.dincr.design.generated.DincrSpacing
 fun DincrMessage(kind: MessageKind, title: String, message: String = "") {
     val style = messageStyle(kind)
     Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(DincrRadius.lg)).background(style.fill)
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(Dincr.look.cardRadius)).background(style.fill)
             .semantics(mergeDescendants = true) {},
     ) {
         // Attention carries a leading accent bar: it reads as "look here", never as a failure.

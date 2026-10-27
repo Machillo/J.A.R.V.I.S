@@ -6,11 +6,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,16 +64,20 @@ import java.math.BigDecimal
 /** Tabular digits for every amount. */
 val TabularNums = TextStyle(fontFeatureSettings = "tnum")
 
-/** Card surface: tonal with a hairline edge, no shadow (DESIGN.md → Elevation & Depth). */
+/**
+ * Card surface: tonal with a hairline edge, no shadow (DESIGN.md → Elevation & Depth). Radius and
+ * padding follow the appearance.
+ */
 @Composable
 fun DincrCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(DincrRadius.lg)
+    val look = Dincr.look
+    val shape = RoundedCornerShape(look.cardRadius)
     Box(
         modifier
             .fillMaxWidth()
             .background(Dincr.colors.surface, shape)
             .border(1.dp, Dincr.colors.line, shape)
-            .padding(DincrSpacing.s4),
+            .padding(look.cardPadding),
     ) { content() }
 }
 
@@ -113,9 +117,9 @@ fun MoneyText(amount: BigDecimal?, modifier: Modifier = Modifier, sign: MoneyFor
 @Composable
 fun MoneyRow(title: String, subtitle: String, amount: BigDecimal, kind: MovementKind, icon: ImageVector, readOnly: Boolean, modifier: Modifier = Modifier, currency: String? = null) {
     val colors = Dincr.colors
-    Row(modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = DincrSpacing.s2), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().heightIn(min = Dincr.look.rowMin).padding(vertical = DincrSpacing.s2), verticalAlignment = Alignment.CenterVertically) {
         val income = kind == MovementKind.INCOME
-        Box(Modifier.size(42.dp).background(if (income) colors.positiveContainer else colors.surface2, RoundedCornerShape(DincrRadius.md)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(42.dp).background(if (income) colors.positiveContainer else colors.surface2, RoundedCornerShape(Dincr.look.controlRadius)), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = if (income) colors.positive else colors.text2, modifier = Modifier.size(20.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
@@ -135,7 +139,7 @@ fun DincrPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = M
     Button(
         onClick = onClick, enabled = enabled && !loading,
         modifier = modifier.fillMaxWidth().heightIn(min = 52.dp),
-        shape = RoundedCornerShape(DincrRadius.md),
+        shape = RoundedCornerShape(Dincr.look.controlRadius),
         colors = ButtonDefaults.buttonColors(containerColor = Dincr.colors.tint, contentColor = Dincr.colors.onTint,
             disabledContainerColor = Dincr.colors.tint.copy(alpha = if (loading) 1f else 0.4f), disabledContentColor = Dincr.colors.onTint),
     ) {
@@ -229,7 +233,7 @@ fun EmptyState(icon: ImageVector, title: String, message: String, action: (@Comp
 /** Inline error with the recovery next to it. */
 @Composable
 fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
-    Column(Modifier.fillMaxWidth().background(Dincr.colors.negativeContainer, RoundedCornerShape(DincrRadius.md)).padding(DincrSpacing.s4)) {
+    Column(Modifier.fillMaxWidth().background(Dincr.colors.negativeContainer, RoundedCornerShape(Dincr.look.controlRadius)).padding(DincrSpacing.s4)) {
         Row(verticalAlignment = Alignment.Top) {
             Icon(Icons.Rounded.Error, contentDescription = null, tint = Dincr.colors.negative)
             Text(message, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text, modifier = Modifier.padding(start = DincrSpacing.s3))
@@ -255,7 +259,7 @@ fun StatusBanner(tone: BannerTone, title: String, message: String) {
     val (icon, color, fill) = when (tone) {
         BannerTone.INFO -> Triple(Icons.Rounded.Info, c.info, c.infoContainer)
     }
-    Row(Modifier.fillMaxWidth().background(fill, RoundedCornerShape(DincrRadius.md)).padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s3)) {
+    Row(Modifier.fillMaxWidth().background(fill, RoundedCornerShape(Dincr.look.controlRadius)).padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s3)) {
         Icon(icon, contentDescription = null, tint = color)
         Column(Modifier.padding(start = DincrSpacing.s3)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = c.text)

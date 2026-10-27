@@ -482,6 +482,38 @@ and changes only the scene, below a root that reads the server role (`dincrOwner
 - Everything else in this file still applies: no eyebrows, no stat-tile grids, money signed with
   `+` / `−` and never by color alone, unknown values "—", system materials only for blur.
 
+## Personal appearance (APP-1, Owner-only experiment)
+
+A person may choose a limited, validated set of alternatives to the base above. Phase 1 offers it
+to the single Owner only (server gate `require_owner()` on `/user-product/appearance`); Free, Basic
+and VIP always draw the **classic** set, which is this file exactly. The alternatives live in
+[`jarvis-personal/native/design-tokens/appearance.json`](jarvis-personal/native/design-tokens/appearance.json),
+next to this file's generator, which turns them into Swift and Kotlin and refuses any combination
+that breaks the rules of this file.
+
+| Option | Values (default for the Owner first) | Classic |
+|--------|----------------------------------------|---------|
+| Theme | Automático, Claro, Oscuro | the device setting |
+| Palette (neutrals) | Océano, Clásico, Arena, Grafito | Clásico |
+| Accent (the one tint) | Cian, Verde azulado, Ciruela, Tinta | Verde azulado |
+| Text size (× the system scale) | Estándar 100 %, Pequeño 90 %, Grande 115 %, Muy grande 130 % | Estándar |
+| Typeface | Sistema, Editorial (serif screen and section titles) | Sistema |
+| Density | Cómoda, Compacta (12 gaps, 48 rows) | Cómoda |
+| Surfaces | Con contorno (hairline, cards 22 / controls 16), Tonal | Tonal |
+
+- **Océano + Cian + Con contorno is the Owner identity** (above), so the Owner's default is the
+  same scene on iOS and Android; the generator test holds the tokens equal to `OwnerColor`.
+- Every palette × accent × scheme keeps text ≥ 4.5:1 on `bg`, `surface` and `surface-2`, control
+  boundaries and focus ≥ 3:1, labels on filled and tonal accents ≥ 4.5:1, status colors ≥ 4.5:1 and
+  chart series ≥ 3:1 (`contrastFailures`, generate.test.mjs).
+- Status, message and chart colors never change with the appearance: positive, negative, warning,
+  info and VIP keep their meaning (Océano only uses the Owner identity's brighter positive in dark).
+- The text size multiplies the platform scale (Dynamic Type / font scale); it never replaces it,
+  and compact density never takes touch targets below 48.
+- No new accent may collide with a status or chart meaning (no green, red, amber or indigo tint).
+- Preferences belong to one account (`user_preferences`, one key per account in its workspace) and
+  follow it to every signed-in device; a GET never writes and no stored value means the default.
+
 ## Do's and Don'ts
 
 ### Do:

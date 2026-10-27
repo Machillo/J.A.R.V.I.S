@@ -51,6 +51,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.Appearance
 import com.dincr.app.StoreBilling
 import com.dincr.app.tx
+import com.dincr.data.AppearancePolicy
 import com.dincr.data.AuthException
 import com.dincr.data.Jarvis
 import com.dincr.data.OpsFlag
@@ -98,6 +99,10 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
             // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
             NavRow(Icons.Rounded.Key, "JARVIS", tx("Tu espacio personal", "Your personal space")) { nav.open("jarvis") }
         }
+        // APP-1: the personal appearance is an Owner-only experiment (the server refuses everyone else).
+        if (AppearancePolicy.isPersonalizable(profile)) DincrCard(Modifier.testTag("profile.appearance")) {
+            NavRow(Icons.Rounded.Palette, tx("Personalización", "Personalization"), tx("Tema, colores, texto y densidad", "Theme, colors, text and density")) { nav.open("appearance") }
+        }
         DincrCard {
             Column {
                 // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
@@ -131,7 +136,10 @@ fun SettingsScreen(model: AppModel, nav: Navigator, appearance: Appearance, onAp
     val profile by model.profile.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { model.recordScreen("settings_opened", "settings") }
     DetailScaffold(tx("Ajustes de cuenta", "Account settings"), nav::back) {
-        Section(tx("Apariencia", "Appearance")) {
+        if (AppearancePolicy.isPersonalizable(profile)) Section(tx("Apariencia", "Appearance")) {
+            // The Owner's theme is part of its personal appearance, saved to the account (APP-1).
+            NavRow(Icons.Rounded.Palette, tx("Personalización", "Personalization"), tx("Tema, colores, texto y densidad", "Theme, colors, text and density")) { nav.open("appearance") }
+        } else Section(tx("Apariencia", "Appearance")) {
             listOf(Appearance.SYSTEM to tx("Automático", "Automatic"), Appearance.LIGHT to tx("Claro", "Light"), Appearance.DARK to tx("Oscuro", "Dark")).forEach { (value, label) ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(appearance == value, role = Role.RadioButton) { onAppearance(value) }, verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(appearance == value, null)

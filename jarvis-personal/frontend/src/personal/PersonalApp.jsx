@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
-  Brain,
   Camera,
   ChevronRight,
   CreditCard,
@@ -19,7 +18,6 @@ import {
 import Dashboard from "../pages/Dashboard";
 import Finance from "../pages/Finance";
 import Goals from "../pages/Goals";
-import Memory from "../pages/Memory";
 import Settings from "../pages/Settings";
 import Transactions from "../pages/Transactions";
 import PremiumStrategy from "../pages/PremiumStrategy";
@@ -78,7 +76,6 @@ const appSectionsFor = (language) => ({
   transactions: { title: t("nav.transactions", language), eyebrow: language === "es" ? "Datos" : "Data" },
   additionalCards: { title: t("nav.additionalCards", language), eyebrow: language === "es" ? "Datos" : "Data" },
   profile: { title: t("nav.settings", language), eyebrow: language === "es" ? "Perfil" : "Profile" },
-  memory: { title: t("nav.memory", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   settings: { title: t("nav.settings", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   goals: { title: t("nav.goals", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   userManagement: { title: t("nav.manageUsers", language), eyebrow: language === "es" ? "Control de propietario" : "Owner Control" },
@@ -87,7 +84,7 @@ const appSectionsFor = (language) => ({
 
 const getBottomGroup = (page) => {
   if (["emails", "transactions", "additionalCards", "chats", "moneyControl"].includes(page)) return "profile";
-  if (["memory", "settings", "goals", "profile", "userManagement", "productOperations"].includes(page)) return "profile";
+  if (["settings", "goals", "profile", "userManagement", "productOperations"].includes(page)) return "profile";
   if (["investments", "businesses", "netWorth", "financialTimeline", "reconciliation", "deterioration", "wealth"].includes(page)) return "wealth";
   return page;
 };
@@ -142,7 +139,6 @@ function ProfileHub({ navigatePage, userName, currentUser, onLogout, profilePref
       </JarvisGlassCard>
 
       <div className="profile-link-list">
-        <AppListItem icon={Brain} title={t("nav.memory", language)} subtitle={tx("Memoria y contexto personal", "Memory and personal context", language)} onClick={() => navigatePage("memory")} />
         <AppListItem icon={Target} title={t("nav.goals", language)} subtitle={tx("Objetivos y prioridades", "Objectives and priorities", language)} onClick={() => navigatePage("goals")} />
         <AppListItem icon={SettingsIcon} title={t("nav.settings", language)} subtitle={tx("Preferencias de DINCR Owner", "DINCR Owner preferences", language)} onClick={() => navigatePage("settings")} />
         <AppListItem icon={HandCoins} title={tx("Datos financieros", "Financial data", language)} subtitle={tx("Control · Email · historial · tarjetas", "Control · Email · history · cards", language)} onClick={() => navigatePage("moneyControl")} />
@@ -583,9 +579,6 @@ export default function App() {
       case "transactions":
         return <Transactions />;
 
-      case "memory":
-        return <Memory />;
-
       case "strategy":
         return <PremiumStrategy />;
 
@@ -618,7 +611,7 @@ export default function App() {
 
   const currentSection = appSections[activePage] || appSections[getBottomGroup(activePage)] || appSections.dashboard;
   // "emails" renders the shared product mailbox screen, which relies on the shell back bar.
-  const immersivePages = new Set(["moneyControl", "transactions", "additionalCards", "goals", "memory", "profile", "settings"]);
+  const immersivePages = new Set(["moneyControl", "transactions", "additionalCards", "goals", "profile", "settings"]);
   const showHeader = activePage !== "dashboard" && !immersivePages.has(activePage);
   const platform = detectNativePlatform();
   const isStandalonePwa = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;

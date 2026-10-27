@@ -108,7 +108,7 @@ def test_only_an_owner_candidate_reaches_the_learned_rule_save(monkeypatch, owne
     db = _Db({"INSERT INTO finva_email_candidates": {"id": 55}})
     for name in ("discover_candidate_account", "link_received_payroll"):
         monkeypatch.setattr(gmail_service, name, lambda *_a, **_k: None)
-    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id: {"status": "pending"})
+    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id, **_scope: {"status": "pending"})
     monkeypatch.setattr(gmail_service, "legacy_transaction_for_message", lambda *_a, **_k: None)
     monkeypatch.setattr(gmail_service, "owner_account_context", lambda *_a: owner)
     saved = []
@@ -132,7 +132,7 @@ def test_a_duplicate_or_internal_transfer_never_reaches_the_save(monkeypatch, re
     db = _Db({"INSERT INTO finva_email_candidates": {"id": 56}})
     for name in ("discover_candidate_account", "link_received_payroll"):
         monkeypatch.setattr(gmail_service, name, lambda *_a, **_k: None)
-    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id: {"status": resolved})
+    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id, **_scope: {"status": resolved})
     monkeypatch.setattr(gmail_service, "legacy_transaction_for_message", lambda *_a, **_k: None)
     monkeypatch.setattr(gmail_service, "owner_account_context", lambda *_a: True)
     monkeypatch.setattr(owner_mail_automation, "auto_save", lambda *_a: pytest.fail("only a pending candidate is evaluated"))

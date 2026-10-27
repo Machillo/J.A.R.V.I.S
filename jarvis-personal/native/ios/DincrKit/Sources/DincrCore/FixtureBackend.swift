@@ -49,6 +49,18 @@ public actor FixtureBackend: HTTPTransport {
     /// Salvavidas preferences: the 1/3/6-month goal, and the Owner's manual balance and protected expenses.
     var salvavidasTargetMonths = 6
     var ownerSalvavidasCurrent: Decimal = 450_000
+    /// JARVIS → Control de dinero (Owner): who owes the Owner money and every charge and payment
+    /// (FixtureBackend+Receivables.swift). Invented names and amounts.
+    var ownerReceivables: [FixtureReceivable] = FixtureReceivable.seed
+    /// JARVIS → Mi dinero (Owner): the Owner's accounts and their declared balances
+    /// (FixtureBackend+Money.swift). Invented accounts and amounts.
+    var ownerAccounts: [FixtureAccount] = FixtureAccount.seed
+    /// JARVIS → Patrimonio (Owner): the businesses, their movements and the portfolio snapshot's age
+    /// (FixtureBackend+Wealth.swift). Invented names and amounts.
+    var ownerWealth = FixtureWealth()
+    /// JARVIS → Registros (Owner): the real balances confirmed in the reconciliation, by account
+    /// (FixtureBackend+Records.swift). Invented accounts and amounts.
+    var ownerConfirmedBalances: [Int: Decimal] = [:]
     var ownerProtectedExpenses: Set<Int> = [62]
     private var tickets: [[String: Any]] = []
     var mailConnected: Bool
@@ -66,9 +78,23 @@ public actor FixtureBackend: HTTPTransport {
     private var jarvisAsksGoalName = false
     private var jarvisClarifying = false
     public private(set) var requests: [URLRequest] = []
-    /// B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server.
+    /// DEB-07a: the payments recorded per debt in this session (newest last).
+    private var debtPayments: [Int: [[String: Any]]] = [:]
+    /// B17 / NAT-03 UI tests: a read again (a pull to refresh) of the identity, Hoy's main source or
+    /// the movement list answers like an unreachable server; the first read of each works.
     let identityRefreshFails: Bool
     private var identityReads = 0
+    static let refreshedSources: Set<String> = ["/auth/me", "/user-product/free/dashboard", "/user-product/basic/dashboard",
+                                                "/user-product/vip/command-center", "/user-product/free/movements"]
+    private var sourceReads: [String: Int] = [:]
+    /// BIL-03 UI tests: the `store_billing` switch is on, and the store routes answer as the backend
+    /// does with store verification enabled (catalog, entitlement, customer token).
+    let storeBillingOn: Bool
+    /// SEC-01 UI tests: the terms change while the app is open. The next write meets the server's
+    /// legal gate (403 `legal_acceptance_required`) and the identity asks for acceptance again; once
+    /// accepted, writes run as before.
+    private var legalLapses: Bool
+    private var legalGateClosed = false
 
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
     /// app still learns the role only from `/auth/me`, exactly as with the real backend.
@@ -79,10 +105,12 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
-                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, mailArrives: Bool = false) {
+                today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, mailArrives: Bool = false, storeBillingOn: Bool = false, legalLapses: Bool = false) {
         self.scenario = scenario
         self.identityRefreshFails = identityRefreshFails
         self.mailArrives = mailArrives
+        self.storeBillingOn = storeBillingOn
+        self.legalLapses = legalLapses
         self.latency = latency
         self.language = language
         // STORE images must not depend on the capture day.
@@ -177,9 +205,18 @@ public actor FixtureBackend: HTTPTransport {
         if scenario == .failing && path != "/product-ops/release-policy" {
             return reply(500, Self.errorBody("Ocurrió un error interno. Intentá nuevamente."))
         }
-        if method == "GET" && path == "/auth/me" {
-            identityReads += 1
-            if identityRefreshFails && identityReads > 1 { return reply(503, Self.errorBody("Servicio no disponible.")) }
+        if method == "GET" && Self.refreshedSources.contains(path) {
+            sourceReads[path, default: 0] += 1
+            if path == "/auth/me" { identityReads += 1 }
+            if identityRefreshFails && sourceReads[path, default: 0] > 1 { return reply(503, Self.errorBody("Servicio no disponible.")) }
+        }
+        if method != "GET", !Self.openBeforeAcceptance.contains("\(method) \(path)"), legalLapses || legalGateClosed {
+            legalLapses = false
+            legalGateClosed = true
+            var legal = profile["legal"] as? [String: Any] ?? [:]
+            legal["required"] = true
+            profile["legal"] = legal
+            return reply(403, Self.legalRequiredBody)
         }
         // Like core/idempotency.py: the same key replays the stored answer; another body is a 409.
         let key = ["POST", "PUT", "PATCH"].contains(method) ? request.value(forHTTPHeaderField: "X-Idempotency-Key") : nil
@@ -226,6 +263,7 @@ public actor FixtureBackend: HTTPTransport {
                 return error(409, "Las versiones legales cambiaron.")
             }
             profile["legal"] = legal.merging(["required": false, "accepted_at": "2026-09-29T12:00:00Z"]) { $1 }
+            legalGateClosed = false
             return ok(["status": "accepted", "required": false])
         case ("GET", "/auth/plans"): return ok(Self.plans)
         case ("GET", "/product-ops/billing/catalog"):
@@ -237,7 +275,16 @@ public actor FixtureBackend: HTTPTransport {
             profile["subscription"] = ["plan": "free", "plan_name": "Free", "status": "active", "access_source": "self_service"]
             return ok(["status": "ok", "plan": "free", "profile": profile])
         // Operations
-        case ("GET", "/product-ops/feature-flags"): return ok(["flags": OpsFlag.allCases.map { ["flag_key": $0.rawValue, "enabled": $0 != .storeBilling] }])
+        case ("GET", "/product-ops/feature-flags"): return ok(["flags": OpsFlag.allCases.map { ["flag_key": $0.rawValue, "enabled": $0 != .storeBilling || storeBillingOn] }])
+        // BIL-03: the store routes as the backend answers them (store_billing.store_catalog and entitlement).
+        // The product ids are the backend's defaults; prices come only from the store.
+        case ("GET", "/product-ops/billing/store/catalog"):
+            return ok(["currency": "CRC", "plans": ["basic", "vip"].map { ["code": $0, "monthly": ["product_id": "finva.\($0).monthly"],
+                                                                                 "annual": ["product_id": "finva.\($0).annual"]] }])
+        case ("GET", "/product-ops/billing/store/entitlement"):
+            return ok(["plan": "free", "entitlement": "free", "status": "free", "provider": NSNull()])
+        case ("POST", "/product-ops/billing/store/customer-token"):
+            return ok(["token": "6f1c2b9e-0d4a-4f7e-9a51-2c8d7e3b4a10"])
         case ("GET", "/product-ops/health"): return ok(["status": "operational", "active_incidents": 0])
         case ("GET", "/product-ops/release-policy"): return ok(["platform": "ios", "status": "current", "required": false, "active": false])
         case ("GET", "/product-ops/feedback"): return ok(tickets)
@@ -252,10 +299,11 @@ public actor FixtureBackend: HTTPTransport {
         case ("GET", "/user-product/free/monthly-summary"): return ok(monthlySummary(query["period"] ?? String(day(0).prefix(7))))
         case ("GET", "/user-product/free/movements"):
             return ok(movements.sorted { ($0["transaction_date"] as? String ?? "") > ($1["transaction_date"] as? String ?? "") })
+        case ("GET", "/user-product/finance/expenses/paid-with-options"): return ok(paidWithOptions())
         case ("POST", "/user-product/finance/income"), ("POST", "/user-product/finance/expenses"):
             return createMovement(income: path.hasSuffix("income"), body)
         // Debts
-        case ("GET", "/user-product/finance/debts"): return ok(debts)
+        case ("GET", "/user-product/finance/debts"): return ok(debts.map(withPayoffEstimate))
         case ("POST", "/user-product/finance/debts"):
             var debt = body
             debt["id"] = nextId()
@@ -307,6 +355,10 @@ public actor FixtureBackend: HTTPTransport {
             if let denied = needs(.vip) { return denied }
             return mail(method, path, parts, query, body)
         }
+        if method == "POST", path == "/user-product/finance/strategy-vip/debt-scenario" {
+            if let denied = needs(.vip) { return denied }
+            return debtScenario(body)
+        }
         if path.hasPrefix("/user-product/vip") || path.hasPrefix("/user-product/finance/strategy-vip") {
             if let denied = needs(.vip) { return denied }
             return vip(path)
@@ -325,11 +377,15 @@ public actor FixtureBackend: HTTPTransport {
         if foreign && rate == nil { return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.") }
         let stored = foreign ? (ConversionPreview.baseAmount(typed: typed, currency: currency!, base: base, rate: rate) ?? typed) : typed
         let origin = income ? "salary" : "expense"
+        let link = paidWithLink(body)
+        if case .refused(let answer) = link { return answer }
+        if income, case .set(let value) = link, !(value is NSNull) { return error(422, "Solo un gasto indica con qué se pagó.") }
         let sid = nextId()
         var row: [String: Any] = ["movement_id": "\(origin):\(sid)", "source_id": sid, "origin": origin, "transaction_date": body["entry_date"] ?? day(0),
                                   "description": body["description"] ?? "", "amount": number(stored), "transaction_type": income ? "income" : "expense",
                                   "category": body["category"] ?? "", "notes": "", "editable": true]
         if foreign { row["original_amount"] = number(typed); row["original_currency"] = currency; row["exchange_rate"] = number(rate!) }
+        if !income, case .set(let value) = link { row["financial_account_id"] = value }
         movements.append(row)
         return ok(["id": sid])
     }
@@ -350,7 +406,11 @@ public actor FixtureBackend: HTTPTransport {
         let origin = movements[index]["origin"] as? String ?? ""
         if foreign && !["salary", "expense"].contains(origin) { return error(422, "Este movimiento solo se puede registrar en tu moneda principal.") }
         if foreign && rate == nil { return error(422, "Indicá el tipo de cambio.") }
+        let link = paidWithLink(body)
+        if case .refused(let answer) = link { return answer }
+        if origin != "expense", case .set(let value) = link, !(value is NSNull) { return error(422, "Solo un gasto indica con qué se pagó.") }
         var row = movements[index]
+        if origin == "expense", case .set(let value) = link { row["financial_account_id"] = value }
         row["transaction_date"] = body["transaction_date"]; row["description"] = body["description"]; row["category"] = body["category"]
         row["amount"] = number(foreign ? (ConversionPreview.baseAmount(typed: typed, currency: currency!, base: base, rate: rate) ?? typed) : typed)
         // Like the backend: without a currency the row becomes a plain base-currency amount.
@@ -370,7 +430,11 @@ public actor FixtureBackend: HTTPTransport {
             let remaining = decimal(debts[index]["remaining_amount"]) ?? 0
             let paid = min(decimal(body["amount"]) ?? 0, remaining)
             debts[index]["remaining_amount"] = number(remaining - paid)
+            // As the backend: each payment leaves a record the history lists (DEB-07a).
+            debtPayments[debtID, default: []].append(["id": nextId(), "payment_date": day(0), "amount": number(paid)])
             return ok(["status": "OK", "debt_id": debtID, "payment_amount": number(paid), "new_remaining_amount": number(remaining - paid)])
+        case ("GET", "payments"?):
+            return ok(Array((debtPayments[debtID] ?? []).reversed()))
         case ("DELETE", nil):
             debts.remove(at: index)
             return ok(["status": "ok", "id": debtID])
@@ -410,6 +474,13 @@ public actor FixtureBackend: HTTPTransport {
         case ("POST", "contributions"?):
             savings[index]["saved_amount"] = number((decimal(savings[index]["saved_amount"]) ?? 0) + (decimal(body["amount"]) ?? 0))
             return ok(savings[index])
+        case ("PUT", nil):
+            // Like `update_savings_plan`: every field is replaced; the id stays.
+            var plan = body
+            plan["id"] = planID
+            plan["status"] = body["status"] ?? "active"
+            savings[index] = plan
+            return ok(plan)
         case ("DELETE", nil):
             savings.remove(at: index)
             return ok(["status": "ok", "id": planID])
@@ -580,17 +651,31 @@ public actor FixtureBackend: HTTPTransport {
         case ("GET", "/user-product/vip/gmail/own-transfer-suggestions"): return ok(["items": [Any]()])
         case ("GET", "/user-product/vip/financial-identity"):
             let states = identityAccounts.map { $0["ownership_status"] as? String ?? "pending" }
-            return ok(["status": "ok", "items": identityAccounts,
+            return ok(["status": "ok", "items": identityAccounts, "statement_cut_day_available": true,
                        "summary": ["total": states.count, "pending": states.filter { $0 == "pending" }.count,
                                    "owned": states.filter { $0 == "own" }.count, "not_mine": states.filter { $0 == "not_mine" }.count]])
         default: break
         }
+        if method == "POST", path == "/user-product/vip/financial-identity/accounts" {
+            return declareOwnAccount(body)
+        }
+        if method == "PUT", parts.starts(with: ["user-product", "vip", "financial-identity", "accounts"]), parts.count == 6, parts[5] == "statement-cut-day" {
+            // As statement_cut.set_statement_cut_day: own, active credit cards only; 1–31 or null.
+            guard let index = identityAccounts.firstIndex(where: { $0["id"] as? Int == Int(parts[4]) }) else { return error(404, "Cuenta financiera no encontrada.") }
+            let day = body["statement_cut_day"] as? Int
+            guard body.keys.contains("statement_cut_day"), day.map({ (1...31).contains($0) }) ?? true else { return error(422, "El día de corte va de 1 a 31.") }
+            guard identityAccounts[index]["account_type"] as? String == "credit_card" else { return error(422, "Solo las tarjetas de crédito tienen día de corte.") }
+            guard identityAccounts[index]["ownership_status"] as? String == "own" else { return error(409, "Confirmá primero que la tarjeta es tuya.") }
+            identityAccounts[index]["statement_cut_day"] = day.map { $0 as Any } ?? NSNull()
+            return ok(["status": "ok", "item": identityAccounts[index]])
+        }
         if parts.starts(with: ["user-product", "vip", "financial-identity", "accounts"]), parts.count == 5 {
             let status = body["ownership_status"] as? String ?? ""
-            guard ["own", "not_mine"].contains(status) else { return error(422, "Estado inválido.") }
+            guard ["own", "not_mine", "pending"].contains(status) else { return error(422, "Estado inválido.") }
             guard let index = identityAccounts.firstIndex(where: { $0["id"] as? Int == Int(parts[4]) }) else { return error(404, "Cuenta financiera no encontrada.") }
             identityAccounts[index]["ownership_status"] = status
-            return ok(identityAccounts[index])
+            identityAccounts[index]["ownership_confirmed_at"] = "2026-10-21T12:00:00Z"
+            return ok(["status": "ok", "item": identityAccounts[index]])
         }
         if parts.starts(with: ["user-product", "vip", "gmail", "candidates"]), parts.count == 6, let candidateID = Int(parts[4]) {
             return review(method, candidateID, parts[5], body)
@@ -680,12 +765,61 @@ public actor FixtureBackend: HTTPTransport {
                 "categories": categories(month).map { ["category": $0["category"]!, "amount": $0["amount"]!] }, "monthly_history": history()]
     }
 
+    /// Like the backend's debt_payoff.py: installments left and the last one's date, only for a known
+    /// rate and a payment that covers the interest; nil otherwise, never a guessed date.
+    private func withPayoffEstimate(_ debt: [String: Any]) -> [String: Any] {
+        var row = debt
+        let remaining = (debt["remaining_amount"] as? NSNumber)?.doubleValue ?? 0
+        let payment = (debt["monthly_payment"] as? NSNumber)?.doubleValue ?? 0
+        let known = debt["interest_rate_known"] as? Bool == true
+        let monthlyRate = ((debt["interest_rate"] as? NSNumber)?.doubleValue ?? 0) / 100 / 12
+        var months: Int?
+        if remaining <= 0 { months = 0 } else if known, payment > 0 {
+            var left = remaining
+            for month in 1...1200 {
+                let interest = left * monthlyRate
+                if payment <= interest { break }
+                left += interest - payment
+                if left <= 0.01 { months = month; break }
+            }
+        }
+        row["estimated_payoff_months"] = months ?? NSNull()
+        if let months, months > 0 {
+            let calendar = Calendar(identifier: .gregorian)
+            let paymentDay = debt["payment_day"] as? Int ?? 1
+            let thisMonth = calendar.dateComponents([.year, .month, .day], from: today)
+            let startsNextMonth = (thisMonth.day ?? 1) > paymentDay
+            let last = calendar.date(byAdding: .month, value: months - 1 + (startsNextMonth ? 1 : 0), to: today) ?? today
+            let parts = calendar.dateComponents([.year, .month], from: last)
+            let lastDay = calendar.range(of: .day, in: .month, for: last)?.count ?? 28
+            row["estimated_payoff_date"] = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, min(paymentDay, lastDay))
+        } else {
+            row["estimated_payoff_date"] = NSNull()
+        }
+        return row
+    }
+
     private func monthlySummary(_ period: String) -> [String: Any] {
         let (income, expenses) = totals(period)
         let cats = categories(period)
-        return ["period": period, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "balance": number(income - expenses),
+        var summary: [String: Any] = ["period": period, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "balance": number(income - expenses),
                 "top_category": cats.first ?? NSNull(), "categories": cats, "savings": number(sum(savings, "saved_amount")),
                 "goals": ["current": number(sum(goals, "current_amount")), "target": number(sum(goals, "target_amount")), "progress": 40.0]]
+        guard profile["role"] as? String == "owner" else { return summary }
+        // Like the backend: only the verified Owner's month carries the ledger's reading. The current
+        // month still has a mail notice to review; a closed month has a loan received (not income) and
+        // gross payroll reported apart. Android: FakeBackend.monthlySummary.
+        let open = period == String(day(0).prefix(7))
+        let loan: Decimal = open ? 0 : 100_000
+        summary.merge([
+            "complete": !open, "incomplete_reasons": open ? ["pending_mail_review"] : [String](),
+            "gross_expenses": number(expenses), "refunds": 0, "other_inflows": number(loan), "loan_received": number(loan),
+            "receivable_payments": 0, "asset_sale_proceeds": 0, "cash_flow": number(income - expenses + loan),
+            "unclassified_count": 0, "pending_mail_count": open ? 1 : 0,
+            "payroll_accrued": open ? ["overtime_gross": 0, "vgh_gross": 0, "bonuses_gross": 0, "total_gross": 0]
+                                    : ["overtime_gross": 60_000, "vgh_gross": 0, "bonuses_gross": 25_000, "total_gross": 85_000],
+        ]) { $1 }
+        return summary
     }
 
     /// This month's recorded movements, as the command center's `reports.current`.
@@ -788,6 +922,40 @@ public actor FixtureBackend: HTTPTransport {
 
     func ok(_ value: Any) -> Answer { (200, value) }
     func error(_ status: Int, _ detail: String) -> Answer { (status, ["detail": detail]) }
+
+    /// Like `financial_identity.declare_own_account`: the same institution, digits and currency
+    /// reuse the account (marked own); the balance is never shown.
+    private func declareOwnAccount(_ body: [String: Any]) -> Answer {
+        let code = body["institution_code"] as? String ?? ""
+        let last4 = body["account_last4"] as? String ?? ""
+        let currency = body["currency"] as? String ?? "CRC"
+        guard OwnAccountDeclaration.institutions.contains(code) else { return error(422, "Elegí la institución de la cuenta.") }
+        guard last4.count == 4, last4.allSatisfy(\.isNumber) else { return error(422, "Indicá los últimos 4 dígitos de la cuenta.") }
+        let names = ["bac": "BAC", "popular": "Banco Popular", "multimoney": "MultiMoney"]
+        guard let bank = code == "other" ? body["institution_name"] as? String : names[code], !bank.isEmpty else {
+            return error(422, "Escribí el nombre de la institución.")
+        }
+        if let index = identityAccounts.firstIndex(where: { $0["institution_code"] as? String == code && $0["account_last4"] as? String == last4
+                                                             && $0["currency"] as? String == currency }) {
+            identityAccounts[index]["ownership_status"] = "own"
+            identityAccounts[index]["ownership_confirmed_at"] = "2026-10-21T12:00:00Z"
+            return ok(["status": "ok", "item": identityAccounts[index]])
+        }
+        let account: [String: Any] = [
+            "id": (identityAccounts.compactMap { $0["id"] as? Int }.max() ?? 0) + 1,
+            "account_name": body["display_name"] as? String ?? "\(bank) •••• \(last4)" + (currency == "USD" ? " (USD)" : ""),
+            "bank_name": bank, "institution_code": code, "institution_country": "CR", "account_type": "checking",
+            "account_last4": last4, "currency": currency, "ownership_status": "own", "ownership_confirmed_at": "2026-10-21T12:00:00Z",
+        ]
+        identityAccounts.append(account)
+        return ok(["status": "ok", "item": account])
+    }
+    /// The writes the server's legal gate lets through before acceptance (`auth/legal.py`).
+    static let openBeforeAcceptance: Set<String> = ["DELETE /auth/me", "POST /auth/legal/accept", "POST /product-ops/feedback"]
+    static let legalRequiredBody = (try? JSONSerialization.data(withJSONObject: ["detail": [
+        "code": "legal_acceptance_required",
+        "message": "Antes de continuar, aceptá los Términos y la Política de Privacidad vigentes.",
+    ]])) ?? Data()
     static func errorBody(_ detail: String) -> Data { (try? JSONSerialization.data(withJSONObject: ["detail": detail])) ?? Data() }
 
     func needs(_ tier: PlanTier) -> Answer? {

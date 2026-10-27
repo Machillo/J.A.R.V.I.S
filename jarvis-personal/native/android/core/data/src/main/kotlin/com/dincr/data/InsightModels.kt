@@ -34,6 +34,31 @@ data class MonthlySummary(
     val categories: List<CategoryTotal> = emptyList(),
     val savings: Money? = null,
     val goals: GoalProgress? = null,
+    // The verified Owner's month (backend owner_ledger); absent (null) for every other account.
+    val complete: Boolean? = null,
+    @SerialName("incomplete_reasons") val incompleteReasons: List<String> = emptyList(),
+    @SerialName("gross_expenses") val grossExpenses: Money? = null,
+    val refunds: Money? = null,
+    @SerialName("other_inflows") val otherInflows: Money? = null,
+    @SerialName("loan_received") val loanReceived: Money? = null,
+    @SerialName("receivable_payments") val receivablePayments: Money? = null,
+    @SerialName("asset_sale_proceeds") val assetSaleProceeds: Money? = null,
+    @SerialName("cash_flow") val cashFlow: Money? = null,
+    @SerialName("unclassified_count") val unclassifiedCount: Int? = null,
+    @SerialName("pending_mail_count") val pendingMailCount: Int? = null,
+    @SerialName("payroll_accrued") val payrollAccrued: PayrollAccrued? = null,
+) {
+    /** The answer follows the Owner's single ledger (only the verified Owner's does). */
+    val isOwnerLedger: Boolean get() = complete != null
+}
+
+/** Gross payroll the Owner's ledger reports apart (never added to income): overtime, VGH, bonuses. */
+@Serializable
+data class PayrollAccrued(
+    @SerialName("overtime_gross") val overtimeGross: Money? = null,
+    @SerialName("vgh_gross") val vghGross: Money? = null,
+    @SerialName("bonuses_gross") val bonusesGross: Money? = null,
+    @SerialName("total_gross") val totalGross: Money? = null,
 )
 
 @Serializable

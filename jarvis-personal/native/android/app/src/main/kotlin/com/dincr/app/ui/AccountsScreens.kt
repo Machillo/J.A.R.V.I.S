@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.MarkEmailRead
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,8 +31,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dincr.app.AppModel
 import com.dincr.app.tx
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.KeyboardType
+import com.dincr.data.AccountOwnership
 import com.dincr.data.Accounts
 import com.dincr.data.AuthException
+import com.dincr.data.OwnAccountDeclaration
 import com.dincr.data.FinancialIdentity
 import com.dincr.data.MailCandidate
 import com.dincr.data.OpsFlag
@@ -66,14 +73,30 @@ fun ownershipLabel(status: String?): String = when (status) {
     "own" -> tx("Tuya", "Yours"); "not_mine" -> tx("No es tuya", "Not yours"); else -> tx("Sin confirmar", "Unconfirmed")
 }
 
+/** The answer as the user gave it: an unrecognised account is not "unconfirmed". */
+fun ownershipLabel(account: FinancialIdentity.Account): String =
+    if (account.ownership == AccountOwnership.UNKNOWN) tx("No la reconocés", "You don’t recognise it") else ownershipLabel(account.ownershipStatus)
+
+fun ownershipAction(option: AccountOwnership): String = when (option) {
+    AccountOwnership.OWN -> tx("Es mía", "It’s mine")
+    AccountOwnership.NOT_MINE -> tx("No es mía", "Not mine")
+    AccountOwnership.UNKNOWN -> tx("No la reconozco", "I don’t recognise it")
+}
+
 @Composable
 fun AccountsScreen(model: AppModel, nav: Navigator) {
     val data = rememberLoad(model) { loadAccounts(model) }
     LifecycleResumeEffect(Unit) { data.reload(); onPauseOrDispose { } }
+    var declaring by remember { mutableStateOf(false) }
     DetailScaffold(tx("Cuentas", "Accounts"), nav::back) {
         if (accountsPaused(model)) return@DetailScaffold
         Caption(tx("Tus bancos según los avisos que DINCR leyó. DINCR no muestra saldos ni números de cuenta completos.",
             "Your banks from the notices DINCR read. DINCR shows no balances or full account numbers."))
+        // An own account no notice came from (the other bank of a transfer): marking it lets DINCR
+        // recognise transfers between your accounts instead of offering them as spending.
+        TextButton({ declaring = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.declare")) {
+            Text(tx("Agregar cuenta propia", "Add an own account"), color = Dincr.colors.tint)
+        }
         LoadContent(data) { d ->
             val groups = d.groups
             if (groups.isEmpty()) EmptyState(Icons.Rounded.AccountBalance, tx("Sin cuentas detectadas", "No accounts detected"),
@@ -97,6 +120,48 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
             }
         }
     }
+    if (declaring) DeclareOwnAccountSheet(model, onDismiss = { declaring = false }) { message ->
+        declaring = false; model.showNotice(message); data.reload()
+    }
+}
+
+/**
+ * "Agregar cuenta propia": institution, last 4 digits and currency of an own account no notice came
+ * from. Only the last 4 digits are asked for (and stored). iOS: `DeclareOwnAccountForm`.
+ */
+@Composable
+private fun DeclareOwnAccountSheet(model: AppModel, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
+    var institution by remember { mutableStateOf("bac") }
+    var institutionName by remember { mutableStateOf("") }
+    var last4 by remember { mutableStateOf("") }
+    var currency by remember { mutableStateOf("CRC") }
+    var displayName by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    FormSheet(tx("Cuenta propia", "Own account"), saving, error, tx("Guardar", "Save"), onDismiss = onDismiss, onPrimary = {
+        val declaration = OwnAccountDeclaration.of(institution, institutionName, last4, currency, displayName)
+        if (!declaration.isComplete) {
+            error = tx("Completá la institución y los últimos 4 dígitos.", "Fill in the institution and the last 4 digits."); return@FormSheet
+        }
+        saving = true; error = null
+        scope.launch {
+            model.load(tx("No pudimos guardarla.", "We couldn’t save it.")) { model.api.declareOwnAccount(declaration) }
+                .onSuccess { onSaved(tx("Cuenta propia guardada", "Own account saved")) }
+                .onFailure { if (it !is AuthException.SignedOut) error = it.message }
+            saving = false
+        }
+    }) {
+        ChoiceChips(listOf("bac" to "BAC", "popular" to "Banco Popular", "multimoney" to "MultiMoney", "other" to tx("Otra", "Other")),
+            institution, { institution = it }, tx("Institución", "Institution"))
+        if (institution == "other") FormField(tx("Nombre de la institución", "Institution name"), institutionName, { institutionName = it })
+        FormField(tx("Últimos 4 dígitos", "Last 4 digits"), last4, { value -> last4 = value.filter(Char::isDigit).take(4) },
+            keyboard = KeyboardType.NumberPassword, modifier = Modifier.testTag("declare.last4"))
+        ChoiceChips(listOf("CRC" to tx("Colones", "Colones"), "USD" to tx("Dólares", "Dollars")), currency, { currency = it }, tx("Moneda", "Currency"))
+        FormField(tx("Nombre (opcional)", "Name (optional)"), displayName, { displayName = it })
+        Caption(tx("Solo se guardan los últimos 4 dígitos. DINCR reconocerá las transferencias entre tus cuentas y no las contará como gastos ni ingresos.",
+            "Only the last 4 digits are stored. DINCR will recognise transfers between your accounts and won’t count them as spending or income."))
+    }
 }
 
 /** One bank: its detected accounts (with the ownership action) and its movements (`emails?bank=`). */
@@ -116,7 +181,7 @@ fun BankAccountsScreen(model: AppModel, nav: Navigator, key: String?) {
     val title = (data.state as? Load.Ready)?.value?.second?.let(::bankGroupName) ?: tx("Cuentas", "Accounts")
     DetailScaffold(title, nav::back) {
         if (accountsPaused(model)) return@DetailScaffold
-        LoadContent(data) { (_, group, movements) ->
+        LoadContent(data) { (base, group, movements) ->
             if (group == null) {
                 EmptyState(Icons.Rounded.AccountBalance, tx("Sin datos de este banco", "No data for this bank"), tx("Volvé a Cuentas para ver tus bancos.", "Go back to Accounts to see your banks."))
                 return@LoadContent
@@ -128,13 +193,18 @@ fun BankAccountsScreen(model: AppModel, nav: Navigator, key: String?) {
             SectionTitle(tx("Cuentas", "Accounts"))
             if (group.accounts.isEmpty()) Caption(tx("Todavía no hay cuentas detectadas de este banco.", "No accounts detected for this bank yet."))
             group.accounts.forEach { account ->
-                AccountCard(account, busy = busy != null, onOpen = { nav.push("accounts/account/${account.id}") }) { own ->
+                fun save(write: suspend () -> Unit) {
                     busy = account.id
                     scope.launch {
-                        model.load(tx("No pudimos guardarlo.", "We couldn’t save it.")) { model.api.setAccountOwnership(account.id, own) }
+                        model.load(tx("No pudimos guardarlo.", "We couldn’t save it.")) { write() }
                             .onFailure { if (it !is AuthException.SignedOut) model.showNotice(it.message.orEmpty()) }
                         busy = null; data.reload()
                     }
+                }
+                AccountCard(account, busy = busy != null, cutDayAvailable = base.identity.statementCutDayAvailable,
+                    onOpen = { nav.push("accounts/account/${account.id}") },
+                    onCutDay = { day -> save { model.api.setStatementCutDay(account.id, day) } }) { ownership ->
+                    save { model.api.setAccountOwnership(account.id, ownership) }
                 }
             }
             SectionTitle(tx("Movimientos", "Transactions"))
@@ -165,7 +235,7 @@ fun AccountMovementsScreen(model: AppModel, nav: Navigator, id: Long?) {
                 BankLogo(bank)
                 Column(Modifier.padding(start = DincrSpacing.s3)) {
                     Text(listOfNotNull(account.bankName, account.accountName).joinToString(" · "), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
-                    Caption(listOfNotNull(Accounts.maskedLabel(account), account.currency, ownershipLabel(account.ownershipStatus)).joinToString(" · "))
+                    Caption(listOfNotNull(Accounts.maskedLabel(account), account.currency, ownershipLabel(account)).joinToString(" · "))
                 }
             }
             MovementList(movements, reviewer)
@@ -175,21 +245,46 @@ fun AccountMovementsScreen(model: AppModel, nav: Navigator, id: Long?) {
 }
 
 @Composable
-private fun AccountCard(account: FinancialIdentity.Account, busy: Boolean, onOpen: () -> Unit, onOwnership: (Boolean) -> Unit) {
+private fun AccountCard(
+    account: FinancialIdentity.Account,
+    busy: Boolean,
+    cutDayAvailable: Boolean,
+    onOpen: () -> Unit,
+    onCutDay: (Int?) -> Unit,
+    onOwnership: (AccountOwnership) -> Unit,
+) {
     DincrCard {
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(account.accountName ?: tx("Cuenta", "Account"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
-                    Caption(listOfNotNull(Accounts.maskedLabel(account), account.currency, ownershipLabel(account.ownershipStatus)).joinToString(" · "))
+                    Caption(listOfNotNull(Accounts.maskedLabel(account), account.currency, ownershipLabel(account)).joinToString(" · "))
                 }
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = tx("Ver movimientos", "See transactions"), tint = Dincr.colors.textMuted)
             }
-            Row {
-                listOf(true to tx("Es mía", "It’s mine"), false to tx("No es mía", "Not mine")).forEach { (own, label) ->
-                    TextButton(enabled = !busy, onClick = { onOwnership(own) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(label, color = Dincr.colors.tint) }
+            // Every answer can be changed later; only "Es mía" makes the account an end of an own transfer.
+            androidx.compose.foundation.layout.FlowRow {
+                AccountOwnership.entries.filter { it != account.ownership }.forEach { option ->
+                    TextButton(enabled = !busy, onClick = { onOwnership(option) },
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.${option.wire}.${account.id}")) { Text(ownershipAction(option), color = Dincr.colors.tint) }
                 }
             }
+            if (cutDayAvailable && account.takesCutDay) CutDayControl(account, busy, onCutDay)
+        }
+    }
+}
+
+/** An own credit card's statement cut day: a day from 1 to 31, or cleared. iOS: `CutDayControl`. */
+@Composable
+private fun CutDayControl(account: FinancialIdentity.Account, busy: Boolean, onCutDay: (Int?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val label = account.statementCutDay?.let { tx("Día de corte: $it", "Statement day: $it") } ?: tx("Indicar día de corte", "Set statement day")
+    Box {
+        TextButton(enabled = !busy, onClick = { open = true },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.cutday.${account.id}")) { Text(label, color = Dincr.colors.tint) }
+        DropdownMenu(open, { open = false }) {
+            if (account.statementCutDay != null) DropdownMenuItem({ Text(tx("Quitar", "Remove")) }, { open = false; onCutDay(null) })
+            (1..31).forEach { day -> DropdownMenuItem({ Text(tx("Día $day", "Day $day")) }, { open = false; onCutDay(day) }) }
         }
     }
 }

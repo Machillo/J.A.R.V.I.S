@@ -33,11 +33,11 @@ final class WealthUITests: XCTestCase {
         for plan in [nil, "basic"] as [String?] {
             let app = launch(plan: plan)
             let context = plan ?? "free"
-            for id in ["wealth.accounts", "wealth.connections"] {
-                let row = element(id, in: app)
-                XCTAssertTrue(row.waitForExistence(timeout: 10), "\(context): \(id)")
-                XCTAssertTrue(row.label.contains("Disponible desde VIP"), "\(context): \(id) not locked (\(row.label))")
-            }
+            let row = element("wealth.accounts", in: app)
+            XCTAssertTrue(row.waitForExistence(timeout: 10), "\(context): wealth.accounts")
+            XCTAssertTrue(row.label.contains("Disponible desde VIP"), "\(context): wealth.accounts not locked (\(row.label))")
+            // Conexiones de correo is the Owner's alone during the launch: not even shown locked.
+            XCTAssertFalse(element("wealth.connections", in: app).exists, "\(context): no Conexiones de correo")
             element("wealth.accounts", in: app).tap()
             XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10), context)
             back(app)
@@ -54,7 +54,7 @@ final class WealthUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Deudas"].waitForExistence(timeout: 10))
     }
 
-    func testVipOpensCuentasAndTheMailConnections() {
+    func testVipOpensCuentasButNotTheMailConnections() {
         let app = launch(plan: "vip")
         let accounts = element("wealth.accounts", in: app)
         XCTAssertTrue(accounts.waitForExistence(timeout: 10))
@@ -62,9 +62,7 @@ final class WealthUITests: XCTestCase {
         accounts.tap()
         XCTAssertTrue(element("accounts.bank.bac", in: app).waitForExistence(timeout: 10))
         back(app)
-        element("wealth.connections", in: app).tap()
-        XCTAssertTrue(element("mail.status.connected", in: app).waitForExistence(timeout: 10))
-        back(app)
+        XCTAssertFalse(element("wealth.connections", in: app).exists, "no Conexiones de correo for a VIP")
         XCTAssertTrue(reveal("wealth.debts.composition", in: app).exists)
         XCTAssertFalse(text("Patrimonio neto", in: app).exists, "K-3: no net worth figure")
     }
@@ -72,6 +70,9 @@ final class WealthUITests: XCTestCase {
     func testTheOwnerOpensCuentasAndKeepsJarvis() {
         // The fixture seeds the connected mailbox and detected accounts for a VIP launch; the Owner reaches them by role.
         let app = launch(plan: "vip", role: "owner")
+        element("wealth.connections", in: app).tap()
+        XCTAssertTrue(element("mail.status.connected", in: app).waitForExistence(timeout: 10))
+        back(app)
         element("wealth.accounts", in: app).tap()
         XCTAssertTrue(element("accounts.bank.bac", in: app).waitForExistence(timeout: 10))
         back(app)

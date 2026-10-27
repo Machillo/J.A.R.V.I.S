@@ -51,11 +51,14 @@ import com.dincr.app.Appearance
 import com.dincr.app.tx
 import com.dincr.data.AppLanguage
 import com.dincr.data.MessageKind
+import com.dincr.data.MovementKind
 import com.dincr.data.OpsFlag
+import com.dincr.data.QuickAction
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrMessage
 import com.dincr.design.StatusBanner
+import com.dincr.design.SystemTextScale
 import com.dincr.design.generated.DincrSpacing
 
 /** UX-13: the public navigation is exactly Hoy · Movimientos · Plan · Patrimonio · Perfil. */
@@ -126,17 +129,28 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
     val route by model.pendingRoute.collectAsStateWithLifecycle()
     var offerLock by remember { mutableStateOf(!model.appLock.onboardingSeen && !model.isFixtures) }
     LaunchedEffect(notice) { notice?.let { snackbar.showSnackbar(it); model.consumeNotice() } }
-    LaunchedEffect(route) { route?.let { nav.open(it); model.consumeRoute() } }
+    // A launcher shortcut's quick action opens the editor of a new expense; any other route navigates.
+    var quickExpense by remember { mutableStateOf(false) }
+    LaunchedEffect(route) {
+        route?.let { if (QuickAction.fromRoute(it) == QuickAction.NEW_EXPENSE) quickExpense = true else nav.open(it); model.consumeRoute() }
+    }
+    if (quickExpense) {
+        MovementEditorSheet(model, EditorMode.Create, onDismiss = { quickExpense = false }, onSaved = { quickExpense = false }, onDelete = {}, initialKind = MovementKind.EXPENSE)
+    }
     if (offerLock) AppLockOffer(model) { offerLock = false }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val expanded = maxWidth >= 600.dp
         Scaffold(
-            containerColor = Dincr.colors.bg,
+            // Over a scene with a glow (the root draws it) the scaffold is clear.
+            containerColor = if (Dincr.look.glow != null) androidx.compose.ui.graphics.Color.Transparent else Dincr.colors.bg,
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                if (!expanded) NavigationBar(containerColor = Dincr.colors.surface) {
-                    Destination.entries.forEach { d ->
-                        NavigationBarItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label, maxLines = 1) }, colors = dincrNavBarItemColors())
+                // APP-1: the five one-line labels keep the system text size, so a larger personal size never cuts them.
+                if (!expanded) SystemTextScale {
+                    NavigationBar(containerColor = Dincr.colors.surface) {
+                        Destination.entries.forEach { d ->
+                            NavigationBarItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label, maxLines = 1) }, colors = dincrNavBarItemColors())
+                        }
                     }
                 }
             },
@@ -179,6 +193,8 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("planPreferences") { PlanPreferencesScreen(model, nav) }
                             composable("declaredSavings") { DeclaredSavingsScreen(model, nav) }
                             composable("settings") { SettingsScreen(model, nav, appearance, onAppearance) }
+                            // APP-1: the Owner's personal appearance; the screen checks the role again.
+                            composable("appearance") { PersonalizationScreen(model, nav) }
                             composable("plans") { PlanSettingsScreen(model, nav) }
                             composable("security") { SecurityScreen(model, nav) }
                             composable("mail") { MailScreen(model, nav) }

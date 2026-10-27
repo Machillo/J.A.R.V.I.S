@@ -51,6 +51,8 @@ final class AppModel {
     /// Whether `mailOutcome` is a failure of the connection (technical-error look) or a neutral notice.
     private(set) var mailOutcomeIsFailure = true
     var planTier: PlanTier { profile?.planTier ?? .free }
+    /// Mail reading is the Owner's alone during the launch (`Profile.canReadMail`).
+    var canReadMail: Bool { profile?.canReadMail == true }
 
     let service: DincrService
     /// The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the
@@ -72,6 +74,8 @@ final class AppModel {
     private var lastIdentityRefresh = Date.distantPast
     /// One identity-and-switches refresh at a time, whichever tab asked for it (B17).
     @ObservationIgnored private let accessRefresh = SingleFlight()
+    /// App Store subscriptions (BIL-03), created on first use.
+    @ObservationIgnored private var store: StoreKitBilling?
     private var releaseChecked = false
 
     init(environment: AppEnvironment = .current()) {
@@ -94,8 +98,13 @@ final class AppModel {
             let refreshFails = ProcessInfo.processInfo.arguments.contains("-DincrRefreshFails")
             // `-DincrMailArrives`: a bank notice arrives after launch (mail recovery UI tests).
             let mailArrives = ProcessInfo.processInfo.arguments.contains("-DincrMailArrives")
+            // `-DincrLegalLapses`: the terms change while the app is open (SEC-01 UI tests).
+            let legalLapses = ProcessInfo.processInfo.arguments.contains("-DincrLegalLapses")
+            // `-DincrStoreBilling`: the fixture server turns the `store_billing` switch on (BIL-03 UI tests).
+            let storeBilling = ProcessInfo.processInfo.arguments.contains("-DincrStoreBilling")
             service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency,
-                                                            identityRefreshFails: refreshFails, mailArrives: mailArrives))
+                                                            identityRefreshFails: refreshFails, mailArrives: mailArrives,
+                                                            storeBillingOn: storeBilling, legalLapses: legalLapses))
             returnSyncInterval = 0  // fixtures: every return reads again (UI tests do not wait a minute)
         case let .unconfigured(reason):
             self.auth = nil
@@ -163,7 +172,7 @@ final class AppModel {
         guard phase == .ready, Date.now.timeIntervalSince(lastReturnSync) >= returnSyncInterval else { return }
         lastReturnSync = .now
         let epoch = sessionEpoch
-        if planTier.allows(.gmailAutomation), flags.isEnabled(.gmailAutomation) {
+        if planTier.allows(.gmailAutomation), flags.isEnabled(.gmailAutomation), canReadMail {
             _ = try? await service.syncMail()
         }
         if epoch == sessionEpoch, phase == .ready { dataGeneration += 1 }
@@ -330,7 +339,18 @@ final class AppModel {
         let loaded = try? await service.featureFlags()
         if let loaded, epoch == sessionEpoch { flags = loaded }
         if let health = try? await service.health(), epoch == sessionEpoch { self.health = health }
+        // BIL-03: while store purchases are on, transactions that arrive outside a purchase (renewals,
+        // another device) go to the backend as they come. Never in fixtures (no App Store there).
+        if phase == .ready, flags.isEnabled(.storeBilling), !environment.isFixtures { storeBilling.observeUpdates() }
         return loaded != nil
+    }
+
+    /// App Store subscriptions for this session (BIL-03).
+    var storeBilling: StoreKitBilling {
+        if let store { return store }
+        let created = StoreKitBilling(service: service)
+        store = created
+        return created
     }
 
     // MARK: Pull to refresh (B17)
@@ -383,6 +403,9 @@ final class AppModel {
             return nil
         case let error as APIError:
             if error.kind == .featureUnavailable { Task { await refreshFlags() } }
+            // SEC-01: the server's legal gate refused the call (the terms changed while the app was
+            // open). Reading the identity again moves the gate to the acceptance screen.
+            if error.code == APIError.legalAcceptanceRequiredCode { Task { await loadIdentity() } }
             return error.message
         default:
             return fallback
@@ -474,6 +497,8 @@ final class AppModel {
         appLock.detach()
         DataExport.clear()
         jarvisChat.reset()
+        store?.stopObserving()
+        store = nil
         phase = .signedOut
     }
 }
