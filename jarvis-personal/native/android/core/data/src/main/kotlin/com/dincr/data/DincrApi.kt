@@ -66,9 +66,22 @@ class DincrApi(private val client: ApiClient) {
         val path = if (kind == MovementKind.INCOME) "/user-product/finance/income" else "/user-product/finance/expenses"
         client.send<EntryCreate, JsonElement>("POST", path, entry, idempotencyKey)
     }
-    suspend fun update(movementId: String, update: MovementUpdate) {
-        client.send<MovementUpdate, Acknowledgement>("PUT", "/user-product/free/movements/${encode(movementId)}", update)
+    /**
+     * [paidWith] only for an expense: [PaidWithChange.Unchanged] leaves the stored link as it is (the
+     * key is not sent); a cleared link travels as an explicit null, so that body is built by hand.
+     */
+    suspend fun update(movementId: String, update: MovementUpdate, paidWith: PaidWithChange = PaidWithChange.Unchanged) {
+        val path = "/user-product/free/movements/${encode(movementId)}"
+        if (paidWith !is PaidWithChange.Set) {
+            client.send<MovementUpdate, Acknowledgement>("PUT", path, update)
+            return
+        }
+        val fields = client.json.encodeToJsonElement(MovementUpdate.serializer(), update) as kotlinx.serialization.json.JsonObject
+        client.send<kotlinx.serialization.json.JsonObject, Acknowledgement>("PUT", path, kotlinx.serialization.json.JsonObject(
+            fields + ("financial_account_id" to kotlinx.serialization.json.JsonPrimitive(paidWith.accountId))))
     }
+    /** The own accounts and cards an expense can say it was paid with. */
+    suspend fun paidWithOptions(): PaidWithOptions = client.get("/user-product/finance/expenses/paid-with-options")
     suspend fun delete(movementId: String) {
         client.send<Acknowledgement>("DELETE", "/user-product/free/movements/${encode(movementId)}")
     }

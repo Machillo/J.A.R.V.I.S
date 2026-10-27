@@ -128,6 +128,22 @@ class FakeBackend(
         return ok(json.encodeToString(FinancialAccountResult.serializer(), FinancialAccountResult(account)))
     }
 
+    /** The backend's "paid with" rules (`expense_account`): only own accounts; no key = left as it is. */
+    private sealed interface PaidWithLink {
+        data object Keep : PaidWithLink
+        data class Set(val accountId: Long?) : PaidWithLink
+        data class Refused(val answer: HttpResponse) : PaidWithLink
+    }
+
+    private fun paidWithLink(body: kotlinx.serialization.json.JsonObject?): PaidWithLink {
+        val value = body?.get("financial_account_id") ?: return PaidWithLink.Keep
+        if (value is kotlinx.serialization.json.JsonNull) return PaidWithLink.Set(null)
+        val id = (value as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull()
+        val account = accounts.firstOrNull { it.id == id } ?: return PaidWithLink.Refused(error(404, "Cuenta financiera no encontrada."))
+        if (account.ownershipStatus != "own") return PaidWithLink.Refused(error(409, "Confirmá primero que la cuenta es tuya."))
+        return PaidWithLink.Set(id)
+    }
+
     private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String? = if (this is kotlinx.serialization.json.JsonNull) null else content
     /** The change the scripted JARVIS chat waits a "sí" / "no" for. */
     private var jarvisPending = false
@@ -368,6 +384,9 @@ class FakeBackend(
             // Movements
             path == "/user-product/free/dashboard" -> ok(freeDashboard())
             path == "/user-product/free/monthly-summary" -> ok(monthlySummary(query["period"] ?: today.toString().take(7)))
+            path == "/user-product/finance/expenses/paid-with-options" -> ok(PaidWithOptions(true,
+                accounts.filter { it.ownershipStatus == "own" }.sortedBy { if (it.accountType == "credit_card") 0 else 1 }
+                    .map { PaidWithOptions.Option(it.id, it.accountName, it.bankName, it.accountType, it.accountLast4, it.currency) }))
             path == "/user-product/free/movements" -> ok(movements.sortedWith(compareByDescending<Movement> { it.transactionDate }.thenByDescending { it.sourceId }))
             (path == "/user-product/finance/income" || path == "/user-product/finance/expenses") && method == "POST" -> {
                 val income = path.endsWith("income")
@@ -378,10 +397,14 @@ class FakeBackend(
                 if (currency != null && currency != base && rate == null) return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
                 val converted = if (currency == null || currency == base) typed else convert(typed, currency, base, rate!!)
                 val origin = if (income) "salary" else "expense"
+                val link = paidWithLink(body)
+                if (link is PaidWithLink.Refused) return link.answer
+                if (income && link is PaidWithLink.Set && link.accountId != null) return error(422, "Solo un gasto indica con qué se pagó.")
                 val sid = id()
                 movements += Movement("$origin:$sid", sid, origin, text("entry_date") ?: today.toString(), text("description"), converted,
                     if (income) "income" else "expense", text("category"), "", true,
-                    if (currency != null && currency != base) typed else null, if (currency != null && currency != base) currency else null, if (currency != null && currency != base) rate else null)
+                    if (currency != null && currency != base) typed else null, if (currency != null && currency != base) currency else null, if (currency != null && currency != base) rate else null,
+                    (link as? PaidWithLink.Set)?.accountId)
                 ok("""{"id":$sid}""")
             }
             segments.take(3) == listOf("user-product", "free", "movements") && segments.size == 4 -> {
@@ -397,7 +420,10 @@ class FakeBackend(
                 val foreign = currency != null && currency != base
                 if (foreign && old.origin !in setOf("salary", "expense")) return error(422, "Este movimiento solo se puede registrar en tu moneda principal.")
                 if (foreign && rate == null) return error(422, "Indicá el tipo de cambio.")
-                movements[index] = old.copy(transactionDate = text("transaction_date"), description = text("description"), category = text("category"),
+                val link = paidWithLink(body)
+                if (link is PaidWithLink.Refused) return link.answer
+                if (old.origin != "expense" && link is PaidWithLink.Set && link.accountId != null) return error(422, "Solo un gasto indica con qué se pagó.")
+                movements[index] = old.copy(financialAccountId = if (old.origin == "expense" && link is PaidWithLink.Set) link.accountId else old.financialAccountId,transactionDate = text("transaction_date"), description = text("description"), category = text("category"),
                     amount = if (foreign) convert(typed, currency!!, base, rate!!) else typed,
                     originalAmount = if (foreign) typed else null, originalCurrency = if (foreign) currency else null, exchangeRate = if (foreign) rate else null)
                 ok("""{"status":"ok","movement_id":"$movementId"}""")

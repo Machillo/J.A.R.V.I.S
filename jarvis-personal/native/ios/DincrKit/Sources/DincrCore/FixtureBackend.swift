@@ -264,6 +264,7 @@ public actor FixtureBackend: HTTPTransport {
         case ("GET", "/user-product/free/monthly-summary"): return ok(monthlySummary(query["period"] ?? String(day(0).prefix(7))))
         case ("GET", "/user-product/free/movements"):
             return ok(movements.sorted { ($0["transaction_date"] as? String ?? "") > ($1["transaction_date"] as? String ?? "") })
+        case ("GET", "/user-product/finance/expenses/paid-with-options"): return ok(paidWithOptions())
         case ("POST", "/user-product/finance/income"), ("POST", "/user-product/finance/expenses"):
             return createMovement(income: path.hasSuffix("income"), body)
         // Debts
@@ -337,11 +338,15 @@ public actor FixtureBackend: HTTPTransport {
         if foreign && rate == nil { return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.") }
         let stored = foreign ? (ConversionPreview.baseAmount(typed: typed, currency: currency!, base: base, rate: rate) ?? typed) : typed
         let origin = income ? "salary" : "expense"
+        let link = paidWithLink(body)
+        if case .refused(let answer) = link { return answer }
+        if income, case .set(let value) = link, !(value is NSNull) { return error(422, "Solo un gasto indica con qué se pagó.") }
         let sid = nextId()
         var row: [String: Any] = ["movement_id": "\(origin):\(sid)", "source_id": sid, "origin": origin, "transaction_date": body["entry_date"] ?? day(0),
                                   "description": body["description"] ?? "", "amount": number(stored), "transaction_type": income ? "income" : "expense",
                                   "category": body["category"] ?? "", "notes": "", "editable": true]
         if foreign { row["original_amount"] = number(typed); row["original_currency"] = currency; row["exchange_rate"] = number(rate!) }
+        if !income, case .set(let value) = link { row["financial_account_id"] = value }
         movements.append(row)
         return ok(["id": sid])
     }
@@ -362,7 +367,11 @@ public actor FixtureBackend: HTTPTransport {
         let origin = movements[index]["origin"] as? String ?? ""
         if foreign && !["salary", "expense"].contains(origin) { return error(422, "Este movimiento solo se puede registrar en tu moneda principal.") }
         if foreign && rate == nil { return error(422, "Indicá el tipo de cambio.") }
+        let link = paidWithLink(body)
+        if case .refused(let answer) = link { return answer }
+        if origin != "expense", case .set(let value) = link, !(value is NSNull) { return error(422, "Solo un gasto indica con qué se pagó.") }
         var row = movements[index]
+        if origin == "expense", case .set(let value) = link { row["financial_account_id"] = value }
         row["transaction_date"] = body["transaction_date"]; row["description"] = body["description"]; row["category"] = body["category"]
         row["amount"] = number(foreign ? (ConversionPreview.baseAmount(typed: typed, currency: currency!, base: base, rate: rate) ?? typed) : typed)
         // Like the backend: without a currency the row becomes a plain base-currency amount.

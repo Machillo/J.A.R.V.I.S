@@ -94,6 +94,11 @@ public struct DincrService: Sendable {
         let _: Acknowledgement = try await client.send("POST", path, body: entry, idempotencyKey: idempotencyKey)
     }
 
+    /// The own accounts and cards an expense can say it was paid with.
+    public func paidWithOptions() async throws -> PaidWithOptions {
+        try await client.get("/user-product/finance/expenses/paid-with-options")
+    }
+
     public func update(movementID: String, _ update: MovementUpdate) async throws {
         try WriteContract.checkAmount(update.amount)
         try WriteContract.checkDate(update.transactionDate)
