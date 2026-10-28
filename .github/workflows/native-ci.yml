@@ -10,6 +10,7 @@ on:
       - "jarvis-personal/native/**"
       - "jarvis-personal/store-assets/**"
       - ".github/workflows/native-ci.yml"
+      - ".github/scripts/native_ci_plan.py"
   push:
     branches: [main]
     paths:
@@ -17,6 +18,7 @@ on:
       - "jarvis-personal/native/**"
       - "jarvis-personal/store-assets/**"
       - ".github/workflows/native-ci.yml"
+      - ".github/scripts/native_ci_plan.py"
 
 # CI of the native apps: no secrets, no signing, no deploy, no distribution.
 permissions:
@@ -27,6 +29,33 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which platforms this change touches (.github/scripts/native_ci_plan.py). A pull request runs
+  # only its platforms; one that changes only the reachability spec runs the fast suites and the
+  # iOS reachability flows. A push to main runs everything.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ios: ${{ steps.plan.outputs.ios }}
+      android: ${{ steps.plan.outputs.android }}
+      spec: ${{ steps.plan.outputs.spec }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: plan
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "$BASE...$HEAD" > "$RUNNER_TEMP/changed.txt"
+            python3 .github/scripts/native_ci_plan.py plan --changed-file "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_OUTPUT"
+          else
+            python3 .github/scripts/native_ci_plan.py plan --full | tee -a "$GITHUB_OUTPUT"
+          fi
+
   tokens:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -43,6 +72,8 @@ jobs:
       - run: node --test jarvis-personal/store-assets/scripts/store-assets.test.mjs
 
   android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true' || needs.changes.outputs.spec == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -65,6 +96,8 @@ jobs:
   # Compose flows on an emulator: the minimum (API 24, java.time through desugaring) and a
   # current release. In-process FakeBackend (debug only); no backend, no account.
   android-ui:
+    needs: changes
+    if: needs.changes.outputs.android == 'true' || needs.changes.outputs.spec == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -96,6 +129,8 @@ jobs:
           script: ./gradlew :app:connectedNativedevDebugAndroidTest --console=plain
 
   ios-kit:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true' || needs.changes.outputs.spec == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -109,14 +144,19 @@ jobs:
 
   # The app target (Swift 6 language mode: concurrency errors fail the build) and the XCUITest
   # flows on fixture data in a simulator.
+  # In one job the suite took 63–74 minutes by 2026-10-26 (about 52 of them running tests on
+  # 2026-10-28) and kept growing. It is split across four runners by measured class duration
+  # (native_ci_plan.py shard), about 13 minutes of tests each; every class runs on exactly one.
+  # A spec-only change runs the reachability flows alone ("spec").
   ios-app:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true' || needs.changes.outputs.spec == 'true'
     runs-on: macos-15
-    # The whole XCUITest suite runs in one xcodebuild step: about 41 of the job's minutes on a passing
-    # run (2026-10-08), growing with each UI test added. At 45 the job hit the limit on main and on PRs
-    # ("exceeded the maximum execution time of 45m0s"). By 2026-10-26 passing runs took 63–74 minutes
-    # (main included) and PRs adding UI tests were cancelled at 75 with no failing test; 100 restores
-    # the headroom. Splitting the suite across jobs is the lasting fix once it grows again.
-    timeout-minutes: 100
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.changes.outputs.ios == 'true' && '["1", "2", "3", "4"]' || '["spec"]') }}
     defaults:
       run:
         working-directory: jarvis-personal/native/ios
@@ -170,7 +210,11 @@ jobs:
           test -n "$id"
           xcodebuild -version
           echo "id=$id" >> "$GITHUB_OUTPUT"
-      - run: xcodebuild -project DINCR.xcodeproj -scheme DINCR -destination "id=${{ steps.sim.outputs.id }}" CODE_SIGNING_ALLOWED=NO test
+      - name: Pick this runner's UI test classes
+        id: shard
+        working-directory: ${{ github.workspace }}
+        run: echo "args=$(python3 .github/scripts/native_ci_plan.py shard --count 4 --index ${{ matrix.shard }})" >> "$GITHUB_OUTPUT"
+      - run: xcodebuild -project DINCR.xcodeproj -scheme DINCR -destination "id=${{ steps.sim.outputs.id }}" CODE_SIGNING_ALLOWED=NO test ${{ steps.shard.outputs.args }}
         env:
           # OwnerExperienceUITests.testOwnerScreenshots writes the Owner screens here (synthetic fixtures)
           # for design review without a Mac; the test skips when this is unset.
@@ -179,7 +223,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: owner-ios-screenshots
+          name: owner-ios-screenshots-${{ matrix.shard }}
           path: ${{ runner.temp }}/owner-shots
           if-no-files-found: ignore
           retention-days: 14
