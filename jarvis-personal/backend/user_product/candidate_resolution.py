@@ -487,10 +487,13 @@ def resolve_candidate(conn, candidate_id: int, *, account_id: str, workspace_id:
 
 
 def reevaluate_workspace_candidates(conn, *, account_id: str, workspace_id: str) -> int:
+    """Re-resolve the pending movements an ownership change can turn into (or out of) an own
+    transfer. A card payment names both ends (the paying account and the card), so confirming
+    either one as own can make it internal, exactly like a transfer."""
     rows = conn.execute(
         """SELECT id FROM finva_email_candidates
            WHERE account_id=%s AND workspace_id=%s AND status='pending'
-             AND movement_kind='transfer'
+             AND movement_kind IN ('transfer','card_payment')
            ORDER BY id""",
         (account_id, workspace_id),
     ).fetchall()

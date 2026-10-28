@@ -370,7 +370,8 @@ def gmail_status() -> dict[str, Any]:
             (account_id, workspace_id),
         ).fetchall()
         pending = conn.execute(
-            "SELECT COUNT(*) AS total FROM finva_email_candidates WHERE workspace_id=%s AND status='pending'",
+            "SELECT COUNT(*) AS total FROM finva_email_candidates WHERE workspace_id=%s AND status='pending' "
+            "AND NOT COALESCE(is_internal_transfer,FALSE)",
             (workspace_id,),
         ).fetchone()
     connections = [{**dict(row), "provider": (
@@ -396,7 +397,12 @@ def list_gmail_emails(
     status: str | None = None, bank: str | None = None, financial_account_id: int | None = None,
 ) -> dict[str, Any]:
     """The review inbox. Email Monitor lists it whole; Cuentas lists the same rows for one
-    bank or one detected account. Both read and review exactly the same candidates."""
+    bank or one detected account. Both read and review exactly the same candidates.
+
+    A pending movement already proven to be between two of the user's own accounts is not
+    something to review: the pending list leaves it out. It stays pending (so re-evaluation can
+    still undo the pairing if an account turns out not to be the user's) and every other status
+    filter, or no filter, still lists it."""
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     allowed = {"pending", "auto_saved", "confirmed", "rejected", "duplicate"}
@@ -407,6 +413,8 @@ def list_gmail_emails(
     if status:
         status_filter = " AND c.status=%s"
         params.append(status)
+        if status == "pending":
+            status_filter += " AND NOT COALESCE(c.is_internal_transfer,FALSE)"
     if bank and bank.strip():
         status_filter += " AND LOWER(COALESCE(c.bank,m.bank,''))=LOWER(%s)"
         params.append(bank.strip())
