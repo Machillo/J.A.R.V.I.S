@@ -33,6 +33,7 @@ from backend.email_monitor.popular_pdf import parse_popular_email_document
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.sender_trust import single_sender_address as _single_sender_address
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
+from backend.finance import additional_cards
 from backend.finance.category_catalog import normalize_category, owner_account_context, transfer_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.candidate_currency import native_money, transaction_amounts
@@ -935,9 +936,11 @@ def _insert_finva_candidate(
     ):
         resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution, **scope)
     if resolution.get("status") == "pending":
-        # Owner only (stored records): the learned rules may save the movement (owner_mail_automation).
+        # Owner only (stored records): a purchase on a card the Owner marked as someone else's is
+        # that person's receivable; otherwise the learned rules may save it (owner_mail_automation).
         owner = owner_account_context(conn, connection["account_id"], connection["workspace_id"])
-        if owner and owner_mail_automation.auto_save(conn, candidate_id):
+        if owner and (additional_cards.route_purchase(conn, candidate_id, **scope)
+                      or owner_mail_automation.auto_save(conn, candidate_id)):
             resolution = {**resolution, "status": "auto_saved"}
     return resolution
 

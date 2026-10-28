@@ -51,13 +51,21 @@ CREATE TABLE receivable_entries (
 CREATE UNIQUE INDEX uq_receivable_entries_source_key ON receivable_entries(workspace_id, source_key) WHERE source_key IS NOT NULL;
 CREATE TABLE card_aliases (
     id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL, card_last4 TEXT NOT NULL, owner_label TEXT NOT NULL,
-    relationship TEXT, is_primary BOOLEAN NOT NULL DEFAULT FALSE);
+    relationship TEXT, is_primary BOOLEAN NOT NULL DEFAULT FALSE, user_id BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE UNIQUE INDEX uq_card_aliases_workspace_last4 ON card_aliases(workspace_id, card_last4);
+CREATE TABLE finva_email_candidates (
+    id BIGSERIAL PRIMARY KEY, account_id TEXT NOT NULL, workspace_id UUID NOT NULL, transaction_id BIGINT,
+    transaction_date DATE NOT NULL, amount NUMERIC(18,2) NOT NULL, source_type TEXT NOT NULL DEFAULT 'email',
+    movement_kind TEXT, movement_direction TEXT, source_account_reference TEXT, status TEXT NOT NULL DEFAULT 'pending',
+    resolution_reason TEXT, reviewed_at TIMESTAMPTZ, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE email_transaction_candidates (
     id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL, transaction_id BIGINT, transaction_date DATE NOT NULL,
     amount NUMERIC(14,2) NOT NULL, transaction_type TEXT NOT NULL, card_owner TEXT, card_last4 TEXT, status TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 """
-TABLES = ("transactions", "receivables", "receivable_payments", "receivable_entries", "card_aliases", "email_transaction_candidates")
+TABLES = ("transactions", "receivables", "receivable_payments", "receivable_entries", "card_aliases",
+          "email_transaction_candidates", "finva_email_candidates")
 
 
 @pytest.fixture(scope="module")

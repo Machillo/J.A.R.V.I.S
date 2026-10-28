@@ -38,6 +38,9 @@ SETTLING_TRANSACTION_TYPES = {"income", "reimbursement", "receivable_payment"}
 # A card alias with one of these relationships is the holder's own card even if it was not
 # flagged primary; its purchases are never owed by anyone.
 HOLDER_RELATIONSHIPS = ("principal", "titular", "holder", "owner")
+# A mail notice of a purchase on an additional card, settled as owed by that card's person
+# (confirmed without a transaction of the user's): see finance/additional_cards.py.
+ADDITIONAL_CARD_REASON = "additional_card_receivable"
 
 CASH_METHODS = {"manual", "sinpe", "transfer", "transferencia", "deposit", "deposito", "depósito", "cash", "efectivo"}
 OFFSET_METHODS = {"offset", "non_cash_offset", "compensacion", "compensación"}
@@ -179,7 +182,8 @@ def additional_card_totals(conn, workspace_id: str, cycle_start: date, cycle_end
     """Per person, the confirmed purchases of the workspace's additional cards in one cycle.
 
     A card is additional only when the workspace marked its alias as not primary and its
-    relationship is not the holder's.
+    relationship is not the holder's. Purchases come from the legacy mail reader and from
+    the current mail review (notices settled as the person's, never the user's expense).
     """
     rows = conn.execute(
         """
@@ -189,7 +193,7 @@ def additional_card_totals(conn, workspace_id: str, cycle_start: date, cycle_end
               AND LOWER(TRIM(COALESCE(relationship, ''))) <> ALL(%s)
         ), candidate_movements AS (
             SELECT COALESCE(a.owner_label, c.card_owner) AS person_name, COALESCE(a.card_last4, c.card_last4) AS card_last4,
-                   COALESCE(c.transaction_id, c.id * -1) AS movement_key, c.amount
+                   'legacy:' || COALESCE(c.transaction_id, c.id * -1) AS movement_key, c.amount
             FROM email_transaction_candidates c
             LEFT JOIN additional_aliases a ON a.workspace_id = c.workspace_id AND a.card_last4 = c.card_last4
             WHERE c.workspace_id = %s AND c.transaction_type = 'expense' AND COALESCE(c.amount, 0) > 0
@@ -197,12 +201,21 @@ def additional_card_totals(conn, workspace_id: str, cycle_start: date, cycle_end
               AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved', 'imported')
               AND (a.card_last4 IS NOT NULL
                    OR LOWER(TRIM(COALESCE(c.card_owner, ''))) IN (SELECT LOWER(TRIM(owner_label)) FROM additional_aliases))
+            UNION ALL
+            SELECT a.owner_label, a.card_last4, 'mail:' || f.id, f.amount
+            FROM finva_email_candidates f
+            JOIN additional_aliases a ON a.workspace_id = f.workspace_id
+             AND a.card_last4 = RIGHT(REGEXP_REPLACE(COALESCE(f.source_account_reference, ''), '[^0-9]', '', 'g'), 4)
+            WHERE f.workspace_id = %s AND f.status = 'confirmed' AND f.resolution_reason = %s
+              AND f.transaction_id IS NULL AND COALESCE(f.amount, 0) > 0
+              AND f.transaction_date >= %s AND f.transaction_date < %s
         )
         SELECT person_name, COALESCE(SUM(amount), 0) AS total_amount, COUNT(DISTINCT movement_key) AS movement_count,
                ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4) FILTER (WHERE card_last4 IS NOT NULL AND card_last4 <> '') AS cards
         FROM candidate_movements WHERE COALESCE(person_name, '') <> '' GROUP BY person_name ORDER BY person_name
         """,
-        (workspace_id, list(HOLDER_RELATIONSHIPS), workspace_id, cycle_start, cycle_end),
+        (workspace_id, list(HOLDER_RELATIONSHIPS), workspace_id, cycle_start, cycle_end,
+         workspace_id, ADDITIONAL_CARD_REASON, cycle_start, cycle_end),
     ).fetchall()
     return [dict(row) for row in rows]
 

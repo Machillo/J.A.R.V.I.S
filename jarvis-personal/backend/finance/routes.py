@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance import payroll_receipts
+from backend.finance.additional_cards import list_additional_cards, save_additional_card, stop_additional_card
 from backend.finance.models import (
     PayrollReceiptLinkRequest,
     PayrollTrustedSenderRequest,
@@ -36,7 +37,7 @@ from backend.finance.models import (
     FixedExpenseRequest,
     FixedExpenseUpdateRequest,
     ReceivableRequest,
-    ReceivablePaymentRequest, ReceivableEntryRequest, ReceivableEntryUpdateRequest,
+    ReceivablePaymentRequest, ReceivableEntryRequest, ReceivableEntryUpdateRequest, AdditionalCardRequest,
     AccountBalanceRequest,
     GoalPlanningRequest,
     SalvavidasUpdateRequest,
@@ -688,6 +689,21 @@ def receivable_payment(receivable_id: int, request: ReceivablePaymentRequest):
         payment_date=request.payment_date,
         method=request.method,
     )
+
+
+@router.get("/additional-cards")
+def additional_cards():
+    return list_additional_cards()
+
+
+@router.put("/additional-cards/{card_last4}")
+def save_additional_card_route(card_last4: str, request: AdditionalCardRequest):
+    return save_additional_card(card_last4, request.person_name)
+
+
+@router.delete("/additional-cards/{card_last4}")
+def stop_additional_card_route(card_last4: str):
+    return stop_additional_card(card_last4)
 
 
 @router.get("/account-balances")
