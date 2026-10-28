@@ -196,6 +196,10 @@ class ReceivableEntryRequest(BaseModel):
     entry_date: str | None = None
 
 
+class AdditionalCardRequest(BaseModel):
+    person_name: str
+
+
 class ReceivableEntryUpdateRequest(BaseModel):
     amount: float | None = None
     description: str | None = None

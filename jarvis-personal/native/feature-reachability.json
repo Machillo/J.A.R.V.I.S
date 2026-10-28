@@ -1736,6 +1736,24 @@
      "path": "/finance/receivables/entries",
      "gate": "internal_only",
      "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/additional-cards",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "PUT",
+     "path": "/finance/additional-cards/{card_last4}",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "DELETE",
+     "path": "/finance/additional-cards/{card_last4}",
+     "gate": "internal_only",
+     "used_by": []
     }
    ],
    "ios": {

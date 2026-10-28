@@ -290,6 +290,28 @@
  },
  {
   "method": "GET",
+  "path": "/finance/additional-cards",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/additional-cards/{card_last4}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/additional-cards/{card_last4}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/finance/aguinaldo",
   "gates": [
    "internal_only"

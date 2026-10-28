@@ -147,3 +147,31 @@ def test_a_duplicate_or_internal_transfer_never_reaches_the_save(monkeypatch, re
         connection={"id": 3, "account_id": "account-o", "workspace_id": "workspace-o", "legacy_user_id": 91},
     )
     assert resolution["status"] == resolved
+
+
+@pytest.mark.parametrize(("owner", "expected"), [(True, "auto_saved"), (False, "pending")])
+def test_only_an_owner_purchase_on_an_additional_card_becomes_that_persons_debt(monkeypatch, owner, expected):
+    from backend.finance import additional_cards
+
+    db = _Db({"INSERT INTO finva_email_candidates": {"id": 57}})
+    for name in ("discover_candidate_account", "link_received_payroll"):
+        monkeypatch.setattr(gmail_service, name, lambda *_a, **_k: None)
+    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id, **_scope: {"status": "pending"})
+    monkeypatch.setattr(gmail_service, "legacy_transaction_for_message", lambda *_a, **_k: None)
+    monkeypatch.setattr(gmail_service, "owner_account_context", lambda *_a: owner)
+    routed = []
+    monkeypatch.setattr(additional_cards, "route_purchase", lambda _conn, candidate_id, **scope: routed.append((candidate_id, scope)) or True)
+    monkeypatch.setattr(owner_mail_automation, "auto_save", lambda *_a: pytest.fail("a person's purchase is never the user's expense"))
+    candidate = {key: None for key in (
+        "movement_index", "source_type", "source_provider", "source_record_key", "institution_country", "transaction_date",
+        "transaction_time", "description", "amount", "currency", "original_amount", "original_currency", "transaction_type",
+        "movement_direction", "movement_kind", "category", "bank", "source_account_label", "source_account_reference",
+        "destination_account_reference", "counterparty", "external_reference", "parser_name", "parser_version",
+        "extraction_method", "confidence", "uncertainty_reason", "dedupe_key", "is_internal_transfer", "raw_payload")}
+    resolution = gmail_service._insert_finva_candidate(
+        db, email_message_id=9, candidate=candidate, gmail_message_id="gmail-3",
+        connection={"id": 3, "account_id": "account-o", "workspace_id": "workspace-o", "legacy_user_id": 91},
+    )
+    assert resolution["status"] == expected
+    assert routed == ([(57, {"account_id": "account-o", "workspace_id": "workspace-o"})] if owner else []), \
+        "a DINCR User's notice never reaches the Owner-only receivables"
