@@ -72,6 +72,13 @@ struct ProfileHubView: View {
                     .accessibilityIdentifier("profile.subscription")
                 NavigationLink { SecurityView() } label: { Label(tx("Seguridad", "Security"), systemImage: "lock") }
                     .accessibilityIdentifier("profile.security")
+                // SC-1: iOS only. VIP and the Owner open it; Free and Basic see it locked (opens Suscripción).
+                if ShortcutLinking.isAvailable(to: model.profile) {
+                    NavigationLink { ShortcutsSettingsView() } label: { Label(tx("Atajos de iPhone", "iPhone Shortcuts"), systemImage: "bolt.horizontal") }
+                        .accessibilityIdentifier("profile.shortcuts")
+                } else {
+                    LockedListRow(title: tx("Atajos de iPhone", "iPhone Shortcuts"), symbol: "bolt.horizontal", tier: ShortcutLinking.minimumPlan, id: "profile.shortcuts")
+                }
                 Picker(selection: $appearance) {
                     Text(tx("Automático", "Automatic")).tag(Appearance.system.rawValue)
                     Text(tx("Claro", "Light")).tag(Appearance.light.rawValue)

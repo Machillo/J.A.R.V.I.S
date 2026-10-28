@@ -60,6 +60,8 @@ final class AppModel {
     let jarvisChat: JarvisChatSession
     let environment: AppEnvironment
     let appLock: AppLock
+    /// Perfil → Atajos de iPhone: the limited shortcut token (Keychain when live, memory in fixtures).
+    let shortcutTokens: ShortcutTokenStore
     private let sessions: SessionManager
     private let auth: SupabaseAuthClient?
     private var pendingPKCE: PKCE?
@@ -90,6 +92,7 @@ final class AppModel {
             self.auth = auth
             self.sessions = sessions
             service = DincrService(client: APIClient(baseURL: apiURL, tokens: sessions))
+            self.shortcutTokens = KeychainShortcutTokenStore()
         case let .fixtures(scenario, plan, role):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
@@ -109,10 +112,12 @@ final class AppModel {
                                                             storeBillingOn: storeBilling, legalLapses: legalLapses,
                                                             pendingSample: pendingSample))
             returnSyncInterval = 0  // fixtures: every return reads again (UI tests do not wait a minute)
+            self.shortcutTokens = InMemoryShortcutTokenStore()
         case let .unconfigured(reason):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
             service = DincrService(client: APIClient(baseURL: FixtureBackend.baseURL, tokens: FixtureTokens(), transport: UnconfiguredTransport()))
+            self.shortcutTokens = InMemoryShortcutTokenStore()
             self.phase = .unconfigured(reason)
         }
         self.service = service
@@ -120,6 +125,7 @@ final class AppModel {
     }
 
     var language: AppLanguage { .current }
+    var shortcutLinking: ShortcutLinking { ShortcutLinking(service: service, store: shortcutTokens) }
     var moneyFormat: MoneyFormat { MoneyFormat(profile: profile) }
     var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
 
@@ -278,6 +284,8 @@ final class AppModel {
         let wasReady = phase == .ready
         // Another account, or an account that is no longer the Owner, never sees this chat.
         if profile.id != self.profile?.id || !Jarvis.isAvailable(to: profile) { jarvisChat.reset() }
+        // A shortcut token issued to another account is never used by this one.
+        if let linked = shortcutTokens.read(), linked.accountID != profile.id { shortcutTokens.clear() }
         self.profile = profile
         lastIdentityRefresh = .now
         switch IdentityGate.of(profile) {
@@ -387,6 +395,8 @@ final class AppModel {
         }
         let epoch = sessionEpoch
         do {
+            // The shortcut token is revoked while the session can still do it (best effort), and forgotten.
+            await shortcutLinking.forget()
             try await service.deleteAccount()
             if epoch == sessionEpoch { await signOut() }
             return nil
@@ -484,6 +494,8 @@ final class AppModel {
     // MARK: Sign out
 
     func signOut() async {
+        // While the session still exists: revoke the shortcut token (best effort, bounded) and forget it.
+        await shortcutLinking.forget()
         await sessions.signOut()
         handleSignedOut()
     }
@@ -500,6 +512,8 @@ final class AppModel {
         appLock.detach()
         DataExport.clear()
         jarvisChat.reset()
+        // Every way out of a session (sign-out, rejected refresh, deletion) forgets the shortcut token.
+        shortcutTokens.clear()
         store?.stopObserving()
         store = nil
         phase = .signedOut
