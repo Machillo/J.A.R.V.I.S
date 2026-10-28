@@ -38,7 +38,7 @@ CREATE TABLE payroll_events (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_i
 CREATE TABLE bonuses (id BIGSERIAL PRIMARY KEY, workspace_id UUID, user_id BIGINT, amount NUMERIC(14,2), description TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW());
 CREATE TABLE finva_email_candidates (id BIGSERIAL PRIMARY KEY, workspace_id UUID, transaction_date DATE, amount NUMERIC(14,2),
-    transaction_type TEXT, status TEXT);
+    transaction_type TEXT, status TEXT, is_internal_transfer BOOLEAN NOT NULL DEFAULT FALSE);
 CREATE TABLE financial_goals (id BIGSERIAL PRIMARY KEY, workspace_id UUID, current_amount NUMERIC, target_amount NUMERIC);
 CREATE TABLE financial_profiles (account_id TEXT, workspace_id UUID, liquid_savings NUMERIC);
 CREATE TABLE accounts (id TEXT PRIMARY KEY, role TEXT, status TEXT, primary_email TEXT);
@@ -104,6 +104,8 @@ def db(admin_uri, monkeypatch):
         q(conn, "INSERT INTO transactions (workspace_id, transaction_date, amount, transaction_type) VALUES (%s, '2026-11-03', 30, 'refund')", (ws,))
         q(conn, "INSERT INTO finva_email_candidates (workspace_id, transaction_date, amount, transaction_type, status) VALUES (%s, '2026-10-09', 99, 'income', 'pending')", (ws,))
         q(conn, "INSERT INTO finva_email_candidates (workspace_id, transaction_date, amount, transaction_type, status) VALUES (%s, '2026-10-10', 99, 'expense', 'confirmed')", (ws,))
+        # A pending movement already proven to be between two own accounts is nothing to review.
+        q(conn, "INSERT INTO finva_email_candidates (workspace_id, transaction_date, amount, transaction_type, status, is_internal_transfer) VALUES (%s, '2026-10-11', 99, 'internal_transfer', 'pending', TRUE)", (ws,))
     monkeypatch.setattr(database, "DATABASE_URL", uri)
     # owner_account_context() checks the stored Owner identity; here the session role stands in for it.
     from backend.auth.current_user import get_current_user

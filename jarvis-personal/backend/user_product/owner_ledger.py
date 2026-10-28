@@ -202,7 +202,7 @@ def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
     if "finva_email_candidates" in tables:
         pending = conn.execute(
             "SELECT COUNT(*) AS count FROM finva_email_candidates WHERE workspace_id=%s AND status='pending' "
-            "AND transaction_date >= %s AND transaction_date < %s",
+            "AND NOT COALESCE(is_internal_transfer,FALSE) AND transaction_date >= %s AND transaction_date < %s",
             (workspace_id, start, end),
         ).fetchone()["count"]
     return month_totals([(row["ledger_type"], row["total"], row["count"]) for row in groups], pending_mail=pending, **record)
