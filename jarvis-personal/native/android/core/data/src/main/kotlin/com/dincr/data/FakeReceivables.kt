@@ -29,6 +29,21 @@ internal class FakeReceivables(private val today: java.time.LocalDate, private v
             Entry(7103, "payment", BigDecimal(10_000), "Pago en efectivo", "2026-10-10", "cash_collection"))),
     )
 
+    /** The Owner's additional cards (last 4 → person), invented like every fixture name. */
+    private val additional = sortedMapOf("4821" to "Luis de ejemplo")
+
+    fun additionalCards() = AdditionalCards(additional.entries.sortedWith(compareBy({ it.value }, { it.key })).map { AdditionalCard(it.key, it.value) })
+
+    fun markAdditional(last4: String, personName: String?): AdditionalCardResult? {
+        val name = personName?.trim().orEmpty()
+        if (AdditionalCardRequest.last4(last4) == null || name.isEmpty()) return null
+        additional[last4] = name
+        return AdditionalCardResult("ok", settledPurchases = 0)
+    }
+
+    fun unmarkAdditional(last4: String): AdditionalCardResult? =
+        additional.remove(last4)?.let { AdditionalCardResult("ok", releasedPurchases = 0) }
+
     fun report(): ReceivablesReport {
         val open = people.filter { it.due.signum() > 0 }
         return ReceivablesReport(

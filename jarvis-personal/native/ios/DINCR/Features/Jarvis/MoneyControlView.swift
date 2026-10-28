@@ -21,6 +21,7 @@ struct MoneyControlView: View {
                 MoneyControlContent(report: report, pay: { paying = $0 })
             }
             .id(reloadToken)
+            AdditionalCardsSection(reloadToken: reloadToken, onDone: done)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

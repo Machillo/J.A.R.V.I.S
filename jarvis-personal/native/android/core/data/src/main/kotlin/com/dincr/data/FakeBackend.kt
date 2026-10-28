@@ -380,6 +380,17 @@ class FakeBackend(
                 else -> error(404, "Not Found")
             }
             // JARVIS "Control de dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path.startsWith("/finance/additional-cards") -> {
+                val last4 = path.removePrefix("/finance/additional-cards").trim('/')
+                when {
+                    !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                    method == "GET" && last4.isEmpty() -> ok(receivables.additionalCards())
+                    method == "PUT" -> receivables.markAdditional(last4, text("person_name"))?.let { ok(it) }
+                        ?: error(422, "Indicá los últimos 4 dígitos de la tarjeta y el nombre de la persona.")
+                    method == "DELETE" -> receivables.unmarkAdditional(last4)?.let { ok(it) } ?: error(404, "Esa tarjeta no está marcada como adicional.")
+                    else -> error(404, "Not Found")
+                }
+            }
             path.startsWith("/finance/receivables") -> when {
                 !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
                 method == "GET" && path == "/finance/receivables" -> ok(receivables.report())

@@ -31,6 +31,7 @@ extension FixtureBackend {
     private var receivablesAllowed: Bool { profile["role"] as? String == "owner" }
 
     func receivablesRoute(_ method: String, _ path: String, _ body: [String: Any]) -> Answer? {
+        if path.hasPrefix("/finance/additional-cards") { return additionalCardsRoute(method, path, body) }
         guard path.hasPrefix("/finance/receivables") else { return moneyRoute(method, path, body) }
         guard receivablesAllowed else { return error(403, "No tienes permisos para realizar esta acción.") }
         switch method {
@@ -58,6 +59,30 @@ extension FixtureBackend {
             ownerReceivables[index].entries.insert(FixtureReceivable.Entry(id: nextId(), type: "payment", amount: amount, description: body["notes"] as? String ?? "",
                                                                           date: body["payment_date"] as? String ?? day(0), source: "cash_collection"), at: 0)
             return ok(["status": "OK"])
+        default:
+            return nil
+        }
+    }
+
+    /// `/finance/additional-cards`: list, mark (PUT, 422 unless four digits and a name) and unmark (DELETE, 404 if unknown).
+    private func additionalCardsRoute(_ method: String, _ path: String, _ body: [String: Any]) -> Answer? {
+        guard receivablesAllowed else { return error(403, "No tienes permisos para realizar esta acción.") }
+        let last4 = path == "/finance/additional-cards" ? "" : String(path.split(separator: "/").last ?? "")
+        switch method {
+        case "GET" where last4.isEmpty:
+            let items = ownerAdditionalCards.sorted { ($0.value, $0.key) < ($1.value, $1.key) }
+                .map { ["card_last4": $0.key, "person_name": $0.value] }
+            return ok(["status": "ok", "items": items])
+        case "PUT":
+            let person = (body["person_name"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard AdditionalCardRequest.last4(last4) != nil, !person.isEmpty else {
+                return error(422, "Indicá los últimos 4 dígitos de la tarjeta y el nombre de la persona.")
+            }
+            ownerAdditionalCards[last4] = person
+            return ok(["status": "ok", "item": ["card_last4": last4, "person_name": person], "settled_purchases": 0])
+        case "DELETE":
+            guard ownerAdditionalCards.removeValue(forKey: last4) != nil else { return error(404, "Esa tarjeta no está marcada como adicional.") }
+            return ok(["status": "ok", "released_purchases": 0])
         default:
             return nil
         }

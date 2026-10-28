@@ -57,6 +57,7 @@ fun MoneyControlScreen(model: AppModel, nav: Navigator) {
         }
     }) {
         LoadContent(report) { data -> MoneyControlContent(data, pay = { paying = it }) }
+        AdditionalCardsSection(model) { message -> report.reload(); model.showNotice(message) }
     }
     paying?.let { receivable ->
         val due = Dincr.money.format(receivable.currentAmountDue ?: BigDecimal.ZERO)

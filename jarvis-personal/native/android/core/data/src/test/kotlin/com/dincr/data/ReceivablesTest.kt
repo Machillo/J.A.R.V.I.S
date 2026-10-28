@@ -1,10 +1,12 @@
 package com.dincr.data
 
 import java.math.BigDecimal
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -62,6 +64,47 @@ class ReceivablesTest {
         assertTrue(json.decodeFromString(ReceivableWriteResult.serializer(), """{"status":"OK","item":{}}""").succeeded)
         assertFalse(json.decodeFromString(ReceivableWriteResult.serializer(), """{"status":"NOT_FOUND","message":"No encontrada"}""").succeeded)
         assertFalse(json.decodeFromString(ReceivableWriteResult.serializer(), """{"status":"DUPLICATE"}""").succeeded)
+    }
+
+    @Test fun additionalCardsReadTheCardAndThePerson() {
+        val list = json.decodeFromString(AdditionalCards.serializer(), """
+            {"status":"ok","items":[{"card_last4":"4821","person_name":"Persona A"},{"card_last4":"","person_name":"Sin tarjeta"},
+                                    {"card_last4":"7310"}]}
+        """)
+        assertEquals(listOf("4821", "7310"), list.items.map { it.cardLast4 })
+        assertEquals("Persona A", list.items[0].personName)
+        assertNull(list.items[1].personName)
+        assertTrue(json.decodeFromString(AdditionalCards.serializer(), "{}").items.isEmpty())
+        val result = json.decodeFromString(AdditionalCardResult.serializer(), """{"status":"ok","settled_purchases":2}""")
+        assertEquals(2, result.settledPurchases)
+        assertNull(result.releasedPurchases)
+    }
+
+    @Test fun markingACardSendsThePersonAndOnlyFourDigits() {
+        assertEquals("""{"person_name":"Persona B"}""", json.encodeToString(AdditionalCardRequest.serializer(), AdditionalCardRequest("Persona B")))
+        assertEquals("4821", AdditionalCardRequest.last4(" 4821 "))
+        listOf("482", "48210", "48a1", "", "٤٨٢١").forEach { assertNull(it, AdditionalCardRequest.last4(it)) }
+    }
+
+    private fun api(role: FakeBackend.Role, plan: PlanTier = PlanTier.VIP) =
+        DincrApi(ApiClient("https://fixtures.invalid", { "t" }, FakeBackend(FakeBackend.Scenario.POPULATED, plan, role = role), AppLanguage.SPANISH, backoff = {}))
+
+    @Test fun theOwnerMarksAndUnmarksAnAdditionalCard() = runBlocking {
+        val api = api(FakeBackend.Role.OWNER)
+        val before = api.additionalCards().items.map { it.cardLast4 }
+        api.saveAdditionalCard("7310", "Persona C")
+        val after = api.additionalCards().items
+        assertEquals((before + "7310").toSet(), after.map { it.cardLast4 }.toSet())
+        assertEquals("Persona C", after.first { it.cardLast4 == "7310" }.personName)
+        api.stopAdditionalCard("7310")
+        assertEquals(before, api.additionalCards().items.map { it.cardLast4 })
+        assertThrows(ApiError::class.java) { runBlocking { api.stopAdditionalCard("7310") } }
+        Unit
+    }
+
+    @Test fun aRegularAccountCannotReachAdditionalCards() = runBlocking {
+        assertThrows(ApiError::class.java) { runBlocking { api(FakeBackend.Role.USER).additionalCards() } }
+        Unit
     }
 
     @Test fun moneyControlIsAnAvailableJarvisSection() {
