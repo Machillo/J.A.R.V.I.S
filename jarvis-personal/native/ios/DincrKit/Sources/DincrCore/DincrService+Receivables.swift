@@ -17,6 +17,21 @@ extension DincrService {
         try Self.check(try await client.send("POST", "/finance/receivables/entries", body: request, as: ReceivableWriteResult.self))
     }
 
+    /// The cards the Owner marked as carried by someone else. A read.
+    public func additionalCards() async throws -> AdditionalCardsList { try await client.get("/finance/additional-cards") }
+
+    /// Marks a card as carried by `personName`; its pending purchase notices become that person's debt.
+    @discardableResult
+    public func saveAdditionalCard(last4: String, personName: String) async throws -> AdditionalCardResult {
+        try await client.send("PUT", "/finance/additional-cards/\(last4)", body: AdditionalCardRequest(personName: personName))
+    }
+
+    /// The card is not additional any more: its settled purchases go back to review. Nothing is deleted.
+    @discardableResult
+    public func stopAdditionalCard(last4: String) async throws -> AdditionalCardResult {
+        try await client.send("DELETE", "/finance/additional-cards/\(last4)")
+    }
+
     /// The backend refuses these writes in the body with HTTP 200: shown as an error, never as saved.
     private static func check(_ result: ReceivableWriteResult) throws {
         guard result.succeeded else {

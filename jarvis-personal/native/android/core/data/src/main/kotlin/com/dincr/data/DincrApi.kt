@@ -256,6 +256,13 @@ class DincrApi(private val client: ApiClient) {
     suspend fun addReceivableEntry(request: ReceivableEntryRequest) =
         checkWrite(client.send<ReceivableEntryRequest, ReceivableWriteResult>("POST", "/finance/receivables/entries", request))
 
+    suspend fun additionalCards(): AdditionalCards = client.get("/finance/additional-cards")
+    /** Marks a card as carried by [personName]; its pending purchase notices become that person's debt. */
+    suspend fun saveAdditionalCard(last4: String, personName: String): AdditionalCardResult =
+        client.send("PUT", "/finance/additional-cards/$last4", AdditionalCardRequest(personName))
+    /** The card is not additional any more: its settled purchases go back to review. Nothing is deleted. */
+    suspend fun stopAdditionalCard(last4: String): AdditionalCardResult = client.send("DELETE", "/finance/additional-cards/$last4")
+
     /** The backend refuses these writes in the body with HTTP 200: an error, never "saved". */
     private fun checkWrite(result: ReceivableWriteResult) {
         if (!result.succeeded) throw ApiError(ApiError.Kind.VALIDATION, code = result.status.orEmpty(), message = result.message ?: "No pudimos guardarlo.")

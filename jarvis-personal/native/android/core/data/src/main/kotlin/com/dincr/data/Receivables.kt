@@ -95,3 +95,38 @@ data class ReceivableEntryRequest(
 data class ReceivableWriteResult(val status: String? = null, val message: String? = null) {
     val succeeded: Boolean get() = status == "OK"
 }
+
+// Cards billed to the Owner but carried by someone else: a purchase notice on one of them is that
+// person's debt (the backend settles it into their receivable), not the Owner's expense. Read from
+// `GET /finance/additional-cards`, which never writes; marking or unmarking is an explicit command.
+// iOS twin: `AdditionalCards.swift`.
+
+/** One card the Owner marked as carried by a person. */
+@Serializable
+data class AdditionalCard(
+    @SerialName("card_last4") val cardLast4: String = "",
+    @SerialName("person_name") val personName: String? = null,
+)
+
+/** `GET /finance/additional-cards`. A row without a card is not a card. */
+@Serializable
+data class AdditionalCards(@SerialName("items") val raw: List<AdditionalCard> = emptyList()) {
+    val items: List<AdditionalCard> get() = raw.filter { it.cardLast4.isNotEmpty() }
+}
+
+/** `PUT /finance/additional-cards/{last4}`: who carries the card. */
+@Serializable
+data class AdditionalCardRequest(@SerialName("person_name") val personName: String) {
+    companion object {
+        /** The last 4 digits the backend accepts: exactly four ASCII digits, nothing else. */
+        fun last4(text: String): String? = text.trim().takeIf { t -> t.length == 4 && t.all { it in '0'..'9' } }
+    }
+}
+
+/** The answer of marking (`settled_purchases`) or unmarking (`released_purchases`) a card. */
+@Serializable
+data class AdditionalCardResult(
+    val status: String? = null,
+    @SerialName("settled_purchases") val settledPurchases: Int? = null,
+    @SerialName("released_purchases") val releasedPurchases: Int? = null,
+)

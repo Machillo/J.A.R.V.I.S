@@ -131,4 +131,24 @@ class MoneyControlUiTest {
         waitForText("Marta de ejemplo")
         waitForText(tx("3 personas con saldo pendiente", "3 people with an amount due"))
     }
+
+    @Test fun theOwnerMarksAndRemovesAnAdditionalCard() {
+        launchOwner()
+        openMoneyControl()
+        waitForTag("money.cards.card.4821")
+        tapTag("money.cards.add")
+        waitForTag("money.cards.last4")
+        compose.onNodeWithTag("money.cards.last4").performTextInput("73")
+        compose.onNodeWithTag("money.cards.person").performTextInput("Marta de ejemplo")
+        tapTag("money.cards.save")
+        waitForText(tx("4 dígitos", "4 digits"), substring = true)
+        compose.onNodeWithTag("money.cards.last4").performTextInput("10")
+        tapTag("money.cards.save")
+        waitForTag("money.cards.card.7310")
+        tapTag("money.cards.remove.7310")
+        val confirm = androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.isDialog()) and hasText(tx("Quitar", "Remove")) and hasClickAction()
+        waitUntil("the confirmation") { compose.onAllNodes(confirm).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(confirm).onFirst().performClick()
+        waitUntil("the card leaves the list") { !tagged("money.cards.card.7310") }
+    }
 }

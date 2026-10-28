@@ -54,6 +54,44 @@ struct ReceivablesTests {
         #expect(!(try decode(ReceivableWriteResult.self, #"{"status":"DUPLICATE"}"#).succeeded))
     }
 
+    @Test func additionalCardsReadTheCardAndThePerson() throws {
+        let list = try decode(AdditionalCardsList.self, """
+        {"status":"ok","items":[{"card_last4":"4821","person_name":"Persona A"},{"card_last4":"","person_name":"Sin tarjeta"},
+                                {"card_last4":"7310"}]}
+        """)
+        #expect(list.items.map(\.cardLast4) == ["4821", "7310"], "a row without a card is not a card")
+        #expect(list.items[0].personName == "Persona A" && list.items[1].personName == nil)
+        #expect(try decode(AdditionalCardsList.self, "{}").items.isEmpty)
+        let result = try decode(AdditionalCardResult.self, #"{"status":"ok","settled_purchases":2}"#)
+        #expect(result.settledPurchases == 2 && result.releasedPurchases == nil)
+    }
+
+    @Test func markingACardSendsThePersonAndOnlyFourDigits() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let body = String(decoding: try encoder.encode(AdditionalCardRequest(personName: "Persona B")), as: UTF8.self)
+        #expect(body == #"{"person_name":"Persona B"}"#)
+        #expect(AdditionalCardRequest.last4(" 4821 ") == "4821")
+        for wrong in ["482", "48210", "48a1", "", "٤٨٢١"] { #expect(AdditionalCardRequest.last4(wrong) == nil, "\(wrong)") }
+    }
+
+    @Test func theOwnerMarksAndUnmarksAnAdditionalCard() async throws {
+        let service = FixtureBackend.service(FixtureBackend(scenario: .populated, role: .owner, latency: .zero))
+        let before = try await service.additionalCards().items.map(\.cardLast4)
+        try await service.saveAdditionalCard(last4: "7310", personName: "Persona C")
+        let after = try await service.additionalCards().items
+        #expect(Set(after.map(\.cardLast4)) == Set(before + ["7310"]))
+        #expect(after.first { $0.cardLast4 == "7310" }?.personName == "Persona C")
+        try await service.stopAdditionalCard(last4: "7310")
+        #expect(try await service.additionalCards().items.map(\.cardLast4) == before)
+        await #expect(throws: APIError.self) { try await service.stopAdditionalCard(last4: "7310") }
+    }
+
+    @Test func aRegularAccountCannotReachAdditionalCards() async throws {
+        let service = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero))
+        await #expect(throws: APIError.self) { try await service.additionalCards() }
+    }
+
     @Test func moneyControlIsAnAvailableJarvisSection() {
         #expect(Jarvis.Section.moneyControl.isAvailable)
     }

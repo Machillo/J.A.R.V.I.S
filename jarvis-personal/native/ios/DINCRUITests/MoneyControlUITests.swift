@@ -78,4 +78,29 @@ final class MoneyControlUITests: XCTestCase {
         XCTAssertTrue(text("Marta de ejemplo", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(text("3 personas con saldo pendiente", in: app).exists)
     }
+
+    func testTheOwnerMarksAndRemovesAnAdditionalCard() {
+        let app = launchOwner()
+        openMoneyControl(app)
+        XCTAssertTrue(element("money.cards.card.4821", in: app).waitForExistence(timeout: 10), "the fixture's additional card")
+        tap("money.cards.add", in: app)
+        let last4 = element("money.cards.last4", in: app)
+        XCTAssertTrue(last4.waitForExistence(timeout: 5))
+        last4.tap()
+        last4.typeText("73")
+        let person = element("money.cards.person", in: app)
+        person.tap()
+        person.typeText("Marta de ejemplo")
+        element("money.cards.save", in: app).tap()
+        XCTAssertTrue(text("4 dígitos", in: app).waitForExistence(timeout: 5), "three digits are refused on the device")
+        last4.tap()
+        last4.typeText("10")
+        element("money.cards.save", in: app).tap()
+        XCTAssertTrue(text("Tarjeta guardada", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("money.cards.card.7310", in: app).waitForExistence(timeout: 10))
+        tap("money.cards.remove.7310", in: app)
+        tap("money.cards.remove.confirm", in: app)
+        XCTAssertTrue(text("ya no es adicional", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("money.cards.card.7310", in: app).waitForExistence(timeout: 3))
+    }
 }
