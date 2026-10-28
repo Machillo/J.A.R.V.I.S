@@ -48,6 +48,8 @@ BUILTIN_FEATURE_MIN_PLAN = {
     "gmail_automation": "vip",
     "financial_accounts": "vip",
     "aguinaldo": "vip",
+    # iOS Shortcuts capture (Apple Pay, bank SMS): candidates for the VIP review inbox.
+    "ios_shortcuts": "vip",
 }
 
 

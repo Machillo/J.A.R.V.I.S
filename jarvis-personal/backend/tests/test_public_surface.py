@@ -23,6 +23,8 @@ SECRET_PROTECTED = {
     # Store purchases: Apple's JWS signature, Google's OIDC token, the store cron secret.
     "/product-ops/billing/store/apple/notifications", "/product-ops/billing/store/google/notifications",
     "/product-ops/billing/store/cron",
+    # iOS Shortcuts App Intents: the Shortcuts token (hash-only, revocable) is the credential.
+    "/user-product/vip/shortcuts/apple-pay", "/user-product/vip/shortcuts/bank-sms",
 }
 # The retired Owner Gmail reader (#233): still public so leftover crons and a Pub/Sub
 # subscription get a definitive answer, but they never read mail or data.

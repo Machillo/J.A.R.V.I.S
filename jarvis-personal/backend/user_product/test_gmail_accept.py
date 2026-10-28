@@ -117,6 +117,9 @@ class FakeConnection:
             row.update({"transaction_id": params[0], "status": "confirmed"})
         elif q.startswith("UPDATE finva_email_messages"):
             pass
+        elif q.startswith("SELECT c.*,NULL::bigint AS legacy_user_id"):
+            # The iOS Shortcuts capture lookup (no email): these candidates all come from mail.
+            pass
         elif q.startswith("SELECT id FROM finva_email_candidates WHERE account_id=%s AND workspace_id=%s AND related_candidate_id=%s"):
             account, workspace, related, *reasons = params
             return SimpleNamespace(fetchall=lambda: [

@@ -57,7 +57,9 @@ def test_email_inbox_is_scoped_to_account_and_workspace(monkeypatch):
 
     query, params = connection.calls[0]
     assert "m.account_id=%s AND m.workspace_id=%s" in query
-    assert params == ("account-a", "workspace-a", "pending")
+    # Mail notices and the iOS Shortcuts captures (no email): each part scoped by the same filters.
+    assert "c.email_message_id IS NULL AND c.account_id=%s AND c.workspace_id=%s" in query
+    assert params == ("account-a", "workspace-a", "pending", "account-a", "workspace-a", "pending")
     assert result["items"][0]["email_id"] == 1
 
 
@@ -174,6 +176,7 @@ def test_canonical_insert_keeps_statement_link_and_valid_parameter_shape(monkeyp
 
     monkeypatch.setattr(gmail_service, "discover_candidate_account", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(gmail_service, "resolve_candidate", lambda *_args, **_kwargs: {"status": "pending"})
+    monkeypatch.setattr(gmail_service, "apply_capture_resolution", lambda *_args, **_kwargs: None)
     result = gmail_service._insert_finva_candidate(
         _StrictConnection(), email_message_id=9,
         connection={"account_id": "account-a", "workspace_id": "workspace-a", "legacy_user_id": 7},

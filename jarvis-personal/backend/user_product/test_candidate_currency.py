@@ -197,7 +197,7 @@ def test_inbox_shows_the_native_amount_and_the_account_base(monkeypatch):
     query, params = calls[0]
     assert "c.original_amount,c.original_currency" in query
     assert "a.base_currency AS account_base_currency" in query and "JOIN accounts a ON a.id=m.account_id" in query
-    assert params == ("account-a", "workspace-a", "pending")
+    assert params == ("account-a", "workspace-a", "pending", "account-a", "workspace-a", "pending")
 
 
 def test_saving_a_candidate_always_needs_the_converted_money():

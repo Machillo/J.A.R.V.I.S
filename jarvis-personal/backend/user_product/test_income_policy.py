@@ -34,6 +34,11 @@ def baseline(profile, recorded, imported=(), recurring=None):
     return income_policy.income_baseline(profile, months, _imported(months, imported), recurring)
 
 
+def test_income_confirmed_from_bank_evidence_counts_as_imported_never_on_top_of_the_declared():
+    # A SINPE received by SMS (iOS Shortcuts) and approved is bank evidence, like a mail notice.
+    assert set(income_policy.IMPORTED_SOURCES) == {"finva_gmail", "finva_statement", "ios_shortcuts"}
+
+
 def test_a_declared_income_without_imports():
     result = baseline(DECLARED, [])
     assert (result["baseline"], result["source"]) == (1000000, "declared")

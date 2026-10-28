@@ -2307,6 +2307,42 @@
   ]
  },
  {
+  "method": "POST",
+  "path": "/user-product/vip/shortcuts/apple-pay",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/shortcuts/bank-sms",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/vip/shortcuts/token",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/shortcuts/token",
+  "gates": [
+   "feature:ios_shortcuts"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/shortcuts/token",
+  "gates": [
+   "feature:ios_shortcuts"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/user-product/vip/strategy-dashboard",
   "gates": [

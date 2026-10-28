@@ -38,6 +38,7 @@ from backend.finance.category_catalog import normalize_category, owner_account_c
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.candidate_currency import native_money, transaction_amounts
 from backend.user_product.financial_identity import discover_candidate_account
+from backend.user_product.capture_dedupe import apply_capture_resolution
 from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.mail_sync_analytics import observe_mail_sync
 from backend.user_product.legacy_owner_mail import legacy_transaction_for_message, mark_legacy_duplicate
@@ -409,40 +410,54 @@ def list_gmail_emails(
     allowed = {"pending", "auto_saved", "confirmed", "rejected", "duplicate"}
     if status and status not in allowed:
         raise HTTPException(status_code=422, detail="Estado de revisión inválido.")
-    params: list[Any] = [account_id, workspace_id]
-    status_filter = ""
+    candidate_filter = ""
+    filter_params: list[Any] = []
     if status:
-        status_filter = " AND c.status=%s"
-        params.append(status)
+        candidate_filter = " AND c.status=%s"
+        filter_params.append(status)
         if status == "pending":
-            status_filter += " AND NOT COALESCE(c.is_internal_transfer,FALSE)"
-    if bank and bank.strip():
-        status_filter += " AND LOWER(COALESCE(c.bank,m.bank,''))=LOWER(%s)"
-        params.append(bank.strip())
+            candidate_filter += " AND NOT COALESCE(c.is_internal_transfer,FALSE)"
     if financial_account_id is not None:
-        status_filter += " AND c.financial_account_id=%s"
-        params.append(financial_account_id)
+        candidate_filter += " AND c.financial_account_id=%s"
+        filter_params.append(financial_account_id)
+    bank_filter, bank_params = "", []
+    if bank and bank.strip():
+        bank_filter = " AND LOWER(COALESCE(c.bank,m.bank,''))=LOWER(%s)"
+        bank_params.append(bank.strip())
+    columns = """m.id AS email_id,m.sender,m.subject,CASE WHEN m.id IS NULL THEN c.created_at ELSE m.received_at END AS received_at,m.bank,
+                 m.status AS email_status,m.parse_reason,c.id AS candidate_id,c.transaction_id,c.transaction_date,
+                 c.description,c.amount,c.currency,c.original_amount,c.original_currency,
+                 a.base_currency AS account_base_currency,c.transaction_type,c.movement_direction,
+                 c.movement_kind,c.category,c.bank,c.source_account_label,
+                 c.source_account_reference,c.destination_account_reference,c.counterparty,
+                 c.parser_name,c.parser_version,c.extraction_method,c.confidence,
+                 c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at,
+                 c.source_type,c.source_provider,c.statement_document_id,
+                 c.is_internal_transfer,c.related_candidate_id,c.resolution_reason,
+                 c.financial_account_id,c.raw_payload->>'bank_movement' AS bank_movement,
+                 c.raw_payload->>'financial_effect' AS financial_effect,
+                 COALESCE(m.received_at,m.created_at,c.created_at) AS sort_at"""
     with get_connection() as conn:
+        # Mail notices (one row per message, with its candidates) and the candidates captured
+        # without an email (iOS Shortcuts: Apple Pay, bank SMS) form one inbox, newest first.
         rows = conn.execute(
-            f"""SELECT m.id AS email_id,m.sender,m.subject,m.received_at,m.bank,m.status AS email_status,
-                       m.parse_reason,c.id AS candidate_id,c.transaction_id,c.transaction_date,
-                       c.description,c.amount,c.currency,c.original_amount,c.original_currency,
-                       a.base_currency AS account_base_currency,c.transaction_type,c.movement_direction,
-                       c.movement_kind,c.category,c.bank,c.source_account_label,
-                       c.source_account_reference,c.destination_account_reference,c.counterparty,
-                       c.parser_name,c.parser_version,c.extraction_method,c.confidence,
-                       c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at,
-                       c.source_type,c.source_provider,c.statement_document_id,
-                       c.is_internal_transfer,c.related_candidate_id,c.resolution_reason,
-                       c.financial_account_id,c.raw_payload->>'bank_movement' AS bank_movement,
-                       c.raw_payload->>'financial_effect' AS financial_effect
-                FROM finva_email_messages m
-                JOIN accounts a ON a.id=m.account_id
-                LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
-                WHERE m.account_id=%s AND m.workspace_id=%s{status_filter}
-                ORDER BY COALESCE(m.received_at,m.created_at) DESC,m.id DESC
+            f"""SELECT * FROM (
+                    SELECT {columns}
+                    FROM finva_email_messages m
+                    JOIN accounts a ON a.id=m.account_id
+                    LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
+                    WHERE m.account_id=%s AND m.workspace_id=%s{candidate_filter}{bank_filter}
+                    UNION ALL
+                    SELECT {columns}
+                    FROM finva_email_candidates c
+                    JOIN accounts a ON a.id=c.account_id
+                    LEFT JOIN finva_email_messages m ON FALSE
+                    WHERE c.email_message_id IS NULL AND c.account_id=%s AND c.workspace_id=%s{candidate_filter}{bank_filter}
+                ) inbox
+                ORDER BY sort_at DESC,email_id DESC NULLS LAST,candidate_id DESC
                 LIMIT 200""",
-            tuple(params),
+            (account_id, workspace_id, *filter_params, *bank_params,
+             account_id, workspace_id, *filter_params, *bank_params),
         ).fetchall()
     return {"status": "ok", "items": [
         {**dict(row), "parse_reason": localized_parse_reason(row.get("parse_reason"))} for row in rows
@@ -455,12 +470,11 @@ def _create_candidate_transaction(
 ) -> int:
     # `money` comes from candidate_currency.transaction_amounts: never the reviewed amount as is.
     category = normalize_category(values["category"], values["transaction_type"], owner=owner)
-    source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
-    note = note or (
-        "Confirmado por el usuario desde un estado de cuenta."
-        if candidate.get("source_type") == "statement"
-        else "Confirmado por el usuario desde un correo bancario."
-    )
+    source = {"statement": "finva_statement", "api": "ios_shortcuts"}.get(candidate.get("source_type"), "finva_gmail")
+    note = note or {
+        "statement": "Confirmado por el usuario desde un estado de cuenta.",
+        "api": "Confirmado por el usuario desde Atajos de iPhone.",
+    }.get(candidate.get("source_type"), "Confirmado por el usuario desde un correo bancario.")
     row = conn.execute(
         """INSERT INTO transactions(
                transaction_date,description,amount,transaction_type,category,account,source,notes,
@@ -576,9 +590,23 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
                FOR UPDATE OF c,m,g""",
             (candidate_id, account_id, workspace_id),
         ).fetchone()
+        captured = False
+        if not candidate:
+            # A capture from the iOS Shortcuts (Apple Pay, bank SMS) has no email behind it.
+            captured = True
+            candidate = conn.execute(
+                """SELECT c.*,NULL::bigint AS legacy_user_id,a.base_currency AS account_base_currency
+                   FROM finva_email_candidates c
+                   JOIN accounts a ON a.id=c.account_id
+                   WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s AND c.email_message_id IS NULL
+                   FOR UPDATE OF c""",
+                (candidate_id, account_id, workspace_id),
+            ).fetchone()
         if not candidate:
             raise HTTPException(status_code=404, detail="Correo financiero no encontrado.")
         candidate = dict(candidate)
+        if captured:
+            candidate["legacy_user_id"] = _financial_user_id_for_account(account_id)
         if candidate["status"] != "pending":
             # Reviewed before (another device, a stale list, a racing tap): nothing is
             # written, corrections included, and the answer says so.
@@ -888,7 +916,7 @@ def _plain_text(payload: dict[str, Any]) -> str:
 
 
 def _insert_finva_candidate(
-    conn, *, email_message_id: int, connection: dict[str, Any],
+    conn, *, email_message_id: int | None, connection: dict[str, Any],
     candidate: dict[str, Any], statement_document_id: int | None = None,
     gmail_message_id: str | None = None,
 ) -> dict[str, Any]:
@@ -931,7 +959,7 @@ def _insert_finva_candidate(
     discover_candidate_account(
         conn, candidate_id=candidate_id, candidate=candidate,
         account_id=str(connection["account_id"]), workspace_id=str(connection["workspace_id"]),
-        legacy_user_id=int(connection["legacy_user_id"]),
+        legacy_user_id=connection.get("legacy_user_id"),
     )
     link_received_payroll(
         conn, candidate_id=candidate_id, candidate=candidate,
@@ -944,6 +972,10 @@ def _insert_finva_candidate(
     ):
         resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution, **scope)
     if resolution.get("status") == "pending":
+        # An iOS Shortcuts capture (Apple Pay, bank SMS) and a bank notice of the same movement.
+        resolution = apply_capture_resolution(conn, candidate_id, **scope) or resolution
+    # A capture from the iOS Shortcuts (no email) always waits for the user's review.
+    if resolution.get("status") == "pending" and email_message_id is not None:
         # Owner only (stored records): a purchase on a card the Owner marked as someone else's is
         # that person's receivable; otherwise the learned rules may save it (owner_mail_automation).
         owner = owner_account_context(conn, connection["account_id"], connection["workspace_id"])

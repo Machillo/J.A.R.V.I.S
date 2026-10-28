@@ -57,7 +57,8 @@
   "J-REC",
   "J-MON",
   "J-WEA",
-  "J-MEM"
+  "J-MEM",
+  "SC-1"
  ],
  "fixtures": {
   "ios": {
@@ -1893,6 +1894,65 @@
      ]
     }
    }
+  },
+  {
+   "id": "settings.ios_shortcuts",
+   "name": "Perfil → Atajos de iPhone (Apple Pay y avisos bancarios por SMS)",
+   "decision": "SC-1",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/shortcuts/token",
+     "gate": "feature:ios_shortcuts",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "POST",
+     "path": "/user-product/vip/shortcuts/token",
+     "gate": "feature:ios_shortcuts",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "DELETE",
+     "path": "/user-product/vip/shortcuts/token",
+     "gate": "public",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "POST",
+     "path": "/user-product/vip/shortcuts/apple-pay",
+     "gate": "public",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "POST",
+     "path": "/user-product/vip/shortcuts/bank-sms",
+     "gate": "public",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.shortcuts",
+    "locked_label": "Disponible desde VIP"
+   },
+   "android_gap": "iOS only: the Shortcuts app and App Intents (Transacción, Mensaje automations) exist only on iOS. Android has no equivalent surface for this capture."
   }
  ]
 }

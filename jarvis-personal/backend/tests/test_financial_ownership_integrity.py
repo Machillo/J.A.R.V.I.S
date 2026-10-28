@@ -23,6 +23,7 @@ POST_PHASE_2A = ["account_balances", "account_balance_history", "net_worth_snaps
 # Workspace-owned tables whose deletes are NOT guarded, each with the reason.
 # Every other table with a workspace_id must be in dincr_delete_guard_tables().
 UNGUARDED_WORKSPACE_TABLES = {
+    "shortcut_tokens": "credential hashes (iOS Shortcuts), not financial data; revoked by the app, removed by the account's cascade",
     "advisor_current_strategy": "derived strategy snapshot (Owner), recomputed",
     **{f"audit_backup_{name}_20260908": "static copy from a past manual cleanup; never written by the app"
        for name in ("goal_schedules", "goals", "receivable_entries", "receivable_payments", "receivables")},
