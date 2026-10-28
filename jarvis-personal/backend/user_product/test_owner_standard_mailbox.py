@@ -207,6 +207,7 @@ def test_a_message_the_legacy_reader_already_imported_is_not_offered_again(monke
     monkeypatch.setattr(gmail_service, "discover_candidate_account", lambda *_a, **_k: None)
     monkeypatch.setattr(gmail_service, "link_received_payroll", lambda *_a, **_k: None)
     monkeypatch.setattr(gmail_service, "resolve_candidate", lambda _conn, _id, **_scope: {"status": "pending"})
+    monkeypatch.setattr(gmail_service, "apply_capture_resolution", lambda *_a, **_k: None)  # no iOS Shortcuts captures here
     inserted = {"id": 77}
     original_execute = conn.execute
     conn.execute = lambda q, p=(): SimpleNamespace(fetchone=lambda: inserted) if "INSERT INTO finva_email_candidates" in q else original_execute(q, p)

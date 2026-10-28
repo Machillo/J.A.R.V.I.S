@@ -46,5 +46,24 @@ struct DincrShortcuts: AppShortcutsProvider {
             shortTitle: "Añadir gasto",
             systemImageName: "plus.circle"
         )
+        // Atajos de iPhone (ShortcutIntents.swift): background sends for Shortcuts automations.
+        AppShortcut(
+            intent: RegisterApplePayPurchaseIntent(),
+            phrases: [
+                "Registrar compra en \(.applicationName)",
+                "Register a purchase in \(.applicationName)",
+            ],
+            shortTitle: "Registrar compra",
+            systemImageName: "creditcard"
+        )
+        AppShortcut(
+            intent: SendBankMessageIntent(),
+            phrases: [
+                "Enviar aviso bancario a \(.applicationName)",
+                "Send a bank notice to \(.applicationName)",
+            ],
+            shortTitle: "Enviar aviso bancario",
+            systemImageName: "message"
+        )
     }
 }

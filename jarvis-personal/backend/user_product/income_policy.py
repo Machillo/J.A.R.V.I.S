@@ -29,7 +29,8 @@ from datetime import date
 from statistics import pstdev
 from typing import Any
 
-IMPORTED_SOURCES = ("finva_gmail", "finva_statement")
+# Bank evidence confirmed from review: mail notices, statements and iOS Shortcuts captures (bank SMS).
+IMPORTED_SOURCES = ("finva_gmail", "finva_statement", "ios_shortcuts")
 POLICY_VERSION = "income-policy-v1"
 _RECURRING_FACTORS = {"weekly": 52 / 12, "biweekly": 26 / 12, "monthly": 1, "quarterly": 1 / 3, "annual": 1 / 12}
 

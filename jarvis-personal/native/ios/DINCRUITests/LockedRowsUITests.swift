@@ -2,7 +2,8 @@ import XCTest
 
 /// PR 4 (P6.4) — locked rows instead of hidden ones. §15 PR 10 moved every locked function out of Perfil:
 /// Correos and Cuentas to Patrimonio (`WealthUITests`), Presupuesto and Calendario to Plan → Tu plan del
-/// mes (`PlanOrganizeUITests`), Movimientos recurrentes to Plan → Ingresos y base. Perfil keeps none.
+/// mes (`PlanOrganizeUITests`), Movimientos recurrentes to Plan → Ingresos y base. Perfil keeps none, except
+/// Atajos de iPhone (SC-1, iOS only; locked below VIP, `ShortcutsSettingsUITests`).
 /// Android twin: `LockedRowsUiTest`.
 final class LockedRowsUITests: XCTestCase {
     private func launch(plan: String? = nil, role: String? = nil, english: Bool = false) -> XCUIApplication {
@@ -36,13 +37,19 @@ final class LockedRowsUITests: XCTestCase {
     }
 
     /// §15 PR 10 (option A): Perfil keeps no locked rows: Presupuesto and Calendario are locked inside Plan →
-    /// Tu plan del mes (`PlanOrganizeUITests`), Correos and Cuentas in Patrimonio (`WealthUITests`).
+    /// Tu plan del mes (`PlanOrganizeUITests`), Correos and Cuentas in Patrimonio (`WealthUITests`). SC-1: the
+    /// only locked row Perfil adds back is Atajos de iPhone (`profile.shortcuts`), a Perfil setting by nature.
     func testPerfilHasNoLockedRowsLeftAndTheOwnerKeepsJarvis() {
         for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), (nil, "owner")] as [(String?, String?)] {
             let app = launch(plan: plan, role: role)
             XCTAssertTrue(row("profile.subscription", in: app).waitForExistence(timeout: 10))
-            XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Disponible desde")).firstMatch.exists,
-                           role ?? plan ?? "free")
+            // Any "Disponible desde" label must belong to the Atajos de iPhone row (the row or a text inside it).
+            let shortcuts = row("profile.shortcuts", in: app)
+            let lockedLabels = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Disponible desde")).allElementsBoundByIndex
+            for element in lockedLabels {
+                XCTAssertTrue(shortcuts.exists && shortcuts.frame.contains(element.frame),
+                              "\(role ?? plan ?? "free"): locked row outside Atajos de iPhone (\(element.identifier))")
+            }
             for id in ["profile.budget", "profile.calendar", "profile.recurring", "profile.mail", "profile.accounts"] {
                 XCTAssertFalse(app.descendants(matching: .any)[id].exists, "\(role ?? plan ?? "free"): \(id)")
             }

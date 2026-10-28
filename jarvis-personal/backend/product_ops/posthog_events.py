@@ -43,6 +43,9 @@ ENUMS: dict[str, frozenset[str]] = {
         "grace_period", "restored", "expired", "revoked",
     }),
     "store": frozenset({"sandbox", "apple", "google"}),
+    # iOS Shortcuts captures (aggregate only: never an amount, merchant, card or SMS text).
+    "source": frozenset({"apple_pay_shortcut", "bank_sms_shortcut"}),
+    "sms_bank": frozenset({"bac", "bcr", "bn", "popular", "promerica", "davivienda", "lafise", "mucap", "multimoney", "unknown"}),
 }
 COUNTS = frozenset({"messages_scanned", "candidates_pending", "duplicates", "payroll_reports", "messages_failed", "ignored", "count"})
 BOOLEANS = frozenset({"success", "initial_scan_complete"})
@@ -61,8 +64,11 @@ SERVER_EVENTS: dict[str, frozenset[str]] = {
     "subscription_changed": frozenset({"plan", "billing_period", "subscription_event", "store"}),
     # One-time historical baseline (backend/scripts/posthog_signups_baseline.py): new accounts per day.
     "baseline_daily_signups": frozenset({"count"}),
+    "candidate_created": frozenset({"source"}),
+    "shortcut_sms_unrecognized": frozenset({"sms_bank"}),
 }
-_ALWAYS_SUCCESSFUL = frozenset({"gmail_connected", "account_deletion_completed", "mail_sync_completed", "subscription_changed", "baseline_daily_signups"})
+_ALWAYS_SUCCESSFUL = frozenset({"gmail_connected", "account_deletion_completed", "mail_sync_completed", "subscription_changed",
+                                "baseline_daily_signups", "candidate_created"})
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="dincr-analytics")
 
 

@@ -64,6 +64,10 @@ public actor FixtureBackend: HTTPTransport {
     /// (FixtureBackend+Records.swift). Invented accounts and amounts.
     var ownerConfirmedBalances: [Int: Decimal] = [:]
     var ownerProtectedExpenses: Set<Int> = [62]
+    /// Perfil → Atajos de iPhone (FixtureBackend+Shortcuts.swift): the account's current shortcut token
+    /// (invented, never a real credential) and the captures received, by Idempotency-Key.
+    var shortcutToken: String?
+    var shortcutCaptures: [String: String] = [:]
     private var tickets: [[String: Any]] = []
     var mailConnected: Bool
     private var mailConsentAccepted: Bool
@@ -222,6 +226,9 @@ public actor FixtureBackend: HTTPTransport {
             legal["required"] = true
             profile["legal"] = legal
             return reply(403, Self.legalRequiredBody)
+        }
+        if let answer = shortcutsRoute(request, method: method, path: path) {
+            return reply(answer.0, (try? JSONSerialization.data(withJSONObject: answer.1)) ?? Data("{}".utf8))
         }
         // Like core/idempotency.py: the same key replays the stored answer; another body is a 409.
         let key = ["POST", "PUT", "PATCH"].contains(method) ? request.value(forHTTPHeaderField: "X-Idempotency-Key") : nil

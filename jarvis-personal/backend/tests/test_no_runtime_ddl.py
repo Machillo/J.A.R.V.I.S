@@ -113,7 +113,9 @@ USERS_ROUTE_MODULES = ("user_product/routes.py", "financial_lifecycle/routes.py"
                        "product_ops/routes.py", "notifications/routes.py", "product_ops/store_routes.py",
                        "product_ops/observability_routes.py", "finance/daily_history_routes.py",
                        # APP-1: Owner-gated today (require_owner), a neutral per-account Users surface by design.
-                       "user_product/appearance_routes.py")
+                       "user_product/appearance_routes.py",
+                       # iOS Shortcuts: VIP/Owner capture into the Users review inbox.
+                       "user_product/shortcut_routes.py")
 # Routers main.py mounts without INTERNAL_ONLY that are not Users entries, and why.
 OWNER_GATED_ROUTER_MODULES = {
     "ai/routes.py": "router dependency require_owner (the single verified Owner)",
