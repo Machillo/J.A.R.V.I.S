@@ -58,7 +58,8 @@ CREATE TABLE finva_email_candidates (
     id BIGSERIAL PRIMARY KEY, account_id TEXT NOT NULL, workspace_id UUID NOT NULL, transaction_id BIGINT,
     transaction_date DATE NOT NULL, amount NUMERIC(18,2) NOT NULL, source_type TEXT NOT NULL DEFAULT 'email',
     movement_kind TEXT, movement_direction TEXT, source_account_reference TEXT, status TEXT NOT NULL DEFAULT 'pending',
-    resolution_reason TEXT, reviewed_at TIMESTAMPTZ, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    resolution_reason TEXT, reviewed_at TIMESTAMPTZ, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_internal_transfer BOOLEAN NOT NULL DEFAULT FALSE);
 CREATE TABLE email_transaction_candidates (
     id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL, transaction_id BIGINT, transaction_date DATE NOT NULL,
     amount NUMERIC(14,2) NOT NULL, transaction_type TEXT NOT NULL, card_owner TEXT, card_last4 TEXT, status TEXT,
