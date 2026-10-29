@@ -218,6 +218,18 @@ def test_the_plan_is_checked_by_the_backend_for_linking_and_for_each_capture(db)
     _as(A, shortcut_routes.shortcuts_unlink)  # unlinking never needs the plan
 
 
+def test_the_same_sinpe_sms_from_two_bank_numbers_is_one_movement(db):
+    # SYNTHETIC, in the shape of a real BAC SMS: the bank may send it twice (two sender numbers).
+    text = "Ha recibido 13,740.00 Colones de PERSONA§DE§PRUEBA por SINPE Movil, Sin Descripcion. Referencia 900000004."
+    token = _issue(A)
+    assert _post("bank-sms", token, {"text": text}).json() == {"status": "created"}
+    assert _post("bank-sms", token, {"text": text}).json() == {"status": "created"}  # another run, another key
+    first, second = _candidates(db)
+    assert (first["status"], first["transaction_type"], first["amount"]) == ("pending", "income", Decimal("13740.00"))
+    assert second["status"] == "duplicate" and second["related_candidate_id"] == first["id"]
+    assert [item["candidate_id"] for item in _as(A, gmail_service.list_gmail_emails, "pending")["items"]] == [first["id"]]
+
+
 def test_an_unrecognized_sms_is_discarded(db):
     response = _post("bank-sms", _issue(A), {"text": "BANCO EJEMPLO: aviso sintetico sin formato conocido"})
     assert response.status_code == 200 and response.json() == {"status": "not_recognized"}
