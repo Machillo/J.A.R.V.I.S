@@ -8,8 +8,12 @@ recognizes is discarded (only an aggregate "not recognized" count per bank is ke
 SMS formats live here, separate to the mail parsers (email_monitor/parser.py): the two never
 share a parser. Amounts are read with Decimal, never float.
 
-Status (2026-10-28): no real bank SMS sample has been provided yet, so ``PARSERS`` is empty and
-every SMS is "not recognized". Adding a bank = adding a parser built from its real samples.
+Formats are recognized by their text, never by the sender number (a bank may send from several
+numbers, and the Shortcuts automation filters by text). Supported (from real, anonymized samples):
+- SINPE Móvil received, BAC (2026-10-29): "Ha recibido 36,455.00 Colones de NOMBRE por SINPE
+  Movil, DESCRIPCION. Referencia NNN." The bank writes spaces in names as "_" or "§". The same
+  SMS may arrive twice from two numbers: the reference makes them one movement (semantic dedupe).
+Pending real samples: SINPE Móvil sent, card purchases, other currencies, other banks.
 """
 from __future__ import annotations
 
@@ -53,8 +57,37 @@ class SmsMovement:
 
 
 Parser = Callable[[str], "SmsMovement | None"]
-# Real bank formats only (see module docstring). Tests register synthetic parsers explicitly.
-PARSERS: list[Parser] = []
+
+_SINPE_RECEIVED = re.compile(
+    r"^Ha recibido (?P<amount>[\d,]+\.\d{2}) Colones de (?P<name>.+?) por SINPE Movil, "
+    r"(?P<detail>.*?)\. Referencia (?P<reference>\d{6,30})\.?$",
+    re.DOTALL,
+)
+_NO_DETAIL = {"sin descripcion", "sin descripción", ""}
+
+
+def _person(raw: str) -> str:
+    """The sender's name as printed (the bank writes spaces as "_" or "§"), with single spaces."""
+    return re.sub(r"\s+", " ", re.sub(r"[_§]+", " ", raw)).strip()
+
+
+def sinpe_received_bac(text: str) -> "SmsMovement | None":
+    """BAC SINPE Móvil received, in colones (format of real samples, 2026-10-29)."""
+    match = _SINPE_RECEIVED.match(re.sub(r"\s+", " ", text).strip())
+    if not match:
+        return None
+    amount = amount_from(match.group("amount"), decimal_separator=".")
+    name = _person(match.group("name"))
+    if amount is None or not name:
+        return None
+    detail = re.sub(r"\s+", " ", match.group("detail")).strip()
+    description = f"SINPE de {name}" + (f" · {detail}" if plain(detail) not in _NO_DETAIL else "")
+    return SmsMovement(bank="bac", kind="sinpe_in", amount=amount, currency="CRC",
+                       description=description[:200], reference=match.group("reference"))
+
+
+# Real bank formats only (see module docstring); fixed order. Tests may register synthetic ones.
+PARSERS: list[Parser] = [sinpe_received_bac]
 
 
 def plain(text: str) -> str:
