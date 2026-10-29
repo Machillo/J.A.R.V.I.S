@@ -43,7 +43,8 @@ import kotlinx.coroutines.launch
  * Plan → Salvavidas (VIP; the Owner by role): `GET|PUT /user-product/vip/salvavidas`. The backend
  * answers the Users model (months of the user's own obligations, funded by the declared savings) or,
  * for the Owner role, the historical JARVIS model. Every figure is the backend's: no coverage math
- * on the device. Unknown savings show "Sin dato", never "0 meses".
+ * on the device. Unknown savings show "Sin dato", never "0 meses". Both may set automatic
+ * contributions (`SalvavidasAutoContribution.kt`); the interest rate is the Owner's alone.
  */
 @Composable
 fun SalvavidasScreen(model: AppModel, nav: Navigator) {
@@ -82,6 +83,7 @@ fun SalvavidasScreen(model: AppModel, nav: Navigator) {
                 AmountLine(tx("Meta", "Target"), s.targetAmount, emphasize = true)
                 AmountLine(tx("Base mensual", "Monthly base"), s.monthlyBase)
             }
+            AutoContributionSection(s, saving) { change, done -> update(change, done) }
             Section(tx("Qué protege", "What it protects")) {
                 s.components?.let { c ->
                     AmountLine(tx("Cuotas de deudas", "Debt payments"), c.debtMonthlyPayments)
@@ -127,6 +129,9 @@ private fun FundCard(s: Salvavidas, onEdit: () -> Unit, onSituation: () -> Unit)
             Text(tx("Tu fondo", "Your fund"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
             if (s.isAmountKnown) {
                 MoneyText(s.currentAmount, style = MaterialTheme.typography.displaySmall)
+                // With automatic contributions on, the balance is an estimate following the plan.
+                if (s.activePlan != null) Caption(tx("Ahorro estimado", "Estimated savings"))
+                SalvavidasPlanBreakdown(s)
                 s.coverageMonths?.let { InfoLine(tx("Te cubre", "Covers you for"), coverageMonthsLabel(it)) }
                 s.progressPercent?.let { ProgressLine(it / 100.0, tx("${it.toInt()} % de tu meta", "${it.toInt()} % of your target")) }
                 s.missingAmount?.takeIf { it.signum() > 0 }?.let { AmountLine(tx("Te falta", "Still to go"), it) }

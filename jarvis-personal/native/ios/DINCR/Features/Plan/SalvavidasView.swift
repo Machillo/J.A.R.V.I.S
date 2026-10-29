@@ -30,11 +30,13 @@ struct SalvavidasView: View {
                     OwnerSalvavidasContent(fund: fund, canWrite: canWrite, saving: saving,
                                            setTarget: { months in Task { await save(.target(months: months)) } },
                                            editAmount: { editingAmount = true },
-                                           toggle: { ids in Task { await save(.protectedExpenses(ids)) } })
+                                           toggle: { ids in Task { await save(.protectedExpenses(ids)) } },
+                                           savePlan: { update in await save(update) })
                 } else {
                     UsersSalvavidasContent(fund: fund, canWrite: canWrite, saving: saving,
                                            setTarget: { months in Task { await save(.target(months: months)) } },
-                                           editAmount: { editingAmount = true })
+                                           editAmount: { editingAmount = true },
+                                           savePlan: { update in await save(update) })
                 }
             }
             FinancialDisclaimer()
@@ -123,7 +125,10 @@ private struct CoverageCard: View {
             Text(fund.coverageLabel()).font(DincrFont.displayAmount).foregroundStyle(DincrColor.text)
                 .accessibilityIdentifier("salvavidas.coverage")
             if fund.savingsKnown {
-                FigureRow(label: tx("Ahorro actual", "Current savings"), amount: fund.currentAmount)
+                // With automatic contributions on, the balance is an estimate following the plan.
+                FigureRow(label: fund.activePlan == nil ? tx("Ahorro actual", "Current savings") : tx("Ahorro estimado", "Estimated savings"),
+                          amount: fund.currentAmount)
+                SalvavidasPlanBreakdown(fund: fund)
             } else {
                 InfoRow(label: tx("Ahorro actual", "Current savings"), value: tx("Sin dato", "No data"))
             }
@@ -144,6 +149,7 @@ private struct UsersSalvavidasContent: View {
     let saving: Bool
     let setTarget: (Int) -> Void
     let editAmount: () -> Void
+    let savePlan: (SalvavidasUpdate) async -> String?
 
     var body: some View {
         if fund.needsObligations {
@@ -172,6 +178,7 @@ private struct UsersSalvavidasContent: View {
                 }
             }
             .dincrCard()
+            AutoContributionCard(fund: fund, canWrite: canWrite, saving: saving, save: savePlan)
         }
         ObligationsCard(fund: fund)
         if let message = fund.verification?.message {
@@ -187,6 +194,7 @@ private struct OwnerSalvavidasContent: View {
     let setTarget: (Int) -> Void
     let editAmount: () -> Void
     let toggle: ([Int]) -> Void
+    let savePlan: (SalvavidasUpdate) async -> String?
 
     var body: some View {
         CoverageCard(fund: fund)
@@ -227,6 +235,7 @@ private struct OwnerSalvavidasContent: View {
             }
             .dincrCard()
         }
+        AutoContributionCard(fund: fund, canWrite: canWrite, saving: saving, save: savePlan)
         LinesCard(title: tx("Gastos fijos obligatorios", "Mandatory fixed expenses"), lines: fund.mandatoryExpenses ?? [])
         ObligationsCard(fund: fund)
         LinesCard(title: tx("Excluidos por duplicar una deuda", "Excluded as debt duplicates"), lines: fund.excludedDebtDuplicates ?? [])

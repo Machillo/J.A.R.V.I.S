@@ -49,6 +49,11 @@ public actor FixtureBackend: HTTPTransport {
     /// Salvavidas preferences: the 1/3/6-month goal, and the Owner's manual balance and protected expenses.
     var salvavidasTargetMonths = 6
     var ownerSalvavidasCurrent: Decimal = 450_000
+    /// Salvavidas automatic contributions (FixtureBackend+Salvavidas.swift): the stored plan, the day
+    /// the balance was last declared and the Owner's annual rate.
+    var salvavidasPlan: [String: Any]?
+    var salvavidasBaseDate: String?
+    var ownerSalvavidasRate: Decimal?
     /// JARVIS → Control de dinero (Owner): who owes the Owner money and every charge and payment
     /// (FixtureBackend+Receivables.swift). Invented names and amounts.
     var ownerReceivables: [FixtureReceivable] = FixtureReceivable.seed

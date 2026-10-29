@@ -51,12 +51,15 @@ extension DincrService {
 
     public func salvavidas() async throws -> Salvavidas { try await client.get("/user-product/vip/salvavidas") }
 
-    /// One change per request. Months must be one of 1/3/6 and an amount must fit NUMERIC(12,2);
-    /// anything else never leaves the device.
+    /// Months must be one of 1/3/6, an amount must fit NUMERIC(12,2), a plan must be complete and
+    /// a rate 0–50 %; anything else never leaves the device. Whether the rate is the Owner's is the
+    /// backend's decision (422 for anyone else); the screen only offers it to the Owner scope.
     public func updateSalvavidas(_ update: SalvavidasUpdate) async throws -> Salvavidas {
         if let months = update.targetMonths, !Salvavidas.defaultTargetMonths.contains(months) { throw WriteContract.invalid }
         if let amount = update.currentAmount { try WriteContract.checkAmount(amount, allowZero: true) }
-        if update.targetMonths == nil && update.currentAmount == nil && update.protectedExpenseIds == nil { throw WriteContract.invalid }
+        try update.autoContribution?.check()
+        if let rate = update.annualInterestRate, rate < 0 || rate > SalvavidasRateInput.maxRate || !WriteContract.decimals(rate, fit: 4) { throw WriteContract.invalid }
+        if update.isEmpty { throw WriteContract.invalid }
         return try await client.send("PUT", "/user-product/vip/salvavidas", body: update)
     }
 

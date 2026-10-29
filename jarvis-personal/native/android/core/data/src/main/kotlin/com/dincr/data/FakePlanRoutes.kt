@@ -27,6 +27,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
     )
 
     private var targetMonths = 6
+    /** Automatic contributions and the Owner's rate (`FakeSalvavidasPlan`). */
+    private val autoPlan = FakeSalvavidasPlan(today)
     // The Owner's historical Salvavidas: a manual balance and a protected-expense picker (synthetic).
     private var ownerAmount = BigDecimal(300_000)
     private var ownerProtected = listOf(31L)
@@ -189,11 +191,17 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
      * returned as the third value for the fake to store; 422 without a situation) — never protected
      * expenses. The Owner: target, manual balance and protected expenses.
      */
-    fun updateSalvavidas(data: Snapshot, owner: Boolean, target: Int?, amount: BigDecimal?, protectedIds: List<Long>?): Triple<Int, String, FinancialProfile?> {
+    fun updateSalvavidas(data: Snapshot, owner: Boolean, target: Int?, amount: BigDecimal?, protectedIds: List<Long>?,
+                         body: kotlinx.serialization.json.JsonObject? = null): Triple<Int, String, FinancialProfile?> {
         if (target != null && target !in Salvavidas.ALLOWED_TARGET_MONTHS) return Triple(422, "El objetivo del Salvavidas debe ser de 1, 3 o 6 meses.", null)
         if (amount != null && amount.signum() < 0) return Triple(422, "El ahorro no puede ser negativo.", null)
         if (!owner && !protectedIds.isNullOrEmpty()) return Triple(422, "En DINCR todas tus obligaciones cuentan para el Salvavidas.", null)
         if (!owner && amount != null && data.situation == null) return Triple(422, "Declará primero tus ingresos para guardar tus ahorros.", null)
+        // The automatic contributions and the Owner-only rate, validated before anything changes.
+        val known = owner || amount != null || data.situation?.liquidSavings != null
+        val (change, refusal) = autoPlan.validate(body, owner, known)
+        if (refusal != null) return Triple(422, refusal, null)
+        change?.let { autoPlan.apply(it, declaredNow = amount != null) }
         target?.let { targetMonths = it }
         if (owner) {
             amount?.let { ownerAmount = it }
@@ -222,10 +230,13 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         val recurringMonthly = obligations.sumOf { it.monthlyAmount ?: BigDecimal.ZERO }
         val base = debtMonthly + recurringMonthly
         val target = base * BigDecimal(targetMonths)
-        val current = data.situation?.liquidSavings
+        val declared = data.situation?.liquidSavings
+        // Contributions grow a declared balance only; an unknown balance stays unknown.
+        val auto = declared?.let { autoPlan.answer(it, interestRate = null) }
+        val current = if (auto?.isEnabled == true) auto.total else declared
         return Salvavidas(
             status = if (base.signum() > 0) "OK" else "needs_obligations", scope = "users",
-            currentAmount = current, currentAmountKnown = current != null, monthlyBase = base, targetMonths = targetMonths,
+            currentAmount = current, currentAmountKnown = current != null, declaredAmount = declared, autoContribution = auto, monthlyBase = base, targetMonths = targetMonths,
             allowedTargetMonths = Salvavidas.ALLOWED_TARGET_MONTHS, targetAmount = target,
             missingAmount = current?.let { (target - it).max(BigDecimal.ZERO) },
             coverageMonths = current?.takeIf { base.signum() > 0 }?.let { ratio(it, base) },
@@ -245,14 +256,17 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         val protected = optional.filter { it.selected == true }.sumOf { it.monthlyAmount ?: BigDecimal.ZERO }
         val base = debtMonthly + mandatory + protected
         val target = base * BigDecimal(targetMonths)
+        val auto = autoPlan.answer(ownerAmount, autoPlan.ownerRate)
+        val current = if (auto?.isEnabled == true) auto.total ?: ownerAmount else ownerAmount
         return Salvavidas(
-            status = "OK", scope = "owner", currentAmount = ownerAmount, monthlyBase = base, targetMonths = targetMonths, targetAmount = target,
-            missingAmount = (target - ownerAmount).max(BigDecimal.ZERO), coverageMonths = if (base.signum() > 0) ratio(ownerAmount, base) else BigDecimal.ZERO,
-            progressPercent = if (target.signum() > 0) ratio(ownerAmount * BigDecimal(100), target).min(BigDecimal(100)).toDouble() else 0.0,
+            status = "OK", scope = "owner", currentAmount = current, monthlyBase = base, targetMonths = targetMonths, targetAmount = target,
+            declaredAmount = ownerAmount, autoContribution = auto, annualInterestRate = autoPlan.ownerRate,
+            missingAmount = (target - current).max(BigDecimal.ZERO), coverageMonths = if (base.signum() > 0) ratio(current, base) else BigDecimal.ZERO,
+            progressPercent = if (target.signum() > 0) ratio(current * BigDecimal(100), target).min(BigDecimal(100)).toDouble() else 0.0,
             protectedExpenseIds = ownerProtected,
             components = Salvavidas.Components(debtMonthlyPayments = debtMonthly, mandatoryFixedExpenses = mandatory, protectedExpenses = protected),
             debts = debts, mandatoryExpenses = ownerMandatory, availableExpenses = optional,
-            milestones = milestones(base, ownerAmount),
+            milestones = milestones(base, current),
             verification = Salvavidas.Verification("manual", false, "Guardá el saldo para crear y vincular la cuenta financiera Salvavidas."),
         )
     }
