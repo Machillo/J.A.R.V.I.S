@@ -131,11 +131,15 @@ extension FixtureBackend {
         let base = debtMonthly + recurringMonthly
         let months = salvavidasTargetMonths
         let target = base * Decimal(months)
-        let current = decimal((situation ?? [:])["liquid_savings"])
+        let declared = decimal((situation ?? [:])["liquid_savings"])
+        // Contributions grow a declared balance only; an unknown balance stays unknown.
+        let plan = declared.flatMap { salvavidasPlanAnswer(base: $0, interestRate: nil) }
+        let current = plan?["enabled"] as? Bool == true ? decimal(plan?["total"]) : declared
         var answer: [String: Any] = [
             "status": base > 0 ? "OK" : "needs_obligations", "scope": "users",
             "current_amount": current.map { number($0) as Any } ?? NSNull(), "current_amount_known": current != nil,
             "current_amount_source": current == nil ? NSNull() as Any : "declared" as Any,
+            "declared_amount": declared.map { number($0) as Any } ?? NSNull(), "auto_contribution": plan ?? NSNull(),
             "monthly_base": number(base), "target_months": months, "allowed_target_months": [1, 3, 6], "target_amount": number(target),
             "missing_amount": current.map { number(max(target - $0, 0)) as Any } ?? NSNull(),
             "components": ["debt_monthly_payments": number(debtMonthly), "recurring_obligations": number(recurringMonthly)],
@@ -167,9 +171,13 @@ extension FixtureBackend {
         let base = debtMonthly + mandatory + protectedMonthly
         let months = salvavidasTargetMonths
         let target = base * Decimal(months)
-        let current = ownerSalvavidasCurrent
+        let declared = ownerSalvavidasCurrent
+        let plan = salvavidasPlanAnswer(base: declared, interestRate: ownerSalvavidasRate)
+        let current = plan?["enabled"] as? Bool == true ? decimal(plan?["total"]) ?? declared : declared
         return [
             "status": "OK", "scope": "owner", "current_amount": number(current), "monthly_base": number(base), "target_months": months,
+            "declared_amount": number(declared), "auto_contribution": plan ?? NSNull(),
+            "annual_interest_rate": ownerSalvavidasRate.map { number($0) as Any } ?? NSNull(),
             "target_amount": number(target), "missing_amount": number(max(target - current, 0)),
             "coverage_months": number(base > 0 ? current / base : 0), "progress_percent": number(target > 0 ? min(current / target * 100, 100) : 0),
             "protected_expense_ids": ownerProtectedExpenses.sorted(),
@@ -185,8 +193,8 @@ extension FixtureBackend {
         ]
     }
 
-    /// Users may set the 1/3/6 goal and their declared savings (422 without a situation); never
-    /// protected expenses. The Owner may set any of the three.
+    /// Users may set the 1/3/6 goal, their declared savings (422 without a situation) and the
+    /// automatic contributions; never protected expenses nor the interest rate. The Owner may set all.
     func updateSalvavidas(_ body: [String: Any]) -> Answer {
         // Validate everything first, like the backend: a refused request changes nothing.
         var months: Int?
@@ -201,6 +209,10 @@ extension FixtureBackend {
             if let ids = protectedIDs, !ids.isEmpty { return error(422, "Los gastos protegidos no aplican a tu Salvavidas.") }
             if amount != nil, situation == nil { return error(422, "Declará primero tus ingresos para guardar tus ahorros.") }
         }
+        let known = isOwnerRole || amount != nil || decimal((situation ?? [:])["liquid_savings"]) != nil
+        let checked = salvavidasPlanChange(body, balanceKnown: known)
+        if let refusal = checked.refusal { return refusal }
+        apply(checked.change, declaredNow: amount != nil)
         if let months { salvavidasTargetMonths = months }
         if isOwnerRole {
             if let amount { ownerSalvavidasCurrent = amount }

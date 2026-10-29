@@ -228,6 +228,10 @@ class SalvavidasUpdateRequest(BaseModel):
     current_amount: float | None = None
     protected_expense_ids: list[int] | None = None
     target_months: int | None = None
+    # {enabled, amount, frequency: weekly|biweekly|monthly, start_date, end_date?} (finance/salvavidas_plan.py)
+    auto_contribution: dict | None = None
+    # Owner only: annual % the Salvavidas earns (refused for any other account).
+    annual_interest_rate: float | None = None
 
 
 class PayrollReceiptLinkRequest(BaseModel):

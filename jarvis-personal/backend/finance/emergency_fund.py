@@ -4,12 +4,15 @@ import json
 import math
 import re
 import unicodedata
+from datetime import timedelta
 from typing import Any
 
 from backend.ai.preferences import get_preference, set_preference
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
+from backend.core.time import costa_rica_today
+from backend.finance import salvavidas_plan
 
 PREFERENCE_KEY = "salvavidas"
 DEFAULT_TARGET_MONTHS = 6
@@ -73,11 +76,33 @@ def _load_config() -> dict[str, Any]:
         raw = {}
     protected = raw.get("protected_expense_ids") or []
     candidate_target = int(_f(raw.get("target_months")) or DEFAULT_TARGET_MONTHS)
+    rate = raw.get("annual_interest_rate")
     return {
         "current_amount": max(_f(raw.get("current_amount")), 0.0),
         "protected_expense_ids": [int(item) for item in protected if str(item).isdigit()],
         "target_months": candidate_target if candidate_target in ALLOWED_TARGET_MONTHS else DEFAULT_TARGET_MONTHS,
+        # Automatic contributions (salvavidas_plan) and the day the balance was last declared.
+        "auto_contribution": salvavidas_plan.normalize_plan(raw.get("auto_contribution")),
+        "base_date": raw.get("base_date") if isinstance(raw.get("base_date"), str) else None,
+        # Owner only: the annual rate the savings earn (an estimate of the interest).
+        "annual_interest_rate": _f(rate) if rate is not None else None,
     }
+
+
+def _plan_progress(config: dict[str, Any], base_amount: float, *, interest: bool) -> dict[str, Any] | None:
+    """The automatic contributions (and, for the Owner, interest) added since the balance was declared."""
+    plan = config.get("auto_contribution")
+    if not plan:
+        return None
+    start = salvavidas_plan._day(plan["start_date"])
+    base_date = salvavidas_plan._day(config.get("base_date")) or (start - timedelta(days=1))
+    result = salvavidas_plan.progress(
+        plan, base_amount=base_amount, base_date=base_date, today=costa_rica_today(),
+        annual_interest_rate=config.get("annual_interest_rate") if interest else None,
+    )
+    return result or {**plan, "contributions_count": 0, "contributions_amount": 0.0, "estimated_interest": 0.0,
+                      "next_date": None, "total": round(base_amount, 2), "base_amount": round(base_amount, 2),
+                      "base_date": base_date.isoformat()}
 
 
 def _fetch_active_debts(workspace_id: str) -> list[dict[str, Any]]:
@@ -249,7 +274,9 @@ def _owner_salvavidas_state() -> dict[str, Any]:
                    ORDER BY updated_at DESC,id DESC LIMIT 1""",
                 (workspace_id,),
             ).fetchone()
-    current = max(_f(linked_account.get("current_balance") if linked_account else config.get("current_amount")), 0.0)
+    declared = max(_f(linked_account.get("current_balance") if linked_account else config.get("current_amount")), 0.0)
+    auto = _plan_progress(config, declared, interest=True)
+    current = auto["total"] if auto and auto.get("enabled") else declared
     missing = max(target - current, 0.0)
     coverage = current / monthly_base if monthly_base > 0 else 0.0
     progress = min((current / target) * 100.0, 100.0) if target > 0 else 0.0
@@ -267,6 +294,9 @@ def _owner_salvavidas_state() -> dict[str, Any]:
         "status": "OK",
         "scope": "owner",
         "current_amount": round(current, 2),
+        "declared_amount": round(declared, 2),
+        "auto_contribution": auto,
+        "annual_interest_rate": config.get("annual_interest_rate"),
         "monthly_base": round(monthly_base, 2),
         "target_months": target_months,
         "target_amount": round(target, 2),
@@ -298,17 +328,46 @@ def _owner_salvavidas_state() -> dict[str, Any]:
     }
 
 
+def _apply_plan_changes(config: dict[str, Any], *, declared_now: bool, auto_contribution: dict | None,
+                        balance_known: bool) -> None:
+    """Record a new declared balance's day and an edited automatic-contribution plan in ``config``."""
+    today = costa_rica_today().isoformat()
+    if declared_now:
+        # The real balance was declared today: contributions count again from today.
+        config["base_date"] = today
+    if auto_contribution is not None:
+        plan = salvavidas_plan.validated_plan(auto_contribution)
+        if plan["enabled"] and not balance_known:
+            raise ValueError(tx("Indicá cuánto tenés ahorrado hoy (puede ser 0) para activar los aportes automáticos.",
+                                "Enter how much you have saved today (it can be 0) to turn on automatic contributions."))
+        previous = config.get("auto_contribution")
+        if plan["enabled"] and not (previous and previous.get("enabled")) and not declared_now:
+            # Turned on now: only contributions from today on are added to the balance shown today.
+            config["base_date"] = today
+        config["auto_contribution"] = plan
+
+
 def update_salvavidas(
     *,
     current_amount: float | None = None,
     protected_expense_ids: list[int] | None = None,
     target_months: int | None = None,
+    auto_contribution: dict | None = None,
+    annual_interest_rate: float | None = None,
 ) -> dict[str, Any]:
     if not _is_owner():
+        if annual_interest_rate is not None:
+            raise ValueError(tx("La tasa de interés del Salvavidas no está disponible en tu plan.",
+                                "The emergency fund interest rate is not available on your plan."))
         return _update_users_salvavidas(
             current_amount=current_amount, protected_expense_ids=protected_expense_ids, target_months=target_months,
+            auto_contribution=auto_contribution,
         )
     config = _load_config()
+    if annual_interest_rate is not None:
+        config["annual_interest_rate"] = salvavidas_plan.validated_interest_rate(annual_interest_rate)
+    _apply_plan_changes(config, declared_now=current_amount is not None, auto_contribution=auto_contribution,
+                        balance_known=True)
     if current_amount is not None:
         config["current_amount"] = max(float(current_amount), 0.0)
     if protected_expense_ids is not None:
@@ -328,18 +387,46 @@ def update_salvavidas(
     if current_amount is not None:
         # Keep the old preference for compatibility while making Salvavidas a real account.
         from backend.finance.intelligence import upsert_account_balance
+        bank_name, rate = _owner_account_terms(config)
         upsert_account_balance(
             account_name="Salvavidas",
             current_balance=max(float(current_amount), 0.0),
-            bank_name="MultiMoney",
+            bank_name=bank_name,
             account_type="emergency_fund",
             currency="CRC",
-            annual_interest_rate=0,
+            annual_interest_rate=rate,
             include_in_net_worth=True,
             source="salvavidas",
             note="Saldo actualizado desde Strategy",
         )
+    elif annual_interest_rate is not None:
+        _set_owner_account_rate(config["annual_interest_rate"])
     return get_salvavidas_state()
+
+
+def _owner_account_terms(config: dict[str, Any]) -> tuple[str, float]:
+    """The linked Salvavidas account's bank and rate: saving a balance never renames the bank or
+    resets the rate the Owner set (historically this wrote MultiMoney and 0 on every save)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT bank_name, annual_interest_rate FROM account_balances
+               WHERE workspace_id=%s AND LOWER(account_name)='salvavidas' AND account_type='emergency_fund'
+               ORDER BY updated_at DESC,id DESC LIMIT 1""",
+            (get_current_workspace_id(),),
+        ).fetchone()
+    bank = (row or {}).get("bank_name") or "MultiMoney"
+    rate = config.get("annual_interest_rate")
+    return bank, float(rate if rate is not None else _f((row or {}).get("annual_interest_rate")))
+
+
+def _set_owner_account_rate(rate: float) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """UPDATE account_balances SET annual_interest_rate=%s, updated_at=NOW()
+               WHERE workspace_id=%s AND LOWER(account_name)='salvavidas' AND account_type='emergency_fund'""",
+            (rate, get_current_workspace_id()),
+        )
+        conn.commit()
 
 
 class SalvavidasDepositRefused(ValueError):
@@ -470,10 +557,11 @@ def _users_salvavidas_state() -> dict[str, Any]:
     situation; unknown savings stay unknown (never shown as zero coverage).
     """
     data = _load_users_obligations(get_current_workspace_id(), get_current_account_id())
-    return _users_salvavidas_from(data, _load_config()["target_months"])
+    config = _load_config()
+    return _users_salvavidas_from(data, config["target_months"], config)
 
 
-def _users_salvavidas_from(data: dict[str, Any], target_months: int) -> dict[str, Any]:
+def _users_salvavidas_from(data: dict[str, Any], target_months: int, config: dict[str, Any] | None = None) -> dict[str, Any]:
     debt_items = [{
         "id": debt.get("id"),
         "name": debt.get("name") or tx("Deuda", "Debt"),
@@ -497,6 +585,11 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int) -> dict[str
     target = round(monthly_base * target_months, 2)
     current = data.get("liquid_savings")
     known = current is not None
+    declared = current
+    # Automatic contributions grow a declared balance only; an unknown balance stays unknown.
+    auto = _plan_progress(config or {}, float(current), interest=False) if known else None
+    if auto and auto.get("enabled"):
+        current = auto["total"]
     status = "OK" if monthly_base > 0 else "needs_obligations"
     return {
         "status": status,
@@ -504,6 +597,8 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int) -> dict[str
         "current_amount": round(current, 2) if known else None,
         "current_amount_known": known,
         "current_amount_source": data.get("savings_source") if known else None,
+        "declared_amount": round(declared, 2) if known else None,
+        "auto_contribution": auto,
         "monthly_base": monthly_base,
         "target_months": target_months,
         "allowed_target_months": list(ALLOWED_TARGET_MONTHS),
@@ -547,6 +642,7 @@ def _update_users_salvavidas(
     current_amount: float | None,
     protected_expense_ids: list[int] | None,
     target_months: int | None,
+    auto_contribution: dict | None = None,
 ) -> dict[str, Any]:
     """Users choose the 1/3/6-month goal and may update their declared savings.
 
@@ -585,8 +681,13 @@ def _update_users_salvavidas(
                     "Declare your income first to save your savings.",
                 ))
             conn.commit()
-    if clean_target is not None:
+    if clean_target is not None or current_amount is not None or auto_contribution is not None:
         config = _load_config()
-        config["target_months"] = clean_target
+        if clean_target is not None:
+            config["target_months"] = clean_target
+        known = current_amount is not None or _load_users_obligations(
+            get_current_workspace_id(), get_current_account_id()).get("liquid_savings") is not None
+        _apply_plan_changes(config, declared_now=current_amount is not None, auto_contribution=auto_contribution,
+                            balance_known=known)
         set_preference(PREFERENCE_KEY, config)
     return get_salvavidas_state()

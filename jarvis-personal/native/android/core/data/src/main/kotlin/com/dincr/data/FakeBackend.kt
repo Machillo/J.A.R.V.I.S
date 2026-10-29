@@ -643,7 +643,7 @@ class FakeBackend(
         fun field(key: String) = body?.get(key)?.takeIf { it !is kotlinx.serialization.json.JsonNull }
         val ids = field("protected_expense_ids")?.let { (it as? kotlinx.serialization.json.JsonArray)?.mapNotNull { id -> id.jsonPrimitive.content.toLongOrNull() } }
         val (status, answer, updated) = planRoutes.updateSalvavidas(snapshot(), isOwner, field("target_months")?.jsonPrimitive?.content?.toIntOrNull(),
-            field("current_amount")?.jsonPrimitive?.content?.let(::BigDecimal), ids)
+            field("current_amount")?.jsonPrimitive?.content?.let(::BigDecimal), ids, body)
         if (status != 200) return error(status, answer)
         updated?.let { situation = it }
         return ok(answer)

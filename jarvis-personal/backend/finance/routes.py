@@ -554,7 +554,10 @@ def salvavidas_state():
 
 @router.put("/salvavidas")
 def salvavidas_update(request: SalvavidasUpdateRequest):
-    return update_salvavidas(**request.model_dump(exclude_unset=True))
+    try:
+        return update_salvavidas(**request.model_dump(exclude_unset=True))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.post("/engine/simulate")

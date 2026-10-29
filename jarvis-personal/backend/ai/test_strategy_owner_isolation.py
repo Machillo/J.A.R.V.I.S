@@ -394,6 +394,8 @@ class _OwnerConn:
                            "payment_method": None, "aliases": []}])
         if "to_regclass('public.account_balances')" in q:
             return _Rows([{"table_name": None}])
+        if q.startswith("SELECT bank_name, annual_interest_rate FROM account_balances"):
+            return _Rows([])  # no Salvavidas account yet: the historical bank is kept
         raise AssertionError(q[:80])
 
 

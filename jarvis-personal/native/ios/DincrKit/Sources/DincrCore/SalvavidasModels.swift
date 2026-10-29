@@ -9,7 +9,10 @@ import Foundation
 //   situation; 422 without a situation). Never `protected_expense_ids`.
 // - Owner (`scope == "owner"`): the historical JARVIS model (protected expenses, a manual balance).
 //   PUT: `current_amount`, `protected_expense_ids` or `target_months`.
-// The app never computes coverage on the device. Android twin: `Salvavidas.kt`.
+// Both scopes: `auto_contribution` (the automatic-contribution plan, also when disabled) and
+// `declared_amount` (the balance last declared); with an enabled plan `current_amount` already
+// includes the contributions (and, for the Owner, the estimated interest at `annual_interest_rate`).
+// The app never computes coverage or contributions on the device. Android twin: `Salvavidas.kt`.
 
 public struct Salvavidas: Decodable, Sendable, Equatable {
     public struct Components: Decodable, Sendable, Equatable {
@@ -99,7 +102,13 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
     public let obligations: [Line]?
     public let milestones: [Milestone]?
     public let verification: Verification?
+    /// The balance last declared, before automatic contributions (null while unknown, Users).
+    public let declaredAmount: Decimal?
+    /// The automatic-contribution plan and what it added, or nil when none was ever saved.
+    public let autoContribution: SalvavidasAutoContribution?
     // Owner only.
+    /// Percent per year the Owner's Salvavidas earns (estimated interest). Never sent to Users.
+    public let annualInterestRate: Decimal?
     public let protectedExpenseIds: [Int]?
     public let mandatoryExpenses: [Line]?
     public let availableExpenses: [Line]?
@@ -109,6 +118,7 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
         case status, scope, currentAmount, currentAmountKnown, currentAmountSource, monthlyBase, targetMonths, allowedTargetMonths
         case targetAmount, missingAmount, coverageMonths, progressPercent, components, debts, obligations
         case milestones, verification, protectedExpenseIds, mandatoryExpenses, availableExpenses, excludedDebtDuplicates
+        case declaredAmount, autoContribution, annualInterestRate
     }
 
     public init(from decoder: Decoder) throws {
@@ -134,6 +144,9 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
         mandatoryExpenses = c.lenient([Line].self, .mandatoryExpenses)
         availableExpenses = c.lenient([Line].self, .availableExpenses)
         excludedDebtDuplicates = c.lenient([Line].self, .excludedDebtDuplicates)
+        declaredAmount = c.lenient(Decimal.self, .declaredAmount)
+        autoContribution = c.lenient(SalvavidasAutoContribution.self, .autoContribution)
+        annualInterestRate = c.lenient(Decimal.self, .annualInterestRate)
     }
 
     /// The historical JARVIS model, sent only to the server-resolved Owner.
@@ -148,6 +161,11 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
         return isOwnerScope || currentAmountKnown != false
     }
 
+    /// The enabled plan whose contributions the balance already includes, or nil.
+    public var activePlan: SalvavidasAutoContribution? { autoContribution?.isEnabled == true ? autoContribution : nil }
+    /// The annual interest rate field is the Owner's alone (the backend refuses it for anyone else).
+    public var offersInterestRate: Bool { isOwnerScope }
+
     /// The target choices to offer, as the backend allows them.
     public var targetChoices: [Int] { (allowedTargetMonths?.isEmpty == false ? allowedTargetMonths : nil) ?? Self.defaultTargetMonths }
 
@@ -160,30 +178,165 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
     }
 }
 
-/// Body of `PUT /vip/salvavidas`: exactly one change per request; absent fields are not sent.
+/// The automatic-contribution plan as the backend answers it (`auto_contribution`): its settings
+/// and, when enabled, what it added since `base_date` (estimates following the plan).
+public struct SalvavidasAutoContribution: Decodable, Sendable, Equatable {
+    public static let frequencies = ["weekly", "biweekly", "monthly"]
+
+    public let enabled: Bool?
+    public let amount: Decimal?
+    public let frequency: String?
+    public let startDate: String?
+    public let endDate: String?
+    public let baseAmount: Decimal?
+    public let baseDate: String?
+    public let contributionsCount: Int?
+    public let contributionsAmount: Decimal?
+    public let estimatedInterest: Decimal?
+    public let nextDate: String?
+    public let total: Decimal?
+
+    enum CodingKeys: String, CodingKey {
+        case enabled, amount, frequency, startDate, endDate, baseAmount, baseDate
+        case contributionsCount, contributionsAmount, estimatedInterest, nextDate, total
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = c.lenient(Bool.self, .enabled)
+        amount = c.lenient(Decimal.self, .amount)
+        frequency = c.lenient(String.self, .frequency)
+        startDate = c.lenient(String.self, .startDate)
+        endDate = c.lenient(String.self, .endDate)
+        baseAmount = c.lenient(Decimal.self, .baseAmount)
+        baseDate = c.lenient(String.self, .baseDate)
+        contributionsCount = c.lenient(Int.self, .contributionsCount)
+        contributionsAmount = c.lenient(Decimal.self, .contributionsAmount)
+        estimatedInterest = c.lenient(Decimal.self, .estimatedInterest)
+        nextDate = c.lenient(String.self, .nextDate)
+        total = c.lenient(Decimal.self, .total)
+    }
+
+    public var isEnabled: Bool { enabled == true }
+
+    /// "Semanal" / "Quincenal" / "Mensual".
+    public static func frequencyLabel(_ frequency: String?, language: AppLanguage = .current) -> String {
+        switch frequency {
+        case "weekly": return language.pick("Semanal", "Weekly")
+        case "biweekly": return language.pick("Quincenal", "Every two weeks")
+        case "monthly": return language.pick("Mensual", "Monthly")
+        default: return "—"
+        }
+    }
+
+    /// "3 aportes automáticos" / "1 automatic contribution".
+    public static func countLabel(_ count: Int, language: AppLanguage = .current) -> String {
+        count == 1 ? language.pick("1 aporte automático", "1 automatic contribution")
+            : language.pick("\(count) aportes automáticos", "\(count) automatic contributions")
+    }
+}
+
+/// The plan the app sends in `auto_contribution`; the backend validates it again.
+public struct SalvavidasPlanRequest: Encodable, Sendable, Equatable {
+    /// The backend's cap for one contribution.
+    public static let maxAmount = Decimal(string: "999999999.99")!
+
+    public let enabled: Bool
+    public let amount: Decimal
+    public let frequency: String
+    public let startDate: String
+    /// nil: no end. Always sent (as null) so an edit can remove the end date.
+    public let endDate: String?
+
+    public init(enabled: Bool, amount: Decimal, frequency: String, startDate: String, endDate: String?) {
+        self.enabled = enabled; self.amount = amount; self.frequency = frequency; self.startDate = startDate; self.endDate = endDate
+    }
+
+    enum CodingKeys: String, CodingKey { case enabled, amount, frequency, startDate, endDate }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(amount, forKey: .amount)
+        try c.encode(frequency, forKey: .frequency)
+        try c.encode(startDate, forKey: .startDate)
+        if let endDate { try c.encode(endDate, forKey: .endDate) } else { try c.encodeNil(forKey: .endDate) }
+    }
+
+    /// Refuses, before sending, what the backend would refuse.
+    public func check() throws {
+        try WriteContract.checkAmount(amount)
+        guard amount <= Self.maxAmount, SalvavidasAutoContribution.frequencies.contains(frequency) else { throw WriteContract.invalid }
+        try WriteContract.checkDate(startDate)
+        guard startDate.count == 10 else { throw WriteContract.invalid }
+        if let endDate {
+            try WriteContract.checkDate(endDate)
+            guard endDate.count == 10, endDate >= startDate else {
+                throw APIError(kind: .validation, message: AppLanguage.current.pick(
+                    "La fecha final debe ser después del primer aporte.", "The end date must be after the first contribution."))
+            }
+        }
+    }
+}
+
+/// The Owner's annual interest rate typed as a percent ("2,5" or "2.5"): 0–50, at most 4 decimals.
+public enum SalvavidasRateInput {
+    public static let maxRate = Decimal(50)
+
+    public static func parse(_ text: String) -> Decimal? {
+        let trimmed = text.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "%", with: "")
+        guard !trimmed.isEmpty, trimmed.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == "." || $0 == ",") }) else { return nil }
+        let parts = trimmed.replacingOccurrences(of: ",", with: ".").split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count <= 2, !parts[0].isEmpty, parts.count == 1 || (1...4).contains(parts[1].count) else { return nil }
+        guard let value = Decimal(string: parts.joined(separator: "."), locale: Locale(identifier: "en_US_POSIX")),
+              value >= 0, value <= maxRate else { return nil }
+        return value
+    }
+}
+
+/// Body of `PUT /vip/salvavidas`; absent fields are not sent. The goal, the balance and the
+/// protected expenses go one per request; the automatic-contribution plan may carry the balance
+/// (required while the user's savings are unknown) and, for the Owner, the interest rate.
 public struct SalvavidasUpdate: Encodable, Sendable, Equatable {
     public let targetMonths: Int?
     public let currentAmount: Decimal?
     public let protectedExpenseIds: [Int]?
+    public let autoContribution: SalvavidasPlanRequest?
+    /// Owner only: percent per year (the backend answers 422 to anyone else).
+    public let annualInterestRate: Decimal?
 
-    private init(targetMonths: Int?, currentAmount: Decimal?, protectedExpenseIds: [Int]?) {
+    private init(targetMonths: Int? = nil, currentAmount: Decimal? = nil, protectedExpenseIds: [Int]? = nil,
+                 autoContribution: SalvavidasPlanRequest? = nil, annualInterestRate: Decimal? = nil) {
         self.targetMonths = targetMonths; self.currentAmount = currentAmount; self.protectedExpenseIds = protectedExpenseIds
+        self.autoContribution = autoContribution; self.annualInterestRate = annualInterestRate
     }
 
     /// Users and Owner: the 1/3/6-month goal.
-    public static func target(months: Int) -> SalvavidasUpdate { SalvavidasUpdate(targetMonths: months, currentAmount: nil, protectedExpenseIds: nil) }
+    public static func target(months: Int) -> SalvavidasUpdate { SalvavidasUpdate(targetMonths: months) }
     /// The fund's balance. Owner: his manual balance. Users: their declared savings (the same field as
     /// the financial situation; the backend answers 422 when they have no situation yet).
-    public static func currentAmount(_ amount: Decimal) -> SalvavidasUpdate { SalvavidasUpdate(targetMonths: nil, currentAmount: amount, protectedExpenseIds: nil) }
+    public static func currentAmount(_ amount: Decimal) -> SalvavidasUpdate { SalvavidasUpdate(currentAmount: amount) }
     /// Owner only: the optional fixed expenses the fund protects.
-    public static func protectedExpenses(_ ids: [Int]) -> SalvavidasUpdate { SalvavidasUpdate(targetMonths: nil, currentAmount: nil, protectedExpenseIds: ids.sorted()) }
+    public static func protectedExpenses(_ ids: [Int]) -> SalvavidasUpdate { SalvavidasUpdate(protectedExpenseIds: ids.sorted()) }
+    /// The automatic-contribution plan (nil keeps the saved one), with the balance declared today
+    /// when the savings are unknown, and the Owner's rate. nil when there is nothing to send.
+    public static func plan(_ plan: SalvavidasPlanRequest?, currentAmount: Decimal? = nil, annualInterestRate: Decimal? = nil) -> SalvavidasUpdate? {
+        guard plan != nil || currentAmount != nil || annualInterestRate != nil else { return nil }
+        return SalvavidasUpdate(currentAmount: currentAmount, autoContribution: plan, annualInterestRate: annualInterestRate)
+    }
 
-    enum CodingKeys: String, CodingKey { case targetMonths, currentAmount, protectedExpenseIds }
+    var isEmpty: Bool {
+        targetMonths == nil && currentAmount == nil && protectedExpenseIds == nil && autoContribution == nil && annualInterestRate == nil
+    }
+
+    enum CodingKeys: String, CodingKey { case targetMonths, currentAmount, protectedExpenseIds, autoContribution, annualInterestRate }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encodeIfPresent(targetMonths, forKey: .targetMonths)
         try c.encodeIfPresent(currentAmount, forKey: .currentAmount)
         try c.encodeIfPresent(protectedExpenseIds, forKey: .protectedExpenseIds)
+        try c.encodeIfPresent(autoContribution, forKey: .autoContribution)
+        try c.encodeIfPresent(annualInterestRate, forKey: .annualInterestRate)
     }
 }
