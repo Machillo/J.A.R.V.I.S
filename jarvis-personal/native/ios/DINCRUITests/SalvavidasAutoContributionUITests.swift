@@ -51,12 +51,20 @@ final class SalvavidasAutoContributionUITests: XCTestCase {
 
     private func type(_ text: String, into identifier: String, in app: XCUIApplication) {
         let field = reveal(identifier, in: app)
-        // A tap during a scroll's deceleration may not focus the field: tap until it has the keyboard.
-        for _ in 0..<3 where !((field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) {
-            field.tap()
+        // A tap during a scroll's deceleration (or right after the keyboard closed) may not focus the
+        // field: wait for the screen to settle and tap its center until it has the keyboard.
+        func focused() -> Bool { (field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
+        for _ in 0..<6 where !focused() {
+            _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 1)
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             _ = app.keyboards.firstMatch.waitForExistence(timeout: 2)
         }
+        XCTAssertTrue(focused(), "\(identifier) has the keyboard")
         field.typeText(text)
+        // Close the decimal pad (it has no return key) so the buttons below are reachable.
+        let done = app.buttons["salvavidas.auto.keyboardDone"]
+        if done.waitForExistence(timeout: 2) { done.tap() }
+        _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
     }
 
     func testAVipTicksTheBoxSavesThePlanAndSeesTheBreakdown() {
