@@ -7,6 +7,8 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -93,7 +95,15 @@ class MovementsReviewUiTest {
         // Opened from Movimientos, the review keeps Movimientos selected.
         assertEquals(tx("Movimientos", "Transactions"), selectedTab())
         back()
-        waitUntil("the confirmed notice is now a movement") { present("Compra en supermercado") }
+        // The list shows the month (with its picker above); the new movement may sit below the fold.
+        waitUntil("the confirmed notice is now a movement") {
+            present("Compra en supermercado") || run {
+                compose.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().indices.forEach { index ->
+                    runCatching { compose.onAllNodes(hasScrollToNodeAction())[index].performScrollToNode(hasText("Compra en supermercado", substring = true)) }
+                }
+                present("Compra en supermercado")
+            }
+        }
         assertTrue(tagged("movements.analysis"))
     }
 
