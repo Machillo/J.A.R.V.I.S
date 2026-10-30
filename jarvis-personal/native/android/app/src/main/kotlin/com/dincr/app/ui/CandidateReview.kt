@@ -17,6 +17,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
 import com.dincr.app.tx
@@ -126,6 +127,12 @@ fun CandidateCard(candidate: MailCandidate, busy: Boolean, message: String?, onA
                     Text(candidate.description ?: candidate.subject.orEmpty(), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
                     // `bank` is the institution code: shown as the bank's name when it is identified.
                     Caption(listOfNotNull(bank?.name ?: candidate.bank?.takeIf { it.isNotBlank() }, dateLabel(candidate.transactionDate), candidate.category).joinToString(" · "))
+                    val source = when {
+                        candidate.isApplePayCapture -> "Apple Pay"
+                        candidate.isBankSmsCapture -> tx("SMS del banco", "Bank SMS")
+                        else -> null
+                    }
+                    source?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = Dincr.colors.tint, modifier = Modifier.testTag("candidate.source.${candidate.candidateId ?: 0}")) }
                 }
                 // Always in the notice's own currency.
                 MoneyText(candidate.nativeAmount, currency = candidate.nativeCurrency,
