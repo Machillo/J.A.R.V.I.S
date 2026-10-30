@@ -146,6 +146,8 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
     public let resolutionReason: String?
     public let isInternalTransfer: Bool?
     public let sourceType: String?
+    /// Who captured a candidate without an email: `apple_pay_shortcut` / `bank_sms_shortcut` (iOS Shortcuts).
+    public let sourceProvider: String?
     /// The detected account (`account_balances.id`) the notice belongs to, when known (Cuentas).
     public let financialAccountId: Int?
     /// The parser's reading of the bank movement and its effect (e.g. a card payment); may be null.
@@ -158,13 +160,13 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
                 description: String?, amount: Decimal?, currency: String?, originalAmount: Decimal? = nil, originalCurrency: String? = nil,
                 accountBaseCurrency: String?, transactionDate: String?, transactionType: String?, category: String?,
                 reviewStatus: String?, resolutionReason: String? = nil, isInternalTransfer: Bool? = false,
-                financialAccountId: Int? = nil, bankMovement: String? = nil, financialEffect: String? = nil) {
+                financialAccountId: Int? = nil, bankMovement: String? = nil, financialEffect: String? = nil, sourceProvider: String? = nil) {
         self.candidateId = candidateId; self.emailId = emailId; self.bank = bank; self.sender = sender; self.subject = subject
         self.receivedAt = receivedAt; self.description = description; self.amount = amount; self.currency = currency
         self.originalAmount = originalAmount; self.originalCurrency = originalCurrency; self.accountBaseCurrency = accountBaseCurrency
         self.transactionDate = transactionDate; self.transactionType = transactionType; self.category = category
         self.reviewStatus = reviewStatus; self.resolutionReason = resolutionReason; self.isInternalTransfer = isInternalTransfer
-        self.sourceType = nil
+        self.sourceType = nil; self.sourceProvider = sourceProvider
         self.financialAccountId = financialAccountId; self.bankMovement = bankMovement; self.financialEffect = financialEffect
     }
 
@@ -182,6 +184,16 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
     public var nativeAmount: Decimal? { usesOriginal ? originalAmount : amount }
 
     public var isPending: Bool { reviewStatus == "pending" }
+
+    /// Where a capture came from, shown on its card so it is not taken for a mail notice:
+    /// "Apple Pay" or "SMS del banco"; nil for mail notices and statements.
+    public func captureSourceLabel(language: AppLanguage = .current) -> String? {
+        switch sourceProvider {
+        case "apple_pay_shortcut": "Apple Pay"
+        case "bank_sms_shortcut": language.pick("SMS del banco", "Bank SMS")
+        default: nil
+        }
+    }
 
     /// How the amount is styled: only a notice read as income or spending gets a sign. A transfer may be
     /// the user's own money moving, so it stays neutral (Android: `CandidateReview` amount sign).

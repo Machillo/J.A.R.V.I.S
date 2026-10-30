@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -31,6 +30,7 @@ from fastapi import HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from backend import main  # noqa: E402
+from backend.core.time import costa_rica_today  # noqa: E402
 from backend.user_product import gmail_service, shortcut_capture, shortcut_routes, shortcut_sms, shortcut_tokens  # noqa: E402
 
 # What the capture flow writes on top of the review schema of the shared fixture, plus the
@@ -276,7 +276,9 @@ def _mail_notice(db, ident, *, amount, description, day=None, currency="CRC", or
         message_id = cur.fetchone()["id"]
     candidate = {
         "movement_index": 0, "source_type": "email", "source_provider": "gmail", "source_record_key": f"gmail:{message_id}:0",
-        "institution_country": "CR", "transaction_date": (day or date.today()).isoformat(), "transaction_time": None,
+        # The bank's own (Costa Rica) day, like the capture: date.today() is UTC on CI and differs
+        # from 18:00 to midnight in Costa Rica.
+        "institution_country": "CR", "transaction_date": (day or costa_rica_today()).isoformat(), "transaction_time": None,
         "description": description, "amount": amount, "currency": currency, "original_amount": original,
         "original_currency": "USD" if original else None, "transaction_type": "expense", "movement_direction": "out",
         "movement_kind": "card_purchase", "category": "Compras", "bank": "bac", "source_account_label": None,

@@ -51,6 +51,19 @@ import Testing
         #expect(transport.requests[0].url?.path == "/user-product/vip/gmail/emails")
     }
 
+    /// A capture from the iOS Shortcuts says where it came from; a mail notice says nothing.
+    @Test func capturesNameTheirSource() throws {
+        func label(_ provider: String?) throws -> String? {
+            let value = provider.map { "\"\($0)\"" } ?? "null"
+            let json = #"{"candidate_id":1,"review_status":"pending","source_type":"api","source_provider":"# + value + "}"
+            return try APIClient.decoder.decode(MailCandidate.self, from: Data(json.utf8)).captureSourceLabel(language: .spanish)
+        }
+        #expect(try label("apple_pay_shortcut") == "Apple Pay")
+        #expect(try label("bank_sms_shortcut") == "SMS del banco")
+        #expect(try label("gmail") == nil)
+        #expect(try label(nil) == nil)
+    }
+
     @Test func syncFailedConnectionsIsAList() async throws {
         let json = #"{"status":"partial","connections":2,"failed_connections":[3],"scan_scope":"year_to_date","initial_scan_complete":true,"found":4,"auto_saved":0,"pending":2,"payroll_reports":0,"duplicates":1}"#
         let result = try await DincrService(client: client(ScriptedTransport([.status(200, json)]))).syncMail()

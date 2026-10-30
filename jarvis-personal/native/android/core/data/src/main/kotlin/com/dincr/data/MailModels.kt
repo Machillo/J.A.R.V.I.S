@@ -94,6 +94,8 @@ data class MailCandidate(
     @SerialName("resolution_reason") val resolutionReason: String? = null,
     @SerialName("is_internal_transfer") val isInternalTransfer: Boolean? = null,
     @SerialName("source_type") val sourceType: String? = null,
+    /** Who captured a candidate without an email: `apple_pay_shortcut` / `bank_sms_shortcut` (iOS Shortcuts). */
+    @SerialName("source_provider") val sourceProvider: String? = null,
     @SerialName("parse_reason") val parseReason: String? = null,
     /** The detected account (`/vip/financial-identity`) this notice belongs to, when known. */
     @SerialName("financial_account_id") val financialAccountId: Long? = null,
@@ -106,6 +108,10 @@ data class MailCandidate(
      * the notice was in another currency (backend `candidate_currency`): the native pair is
      * `(original_currency, original_amount)` then.
      */
+    /** "Apple Pay" / "SMS del banco" for an iOS Shortcuts capture, so it is not taken for a mail notice. */
+    val isApplePayCapture: Boolean get() = sourceProvider == "apple_pay_shortcut"
+    val isBankSmsCapture: Boolean get() = sourceProvider == "bank_sms_shortcut"
+
     val nativeCurrency: String? get() =
         if (!originalCurrency.isNullOrBlank() && originalAmount != null && !originalCurrency.equals(currency, ignoreCase = true)) originalCurrency.uppercase() else currency?.uppercase()
     val nativeAmount: java.math.BigDecimal? get() =
