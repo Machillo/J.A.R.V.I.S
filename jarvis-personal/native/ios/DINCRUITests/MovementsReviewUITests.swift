@@ -52,7 +52,10 @@ final class MovementsReviewUITests: XCTestCase {
         open("mail.accept.21", in: app)
         XCTAssertTrue(element("mail.notice", in: app).waitForExistence(timeout: 10))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(text("Compra en supermercado", in: app).waitForExistence(timeout: 10), "the confirmed notice is now a movement")
+        // The month's list is long; the lazy list only builds the row once it is scrolled into view.
+        let movement = text("Compra en supermercado", in: app)
+        for _ in 0..<6 where !movement.waitForExistence(timeout: 2) { app.swipeUp() }
+        XCTAssertTrue(movement.exists, "the confirmed notice is now a movement")
         XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map { $0.label }, ["Hoy", "Movimientos", "Plan", "Patrimonio", "Perfil"])
     }
 
