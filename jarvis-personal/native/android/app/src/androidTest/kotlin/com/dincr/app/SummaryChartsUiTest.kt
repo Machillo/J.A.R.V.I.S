@@ -26,11 +26,9 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * E04 / E05 — Movimientos → Análisis → Resumen del mes draws the month's income vs expenses as bars
- * and its expenses by category as a donut, below the amounts (still there as text). TalkBack reads
- * the bars' amounts and every category with its share. An empty month says so instead of drawing.
- * Every plan reaches the summary; only the Owner keeps the Owner analysis entry. iOS twin:
- * `SummaryChartsUITests`. FakeBackend only.
+ * Movimientos → Análisis → Resumen (simple): a month or a year, income, spending and what was saved
+ * as text, and two donuts (where the money came from, where it went) that TalkBack reads part by
+ * part. An empty period says so. Every plan reaches it. iOS twin: `SummaryChartsUITests`. FakeBackend only.
  */
 class SummaryChartsUiTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -76,58 +74,42 @@ class SummaryChartsUiTest {
         compose.onAllNodes(hasAnyAncestor(hasTestTag(tag)) and SemanticsMatcher("has a description") { it.config.getOrNull(SemanticsProperties.ContentDescription) != null }, useUnmergedTree = true)
             .fetchSemanticsNodes().flatMap { it.config[SemanticsProperties.ContentDescription] }
 
-    private fun thisMonth(): String = shortMonthName(YearMonth.now().monthValue)
-    private fun shortMonthName(month: Int) = (if (tx("es", "en") == "es") listOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic")
-        else listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))[month - 1]
-
-    @Test fun everyPlanSeesTheBarsAndTheDonutWithTheAmountsKept() {
+    @Test fun everyPlanSeesTheTotalsAndBothDonuts() {
         for ((plan, role) in listOf("free" to null, "basic" to null, "vip" to null, "vip" to "owner")) {
             val context = role ?: plan
             launch(plan = plan, role = role)
             assertEquals("$context: the Owner entry stays the Owner's", role == "owner", tagged("analysis.owner"))
             click(tx("Resumen del mes", "Monthly summary"))
-            // The amounts stay as text above the charts.
-            // The Owner reads the month's result with what it means (owner_ledger); the others keep "Balance".
-            waitUntil("$context: amounts") { present(if (role == "owner") tx("Resultado del mes", "Result of the month") else tx("Balance", "Balance")) }
-            if (role == "owner") waitUntil("owner: the month says it is not complete yet") { present(tx("Este mes todavía no está completo", "This month isn’t complete yet")) }
-
-            waitUntil("$context: E04 bars") { tagged("summary.flow.chart") }
-            val bars = descriptions("summary.flow.chart").single()
-            val month = thisMonth()
-            val expected = Regex("^${Regex.escape(tx("Ingresos y gastos de $month", "Income and expenses for $month"))}\\. $month: " +
-                tx("ingresos [0-9]+ colones, gastos [0-9]+ colones$", "income [0-9]+ colones, expenses [0-9]+ colones$"))
-            assertTrue("$context: TalkBack names the month and reads both amounts ($bars)", expected.matches(bars))
-
+            waitUntil("$context: totals") { tagged("summary.income") && tagged("summary.expenses") && tagged("summary.saved") }
+            assertEquals("$context: only the Owner has the ledger detail", role == "owner", tagged("summary.owner.detail"))
+            assertFalse("$context: no bars any more", tagged("summary.flow.chart"))
+            compose.onAllNodes(hasTestTag("summary.incomeSources")).onFirst().performScrollTo()
+            waitUntil("$context: where it came from") { descriptions("summary.incomeSources").isNotEmpty() }
             compose.onAllNodes(hasTestTag("summary.categories")).onFirst().performScrollTo()
-            waitUntil("$context: E05 donut") { descriptions("summary.categories").isNotEmpty() }
+            waitUntil("$context: where it went") { descriptions("summary.categories").isNotEmpty() }
             val parts = descriptions("summary.categories")
-            assertTrue("$context: TalkBack reads each category with its amount and share ($parts)", parts.any { Regex("^Comida: [0-9]+ colones, [0-9]+ %$").matches(it) })
-            assertFalse(context, present(tx("Todavía no hay datos", "No data yet")))
+            assertTrue("$context: TalkBack reads each part with its amount and share ($parts)", parts.any { Regex("^Comida: [0-9]+ colones, [0-9]+ %$").matches(it) })
         }
     }
 
-    @Test fun aMonthWithNothingRecordedSaysSoInsteadOfDrawing() {
+    @Test fun aMonthWithNothingRecordedSaysSo() {
         launch(fixtures = "EMPTY")
         click(tx("Resumen del mes", "Monthly summary"))
         waitUntil("notice") { tagged("summary.flow.notice") }
         assertTrue(present(tx("Todavía no hay ingresos ni gastos registrados en este mes.", "No income or expenses recorded this month yet.")))
-        assertFalse("no bars of nothing", tagged("summary.flow.chart"))
-        val categories = tx("Gastos por categoría", "Expenses by category")
-        val why = "$categories. ${tx("Todavía no hay datos.", "No data yet.")}"
-        waitUntil("the donut says why it isn't drawn") { compose.onAllNodes(hasContentDescription(why), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
     }
 
-    @Test fun aPreviousMonthDrawsItsOwnSummary() {
+    @Test fun theYearHasItsOwnSummary() {
         launch()
         click(tx("Resumen del mes", "Monthly summary"))
-        waitUntil("bars") { tagged("summary.flow.chart") }
-        val previous = tx("Mes anterior", "Previous month")
-        repeat(12) {
+        click(tx("Año", "Year"))
+        waitUntil("year totals") { tagged("summary.income") }
+        val previous = tx("Año anterior", "Previous year")
+        repeat(2) {
             compose.onAllNodes(hasContentDescription(previous) and hasClickAction()).onFirst().performSemanticsAction(SemanticsActions.OnClick)
             compose.waitForIdle()
         }
-        // A year back the fixture has nothing recorded: the bars give way to the notice.
+        // Two years back the fixture has nothing recorded.
         waitUntil("notice") { tagged("summary.flow.notice") }
-        assertFalse(tagged("summary.flow.chart"))
     }
 }

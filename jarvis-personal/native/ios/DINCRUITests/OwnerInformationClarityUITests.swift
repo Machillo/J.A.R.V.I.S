@@ -59,7 +59,9 @@ final class OwnerInformationClarityUITests: XCTestCase {
             let app = launch(l, tab: "movements")
             open("movements.analysis", in: app)
             open("analysis.summary", in: app)
-            // This month: a mail notice still to review.
+            // This month: a mail notice still to review; the short line, then the ledger one tap away.
+            XCTAssertTrue(element("summary.owner.incomplete", in: app).waitForExistence(timeout: 10), l)
+            open("summary.owner.detail", in: app)
             XCTAssertTrue(element("summary.owner.month", in: app).waitForExistence(timeout: 10), l)
             XCTAssertTrue(text(pick(l, "Este mes todavía no está completo", "This month isn’t complete yet"), in: app).exists, l)
             XCTAssertTrue(text(pick(l, "Hay 1 aviso de correo de este mes sin revisar", "There is 1 mail notice from this month not reviewed"), in: app).exists, "\(l): one notice reads singular")
@@ -67,7 +69,9 @@ final class OwnerInformationClarityUITests: XCTestCase {
             snapshot("\(l)-summary-current", app)
 
             // The month before: complete, a loan apart from income and the gross payroll apart.
+            app.swipeDown(); app.swipeDown()
             app.buttons[pick(l, "Mes anterior", "Previous month")].firstMatch.tap()
+            open("summary.owner.detail", in: app)
             XCTAssertTrue(text(pick(l, "Mes completo", "Complete month"), in: app).waitForExistence(timeout: 10), l)
             reveal(pick(l, "Otro dinero que entró (no es ingreso)", "Other money in (not income)"), in: app, l)
             XCTAssertTrue(text(pick(l, "Préstamos recibidos", "Loans received"), in: app).exists, l)
@@ -126,7 +130,8 @@ final class OwnerInformationClarityUITests: XCTestCase {
         let app = launch("es", role: nil, tab: "movements")
         open("movements.analysis", in: app)
         open("analysis.summary", in: app)
-        XCTAssertTrue(text("Balance", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("summary.saved", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("summary.owner.detail", in: app).exists, "VIP never reads the Owner's ledger")
         XCTAssertFalse(element("summary.owner.month", in: app).exists, "VIP never reads the Owner's ledger")
         XCTAssertFalse(text("Este mes todavía no está completo", in: app).exists)
         app.terminate()

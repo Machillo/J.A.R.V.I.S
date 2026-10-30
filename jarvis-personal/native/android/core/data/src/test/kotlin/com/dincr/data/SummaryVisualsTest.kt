@@ -88,4 +88,16 @@ class SummaryVisualsTest {
         assertEquals(SummaryVisuals.Flow.Empty, SummaryVisuals.flow(empty))
         assertEquals(Composition.Status.EMPTY, SummaryVisuals.categories(empty).status)
     }
+
+    /** Resumen (simple): where the money came from and where it went, straight from the backend's amounts. */
+    @Test fun incomeSourcesAndOutflowsComeFromTheBackend() {
+        val summary = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString<MonthlySummary>(
+            """{"period":"2026","scope":"year","income":900000,"expenses":300000,"debt_paid":100000,"categories":[{"category":"Comida","amount":300000}],
+               "income_categories":[{"category":"Salario","amount":800000},{"category":"Horas extra","amount":100000}],"saved":{"total":50000,"goals":20000,"salvavidas":30000}}""")
+        assertEquals("year", summary.scope)
+        assertEquals(listOf("Salario", "Horas extra"), SummaryVisuals.incomeSources(summary, AppLanguage.SPANISH).segments.map { it.label })
+        val outflows = SummaryVisuals.outflows(summary, AppLanguage.SPANISH)
+        assertEquals(listOf("Comida", "Pagos de deudas", "Ahorro"), outflows.segments.map { it.label })
+        assertEquals(0, java.math.BigDecimal(450_000).compareTo(outflows.total))
+    }
 }

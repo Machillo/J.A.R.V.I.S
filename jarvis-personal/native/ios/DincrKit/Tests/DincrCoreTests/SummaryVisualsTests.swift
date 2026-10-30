@@ -79,4 +79,22 @@ import Testing
         #expect(SummaryVisuals.flow(empty) == .empty)
         #expect(SummaryVisuals.categories(empty).status == .empty)
     }
+
+    /// Resumen (simple): where the money came from, and where it went (spending, debt payments and
+    /// what was saved), straight from the backend's amounts; nothing unknown drawn as zero.
+    @Test func incomeSourcesAndOutflowsComeFromTheBackend() throws {
+        let summary = try summary(#"{"period":"2026","scope":"year","income":900000,"expenses":300000,"debt_paid":100000,"categories":[{"category":"Comida","amount":300000}],"income_categories":[{"category":"Salario","amount":800000},{"category":"Horas extra","amount":100000}],"saved":{"total":50000,"goals":20000,"salvavidas":30000}}"#)
+        #expect(summary.scope == "year" && summary.saved?.salvavidas == 30_000)
+        let sources = SummaryVisuals.incomeSources(summary, language: .spanish)
+        #expect(sources.segments.map(\.label) == ["Salario", "Horas extra"] && sources.total == 900_000)
+        let outflows = SummaryVisuals.outflows(summary, language: .spanish)
+        #expect(outflows.segments.map(\.label) == ["Comida", "Pagos de deudas", "Ahorro"])
+        #expect(outflows.total == 450_000)
+    }
+
+    @Test func nothingSavedOrPaidAddsNoSlice() throws {
+        let summary = try summary(#"{"income":1000,"expenses":400,"debt_paid":0,"categories":[{"category":"Comida","amount":400}],"saved":{"total":0}}"#)
+        #expect(SummaryVisuals.outflows(summary, language: .spanish).segments.map(\.label) == ["Comida"])
+        #expect(SummaryVisuals.incomeSources(summary, language: .spanish).status == .empty)
+    }
 }

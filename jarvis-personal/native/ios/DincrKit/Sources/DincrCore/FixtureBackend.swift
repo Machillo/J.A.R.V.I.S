@@ -766,12 +766,13 @@ public actor FixtureBackend: HTTPTransport {
         return (income, expenses)
     }
 
-    private func categories(_ period: String) -> [[String: Any]] {
+    /// Spending (or, with `income`, income) by category in a month `YYYY-MM` or a year `YYYY`.
+    private func categories(_ period: String, income: Bool = false) -> [[String: Any]] {
         var byCategory: [String: Decimal] = [:]
         for row in movements {
             let inPeriod = (row["transaction_date"] as? String ?? "").hasPrefix(period)
             let isIncome = row["transaction_type"] as? String == "income"
-            guard inPeriod, !isIncome else { continue }
+            guard inPeriod, isIncome == income else { continue }
             byCategory[row["category"] as? String ?? "Sin categoría", default: 0] += decimal(row["amount"]) ?? 0
         }
         return byCategory.sorted { $0.value > $1.value }.map { ["category": $0.key, "amount": number($0.value)] }
@@ -833,8 +834,14 @@ public actor FixtureBackend: HTTPTransport {
     private func monthlySummary(_ period: String) -> [String: Any] {
         let (income, expenses) = totals(period)
         let cats = categories(period)
-        var summary: [String: Any] = ["period": period, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "balance": number(income - expenses),
-                "top_category": cats.first ?? NSNull(), "categories": cats, "savings": number(sum(savings, "saved_amount")),
+        // What was put aside: a synthetic goal contribution in every month with movements (the backend
+        // adds goal contributions and the Salvavidas plan's automatic contributions).
+        let goalsSaved: Decimal = income > 0 ? Decimal(period.count == 4 ? 60_000 : 15_000) : 0
+        var summary: [String: Any] = ["period": period, "scope": period.count == 4 ? "year" : "month",
+                "income": number(income), "expenses": number(expenses), "debt_paid": 0, "balance": number(income - expenses),
+                "top_category": cats.first ?? NSNull(), "categories": cats, "income_categories": categories(period, income: true),
+                "saved": ["total": number(goalsSaved), "goals": number(goalsSaved), "salvavidas": 0],
+                "savings": number(sum(savings, "saved_amount")),
                 "goals": ["current": number(sum(goals, "current_amount")), "target": number(sum(goals, "target_amount")), "progress": 40.0]]
         guard profile["role"] as? String == "owner" else { return summary }
         // Like the backend: only the verified Owner's month carries the ledger's reading. The current

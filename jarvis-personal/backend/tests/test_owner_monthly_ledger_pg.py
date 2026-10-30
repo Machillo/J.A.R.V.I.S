@@ -245,3 +245,69 @@ def test_only_the_verified_owner_identity_gets_the_ledger(db, monkeypatch, store
         reset_current_user(token)
     assert {key: summary[key] for key in expected} == expected
     assert all(("counts_in" in row) == (expected is OWNER_OCTOBER) for row in rows)
+
+
+# Resumen (summary_breakdown): where the money came from adds up to the income each account's total
+# counts, a year is a period of its own, and "lo que guardaste" is what was put aside, never income
+# minus spending. Synthetic figures only.
+@pytest.mark.parametrize("role,expected", [
+    ("owner", {"Salario": 2000, "Sin categoría": 1000}),  # the Owner's ledger: no gross payroll
+    ("user", {"Salario": 2000, "Sin categoría": 1000}),   # October's overtime is November in UTC for users
+])
+def test_income_categories_add_up_to_the_income_total(db, role, expected):
+    from backend.auth.current_user import reset_current_user
+    from backend.user_product import free_service
+
+    token = _as(role)
+    try:
+        summary = free_service.get_free_monthly_summary("2026-10")
+    finally:
+        reset_current_user(token)
+    assert {row["category"]: row["amount"] for row in summary["income_categories"]} == expected
+    assert sum(row["amount"] for row in summary["income_categories"]) == summary["income"]
+    assert summary["scope"] == "month" and summary["period"] == "2026-10"
+
+
+def test_a_year_is_its_own_period_and_a_bad_period_is_refused(db):
+    from fastapi import HTTPException
+    from backend.auth.current_user import reset_current_user
+    from backend.user_product import free_service
+
+    token = _as("user")
+    try:
+        year = free_service.get_free_monthly_summary("2026")
+        october = free_service.get_free_monthly_summary("2026-10")
+        november = free_service.get_free_monthly_summary("2026-11")
+        with pytest.raises(HTTPException) as refused:
+            free_service.get_free_monthly_summary("26-1")
+    finally:
+        reset_current_user(token)
+    assert refused.value.status_code == 422
+    assert year["scope"] == "year" and year["period"] == "2026"
+    assert year["income"] == october["income"] + november["income"]
+    assert year["expenses"] == october["expenses"] + november["expenses"]
+
+
+def test_saved_is_goals_and_salvavidas_contributions_never_income_minus_spending(db, monkeypatch):
+    import json
+    from datetime import date
+    from backend.auth.current_user import reset_current_user
+    from backend.user_product import free_service, summary_breakdown
+
+    q(db, "CREATE TABLE finva_goal_contributions (id BIGSERIAL PRIMARY KEY, workspace_id UUID, goal_id BIGINT, amount NUMERIC(14,2), contribution_date DATE)")
+    q(db, "CREATE TABLE user_preferences (workspace_id UUID, preference_key TEXT, preference_value JSONB)")
+    for ws in (WS_A, WS_B):
+        q(db, "INSERT INTO finva_goal_contributions (workspace_id, goal_id, amount, contribution_date) VALUES (%s, 1, 700, '2026-10-20')", (ws,))
+    q(db, "INSERT INTO finva_goal_contributions (workspace_id, goal_id, amount, contribution_date) VALUES (%s, 1, 900, '2026-11-02')", (WS_A,))
+    plan = {"auto_contribution": {"enabled": True, "amount": 2500, "frequency": "weekly", "start_date": "2026-10-01"}}
+    q(db, "INSERT INTO user_preferences VALUES (%s, 'salvavidas', %s::jsonb)", (WS_A, json.dumps(plan)))
+    monkeypatch.setattr(summary_breakdown, "costa_rica_today", lambda: date(2026, 10, 20))
+    token = _as("user")
+    try:
+        october = free_service.get_free_monthly_summary("2026-10")
+        november = free_service.get_free_monthly_summary("2026-11")
+    finally:
+        reset_current_user(token)
+    # 1, 8 and 15 October; the 22nd is after today.
+    assert october["saved"] == {"total": 8200.0, "goals": 700.0, "salvavidas": 7500.0}
+    assert november["saved"] == {"total": 900.0, "goals": 900.0, "salvavidas": 0.0}, "nothing after today is counted"

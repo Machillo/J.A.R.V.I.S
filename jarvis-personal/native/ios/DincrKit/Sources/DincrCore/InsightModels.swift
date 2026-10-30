@@ -30,6 +30,12 @@ public struct MonthlySummary: Decodable, Sendable, Equatable {
     public let categories: [CategoryTotal]?
     public let savings: Decimal?
     public let goals: GoalProgress?
+    /// "month" (`period` = YYYY-MM) or "year" (`period` = YYYY).
+    public let scope: String?
+    /// Where the money came from, by category (largest first), the rows the income total counts.
+    public let incomeCategories: [CategoryTotal]?
+    /// What was put aside in the period: goal contributions and Salvavidas automatic contributions.
+    public let saved: Saved?
     // The verified Owner's month (backend owner_ledger); nil for every other account.
     public let complete: Bool?
     public let incompleteReasons: [String]?
@@ -43,6 +49,13 @@ public struct MonthlySummary: Decodable, Sendable, Equatable {
     public let unclassifiedCount: Int?
     public let pendingMailCount: Int?
     public let payrollAccrued: PayrollAccrued?
+
+    /// "Lo que guardaste": never income minus spending, only money put aside.
+    public struct Saved: Decodable, Sendable, Equatable {
+        public let total: Decimal?
+        public let goals: Decimal?
+        public let salvavidas: Decimal?
+    }
 
     /// The answer follows the Owner's single ledger (only the verified Owner's does).
     public var isOwnerLedger: Bool { complete != nil }

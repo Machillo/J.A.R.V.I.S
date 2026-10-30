@@ -83,8 +83,3 @@ private fun refundNote(gross: BigDecimal?, refunds: BigDecimal?): String =
     else tx("Compras y pagos del mes, ya restados los reembolsos.", "Purchases and payments of the month, refunds already taken out.")
 
 private fun positive(amount: BigDecimal?) = (amount?.signum() ?: 0) > 0
-
-/** The declared savings, said as declared (not an account balance). */
-@Composable
-fun OwnerSavingsNote() = Caption(tx("Ahorros: lo que anotaste en Ingresos y base; no es el saldo de una cuenta.",
-    "Savings: what you entered in Income and base; not an account balance."))

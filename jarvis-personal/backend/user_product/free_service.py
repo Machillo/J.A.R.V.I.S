@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category, owner_account_context
-from backend.user_product import expense_account, owner_ledger, pending_conversion
+from backend.user_product import expense_account, owner_ledger, pending_conversion, summary_breakdown
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 
 
@@ -19,13 +19,6 @@ def _money(value: Any) -> float:
 def _transaction_date_sql() -> str:
     raw = "NULLIF(BTRIM(transaction_date::text),'')"
     return f"CASE WHEN {raw} ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}' THEN SUBSTRING({raw} FROM 1 FOR 10)::date ELSE NULL END"
-
-
-def _month(value: str | None = None) -> date:
-    try:
-        return date.fromisoformat(f"{value}-01") if value else date.today().replace(day=1)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="El periodo debe tener formato YYYY-MM.") from exc
 
 
 def _next_month(start: date) -> date:
@@ -89,15 +82,20 @@ def get_free_dashboard() -> dict:
 
 
 def get_free_monthly_summary(period: str | None = None) -> dict:
+    """A month (``YYYY-MM``) or a whole year (``YYYY``): totals, income and spending by category,
+    and what was saved (summary_breakdown)."""
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
-    start = _month(period)
+    start, end, label, scope = summary_breakdown.period_range(period)
     with get_connection() as conn:
         # The verified Owner's month follows the single ledger (owner_ledger), decided from the
         # stored identity of this account and workspace; everyone else keeps these totals.
         owner = owner_account_context(conn, account_id, workspace_id)
-        totals = (owner_ledger.owner_month_totals(conn, workspace_id, start, _next_month(start)) if owner
-                  else _period_totals(conn, workspace_id, start, _next_month(start)))
-        categories = _categories(conn, workspace_id, start, _next_month(start))
+        totals = (owner_ledger.owner_month_totals(conn, workspace_id, start, end) if owner
+                  else _period_totals(conn, workspace_id, start, end))
+        categories = _categories(conn, workspace_id, start, end)
+        income_categories = summary_breakdown.income_categories(conn, workspace_id, start, end, owner=owner,
+                                                                transaction_date=_transaction_date_sql())
+        saved = summary_breakdown.saved(conn, workspace_id, start, end)
         goals = conn.execute(
             "SELECT COALESCE(SUM(current_amount),0) current,COALESCE(SUM(target_amount),0) target FROM financial_goals WHERE workspace_id=%s",
             (workspace_id,),
@@ -109,8 +107,9 @@ def get_free_monthly_summary(period: str | None = None) -> dict:
     # progress to report (not 0 %).
     savings = profile.get("liquid_savings") if profile else None
     return {
-        "period": start.strftime("%Y-%m"), **totals, "balance": balance,
+        "period": label, "scope": scope, **totals, "balance": balance,
         "top_category": categories[0] if categories else None, "categories": categories,
+        "income_categories": income_categories, "saved": saved,
         "savings": None if savings is None else _money(savings),
         "goals": {"current":current,"target":target,"progress":round(current/target*100,1) if target else None},
     }

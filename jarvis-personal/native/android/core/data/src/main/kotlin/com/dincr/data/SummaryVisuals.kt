@@ -33,10 +33,30 @@ object SummaryVisuals {
      * without an amount stays unknown, so the donut and its shares are not drawn.
      */
     fun categories(summary: MonthlySummary, language: AppLanguage = AppLanguage.current()): Composition =
-        Composition(summary.categories.mapIndexed { index, row ->
+        Composition(categoryItems(summary, language))
+
+    private fun categoryItems(summary: MonthlySummary, language: AppLanguage) = summary.categories.mapIndexed { index, row ->
+        val label = row.category?.takeIf { it.isNotEmpty() } ?: language.pick("Sin categoría", "Uncategorized")
+        CompositionItem("$index-$label", label, row.amount)
+    }
+
+    /** "¿De dónde entró?": the period's income by category (`income_categories`, largest first). */
+    fun incomeSources(summary: MonthlySummary, language: AppLanguage = AppLanguage.current()): Composition =
+        Composition(summary.incomeCategories.mapIndexed { index, row ->
             val label = row.category?.takeIf { it.isNotEmpty() } ?: language.pick("Sin categoría", "Uncategorized")
-            CompositionItem("$index-$label", label, row.amount)
+            CompositionItem("in-$index-$label", label, row.amount)
         })
+
+    /**
+     * "¿A dónde se fue?": spending by category, then debt payments and what was saved, each only when
+     * the backend sent it above zero (an unknown amount is never drawn as zero).
+     */
+    fun outflows(summary: MonthlySummary, language: AppLanguage = AppLanguage.current()): Composition {
+        val items = categoryItems(summary, language).toMutableList()
+        summary.debtPaid?.takeIf { it.signum() > 0 }?.let { items += CompositionItem("out-debts", language.pick("Pagos de deudas", "Debt payments"), it) }
+        summary.saved?.total?.takeIf { it.signum() > 0 }?.let { items += CompositionItem("out-saved", language.pick("Ahorro", "Savings"), it) }
+        return Composition(items)
+    }
 
     fun flowNotice(flow: Flow, language: AppLanguage = AppLanguage.current()): String? = when (flow) {
         is Flow.Bars -> null

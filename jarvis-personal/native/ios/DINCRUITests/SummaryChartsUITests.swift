@@ -1,10 +1,9 @@
 import XCTest
 
-/// E04 / E05 — Movimientos → Análisis → Resumen del mes draws the month's income vs expenses as bars
-/// and its expenses by category as a donut, below the amounts (still there as text). VoiceOver reads
-/// the bars' amounts and every category with its share. An empty month says so instead of drawing.
-/// Every plan reaches the summary; only the Owner keeps the Owner analysis entry. Android twin:
-/// `SummaryChartsUiTest`. Fixture data only.
+/// Movimientos → Análisis → Resumen (simple): a month or a year, income, spending and what was saved
+/// as text, and two donuts (where the money came from, where it went) that VoiceOver reads part by
+/// part. An empty period says so. Every plan reaches it. Android twin: `SummaryChartsUiTest`.
+/// Fixture data only.
 final class SummaryChartsUITests: XCTestCase {
     private func launch(scenario: String = "populated", plan: String? = nil, role: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
@@ -43,58 +42,42 @@ final class SummaryChartsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Resumen del mes"].waitForExistence(timeout: 10))
     }
 
-    private var thisMonth: String {
-        ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic"][Calendar.current.component(.month, from: .now) - 1]
-    }
-
-    func testEveryPlanSeesTheBarsAndTheDonutWithTheAmountsKept() {
+    func testEveryPlanSeesTheTotalsAndBothDonuts() {
         for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), ("vip", "owner")] as [(String?, String?)] {
             let context = role ?? plan ?? "free"
             let app = launch(plan: plan, role: role)
             open("movements.analysis", in: app)
             XCTAssertTrue(element("analysis.summary", in: app).waitForExistence(timeout: 10), context)
-            XCTAssertEqual(element("analysis.owner", in: app).exists, role == "owner", "\(context): the Owner entry stays the Owner's")
             open("analysis.summary", in: app)
 
-            // The amounts stay as text above the charts.
-            XCTAssertTrue(text("Ingresos", in: app).waitForExistence(timeout: 10), context)
-            XCTAssertTrue(text("Gastos", in: app).exists, context)
-
-            let bars = reveal("summary.flow.chart", in: app)
-            XCTAssertTrue(bars.waitForExistence(timeout: 10), "\(context): E04 bars")
-            XCTAssertEqual(bars.label, "Ingresos y gastos de \(thisMonth)", "\(context): VoiceOver names the month")
-            let spoken = bars.value as? String ?? ""
-            XCTAssertNotNil(spoken.range(of: "^\\w+: Ingresos [0-9]+ colones, Gastos [0-9]+ colones$", options: .regularExpression),
-                            "\(context): VoiceOver reads both amounts (\(spoken))")
-
-            XCTAssertTrue(reveal("summary.categories", in: app).waitForExistence(timeout: 10), "\(context): E05 donut")
+            XCTAssertTrue(element("summary.income", in: app).waitForExistence(timeout: 10), context)
+            XCTAssertTrue(element("summary.expenses", in: app).exists, context)
+            XCTAssertTrue(element("summary.saved", in: app).exists, "\(context): what was saved")
+            XCTAssertTrue(reveal("summary.incomeSources", in: app).waitForExistence(timeout: 10), "\(context): where it came from")
+            XCTAssertTrue(reveal("summary.categories", in: app).waitForExistence(timeout: 10), "\(context): where it went")
             let part = app.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES %@", "^Comida: [0-9]+ colones, [0-9]+ %$")).firstMatch
-            XCTAssertTrue(part.waitForExistence(timeout: 10), "\(context): VoiceOver reads each category with its amount and share")
-            XCTAssertFalse(text("Todavía no hay datos", in: app).exists, context)
+            XCTAssertTrue(part.waitForExistence(timeout: 10), "\(context): VoiceOver reads each part with its amount and share")
+            XCTAssertFalse(element("summary.flow.chart", in: app).exists, "\(context): no bars any more")
             app.terminate()
         }
     }
 
-    func testAMonthWithNothingRecordedSaysSoInsteadOfDrawing() {
+    func testAMonthWithNothingRecordedSaysSo() {
         let app = launch(scenario: "empty")
         openSummary(app)
         let notice = element("summary.flow.notice", in: app)
         XCTAssertTrue(notice.waitForExistence(timeout: 10))
         XCTAssertEqual(notice.label, "Todavía no hay ingresos ni gastos registrados en este mes.")
-        XCTAssertFalse(element("summary.flow.chart", in: app).exists, "no bars of nothing")
-        _ = reveal("summary.categories", in: app)
-        XCTAssertTrue(text("Gastos por categoría. Todavía no hay datos.", in: app).waitForExistence(timeout: 10), "the donut says why it isn't drawn")
     }
 
-    func testAPreviousMonthDrawsItsOwnSummary() {
+    func testTheYearHasItsOwnSummary() {
         let app = launch()
         openSummary(app)
-        XCTAssertTrue(element("summary.flow.chart", in: app).waitForExistence(timeout: 10))
-        let previous = app.buttons["Mes anterior"]
-        XCTAssertTrue(previous.waitForExistence(timeout: 10))
-        for _ in 0..<12 { previous.tap() }
-        // A year back the fixture has nothing recorded: the bars give way to the notice.
+        app.segmentedControls["summary.scope"].buttons["Año"].tap()
+        XCTAssertTrue(app.buttons["Año anterior"].waitForExistence(timeout: 10))
+        XCTAssertTrue(element("summary.income", in: app).waitForExistence(timeout: 10))
+        // Two years back the fixture has nothing recorded.
+        app.buttons["Año anterior"].tap(); app.buttons["Año anterior"].tap()
         XCTAssertTrue(element("summary.flow.notice", in: app).waitForExistence(timeout: 10))
-        XCTAssertFalse(element("summary.flow.chart", in: app).exists)
     }
 }

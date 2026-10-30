@@ -860,7 +860,9 @@ class FakeBackend(
         return rows.filter { it.kind == MovementKind.INCOME }.sumOf { it.amount } to rows.filter { it.kind == MovementKind.EXPENSE }.sumOf { it.amount }
     }
 
-    private fun categories(period: String) = colonesMovements.filter { it.kind == MovementKind.EXPENSE && it.transactionDate?.startsWith(period) == true }
+    /** Spending (or, with [income], income) by category in a month `YYYY-MM` or a year `YYYY`. */
+    private fun categories(period: String, income: Boolean = false) = colonesMovements
+        .filter { it.kind == (if (income) MovementKind.INCOME else MovementKind.EXPENSE) && it.transactionDate?.startsWith(period) == true }
         .groupBy { it.category ?: "Sin categoría" }.map { (category, rows) -> CategoryTotal(category, rows.sumOf { it.amount }) }.sortedByDescending { it.amount }
 
     private fun freeDashboard(): FreeDashboard {
@@ -905,8 +907,13 @@ class FakeBackend(
     private fun monthlySummary(period: String): MonthlySummary {
         val (income, expenses) = totals(period)
         val cats = categories(period)
+        // What was put aside: a synthetic goal contribution in every period with income (the backend adds
+        // goal contributions and the Salvavidas plan's automatic contributions).
+        val goalsSaved = if (income.signum() > 0) BigDecimal(if (period.length == 4) 60_000 else 15_000) else BigDecimal.ZERO
         val summary = MonthlySummary(period, income, expenses, BigDecimal.ZERO, income - expenses, cats.firstOrNull(), cats, savings.sumOf { it.savedAmount ?: BigDecimal.ZERO },
-            GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0))
+            GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0),
+            scope = if (period.length == 4) "year" else "month", incomeCategories = categories(period, income = true),
+            saved = MonthlySummary.Saved(goalsSaved, goalsSaved, BigDecimal.ZERO))
         if (!isOwner) return summary
         // Like the backend: only the verified Owner's month carries the ledger's reading. The current
         // month still has a mail notice to review; a closed month has a loan received (not income) and

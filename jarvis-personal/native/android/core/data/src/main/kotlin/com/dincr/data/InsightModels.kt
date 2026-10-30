@@ -34,6 +34,12 @@ data class MonthlySummary(
     val categories: List<CategoryTotal> = emptyList(),
     val savings: Money? = null,
     val goals: GoalProgress? = null,
+    /** "month" (`period` = YYYY-MM) or "year" (`period` = YYYY). */
+    val scope: String? = null,
+    /** Where the money came from, by category (largest first), the rows the income total counts. */
+    @SerialName("income_categories") val incomeCategories: List<CategoryTotal> = emptyList(),
+    /** What was put aside in the period: goal contributions and Salvavidas automatic contributions. */
+    val saved: Saved? = null,
     // The verified Owner's month (backend owner_ledger); absent (null) for every other account.
     val complete: Boolean? = null,
     @SerialName("incomplete_reasons") val incompleteReasons: List<String> = emptyList(),
@@ -50,6 +56,10 @@ data class MonthlySummary(
 ) {
     /** The answer follows the Owner's single ledger (only the verified Owner's does). */
     val isOwnerLedger: Boolean get() = complete != null
+
+    /** "Lo que guardaste": never income minus spending, only money put aside. */
+    @Serializable
+    data class Saved(val total: Money? = null, val goals: Money? = null, val salvavidas: Money? = null)
 }
 
 /** Gross payroll the Owner's ledger reports apart (never added to income): overtime, VGH, bonuses. */

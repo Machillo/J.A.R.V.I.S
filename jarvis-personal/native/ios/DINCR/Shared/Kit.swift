@@ -181,6 +181,28 @@ struct MonthPicker: View {
     }
 }
 
+/// A year with arrows (Resumen → Año); never after the current year.
+struct YearPicker: View {
+    @Binding var year: String
+
+    var body: some View {
+        let value = Int(year) ?? Int(Period.current.prefix(4)) ?? 2026
+        let current = Int(Period.current.prefix(4)) ?? value
+        HStack {
+            Button { year = String(value - 1) } label: { Image(systemName: "chevron.left") }
+                .accessibilityLabel(tx("Año anterior", "Previous year"))
+            Spacer()
+            Text(year).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+            Spacer()
+            Button { year = String(value + 1) } label: { Image(systemName: "chevron.right") }
+                .accessibilityLabel(tx("Año siguiente", "Next year"))
+                .disabled(value >= current)
+        }
+        .frame(minHeight: 44)
+        .foregroundStyle(DincrColor.tint)
+    }
+}
+
 enum Period {
     static var current: String { String(Day.today().prefix(7)) }
 
