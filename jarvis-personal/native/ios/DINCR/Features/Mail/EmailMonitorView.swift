@@ -423,6 +423,11 @@ struct CandidateCard: View {
                     Text(candidate.description ?? candidate.subject ?? tx("Aviso bancario", "Bank notice")).font(DincrFont.body.weight(.semibold))
                     Text([candidate.bank, Day.label(candidate.transactionDate)].compactMap { $0 }.joined(separator: " · "))
                         .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    if let source = candidate.captureSourceLabel() {
+                        Label(source, systemImage: candidate.sourceProvider == "apple_pay_shortcut" ? "wave.3.right.circle" : "message")
+                            .font(DincrFont.caption.weight(.semibold)).foregroundStyle(DincrColor.tint)
+                            .accessibilityIdentifier("candidate.source.\(candidate.candidateId ?? 0)")
+                    }
                 }
                 Spacer()
                 MoneyText(candidate.nativeAmount, sign: candidate.amountSign, currency: candidate.nativeCurrency)

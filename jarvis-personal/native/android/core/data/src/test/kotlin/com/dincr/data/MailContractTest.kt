@@ -43,6 +43,15 @@ class MailContractTest {
     }
 
     /** `sync_current_gmail`: `failed_connections` lists the ids of the mailboxes that failed. */
+    @Test fun capturesNameTheirSource() {
+        val apple = json.decodeFromString<MailCandidate>("""{"candidate_id":1,"source_type":"api","source_provider":"apple_pay_shortcut"}""")
+        val sms = json.decodeFromString<MailCandidate>("""{"candidate_id":2,"source_type":"api","source_provider":"bank_sms_shortcut"}""")
+        val mail = json.decodeFromString<MailCandidate>("""{"candidate_id":3,"source_type":"email"}""")
+        assertTrue(apple.isApplePayCapture && !apple.isBankSmsCapture)
+        assertTrue(sms.isBankSmsCapture && !sms.isApplePayCapture)
+        assertTrue(!mail.isApplePayCapture && !mail.isBankSmsCapture)
+    }
+
     @Test fun syncDecodesTheFailedConnectionIds() = runTest {
         val partial = serving(
             """{"status":"partial","connections":2,"failed_connections":[3],"scan_scope":"year_to_date","initial_scan_complete":true,
