@@ -87,6 +87,7 @@ class FakeBackend(
     private var legalGateClosed = false
     private val planRoutes = FakePlanRoutes(json, today)
     private val receivables = FakeReceivables(today) { id() }
+    private val fixedExpenses = FakeFixedExpenses { id() }
     private val ownerMoney = FakeMoney(today) { id() }
     private val wealth = FakeWealth(today) { id() }
     private val records = FakeRecords(today)
@@ -378,6 +379,20 @@ class FakeBackend(
                 method == "POST" && path.endsWith("/confirm") ->
                     records.confirm(path.split("/").dropLast(1).last().toLongOrNull(), money("real_balance"))?.let { ok(it) } ?: error(404, "Cuenta financiera no encontrada.")
                 else -> error(404, "Not Found")
+            }
+            // Plan → Gastos fijos (Owner): `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
+            path == "/finance/fixed-expenses" || path.startsWith("/finance/fixed-expenses/") -> {
+                val id = path.removePrefix("/finance/fixed-expenses").trim('/').toLongOrNull()
+                when {
+                    !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                    method == "GET" && id == null -> ok(fixedExpenses.list())
+                    method == "POST" && id == null -> fixedExpenses.create(text("name"), text("category"), money("expected_amount"), int("interval_months"), int("due_day"))
+                        ?.let { ok(it) } ?: error(422, "Falta el nombre.")
+                    method == "PUT" -> ok(fixedExpenses.update(id, text("name"), text("category"), money("expected_amount"), int("interval_months"), int("due_day"))?.let { json.encodeToString(OwnerFixedExpense.serializer(), it) } ?: "null")
+                    method == "DELETE" -> ok(buildJsonObject { put("status", "OK"); put("message", "Gasto fijo desactivado.") }.toString())
+                        .also { fixedExpenses.deactivate(id) }
+                    else -> error(404, "Not Found")
+                }
             }
             // JARVIS "Control de dinero": `/finance/*` admits only the verified Owner (main.py INTERNAL_ONLY).
             path.startsWith("/finance/additional-cards") -> {

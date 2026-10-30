@@ -263,6 +263,19 @@ class DincrApi(private val client: ApiClient) {
     /** The card is not additional any more: its settled purchases go back to review. Nothing is deleted. */
     suspend fun stopAdditionalCard(last4: String): AdditionalCardResult = client.send("DELETE", "/finance/additional-cards/$last4")
 
+    // --- Plan → Gastos fijos (Owner; `/finance/*` is Owner-only on the server) -----------------------
+    suspend fun ownerFixedExpenses(): List<OwnerFixedExpense> = client.get("/finance/fixed-expenses")
+    suspend fun createOwnerFixedExpense(request: OwnerFixedExpenseRequest) {
+        client.send<OwnerFixedExpenseRequest, kotlinx.serialization.json.JsonElement>("POST", "/finance/fixed-expenses", request)
+    }
+    suspend fun updateOwnerFixedExpense(id: Long, request: OwnerFixedExpenseRequest) {
+        client.send<OwnerFixedExpenseRequest, kotlinx.serialization.json.JsonElement>("PUT", "/finance/fixed-expenses/$id", request)
+    }
+    /** Removes it from the list: the backend deactivates the row; nothing else is deleted. */
+    suspend fun removeOwnerFixedExpense(id: Long) {
+        client.send<kotlinx.serialization.json.JsonElement>("DELETE", "/finance/fixed-expenses/$id")
+    }
+
     /** The backend refuses these writes in the body with HTTP 200: an error, never "saved". */
     private fun checkWrite(result: ReceivableWriteResult) {
         if (!result.succeeded) throw ApiError(ApiError.Kind.VALIDATION, code = result.status.orEmpty(), message = result.message ?: "No pudimos guardarlo.")

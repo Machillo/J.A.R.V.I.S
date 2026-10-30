@@ -240,9 +240,12 @@ private fun eventKind(kind: String?) = when (kind) {
     "income" -> tx("Ingreso", "Income"); "debt" -> tx("Cuota", "Instalment"); "goal" -> tx("Meta", "Goal"); else -> tx("Pago", "Payment")
 }
 
-/** E10 — recurring payments (every plan, UX-9): create, edit, pause/activate, delete. */
+/**
+ * E10 — recurring payments (every plan, UX-9): create, edit, pause/activate, delete. [expensesOnly]:
+ * Plan → Gastos fijos for VIP (FX-1), the same items, expenses only, under that title.
+ */
 @Composable
-fun RecurringScreen(model: AppModel, nav: Navigator) {
+fun RecurringScreen(model: AppModel, nav: Navigator, expensesOnly: Boolean = false) {
     val list = rememberLoad(model) { model.api.recurring() }
     var creating by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<RecurringItem?>(null) }
@@ -250,10 +253,11 @@ fun RecurringScreen(model: AppModel, nav: Navigator) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { model.recordScreen("recurring_opened", "recurring") }
-    DetailScaffold(tx("Movimientos recurrentes", "Recurring transactions"), nav::back, actions = {
-        IconButton({ creating = true }, modifier = Modifier.heightIn(min = 48.dp)) { Icon(Icons.Rounded.Add, contentDescription = tx("Agregar recurrente", "Add recurring")) }
+    DetailScaffold(if (expensesOnly) tx("Gastos fijos", "Fixed expenses") else tx("Movimientos recurrentes", "Recurring transactions"), nav::back, actions = {
+        IconButton({ creating = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("recurring.add")) { Icon(Icons.Rounded.Add, contentDescription = tx("Agregar recurrente", "Add recurring")) }
     }) {
-        LoadContent(list) { l ->
+        LoadContent(list) { all ->
+            val l = if (expensesOnly) all.copy(items = all.items.filter { it.itemType != "income" }) else all
             DincrCard { Column { AmountLine(tx("Gastos fijos por mes", "Fixed expenses per month"), l.monthlyExpenses, emphasize = true); InfoLine(tx("Activos", "Active"), l.items.count { it.isActive == true }.toString()) } }
             if (l.items.isEmpty()) EmptyState(Icons.Rounded.Repeat, tx("Sin pagos recurrentes", "No recurring payments"), tx("Agregá suscripciones, alquiler o servicios para planificar mejor.", "Add subscriptions, rent or utilities to plan better.")) {
                 DincrPrimaryButton(tx("Agregar", "Add"), { creating = true })
@@ -292,8 +296,8 @@ fun RecurringScreen(model: AppModel, nav: Navigator) {
             }
         }
     }
-    if (creating) RecurringForm(model, onDismiss = { creating = false }) { creating = false; list.reload(); model.showNotice(it) }
-    editing?.let { item -> RecurringForm(model, item, onDismiss = { editing = null }) { editing = null; list.reload(); model.showNotice(it) } }
+    if (creating) RecurringForm(model, expensesOnly = expensesOnly, onDismiss = { creating = false }) { creating = false; list.reload(); model.showNotice(it) }
+    editing?.let { item -> RecurringForm(model, item, expensesOnly, onDismiss = { editing = null }) { editing = null; list.reload(); model.showNotice(it) } }
     deleting?.let { item ->
         ConfirmDialog(tx("¿Eliminar «${item.name.orEmpty()}»?", "Delete “${item.name.orEmpty()}”?"), tx("No se puede deshacer.", "This can’t be undone."), tx("Eliminar", "Delete"), busy = busy, onDismiss = { deleting = null }, onConfirm = {
             busy = true
@@ -314,7 +318,7 @@ fun frequencyLabel(frequency: String?) = when (frequency) {
 
 /** Creates a recurring payment, or edits one ([editing]: every field, its active state kept). */
 @Composable
-private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
+private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, expensesOnly: Boolean = false, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
     val format = Dincr.money
     var name by remember { mutableStateOf(editing?.name.orEmpty()) }
     var amount by remember { mutableStateOf(editing?.amount?.let(format::inputText).orEmpty()) }
@@ -346,7 +350,8 @@ private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, onDis
         FormField(tx("Nombre", "Name"), name, { name = it }, errors["name"])
         MoneyField(tx("Monto", "Amount"), amount, { amount = it }, errors["amount"])
         FormField(tx("Categoría", "Category"), category, { category = it })
-        ChoiceChips(listOf("expense" to tx("Gasto", "Expense"), "income" to tx("Ingreso", "Income")), type, { type = it }, tx("Tipo", "Type"))
+        // Gastos fijos: always an expense, so the type is not asked.
+        if (!expensesOnly) ChoiceChips(listOf("expense" to tx("Gasto", "Expense"), "income" to tx("Ingreso", "Income")), type, { type = it }, tx("Tipo", "Type"))
         ChoiceChips(listOf("weekly", "biweekly", "monthly", "quarterly", "annual").map { it to frequencyLabel(it) }, frequency, { frequency = it }, tx("Frecuencia", "Frequency"))
         FormField(tx("Día de pago (opcional)", "Due day (optional)"), day, { day = it }, errors["day"], KeyboardType.Number)
     }
