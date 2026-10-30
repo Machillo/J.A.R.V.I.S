@@ -5,7 +5,7 @@ import Foundation
 // and amount is invented (CLAUDE.md §4.F).
 extension FixtureBackend {
     func recordsRoute(_ method: String, _ path: String, _ body: [String: Any]) -> Answer? {
-        guard path == "/finance/timeline" || path.hasPrefix("/finance/reconciliation") else { return nil }
+        guard path == "/finance/timeline" || path.hasPrefix("/finance/reconciliation") else { return fixedExpensesRoute(method, path, body) }
         guard profile["role"] as? String == "owner" else { return error(403, "No tienes permisos para realizar esta acción.") }
         switch method {
         case "GET" where path == "/finance/timeline":

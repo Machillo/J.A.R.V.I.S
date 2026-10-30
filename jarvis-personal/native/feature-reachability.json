@@ -58,7 +58,8 @@
   "J-MON",
   "J-WEA",
   "J-MEM",
-  "SC-1"
+  "SC-1",
+  "FX-1"
  ],
  "fixtures": {
   "ios": {
@@ -540,6 +541,49 @@
     "en": {
      "tab": "Plan",
      "text": "Income and base"
+    }
+   }
+  },
+  {
+   "id": "plan.fixedExpenses",
+   "name": "Plan → Gastos fijos",
+   "decision": "FX-1",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "FX-1: VIP sees, adds, edits and removes its recurring expenses; the Owner his fixed_expenses (what his Salvavidas and strategy read)",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/recurring",
+     "gate": "feature:recurring_items",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "GET",
+     "path": "/finance/fixed-expenses",
+     "gate": "internal_only",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.fixedExpenses",
+    "locked_label": "Disponible desde"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Gastos fijos",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Plan",
+     "text": "Fixed expenses",
+     "locked_text": "Available from VIP"
     }
    }
   },

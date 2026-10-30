@@ -9,19 +9,20 @@ import Foundation
 /// every gate by role (`Profile.planTier` is VIP for the server's Owner role only); the backend
 /// still decides every request.
 public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
-    case aguinaldo, strategy, debts, incomeBase, salvavidas, distribution
+    case aguinaldo, strategy, debts, incomeBase, fixedExpenses, salvavidas, distribution
 
     public var id: String { rawValue }
 
     /// Deudas: every plan (`debts`: everyone can record and keep their real debts). Ingresos y base:
     /// every plan (`finance_overview`: everyone declares their own reality).
     /// Estrategia and Distribución: Basic (`strategy_basic`). Salvavidas: VIP (`strategy_vip`).
+    /// Gastos fijos: VIP (its recurring expenses) and the Owner (his `fixed_expenses`).
     /// Aguinaldo: VIP, and only where mail is read (`readsMail`): the Owner's alone during the launch.
     public var minimum: PlanTier {
         switch self {
         case .debts, .incomeBase: .free
         case .strategy, .distribution: .basic
-        case .aguinaldo, .salvavidas: .vip
+        case .aguinaldo, .salvavidas, .fixedExpenses: .vip
         }
     }
 
@@ -30,7 +31,7 @@ public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
     public var killSwitch: OpsFlag? {
         switch self {
         case .aguinaldo, .salvavidas: .vipIntelligence
-        case .strategy, .debts, .incomeBase, .distribution: nil
+        case .strategy, .debts, .incomeBase, .fixedExpenses, .distribution: nil
         }
     }
 

@@ -198,6 +198,8 @@ private struct CalendarContent: View {
 /// PARITY E10 — recurring items (Basic): list, pause/activate, add, delete.
 struct RecurringView: View {
     @Environment(AppModel.self) private var model
+    /// Plan → Gastos fijos (VIP): the same recurring items, expenses only, under that title.
+    var expensesOnly = false
     @State private var generation = 0
     @State private var creating = false
     @State private var notice: String?
@@ -205,11 +207,11 @@ struct RecurringView: View {
     @State private var editing: RecurringList.Item?
 
     var body: some View {
-        ScreenScroll(title: tx("Movimientos recurrentes", "Recurring transactions")) {
+        ScreenScroll(title: expensesOnly ? tx("Gastos fijos", "Fixed expenses") : tx("Movimientos recurrentes", "Recurring transactions")) {
             WritesPausedBanner()
             if let notice { StatusBanner(tone: .info, title: notice, message: "") }
             AsyncContent(load: { try await model.service.recurring() }) { list, _ in
-                RecurringContent(list: list, canWrite: model.flags.isEnabled(.financialWrites),
+                RecurringContent(list: list, expensesOnly: expensesOnly, canWrite: model.flags.isEnabled(.financialWrites),
                                  toggle: { item in Task { await toggle(item) } }, edit: { item in editing = item }, delete: { item in deleting = item })
             }
             .id(generation)
@@ -217,10 +219,11 @@ struct RecurringView: View {
         .toolbar {
             if model.flags.isEnabled(.financialWrites) {
                 Button { creating = true } label: { Label(tx("Agregar", "Add"), systemImage: "plus") }
+                    .accessibilityIdentifier("recurring.add")
             }
         }
-        .sheet(isPresented: $creating) { RecurringForm { notice = $0; generation += 1 } }
-        .sheet(item: $editing) { item in RecurringForm(editing: item) { notice = $0; generation += 1 } }
+        .sheet(isPresented: $creating) { RecurringForm(expensesOnly: expensesOnly) { notice = $0; generation += 1 } }
+        .sheet(item: $editing) { item in RecurringForm(editing: item, expensesOnly: expensesOnly) { notice = $0; generation += 1 } }
         .confirmationDialog(tx("¿Eliminar «\(deleting?.name ?? "")»?", "Delete “\(deleting?.name ?? "")”?"),
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(tx("Eliminar", "Delete"), role: .destructive) { if let item = deleting { Task { await delete(item) } } }
@@ -255,6 +258,7 @@ struct RecurringView: View {
 
 private struct RecurringContent: View {
     let list: RecurringList
+    let expensesOnly: Bool
     let canWrite: Bool
     let toggle: (RecurringList.Item) -> Void
     let edit: (RecurringList.Item) -> Void
@@ -266,7 +270,12 @@ private struct RecurringContent: View {
             FigureRow(label: tx("Gastos anuales", "Annual expenses"), amount: list.annualExpenses)
         }
         .dincrCard()
-        ForEach(list.items ?? []) { item in
+        if expensesOnly && (list.items ?? []).allSatisfy({ $0.itemType == "income" }) {
+            EmptyStateView(symbol: "list.bullet.rectangle", title: tx("Todavía no hay gastos fijos", "No fixed expenses yet"),
+                           message: tx("Agregá lo que pagás todos los meses: alquiler, servicios, suscripciones.", "Add what you pay every month: rent, utilities, subscriptions.")) { EmptyView() }
+                .accessibilityIdentifier("fixedExpenses.empty")
+        }
+        ForEach((list.items ?? []).filter { !expensesOnly || $0.itemType != "income" }) { item in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -299,6 +308,8 @@ private struct RecurringForm: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var editing: RecurringList.Item?
+    /// Gastos fijos: always an expense, so the type is not asked.
+    var expensesOnly = false
     let onDone: (String) -> Void
     @State private var name = ""
     @State private var amount = ""
@@ -325,11 +336,13 @@ private struct RecurringForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker(tx("Tipo", "Type"), selection: $income) {
-                    Text(tx("Gasto", "Expense")).tag(false)
-                    Text(tx("Ingreso", "Income")).tag(true)
+                if !expensesOnly {
+                    Picker(tx("Tipo", "Type"), selection: $income) {
+                        Text(tx("Gasto", "Expense")).tag(false)
+                        Text(tx("Ingreso", "Income")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
                 TextField(tx("Nombre", "Name"), text: $name).accessibilityIdentifier("recurring.name")
                 MoneyField(label: tx("Monto", "Amount"), text: $amount, identifier: "recurring.amount")
                 TextField(tx("Categoría", "Category"), text: $category)

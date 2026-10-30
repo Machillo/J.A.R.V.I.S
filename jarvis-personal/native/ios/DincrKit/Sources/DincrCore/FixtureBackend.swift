@@ -69,6 +69,9 @@ public actor FixtureBackend: HTTPTransport {
     /// (FixtureBackend+Records.swift). Invented accounts and amounts.
     var ownerConfirmedBalances: [Int: Decimal] = [:]
     var ownerProtectedExpenses: Set<Int> = [62]
+    /// Plan → Gastos fijos (Owner): the Owner's active fixed expenses (FixtureBackend+FixedExpenses.swift).
+    /// Invented names and amounts.
+    var ownerFixedExpenses: [FixtureFixedExpense] = FixtureFixedExpense.seed
     /// Perfil → Atajos de iPhone (FixtureBackend+Shortcuts.swift): the account's current shortcut token
     /// (invented, never a real credential) and the captures received, by Idempotency-Key.
     var shortcutToken: String?

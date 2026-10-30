@@ -89,7 +89,7 @@ enum class Destination(val route: String, val icon: ImageVector) {
         fun of(route: String?): Destination = when (route?.substringBefore('/')) {
             null, "home", "debts", "goals", "attention" -> HOME
             "movements", "monthly" -> MOVEMENTS
-            "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "planPreferences" -> PLAN
+            "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "fixedExpenses", "planPreferences" -> PLAN
             // UX-13: Movimientos → Análisis; Patrimonio → Proyecciones / Escenarios.
             "analysis", "reports", "review", "ownerAnalysis" -> MOVEMENTS
             "wealth", "scenarios", "projections" -> WEALTH
@@ -190,6 +190,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("reports") { ReportsScreen(model, nav) }
                             composable("profile") { ProfileHubScreen(model, nav) }
                             composable("incomeBase") { IncomeBaseScreen(model, nav) }
+                            composable("fixedExpenses") { FixedExpensesScreen(model, nav) }
                             composable("planPreferences") { PlanPreferencesScreen(model, nav) }
                             composable("declaredSavings") { DeclaredSavingsScreen(model, nav) }
                             composable("settings") { SettingsScreen(model, nav, appearance, onAppearance) }
