@@ -220,7 +220,10 @@ class PlanRecoveryUiTest {
         waitForText(tx("Tu ciclo", "Your cycle"))
         back()
         click(tx("Salvavidas", "Emergency fund"))
-        waitForText(tx("Gastos protegidos", "Protected expenses"))
+        // The protected expenses sit in the folded detail.
+        assertTrue(!present(tx("Gastos que querés proteger", "Expenses you want to protect")))
+        click(tx("Qué cubre tu Salvavidas", "What your emergency fund covers"))
+        waitForText(tx("Gastos que querés proteger", "Expenses you want to protect"))
     }
 
     /**
