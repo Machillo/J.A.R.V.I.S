@@ -20,7 +20,6 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -104,7 +103,15 @@ class MovementsReviewUiTest {
                 present("Compra en supermercado")
             }
         }
-        assertTrue(tagged("movements.analysis"))
+        // Back to the top (the search did scroll): Análisis is still there.
+        waitUntil("Análisis") {
+            tagged("movements.analysis") || run {
+                compose.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().indices.forEach { index ->
+                    runCatching { compose.onAllNodes(hasScrollToNodeAction())[index].performScrollToNode(hasTestTag("movements.analysis")) }
+                }
+                tagged("movements.analysis")
+            }
+        }
     }
 
     @Test fun theOwnerReviewsTooAndKeepsJarvis() {
