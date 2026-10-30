@@ -47,4 +47,14 @@ class CorrectionInputTest {
         assertNull(ExchangeRateInput.parse("453,84", MoneyFormat.Separators.COMMA_DOT))
         assertNull(AmountInput.parse("9,99", MoneyFormat.Separators.COMMA_DOT))
     }
+
+    /** Plan → Ingresos y base: "2390,79" typed on a comma_dot profile is 2390.79, never refused. */
+    @Test fun declaredProfileAmountsAcceptTheKeyboardsDecimal() {
+        val cd = MoneyFormat.Separators.COMMA_DOT
+        assertEquals(0, BigDecimal("2390.79").compareTo(CorrectionInput.amountZeroOrMore("2390,79", cd)))
+        assertEquals(0, BigDecimal("18450").compareTo(CorrectionInput.amountZeroOrMore("18,450", cd)))
+        assertEquals(0, BigDecimal.ZERO.compareTo(CorrectionInput.amountZeroOrMore("0", cd)))
+        assertNull(CorrectionInput.amountZeroOrMore("1.234,5", cd))
+        assertNull(CorrectionInput.amountZeroOrMore("12,3456", cd))
+    }
 }

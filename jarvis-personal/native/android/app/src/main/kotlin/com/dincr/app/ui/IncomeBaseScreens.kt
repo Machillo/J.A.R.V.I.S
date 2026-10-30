@@ -17,9 +17,11 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AmountInput
 import com.dincr.data.AuthException
+import com.dincr.data.CorrectionInput
 import com.dincr.data.FinancialProfile
 import com.dincr.data.FinancialSituation
 import com.dincr.data.IdempotencyKey
+import com.dincr.data.MoneyFormat
 import com.dincr.data.SituationDefaults
 import com.dincr.data.WholeNumberInput
 import com.dincr.design.Dincr
@@ -83,14 +85,14 @@ private fun IncomeBaseForm(model: AppModel, current: FinancialProfile?, observed
     DincrPrimaryButton(tx("Guardar", "Save"), loading = saving, onClick = {
         val found = mutableMapOf<String, String>()
         fun money(key: String, value: String, positive: Boolean = false) = if (value.isBlank()) null else
-            (if (positive) AmountInput.parse(value, format.separators) else AmountInput.parseZeroOrMore(value, format.separators)).also { if (it == null) found[key] = tx("Monto no válido.", "Not a valid amount.") }
+            (if (positive) CorrectionInput.amount(value, format.separators) else CorrectionInput.amountZeroOrMore(value, format.separators)).also { if (it == null) found[key] = tx("Monto no válido.", "Not a valid amount.") }
         val request = (current ?: FinancialProfile()).copy(
             incomeType = incomeType,
             fixedMonthlySalary = if (incomeType == "fixed") money("salary", salary, positive = true) else null,
             hourlyRate = if (incomeType == "hourly") money("hourly", hourly, positive = true) else null,
             // Always sent, for every income type (the backend answers 422 without it).
             workDaysPerWeek = WholeNumberInput.parse(days, SituationDefaults.WORK_DAYS_RANGE).also { if (it == null) found["days"] = tx("Entre 1 y 7.", "1 to 7.") },
-            hoursPerDay = if (incomeType == "hourly" && hours.isNotBlank()) AmountInput.parseDecimal(hours, format.separators, 2, java.math.BigDecimal(24), allowZero = false).also { if (it == null) found["hours"] = tx("Entre 0 y 24.", "0 to 24.") } else current?.hoursPerDay,
+            hoursPerDay = if (incomeType == "hourly" && hours.isNotBlank()) AmountInput.parseDecimal(hours.replace(',', '.'), MoneyFormat.Separators.COMMA_DOT, 2, java.math.BigDecimal(24), allowZero = false).also { if (it == null) found["hours"] = tx("Entre 0 y 24.", "0 to 24.") } else current?.hoursPerDay,
             payFrequency = frequency,
             essentialMonthlyExpenses = money("essentials", essentials),
         )
@@ -139,7 +141,7 @@ private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: Financ
     }
     error?.let { ErrorState(it) }
     if (incomeDeclared) DincrPrimaryButton(tx("Guardar", "Save"), loading = saving, onClick = {
-        val minimumValue = if (minimum.isBlank()) null else AmountInput.parseZeroOrMore(minimum, format.separators)
+        val minimumValue = if (minimum.isBlank()) null else CorrectionInput.amountZeroOrMore(minimum, format.separators)
         minimumError = if (minimum.isNotBlank() && minimumValue == null) tx("Monto no válido.", "Not a valid amount.") else null
         if (minimumError != null) return@DincrPrimaryButton
         val request = withDefaults(current).copy(discretionaryMonthlyMinimum = minimumValue)
@@ -190,7 +192,7 @@ private fun DeclaredSavingsForm(model: AppModel, nav: Navigator, current: Financ
     if (incomeDeclared) DincrPrimaryButton(tx("Guardar", "Save"), loading = saving, onClick = {
         val found = mutableMapOf<String, String>()
         fun money(key: String, value: String) = if (value.isBlank()) null else
-            AmountInput.parseZeroOrMore(value, format.separators).also { if (it == null) found[key] = tx("Monto no válido.", "Not a valid amount.") }
+            CorrectionInput.amountZeroOrMore(value, format.separators).also { if (it == null) found[key] = tx("Monto no válido.", "Not a valid amount.") }
         val request = withDefaults(current).copy(liquidSavings = money("savings", savings), emergencyFundTarget = money("emergency", emergency))
         errors = found
         if (found.isNotEmpty()) return@DincrPrimaryButton

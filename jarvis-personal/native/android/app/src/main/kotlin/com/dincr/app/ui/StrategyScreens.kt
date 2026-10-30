@@ -328,7 +328,7 @@ private fun MonthPlanSplit(plan: MonthPlan) {
 
 /** A section that opens on tap: the plan shows the result first and keeps the detail one tap away. */
 @Composable
-private fun Disclosure(title: String, tag: String, content: @Composable () -> Unit) {
+internal fun Disclosure(title: String, tag: String, content: @Composable () -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.testTag(tag)) {
         Row(

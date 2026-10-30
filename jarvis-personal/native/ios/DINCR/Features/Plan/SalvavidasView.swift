@@ -180,13 +180,12 @@ private struct UsersSalvavidasContent: View {
             .dincrCard()
             AutoContributionCard(fund: fund, canWrite: canWrite, saving: saving, save: savePlan)
         }
-        ObligationsCard(fund: fund)
-        if let message = fund.verification?.message {
-            Text(message).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-        }
+        SalvavidasDetails { ObligationLines(fund: fund) }
     }
 }
 
+/// The Owner: coverage, goal and balance, the contribution plan, and the detail (what is protected,
+/// debts, milestones) folded away so the screen opens with what matters.
 private struct OwnerSalvavidasContent: View {
     let fund: Salvavidas
     let canWrite: Bool
@@ -206,15 +205,13 @@ private struct OwnerSalvavidasContent: View {
                     .disabled(saving)
                     .accessibilityIdentifier("salvavidas.editBalance")
             }
-            if let message = fund.verification?.message {
-                Text(message).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-            }
         }
         .dincrCard()
-        let available = fund.availableExpenses ?? []
-        if !available.isEmpty {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                SectionHeader(title: tx("Gastos protegidos", "Protected expenses"))
+        AutoContributionCard(fund: fund, canWrite: canWrite, saving: saving, save: savePlan)
+        SalvavidasDetails {
+            let available = fund.availableExpenses ?? []
+            if !available.isEmpty {
+                Text(tx("Gastos que querés proteger", "Expenses you want to protect")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
                 ForEach(available) { expense in
                     Toggle(isOn: Binding(get: { expense.selected == true }, set: { on in
                         guard let id = expense.lineId else { return }
@@ -233,58 +230,67 @@ private struct OwnerSalvavidasContent: View {
                     .accessibilityIdentifier("salvavidas.protect.\(expense.lineId ?? 0)")
                 }
             }
-            .dincrCard()
+            ObligationLines(fund: fund)
         }
-        AutoContributionCard(fund: fund, canWrite: canWrite, saving: saving, save: savePlan)
-        LinesCard(title: tx("Gastos fijos obligatorios", "Mandatory fixed expenses"), lines: fund.mandatoryExpenses ?? [])
-        ObligationsCard(fund: fund)
-        LinesCard(title: tx("Excluidos por duplicar una deuda", "Excluded as debt duplicates"), lines: fund.excludedDebtDuplicates ?? [])
     }
 }
 
-/// What the monthly base is made of: debts and recurring obligations, and the milestones.
-private struct ObligationsCard: View {
+/// "Qué cubre tu Salvavidas", closed by default: the detail behind the monthly base.
+private struct SalvavidasDetails<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) { content() }
+                .padding(.top, DincrSpacing.s2)
+        } label: {
+            Text(tx("Qué cubre tu Salvavidas", "What your emergency fund covers")).font(DincrFont.label).foregroundStyle(DincrColor.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("salvavidas.details")
+        }
+        .tint(DincrColor.tint)
+        .dincrCard()
+    }
+}
+
+/// What the monthly base is made of: debt payments and recurring payments, and the milestones.
+private struct ObligationLines: View {
     let fund: Salvavidas
 
     var body: some View {
-        LinesCard(title: tx("Cuotas de deudas", "Debt payments"), lines: fund.debts ?? [])
-        LinesCard(title: tx("Pagos recurrentes", "Recurring payments"), lines: fund.obligations ?? [])
+        Lines(title: tx("Cuotas de deudas", "Debt payments"), lines: fund.debts ?? [])
+        Lines(title: tx("Pagos recurrentes", "Recurring payments"), lines: fund.obligations ?? [])
         let milestones = fund.milestones ?? []
         if !milestones.isEmpty {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                SectionHeader(title: tx("Hitos", "Milestones"))
-                ForEach(Array(milestones.enumerated()), id: \.offset) { _, milestone in
-                    HStack {
-                        Image(systemName: milestone.reached == true ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(milestone.reached == true ? DincrColor.positive : DincrColor.textMuted)
-                            .accessibilityHidden(true)
-                        let months = milestone.months ?? 0
-                        Text(tx("\(months) \(months == 1 ? "mes" : "meses")", "\(months) \(months == 1 ? "month" : "months")")).font(DincrFont.bodySmall)
-                        Spacer()
-                        MoneyText(milestone.target, font: DincrFont.bodySmall.monospacedDigit())
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityValue(milestone.reached == true ? tx("alcanzado", "reached") : tx("pendiente", "pending"))
+            Text(tx("Hitos", "Milestones")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            ForEach(Array(milestones.enumerated()), id: \.offset) { _, milestone in
+                HStack {
+                    Image(systemName: milestone.reached == true ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(milestone.reached == true ? DincrColor.positive : DincrColor.textMuted)
+                        .accessibilityHidden(true)
+                    let months = milestone.months ?? 0
+                    Text(tx("\(months) \(months == 1 ? "mes" : "meses")", "\(months) \(months == 1 ? "month" : "months")")).font(DincrFont.bodySmall)
+                    Spacer()
+                    MoneyText(milestone.target, font: DincrFont.bodySmall.monospacedDigit())
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(milestone.reached == true ? tx("alcanzado", "reached") : tx("pendiente", "pending"))
             }
-            .dincrCard()
         }
     }
 }
 
-private struct LinesCard: View {
+private struct Lines: View {
     let title: String
     let lines: [Salvavidas.Line]
 
     var body: some View {
         if !lines.isEmpty {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                SectionHeader(title: title)
-                ForEach(lines) { line in
-                    FigureRow(label: line.name ?? "—", amount: line.monthlyAmount)
-                }
+            Text(title).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            ForEach(lines) { line in
+                FigureRow(label: line.name ?? "—", amount: line.monthlyAmount)
             }
-            .dincrCard()
         }
     }
 }
@@ -306,7 +312,8 @@ private struct SavingsAmountSheet: View {
                 Section {
                     MoneyField(label: tx("Ahorro disponible", "Available savings"), text: $text, error: error, identifier: "salvavidas.amount")
                 } footer: {
-                    Text(tx("Es el mismo dato de Metas y ahorro → Tus ahorros.", "It’s the same figure as in Goals and savings → Your savings."))
+                    Text(tx("Lo que tenés hoy en la cuenta, incluido el aporte que ya entró hoy. Es el mismo dato de Metas y ahorro → Tus ahorros.",
+                            "What the account holds today, including a contribution that already arrived today. It’s the same figure as in Goals and savings → Your savings."))
                 }
             }
             .navigationTitle(tx("Ahorros", "Savings"))
