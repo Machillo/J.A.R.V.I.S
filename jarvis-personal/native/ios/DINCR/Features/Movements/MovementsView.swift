@@ -3,8 +3,8 @@ import DincrDesign
 import SwiftUI
 
 /// PARITY D1, D3, D4, D5, D6 (partial: no debt or category filter yet) — movements by day,
-/// search, type filter, add, edit, delete. The backend returns the whole history; search and the
-/// type filter only narrow what is already on screen. The debt filter (D2) and debt
+/// search, type filter, add, edit, delete. The backend returns the whole history; the screen shows
+/// one month (the current one when it opens, `MovementMonth`), and a search looks through every month. The debt filter (D2) and debt
 /// classification wait for the backend `kind` (audit §5).
 struct MovementsView: View {
     enum Filter: String, CaseIterable, Identifiable {
@@ -24,6 +24,7 @@ struct MovementsView: View {
     @State private var state: LoadState<[Movement]> = .loading
     @State private var query = ""
     @State private var filter: Filter = .all
+    @State private var month = Period.current
     @State private var editor: MovementEditor.Mode?
     @State private var pendingDelete: Movement?
     @State private var status: String?
@@ -43,6 +44,13 @@ struct MovementsView: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
                 .sensoryFeedback(.selection, trigger: filter)
+                // One month at a time; a search looks through every month.
+                if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    MonthPicker(period: $month)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                        .accessibilityIdentifier("movements.month")
+                }
             }
             // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
             Section {
@@ -77,10 +85,14 @@ struct MovementsView: View {
                 let groups = grouped(rows)
                 if groups.isEmpty {
                     Section {
+                        let emptyMonth = !rows.isEmpty && query.trimmingCharacters(in: .whitespaces).isEmpty && filter == .all
                         EmptyStateView(
-                            symbol: rows.isEmpty ? "tray" : "magnifyingglass",
-                            title: rows.isEmpty ? tx("Todavía no hay movimientos", "No transactions yet") : tx("Nada coincide con tu búsqueda", "Nothing matches your search"),
-                            message: rows.isEmpty ? tx("Registrá tu primer ingreso o gasto para empezar.", "Record your first income or expense to begin.") : tx("Probá otra palabra o cambiá el filtro.", "Try another word or change the filter.")
+                            symbol: rows.isEmpty || emptyMonth ? "tray" : "magnifyingglass",
+                            title: rows.isEmpty ? tx("Todavía no hay movimientos", "No transactions yet")
+                                : emptyMonth ? tx("Sin movimientos en este mes", "No transactions this month") : tx("Nada coincide con tu búsqueda", "Nothing matches your search"),
+                            message: rows.isEmpty ? tx("Registrá tu primer ingreso o gasto para empezar.", "Record your first income or expense to begin.")
+                                : emptyMonth ? tx("Cambiá de mes con las flechas o buscá un movimiento.", "Change the month with the arrows or search for a transaction.")
+                                : tx("Probá otra palabra o cambiá el filtro.", "Try another word or change the filter.")
                         ) {
                             if rows.isEmpty {
                                 Button(tx("Agregar movimiento", "Add transaction")) { editor = .create }.buttonStyle(.dincrPrimary)
@@ -253,7 +265,7 @@ struct MovementsView: View {
     }
 
     private func grouped(_ rows: [Movement]) -> [(day: String, rows: [Movement])] {
-        let visible = rows.filter { row in
+        let visible = MovementMonth.rows(rows, month: month, query: query).filter { row in
             (filter == .all || row.transactionType.rawValue == filter.rawValue)
                 && SearchText.matches(query, in: [row.description, row.category])
         }
