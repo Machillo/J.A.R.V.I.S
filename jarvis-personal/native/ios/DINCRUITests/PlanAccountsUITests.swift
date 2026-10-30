@@ -268,8 +268,13 @@ final class PlanAccountsUITests: XCTestCase {
     func testTheOwnerSalvavidasHasProtectedExpenses() {
         let app = launch(role: "owner", tab: "plan")
         open("plan.salvavidas", in: app)
+        XCTAssertTrue(element("salvavidas.editBalance", in: app).waitForExistence(timeout: 10))
+        // The detail is folded away until asked for.
+        XCTAssertFalse(element("salvavidas.protect.62", in: app).exists)
+        let details = element("salvavidas.details", in: app)
+        for _ in 0..<6 where !details.isHittable { app.swipeUp() }
+        details.tap()
         XCTAssertTrue(element("salvavidas.protect.62", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(element("salvavidas.editBalance", in: app).exists)
     }
 
     // MARK: Cuentas ↔ Correos (one review system; §15 PR 10: both in Patrimonio)

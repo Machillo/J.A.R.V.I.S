@@ -234,6 +234,22 @@ public struct SalvavidasAutoContribution: Decodable, Sendable, Equatable {
         count == 1 ? language.pick("1 aporte automático", "1 automatic contribution")
             : language.pick("\(count) aportes automáticos", "\(count) automatic contributions")
     }
+
+    /// The one-line summary of a saved plan: "₡2.500 cada semana" / "₡2,500 every week".
+    public static func summary(amount: String, frequency: String?, language: AppLanguage = .current) -> String {
+        switch frequency {
+        case "weekly": return language.pick("\(amount) cada semana", "\(amount) every week")
+        case "biweekly": return language.pick("\(amount) cada quincena", "\(amount) every two weeks")
+        case "monthly": return language.pick("\(amount) cada mes", "\(amount) every month")
+        default: return amount
+        }
+    }
+
+    /// "2,5 %" / "2.5%": the Owner's annual rate as typed back, with the language's decimal mark.
+    public static func rateLabel(_ rate: Decimal, language: AppLanguage = .current) -> String {
+        let text = "\(rate)"
+        return language == .spanish ? text.replacingOccurrences(of: ".", with: ",") + " %" : text + "%"
+    }
 }
 
 /// The plan the app sends in `auto_contribution`; the backend validates it again.

@@ -141,4 +141,11 @@ import Testing
         let biweekly: [String: Any] = ["frequency": "biweekly", "start_date": "2026-10-01"]
         #expect(FixtureBackend.scheduledDays(biweekly, after: try day("2026-10-01"), until: try day("2026-10-29")).map(FixtureBackend.dayString) == ["2026-10-15", "2026-10-29"])
     }
+
+    @Test func aSavedPlanSummarizesInOneLine() {
+        #expect(SalvavidasAutoContribution.summary(amount: "₡2.500", frequency: "weekly", language: .spanish) == "₡2.500 cada semana")
+        #expect(SalvavidasAutoContribution.summary(amount: "₡2,500", frequency: "monthly", language: .english) == "₡2,500 every month")
+        #expect(SalvavidasAutoContribution.rateLabel(Decimal(string: "2.5")!, language: .spanish) == "2,5 %")
+        #expect(SalvavidasAutoContribution.rateLabel(Decimal(string: "2.5")!, language: .english) == "2.5%")
+    }
 }

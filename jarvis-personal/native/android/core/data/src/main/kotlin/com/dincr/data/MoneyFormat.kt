@@ -172,6 +172,10 @@ object CorrectionInput {
     fun amount(text: String, separators: MoneyFormat.Separators): BigDecimal? =
         parse(text, separators, AmountInput.MAX_FRACTION_DIGITS) { t, s -> AmountInput.parse(t, s) }
 
+    /** Like [amount], but zero is valid (declared profile figures such as Plan → Ingresos y base). */
+    fun amountZeroOrMore(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        parse(text, separators, AmountInput.MAX_FRACTION_DIGITS) { t, s -> AmountInput.parseZeroOrMore(t, s) }
+
     fun rate(text: String, separators: MoneyFormat.Separators): BigDecimal? =
         parse(text, separators, ExchangeRateInput.FRACTION_DIGITS) { t, s -> ExchangeRateInput.parse(t, s) }
 

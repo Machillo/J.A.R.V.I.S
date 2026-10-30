@@ -97,8 +97,14 @@ class SalvavidasAutoContributionUiTest {
         tapTag("salvavidas.auto.save")
         waitForTag("salvavidas.breakdown")
         waitForTag("salvavidas.breakdown.next")
-        waitForText(tx("Según tu plan de aportes; actualizá el saldo real cuando quieras.", "Following your contribution plan; update the real balance whenever you like."))
         assertTrue("no interest for a VIP", !tagPresent("salvavidas.breakdown.interest"))
+        // A saved plan is one line with "Editar"; the form opens only to change it.
+        waitForTag("salvavidas.auto.summary")
+        assertTrue("the saved plan is summarized", !tagPresent("salvavidas.auto.amount"))
+        tapTag("salvavidas.auto.edit")
+        waitForTag("salvavidas.auto.amount")
+        tapTag("salvavidas.auto.cancel")
+        waitForTag("salvavidas.auto.summary")
     }
 
     @Test fun unknownSavingsAskForTodaysBalance() {

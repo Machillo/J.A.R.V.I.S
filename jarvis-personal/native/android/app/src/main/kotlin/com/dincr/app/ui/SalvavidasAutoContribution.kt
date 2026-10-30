@@ -9,6 +9,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,20 @@ import java.time.LocalDate
 internal fun contributionsLabel(count: Int): String =
     if (count == 1) tx("1 aporte automático", "1 automatic contribution") else tx("$count aportes automáticos", "$count automatic contributions")
 
+/** "₡2.500 cada semana": the one-line summary of a saved plan. */
+internal fun planSummary(amount: String, frequency: String?): String = when (frequency) {
+    "weekly" -> tx("$amount cada semana", "$amount every week")
+    "biweekly" -> tx("$amount cada quincena", "$amount every two weeks")
+    "monthly" -> tx("$amount cada mes", "$amount every month")
+    else -> amount
+}
+
+/** "2,5 %" / "2.5%": the Owner's annual rate with the language's decimal mark. */
+internal fun rateLabel(rate: java.math.BigDecimal): String {
+    val plain = rate.stripTrailingZeros().toPlainString()
+    return tx(plain.replace('.', ',') + " %", "$plain%")
+}
+
 /** What the enabled plan added under the balance: declared + contributions (+ Owner interest) = total. */
 @Composable
 internal fun SalvavidasPlanBreakdown(s: Salvavidas) {
@@ -52,11 +67,9 @@ internal fun SalvavidasPlanBreakdown(s: Salvavidas) {
                 AmountLine(tx("Intereses estimados", "Estimated interest"), plan.estimatedInterest ?: java.math.BigDecimal.ZERO)
             }
         }
-        AmountLine(tx("Total estimado", "Estimated total"), plan.total ?: s.currentAmount, emphasize = true)
         plan.nextDate?.let { next ->
             Column(Modifier.testTag("salvavidas.breakdown.next")) { InfoLine(tx("Próximo aporte", "Next contribution"), dateLabel(next)) }
         }
-        Caption(tx("Según tu plan de aportes; actualizá el saldo real cuando quieras.", "Following your contribution plan; update the real balance whenever you like."))
     }
 }
 
@@ -88,11 +101,25 @@ internal fun AutoContributionSection(s: Salvavidas, saving: Boolean, save: (Salv
     var savedToday by remember(s) { mutableStateOf("") }
     var rate by remember(s) { mutableStateOf(s.annualInterestRate?.stripTrailingZeros()?.toPlainString()?.let { if (tx("es", "en") == "es") it.replace('.', ',') else it }.orEmpty()) }
     var error by remember(s) { mutableStateOf<String?>(null) }
+    // A saved, active plan is one line with "Editar"; the form opens only to change it.
+    var editing by remember(s) { mutableStateOf(false) }
+    val active = s.activePlan
     val showsFields = enabled || saved != null
     val asksBalance = enabled && !s.isAmountKnown
 
     Section(tx("Aportes automáticos", "Automatic contributions")) {
         Column(Modifier.testTag("salvavidas.auto"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+            if (active != null && !editing) {
+                Text(planSummary(format.format(active.amount ?: java.math.BigDecimal.ZERO), active.frequency), style = MaterialTheme.typography.bodyLarge,
+                    color = Dincr.colors.text, modifier = Modifier.testTag("salvavidas.auto.summary"))
+                active.startDate?.let { InfoLine(tx("Desde", "From"), dateLabel(it)) }
+                active.endDate?.let { InfoLine(tx("Hasta", "Until"), dateLabel(it)) }
+                if (s.isOwnerScope) s.annualInterestRate?.let { InfoLine(tx("Interés anual", "Annual interest"), rateLabel(it)) }
+                TextButton({ editing = true }, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp).testTag("salvavidas.auto.edit")) {
+                    Text(tx("Editar aportes", "Edit contributions"), color = Dincr.colors.tint)
+                }
+                return@Column
+            }
             Caption(tx("Si un monto fijo entra a tu Salvavidas (por ejemplo, una transferencia automática), DINCR lo suma a tu saldo según el plan.",
                 "If a fixed amount goes into your emergency fund (for example, an automatic transfer), DINCR adds it to your balance following the plan."))
             CheckRow(tx("Activar aportes automáticos", "Turn on automatic contributions"), enabled, !saving, "salvavidas.auto.enabled") { enabled = it }
@@ -144,6 +171,11 @@ internal fun AutoContributionSection(s: Salvavidas, saving: Boolean, save: (Salv
                     error = null
                     save(update) { failure -> error = failure }
                 })
+            }
+            if (editing) {
+                TextButton({ editing = false }, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp).testTag("salvavidas.auto.cancel")) {
+                    Text(tx("Cancelar", "Cancel"), color = Dincr.colors.tint)
+                }
             }
         }
     }

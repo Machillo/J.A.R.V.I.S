@@ -199,10 +199,17 @@ public enum RateInput {
 /// format is tried first (identical results); only when it fails is the OTHER separator read as
 /// the decimal mark, and only when it is the single separator in the text and is not followed by
 /// exactly 3 digits (that would be a thousands group: "453,840" is refused, never guessed).
-/// Mixed separators keep failing. Scoped to this sheet; other money fields are unchanged.
+/// Mixed separators keep failing. Used by this sheet and the declared-profile forms (Ingresos y
+/// base, Tus ahorros, Ajustes del plan); other money fields are unchanged.
 public enum CorrectionInput {
     public static func amount(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
         parse(text, separators: separators, maxFraction: AmountInput.maxFractionDigits) { AmountInput.parse($0, separators: $1) }
+    }
+
+    /// Like `amount`, but zero is valid (declared profile figures such as Plan → Ingresos y base,
+    /// whose decimal keyboard has the same mismatch).
+    public static func amountZeroOrMore(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
+        parse(text, separators: separators, maxFraction: AmountInput.maxFractionDigits) { AmountInput.parseZeroOrMore($0, separators: $1) }
     }
 
     public static func rate(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {

@@ -45,4 +45,16 @@ import Testing
     func rejectsInvalidInput(text: String) {
         #expect(AmountInput.parse(text, separators: .commaDot) == nil)
     }
+
+    /// Plan → Ingresos y base: the decimal keyboard types "2390,79" in a comma_dot profile; it is the
+    /// rate with decimals, never refused and never 239 079. A thousands group stays refused.
+    @Test func declaredProfileAmountsAcceptTheKeyboardsDecimal() {
+        #expect(CorrectionInput.amountZeroOrMore("2390,79", separators: .commaDot) == Decimal(string: "2390.79"))
+        #expect(CorrectionInput.amountZeroOrMore("2390.79", separators: .commaDot) == Decimal(string: "2390.79"))
+        #expect(CorrectionInput.amountZeroOrMore("18,450", separators: .commaDot) == 18_450)
+        #expect(CorrectionInput.amountZeroOrMore("0", separators: .commaDot) == 0)
+        #expect(CorrectionInput.amountZeroOrMore("2390.79", separators: .dotComma) == Decimal(string: "2390.79"))
+        #expect(CorrectionInput.amountZeroOrMore("1.234,5", separators: .commaDot) == nil)
+        #expect(CorrectionInput.amountZeroOrMore("12,3456", separators: .commaDot) == nil)
+    }
 }

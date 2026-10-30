@@ -84,7 +84,13 @@ final class SalvavidasAutoContributionUITests: XCTestCase {
         XCTAssertTrue(element("salvavidas.breakdown.contributions", in: app).exists)
         XCTAssertTrue(element("salvavidas.breakdown.next", in: app).exists)
         XCTAssertFalse(element("salvavidas.breakdown.interest", in: app).exists, "no interest for a VIP")
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Según tu plan de aportes")).firstMatch.exists)
+        // A saved plan is one line with "Editar"; the form opens only to change it.
+        XCTAssertTrue(reveal("salvavidas.auto.summary", in: app).label.contains("cada mes"), "monthly is the default frequency")
+        XCTAssertFalse(element("salvavidas.auto.amount", in: app).exists, "the saved plan is summarized")
+        reveal("salvavidas.auto.edit", in: app).tap()
+        XCTAssertTrue(reveal("salvavidas.auto.amount", in: app).exists)
+        reveal("salvavidas.auto.cancel", in: app).tap()
+        XCTAssertTrue(element("salvavidas.auto.summary", in: app).waitForExistence(timeout: 5))
     }
 
     func testUnknownSavingsAskForTodaysBalance() {

@@ -273,10 +273,12 @@ private final class ProfileSave {
         return profile
     }
 
-    /// Empty → nil (unknown); anything else must parse, or nothing is sent.
+    /// Empty → nil (unknown); anything else must parse, or nothing is sent. The decimal keyboard
+    /// follows the device language, so "2390,79" in a comma_dot profile is read as 2390.79
+    /// (`CorrectionInput`: never a thousands group, never mixed separators).
     nonisolated static func optional(_ text: String, _ separators: MoneyFormat.Separators) -> Decimal?? {
         if text.trimmingCharacters(in: .whitespaces).isEmpty { return .some(nil) }
-        guard let value = AmountInput.parseZeroOrMore(text, separators: separators) else { return nil }
+        guard let value = CorrectionInput.amountZeroOrMore(text, separators: separators) else { return nil }
         return .some(value)
     }
 

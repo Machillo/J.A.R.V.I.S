@@ -84,33 +84,36 @@ fun SalvavidasScreen(model: AppModel, nav: Navigator) {
                 AmountLine(tx("Base mensual", "Monthly base"), s.monthlyBase)
             }
             AutoContributionSection(s, saving) { change, done -> update(change, done) }
-            Section(tx("Qué protege", "What it protects")) {
-                s.components?.let { c ->
-                    AmountLine(tx("Cuotas de deudas", "Debt payments"), c.debtMonthlyPayments)
-                    c.recurringObligations?.let { AmountLine(tx("Pagos recurrentes", "Recurring payments"), it) }
-                    c.mandatoryFixedExpenses?.let { AmountLine(tx("Fijos obligatorios", "Mandatory fixed expenses"), it) }
-                    c.protectedExpenses?.let { AmountLine(tx("Gastos protegidos", "Protected expenses"), it) }
+            // The detail behind the monthly base, folded away so the screen opens with what matters.
+            Section(tx("Detalle", "Detail")) {
+                Disclosure(tx("Qué cubre tu Salvavidas", "What your emergency fund covers"), "salvavidas.details") {
+                    if (s.isOwnerScope && s.availableExpenses.isNotEmpty()) ProtectedExpenses(s, saving) { ids -> update(SalvavidasUpdate.ownerProtected(ids)) }
+                    if (s.debts.isNotEmpty()) Column {
+                        SectionTitle(tx("Cuotas de deudas", "Debt payments"))
+                        s.debts.forEach { AmountLine(it.name.orEmpty(), it.monthlyPayment) }
+                    }
+                    if (s.obligations.isNotEmpty()) Column {
+                        SectionTitle(tx("Pagos recurrentes", "Recurring payments"))
+                        s.obligations.forEach { AmountLine(it.name.orEmpty(), it.monthlyAmount) }
+                    }
+                    if (s.milestones.isNotEmpty()) Column {
+                        SectionTitle(tx("Hitos", "Milestones"))
+                        s.milestones.forEach { m ->
+                            val reached = s.isAmountKnown && m.reached == true
+                            AmountLine(tx("${m.months} ${if (m.months == 1) "mes" else "meses"}", "${m.months} month${if (m.months == 1) "" else "s"}") +
+                                (if (reached) tx(" · alcanzado", " · reached") else ""), m.target)
+                        }
+                    }
                 }
-                s.debts.forEach { AmountLine("• ${it.name.orEmpty()}", it.monthlyPayment) }
-                s.obligations.forEach { AmountLine("• ${it.name.orEmpty()}", it.monthlyAmount) }
-                s.mandatoryExpenses.forEach { AmountLine("• ${it.name.orEmpty()}", it.monthlyAmount) }
             }
-            if (s.isOwnerScope && s.availableExpenses.isNotEmpty()) ProtectedExpenses(s, saving) { ids -> update(SalvavidasUpdate.ownerProtected(ids)) }
-            if (s.milestones.isNotEmpty()) Section(tx("Hitos", "Milestones")) {
-                s.milestones.forEach { m ->
-                    val reached = s.isAmountKnown && m.reached == true
-                    AmountLine(tx("${m.months} ${if (m.months == 1) "mes" else "meses"}", "${m.months} month${if (m.months == 1) "" else "s"}") +
-                        (if (reached) tx(" · alcanzado", " · reached") else ""), m.target)
-                }
-            }
-            s.verification?.message?.let { Caption(it) }
         }
         FinancialDisclaimer()
     }
     if (editingAmount) {
         val owner = (state.state as? Load.Ready)?.value?.isOwnerScope == true
         AmountDialog(if (owner) tx("Saldo del Salvavidas", "Emergency fund balance") else tx("Actualizar ahorros", "Update savings"),
-            if (owner) null else tx("Se guarda como tus ahorros disponibles de Metas y ahorros → Tus ahorros.", "It’s saved as the available savings in Goals and savings → Your savings."),
+            if (owner) tx("Lo que tenés hoy en la cuenta, incluido el aporte que ya entró hoy.", "What the account holds today, including a contribution that already arrived today.")
+            else tx("Se guarda como tus ahorros disponibles de Metas y ahorros → Tus ahorros.", "It’s saved as the available savings in Goals and savings → Your savings."),
             tx("Guardar", "Save"), onDismiss = { editingAmount = false }) { amount, _ ->
             var error: String? = null
             model.load(tx("No pudimos guardar el Salvavidas.", "We couldn’t save the emergency fund.")) { model.api.updateSalvavidas(SalvavidasUpdate.amount(amount)) }
@@ -157,7 +160,8 @@ internal fun coverageMonthsLabel(months: BigDecimal): String {
 /** Owner: the optional expenses the fund protects (historical picker). */
 @Composable
 private fun ProtectedExpenses(s: Salvavidas, saving: Boolean, onChange: (List<Long>) -> Unit) {
-    Section(tx("Gastos protegidos", "Protected expenses")) {
+    Column {
+        SectionTitle(tx("Gastos que querés proteger", "Expenses you want to protect"))
         s.availableExpenses.forEach { expense ->
             val id = expense.id ?: return@forEach
             val checked = expense.selected == true

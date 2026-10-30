@@ -19,14 +19,10 @@ struct SalvavidasPlanBreakdown: View {
                     FigureRow(label: tx("Intereses estimados", "Estimated interest"), amount: plan.estimatedInterest ?? 0)
                         .accessibilityIdentifier("salvavidas.breakdown.interest")
                 }
-                FigureRow(label: tx("Total estimado", "Estimated total"), amount: plan.total ?? fund.currentAmount)
                 if let next = plan.nextDate {
                     InfoRow(label: tx("Próximo aporte", "Next contribution"), value: Day.label(next))
                         .accessibilityIdentifier("salvavidas.breakdown.next")
                 }
-                Text(tx("Según tu plan de aportes; actualizá el saldo real cuando quieras.",
-                        "Following your contribution plan; update the real balance whenever you like."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
             }
             .padding(.top, DincrSpacing.s1)
             .accessibilityElement(children: .contain)
@@ -37,7 +33,8 @@ struct SalvavidasPlanBreakdown: View {
 
 /// "Aportes automáticos": a box to tick (the plan works only when ticked), the amount, frequency,
 /// first and optional last date; the balance of today while the savings are unknown (0 allowed);
-/// and, for the Owner only, the annual interest rate. One PUT per tap of Guardar.
+/// and, for the Owner only, the annual interest rate. One PUT per tap of Guardar. A saved, active
+/// plan shows as one line with "Editar"; the form opens only to change it.
 struct AutoContributionCard: View {
     @Environment(AppModel.self) private var model
     let fund: Salvavidas
@@ -55,7 +52,10 @@ struct AutoContributionCard: View {
     @State private var savedToday = ""
     @State private var rate = ""
     @State private var error: String?
+    @State private var editing = false
 
+    /// A saved, active plan is summarized until the user taps "Editar".
+    private var summarized: Bool { fund.activePlan != nil && !editing }
     /// While the savings are unknown, turning the plan on needs the balance of today.
     private var asksBalance: Bool { enabled && !fund.savingsKnown }
     private var showsFields: Bool { enabled || fund.autoContribution != nil }
@@ -63,6 +63,32 @@ struct AutoContributionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             SectionHeader(title: tx("Aportes automáticos", "Automatic contributions"))
+            if summarized, let plan = fund.activePlan {
+                PlanSummary(fund: fund, plan: plan)
+                if canWrite {
+                    Button(tx("Editar aportes", "Edit contributions")) { editing = true }
+                        .buttonStyle(.dincrSecondary)
+                        .disabled(saving)
+                        .accessibilityIdentifier("salvavidas.auto.edit")
+                }
+            } else {
+                form
+            }
+        }
+        .dincrCard()
+        // The decimal pad has no return key: "Listo" closes it so "Guardar aportes" is reachable.
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(tx("Listo", "Done")) { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+                    .accessibilityIdentifier("salvavidas.auto.keyboardDone")
+            }
+        }
+        .onAppear(perform: prefill)
+        .onChange(of: fund) { prefill() }
+    }
+
+    @ViewBuilder private var form: some View {
             Text(tx("Si un monto fijo entra a tu Salvavidas (por ejemplo, una transferencia automática), DINCR lo suma a tu saldo según el plan.",
                     "If a fixed amount goes into your emergency fund (for example, an automatic transfer), DINCR adds it to your balance following the plan."))
                 .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
@@ -118,18 +144,12 @@ struct AutoContributionCard: View {
                     .disabled(saving)
                     .accessibilityIdentifier("salvavidas.auto.save")
             }
-        }
-        .dincrCard()
-        // The decimal pad has no return key: "Listo" closes it so "Guardar aportes" is reachable.
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button(tx("Listo", "Done")) { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-                    .accessibilityIdentifier("salvavidas.auto.keyboardDone")
+            if editing {
+                Button(tx("Cancelar", "Cancel")) { prefill() }
+                    .buttonStyle(.dincrSecondary)
+                    .disabled(saving)
+                    .accessibilityIdentifier("salvavidas.auto.cancel")
             }
-        }
-        .onAppear(perform: prefill)
-        .onChange(of: fund) { prefill() }
     }
 
     /// The saved plan (or defaults); called on load and after every answer of the backend.
@@ -145,6 +165,7 @@ struct AutoContributionCard: View {
         savedToday = ""
         rate = fund.annualInterestRate.map { "\($0)".replacingOccurrences(of: ".", with: model.moneyFormat.separators == .dotComma ? "," : ".") } ?? ""
         error = nil
+        editing = false
     }
 
     private func submit() async {
@@ -179,5 +200,30 @@ struct AutoContributionCard: View {
         }
         error = nil
         if let failure = await save(update) { error = failure }
+    }
+}
+
+/// One line for a saved, active plan: "₡2.500 cada semana · desde 5 nov 2026", the end and, for the
+/// Owner, the rate.
+private struct PlanSummary: View {
+    @Environment(AppModel.self) private var model
+    let fund: Salvavidas
+    let plan: SalvavidasAutoContribution
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s1) {
+            Text(SalvavidasAutoContribution.summary(amount: model.moneyFormat.string(plan.amount ?? 0), frequency: plan.frequency))
+                .font(DincrFont.body)
+                .accessibilityIdentifier("salvavidas.auto.summary")
+            if let start = plan.startDate {
+                InfoRow(label: tx("Desde", "From"), value: Day.label(start))
+            }
+            if let end = plan.endDate {
+                InfoRow(label: tx("Hasta", "Until"), value: Day.label(end))
+            }
+            if fund.isOwnerScope, let rate = fund.annualInterestRate {
+                InfoRow(label: tx("Interés anual", "Annual interest"), value: SalvavidasAutoContribution.rateLabel(rate))
+            }
+        }
     }
 }
