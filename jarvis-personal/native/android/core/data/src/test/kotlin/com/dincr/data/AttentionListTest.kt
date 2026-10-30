@@ -172,7 +172,7 @@ class AttentionListTest {
         // App routes that exist in MainScaffold; the review item opens the Email Monitor.
         assertEquals(
             mapOf("review" to "mail", "debts" to "debts", "salvavidas" to "salvavidas", "incomeBase" to "incomeBase",
-                "strategy" to "strategy", "movements" to "movements", "monthlyReview" to "review"),
+                "strategy" to "strategy", "movements" to "movements", "monthlyReview" to "monthly"),
             AttentionItem.Destination.entries.associate { it.key to it.route },
         )
     }

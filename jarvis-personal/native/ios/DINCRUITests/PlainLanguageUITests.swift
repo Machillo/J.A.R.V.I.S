@@ -44,15 +44,4 @@ final class PlainLanguageUITests: XCTestCase {
         XCTAssertTrue(text("Libre después de tus compromisos", in: app).waitForExistence(timeout: 10))
         XCTAssertFalse(text("Margen", in: app).exists)
     }
-
-    func testTheMonthlyReviewSaysHowEachIndicatorMoved() {
-        let app = launch(plan: "vip", tab: "movements")
-        open("movements.analysis", in: app)
-        open("analysis.review", in: app)
-        XCTAssertTrue(text("Deuda total · mejoró", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(text("Meses que cubre tu fondo de emergencia · sin cambios", in: app).exists)
-        XCTAssertTrue(text("1 mes", in: app).exists)
-        XCTAssertTrue(text("Ingresos menos gastos · empeoró", in: app).exists)
-        XCTAssertFalse(text("months", in: app).exists)  // no raw unit codes
-    }
 }

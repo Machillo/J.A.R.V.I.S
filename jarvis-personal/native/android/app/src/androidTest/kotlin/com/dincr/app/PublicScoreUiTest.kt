@@ -18,8 +18,8 @@ import org.junit.Test
 
 /**
  * K-2 — no public screen shows the financial-health score until it has a canonical calculation
- * (P3.7): Movimientos → Análisis → Revisión del mes keeps its other indicators and its next step
- * but not the score; the Owner keeps it in JARVIS → Análisis financiero. iOS twin:
+ * (P3.7); the Owner keeps it in JARVIS → Análisis financiero. (Movimientos → Análisis → Revisión
+ * del mes, which showed the other indicators, was retired: it repeated the summary.) iOS twin:
  * `PublicScoreUITests`. FakeBackend only.
  */
 class PublicScoreUiTest {
@@ -51,20 +51,6 @@ class PublicScoreUiTest {
     private fun tab(text: String) {
         waitUntil("tab $text") { compose.onAllNodes(hasText(text) and isSelectable()).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasText(text) and isSelectable()).onFirst().performSemanticsAction(SemanticsActions.OnClick)
-    }
-
-    @Test fun theMonthlyReviewKeepsItsIndicatorsWithoutTheScore() {
-        for ((plan, role) in listOf("vip" to null, "free" to "owner")) {
-            launch(plan, role)
-            tab(tx("Movimientos", "Transactions"))
-            click(tx("Análisis", "Analysis"))
-            click(tx("Revisión del mes", "Monthly review"))
-            // The fixture's lines carry the backend's Spanish labels.
-            waitUntil("review ($role)") { present("Deuda total") }
-            waitUntil("flow") { present("Ingresos menos gastos") }
-            waitUntil("next step") { present("Pagá extra a la tarjeta") }
-            for (hidden in listOf("Salud financiera", tx("Salud financiera", "Financial health"), "/100", "de 100", "72.0")) assertFalse("${role ?: plan}: $hidden", present(hidden))
-        }
     }
 
     @Test fun theOwnerKeepsTheScoreInJarvis() {

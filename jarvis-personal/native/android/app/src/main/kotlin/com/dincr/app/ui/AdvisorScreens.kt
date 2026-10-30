@@ -17,8 +17,6 @@ import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Insights
-import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Summarize
 import androidx.compose.material.icons.rounded.Timeline
@@ -35,9 +33,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
-import com.dincr.data.Feature
 import com.dincr.data.MoneyFormat
-import com.dincr.data.MonthlyReview
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
 import com.dincr.data.ScenarioRequest
@@ -49,7 +45,6 @@ import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.StatusBanner
 import java.math.BigDecimal
-import java.time.YearMonth
 import kotlinx.coroutines.launch
 
 /** B16 — every advisory screen says what DINCR is and is not. */
@@ -74,11 +69,6 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
         DincrCard {
             Column {
                 NavRow(Icons.Rounded.Summarize, tx("Resumen del mes", "Monthly summary"), tx("Ingresos, gastos y metas por mes", "Income, expenses and goals by month")) { nav.open("monthly") }
-                if (plan.allows(Feature.BASIC_REPORTS)) {
-                    if (model.isOn(OpsFlag.ADVANCED_REPORTS)) NavRow(Icons.Rounded.QueryStats, tx("Reportes", "Reports"), tx("Tu mes comparado con el anterior", "Your month vs the previous one")) { nav.open("reports") }
-                } else LockedRow(Icons.Rounded.QueryStats, tx("Reportes", "Reports"), PlanTier.BASIC, nav)
-                if (plan != PlanTier.VIP) LockedRow(Icons.Rounded.Insights, tx("Revisión del mes", "Monthly review"), PlanTier.VIP, nav)
-                else if (vipOn) NavRow(Icons.Rounded.Insights, tx("Revisión del mes", "Monthly review"), tx("Qué cambió y qué sigue", "What changed and what’s next")) { nav.open("review") }
                 // §15 PR 11: the Owner (role, never a plan) also gets the historical financial analysis, in its
                 // Análisis mode (no health score until P3.7, no net worth until P0.9); JARVIS keeps the full one.
                 if (Jarvis.isAvailable(profile)) Box(Modifier.testTag("analysis.owner")) {
@@ -218,63 +208,6 @@ fun ScenariosScreen(model: AppModel, nav: Navigator) {
         }
         FinancialDisclaimer()
     }
-}
-
-/** F8 — VIP monthly review. It needs history; until then the backend answers BASELINE. */
-@Composable
-fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
-    var month by remember { mutableStateOf(YearMonth.now()) }
-    val review = rememberLoad(model, month) { model.api.monthlyReview(month.toString()) }
-    DetailScaffold(tx("Revisión mensual", "Monthly review"), nav::back) {
-        MonthPicker(month, { month = it })
-        LoadContent(review) { r ->
-            if (r.status == "BASELINE") StatusBanner(BannerTone.INFO, r.headline ?: tx("Todavía sin comparación", "No comparison yet"), r.summary ?: tx("DINCR necesita más historia de este mes para comparar.", "DINCR needs more history for this month to compare."))
-            else {
-                r.headline?.let { Text(it, style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text) }
-                r.summary?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text2) }
-                if (r.publicScorecard.isNotEmpty()) Section(tx("Indicadores", "Indicators")) {
-                    r.publicScorecard.forEach { ScoreLineRow(it) }
-                }
-            }
-            r.nextMonth?.let { next ->
-                Section(tx("El próximo mes", "Next month")) {
-                    next.title?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text) }
-                    next.amount?.takeIf { it.signum() > 0 }?.let { AmountLine(tx("Monto", "Amount"), it) }
-                    next.rationale?.let { Caption(it) }
-                }
-            }
-        }
-        FinancialDisclaimer()
-    }
-}
-
-/**
- * One indicator of the review: its value (money or months) and how it moved since the previous
- * month; an unknown trend says nothing. Same wording as iOS's `ScoreLineRow`.
- */
-@Composable
-private fun ScoreLineRow(line: MonthlyReview.ScoreLine) {
-    val label = line.label ?: line.key.orEmpty()
-    val trend = when (line.trend) {
-        "improved" -> tx("mejoró", "improved")
-        "declined" -> tx("empeoró", "got worse")
-        "unchanged" -> tx("sin cambios", "no change")
-        else -> null
-    }
-    val titled = trend?.let { "$label · $it" } ?: label
-    val explanation = line.explanation
-    when {
-        explanation != null -> InfoLine(label, explanation)
-        line.unit == "CRC" -> AmountLine(titled, line.current?.toBigDecimal())
-        else -> InfoLine(titled, scoreValue(line))
-    }
-}
-
-private fun scoreValue(line: MonthlyReview.ScoreLine): String {
-    val current = line.current ?: return "—"
-    val number = java.text.NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(current)
-    if (line.unit != "months") return number
-    return if (current == 1.0) tx("1 mes", "1 month") else tx("$number meses", "$number months")
 }
 
 /** E12 — VIP aguinaldo from the CCSS payroll notices in the connected mailbox (always colones). */

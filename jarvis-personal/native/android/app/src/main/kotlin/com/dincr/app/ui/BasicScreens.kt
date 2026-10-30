@@ -357,39 +357,6 @@ private fun RecurringForm(model: AppModel, editing: RecurringItem? = null, expen
     }
 }
 
-/** Reports (Basic; `advanced_reports`): a month with the previous one. */
-@Composable
-fun ReportsScreen(model: AppModel, nav: Navigator) {
-    var month by remember { mutableStateOf(YearMonth.now()) }
-    val paused = !model.isOn(OpsFlag.ADVANCED_REPORTS)
-    val report = rememberLoad(model, month) { model.api.report(month.toString()) }
-    LaunchedEffect(Unit) { model.recordScreen("reports_opened", "reports") }
-    DetailScaffold(tx("Reportes", "Reports"), nav::back) {
-        if (paused) { FeaturePaused(model, OpsFlag.ADVANCED_REPORTS); return@DetailScaffold }
-        MonthPicker(month, { month = it })
-        LoadContent(report) { r ->
-            DincrCard {
-                Column {
-                    AmountLine(tx("Ingresos", "Income"), r.income, sign = com.dincr.data.MoneyFormat.Sign.INCOME)
-                    AmountLine(tx("Gastos", "Expenses"), r.expenses)
-                    AmountLine(tx("Pagos de deuda", "Debt payments"), r.debtPaid)
-                    AmountLine(tx("Aportes a metas", "Goal contributions"), r.goalContributions)
-                    AmountLine(tx("Balance", "Balance"), r.balance, emphasize = true)
-                }
-            }
-            r.comparison?.let { c ->
-                Section(tx("Mes anterior", "Previous month")) {
-                    AmountLine(tx("Ingresos", "Income"), c.income)
-                    AmountLine(tx("Gastos", "Expenses"), c.expenses)
-                }
-            }
-            if (r.categories.isNotEmpty()) Section(tx("Gastos por categoría", "Expenses by category")) {
-                KnownCategoryBars(CategoryTotal.split(r.categories))
-            }
-        }
-    }
-}
-
 /** B17 — a paused feature shows the server's message instead of the screen. */
 @Composable
 fun FeaturePaused(model: AppModel, flag: OpsFlag) {
