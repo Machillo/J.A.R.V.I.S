@@ -30,6 +30,42 @@ extension FixtureBackend {
                        "explanation": "La cuota de \(name) saldría de tu mes."])
         }
 
+        if kind == "refinance" || kind == "consolidate" {
+            // Simple fixed math (the server amortizes): interest ≈ balance × rate × months / 24.
+            guard let rate = decimal(body["annual_rate"]), let term = body["term_months"] as? Int, term > 0 else {
+                return failure(422, "terms_required", "Indicá la tasa y el plazo del préstamo nuevo.")
+            }
+            let ids = kind == "refinance" ? [(body["debt_id"] as? Int) ?? -1] : Array(Set((body["debt_ids"] as? [Int]) ?? [])).sorted()
+            if kind == "consolidate" && ids.count < 2 { return failure(422, "debts_required", "Elegí al menos dos deudas para juntar.") }
+            let picked = ids.compactMap { id in debts.first { $0["id"] as? Int == id && (decimal($0["remaining_amount"]) ?? 0) > 0 } }
+            guard picked.count == ids.count else { return failure(404, "debt_not_found", "No encontramos esa deuda.") }
+            let fee = amount ?? 0
+            let balance = picked.reduce(Decimal(0)) { $0 + (decimal($1["remaining_amount"]) ?? 0) }
+            let payments = picked.reduce(Decimal(0)) { $0 + (decimal($1["monthly_payment"]) ?? 0) }
+            let todayMonths = picked.map { debt -> Int in
+                let left = decimal(debt["remaining_amount"]) ?? 0, payment = decimal(debt["monthly_payment"]) ?? 1
+                return NSDecimalNumber(decimal: left / payment).intValue + 1
+            }.max() ?? 0
+            let todayInterest = picked.reduce(Decimal(0)) { sum, debt in
+                sum + (decimal(debt["remaining_amount"]) ?? 0) * (decimal(debt["interest_rate"]) ?? 0) / 100 * Decimal(todayMonths) / 24
+            }
+            let principal = balance + fee
+            let newInterest = principal * rate / 100 * Decimal(term) / 24
+            let newPayment = (principal + newInterest) / Decimal(term)
+            let names = picked.compactMap { $0["name"] as? String }.joined(separator: ", ")
+            return ok(["rule_version": "debt-scenarios-v2", "kind": kind,
+                       "debt": ["id": kind == "refinance" ? ids[0] as Any : NSNull() as Any, "name": kind == "refinance" ? "Préstamo nuevo" : "Préstamo para juntar deudas",
+                                "remaining_amount": number(principal), "monthly_payment": number(newPayment), "monthly_payment_source": "computed",
+                                "interest_rate": number(rate)],
+                       "debts": picked.map { ["id": $0["id"] ?? NSNull(), "name": $0["name"] ?? NSNull(), "remaining_amount": $0["remaining_amount"] ?? NSNull()] },
+                       "monthly_leftover": leftover(payments - newPayment), "one_time_amount": NSNull(), "liquid_savings_after": NSNull(),
+                       "options": NSNull(), "payoff": ["months": term, "interest": number(newInterest)],
+                       "comparison": ["current": ["monthly_payment": number(payments), "months": todayMonths, "interest": number(todayInterest)],
+                                      "scenario": ["monthly_payment": number(newPayment), "months": term, "interest": number(newInterest), "fee": number(fee)],
+                                      "total_saved": number(todayInterest - newInterest - fee)],
+                       "warnings": [String](), "explanation": "Pagarías \(names) con un préstamo nuevo."])
+        }
+
         guard let id = body["debt_id"] as? Int else { return failure(422, "debt_required", "Elegí una de tus deudas.") }
         guard let debt = debts.first(where: { $0["id"] as? Int == id }), let remaining = decimal(debt["remaining_amount"]), remaining > 0 else {
             return failure(404, "debt_not_found", "No encontramos esa deuda.")

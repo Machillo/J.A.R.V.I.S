@@ -56,6 +56,21 @@ class DebtScenarioTest {
         assertEquals(0, BigDecimal(-10_000).compareTo(newDebt.monthlyLeftover.change))
     }
 
+    /** DS-2: refinance one debt / consolidate several: today against the new loan. */
+    @Test fun refinanceAndConsolidateCompareTodayWithTheNewLoan() = runTest {
+        val request = DebtScenarioRequest.consolidate(listOf(1, 2), BigDecimal(15), 48, BigDecimal(20_000))
+        val body = json.encodeToString(DebtScenarioRequest.serializer(), request)
+        assertTrue(body, body.contains("\"kind\":\"consolidate\"") && body.contains("\"debt_ids\":[1,2]"))
+        val api = fake(PlanTier.VIP)
+        val together = api.debtScenario(request)
+        assertEquals(0, BigDecimal(95_000).compareTo(together.comparison?.current?.monthlyPayment))
+        assertEquals(2, together.debts.size)
+        assertEquals(48, together.comparison?.scenario?.months)
+        val one = api.debtScenario(DebtScenarioRequest.refinance(1, BigDecimal(12), 24, null))
+        assertEquals(1L, one.debt?.id)
+        expectStatus(422) { api.debtScenario(DebtScenarioRequest.consolidate(listOf(1), BigDecimal(12), 24, null)) }
+    }
+
     @Test fun theFakeRefusesWhatTheBackendRefuses() = runTest {
         expectStatus(403) { fake(PlanTier.FREE).debtScenario(DebtScenarioRequest.payOff(1)) }
         val vip = fake(PlanTier.VIP)

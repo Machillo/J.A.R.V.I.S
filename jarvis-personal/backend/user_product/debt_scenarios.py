@@ -1,4 +1,5 @@
-"""Debt what-if scenarios (VIP): pay a debt off, make an extra payment, or take a new debt.
+"""Debt what-if scenarios (VIP): pay a debt off, make an extra payment, take a new debt, refinance a
+debt, or consolidate several into one loan.
 
 Every scenario answers one question: how much money is left each month after essential expenses
 and debt payments (the strategy's margin, `build_basic_strategy`). It reads the caller's own
@@ -10,6 +11,10 @@ monthly payment or interest rate leaves what depends on it unknown, with a warni
 An extra payment shows both lender policies, because the lender decides: a lower installment
 (same remaining term; frees money every month) or a shorter term (same installment; saves more
 interest).
+
+Refinancing (one debt) and consolidating (several debts into one loan) compare today's payments,
+months and interest with the new loan's (its rate and term; an optional fee is added to what is
+borrowed and counted as a cost). What depends on an unknown payment or rate stays unknown.
 """
 from __future__ import annotations
 
@@ -18,9 +23,9 @@ from typing import Any, Literal
 from backend.core.i18n import tx
 from backend.user_product.strategy_engine import _money, build_basic_strategy
 
-RULE_VERSION = "debt-scenarios-v1"
+RULE_VERSION = "debt-scenarios-v2"
 MAX_MONTHS = 1200
-Kind = Literal["pay_off", "extra_payment", "new_debt"]
+Kind = Literal["pay_off", "extra_payment", "new_debt", "refinance", "consolidate"]
 
 
 class DebtScenarioError(ValueError):
@@ -113,7 +118,7 @@ def _missing_warnings(payment: float | None, rate: float | None) -> list[str]:
 
 def build_debt_scenario(snapshot: dict, kind: Kind, *, debt_id: int | None = None, amount: float | None = None,
                         monthly_payment: float | None = None, annual_rate: float | None = None,
-                        term_months: int | None = None, name: str | None = None) -> dict:
+                        term_months: int | None = None, name: str | None = None, debt_ids: list[int] | None = None) -> dict:
     current = monthly_leftover(snapshot)
     base_warnings = list(build_basic_strategy(snapshot).get("warnings", []))
     result: dict[str, Any] = {"rule_version": RULE_VERSION, "kind": kind, "options": None, "payoff": None}
@@ -186,7 +191,63 @@ def build_debt_scenario(snapshot: dict, kind: Kind, *, debt_id: int | None = Non
         )
         return result
 
+    if kind in ("refinance", "consolidate"):
+        if annual_rate is None or not term_months:
+            raise DebtScenarioError("terms_required", tx("Indicá la tasa y el plazo del préstamo nuevo.", "Enter the new loan’s rate and term."))
+        if kind == "refinance":
+            debts = [_find_debt(snapshot, debt_id)]
+        else:
+            ids = list(dict.fromkeys(debt_ids or []))
+            if len(ids) < 2:
+                raise DebtScenarioError("debts_required", tx("Elegí al menos dos deudas para juntar.", "Choose at least two debts to consolidate."))
+            debts = [_find_debt(snapshot, one) for one in ids]
+        return {**result, **_replace(current, base_warnings, kind, debts, annual_rate=annual_rate, term_months=term_months,
+                                      fee=_money(amount) if amount else 0.0, name=name)}
+
     raise DebtScenarioError("unknown_kind", tx("Ese escenario no existe.", "That scenario doesn’t exist."))
+
+
+def _replace(current: float | None, base_warnings: list, kind: str, debts: list[dict], *, annual_rate: float,
+             term_months: int, fee: float, name: str | None) -> dict:
+    """Today's debts against one new loan for what is left of them (plus the fee)."""
+    balance = round(sum(_money(debt["remaining_amount"]) for debt in debts), 2)
+    payments = [_known(debt.get("monthly_payment")) for debt in debts]
+    rates = [_known(debt.get("interest_rate")) for debt in debts]
+    schedules = [schedule(_money(debt["remaining_amount"]), payment, rate) for debt, payment, rate in zip(debts, payments, rates)]
+    today_payment = None if None in payments else round(sum(payments), 2)
+    today_known = all(schedules)
+    principal = round(balance + fee, 2)
+    new_payment = amortized_payment(principal, annual_rate, term_months)
+    after = schedule(principal, new_payment, annual_rate)
+    today_interest = round(sum(left[1] for left in schedules), 2) if today_known else None
+    new_cost = round(after[1] + fee, 2) if after else None
+    warnings = list(base_warnings)
+    for debt, payment, rate in zip(debts, payments, rates):
+        if payment is None or rate is None:
+            warnings += [f"{debt.get('name')}: {warning}" for warning in _missing_warnings(payment, rate)]
+    label = (name or "").strip() or (tx("Préstamo para juntar deudas", "Consolidation loan") if kind == "consolidate"
+                                    else tx("Préstamo nuevo", "New loan"))
+    names = ", ".join(str(debt.get("name")) for debt in debts)
+    return {
+        "debt": {"id": None if kind == "consolidate" else debts[0].get("id"), "name": label, "remaining_amount": principal,
+                 "monthly_payment": new_payment, "monthly_payment_source": "computed", "interest_rate": annual_rate, "debt_type": None},
+        "debts": [_debt_view(debt) for debt in debts],
+        "monthly_leftover": _change(current, None if today_payment is None or new_payment is None else today_payment - new_payment),
+        "one_time_amount": None, "liquid_savings_after": None,
+        "payoff": {"months": after[0] if after else None, "interest": after[1] if after else None},
+        "comparison": {
+            "current": {"monthly_payment": today_payment, "months": max(left[0] for left in schedules) if today_known else None,
+                        "interest": today_interest},
+            "scenario": {"monthly_payment": new_payment, "months": after[0] if after else None, "interest": after[1] if after else None,
+                         "fee": round(fee, 2)},
+            "total_saved": round(today_interest - new_cost, 2) if today_interest is not None and new_cost is not None else None,
+        },
+        "warnings": warnings,
+        "explanation": tx(f"Pagarías {names} con un solo préstamo nuevo y quedaría una sola cuota.",
+                          f"You would pay {names} with one new loan and keep a single payment.") if kind == "consolidate"
+        else tx(f"Cambiarías {names} por un préstamo nuevo con otra tasa y otro plazo.",
+                f"You would replace {names} with a new loan at another rate and term."),
+    }
 
 
 def simulate_debt_scenario(request) -> dict:
@@ -202,7 +263,7 @@ def simulate_debt_scenario(request) -> dict:
         return build_debt_scenario(
             _strategy_snapshot(), request.kind, debt_id=request.debt_id, amount=request.amount,
             monthly_payment=request.monthly_payment, annual_rate=request.annual_rate,
-            term_months=request.term_months, name=request.name,
+            term_months=request.term_months, name=request.name, debt_ids=request.debt_ids,
         )
     except DebtScenarioError as error:
         raise HTTPException(status_code=404 if error.code == "debt_not_found" else 422,

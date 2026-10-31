@@ -1,7 +1,10 @@
 package com.dincr.app.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -12,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,7 +36,7 @@ import kotlinx.coroutines.launch
  * saved. Same choices as iOS's `ScenarioChoice`.
  */
 enum class ScenarioChoice {
-    GENERAL, PAY_OFF, EXTRA_PAYMENT, NEW_DEBT;
+    GENERAL, PAY_OFF, EXTRA_PAYMENT, NEW_DEBT, REFINANCE, CONSOLIDATE;
 
     val title: String
         get() = when (this) {
@@ -40,6 +44,8 @@ enum class ScenarioChoice {
             PAY_OFF -> tx("Pagar una deuda completa", "Pay a debt off")
             EXTRA_PAYMENT -> tx("Abonar a una deuda", "Make an extra payment to a debt")
             NEW_DEBT -> tx("Agregar una deuda nueva", "Add a new debt")
+            REFINANCE -> tx("Refinanciar una deuda", "Refinance a debt")
+            CONSOLIDATE -> tx("Juntar deudas en un préstamo", "Consolidate debts into one loan")
         }
 }
 
@@ -60,6 +66,8 @@ fun DebtScenarioForm(model: AppModel, choice: ScenarioChoice) {
     var payment by remember(choice) { mutableStateOf("") }
     var rate by remember(choice) { mutableStateOf("") }
     var term by remember(choice) { mutableStateOf("") }
+    var fee by remember(choice) { mutableStateOf("") }
+    var chosen by remember(choice) { mutableStateOf(setOf<Long>()) }
     var result by remember(choice) { mutableStateOf<DebtScenarioResult?>(null) }
     var error by remember(choice) { mutableStateOf<String?>(null) }
     var busy by remember(choice) { mutableStateOf(false) }
@@ -82,6 +90,17 @@ fun DebtScenarioForm(model: AppModel, choice: ScenarioChoice) {
             if (debtId == null || value == null) { error = tx("Revisá el monto.", "Check the amount."); null }
             else DebtScenarioRequest.extraPayment(debtId!!, value)
         }
+        ScenarioChoice.REFINANCE, ScenarioChoice.CONSOLIDATE -> {
+            val annual = money(rate)
+            val months = term.trim().toIntOrNull()?.takeIf { it > 0 }
+            val cost = fee.takeIf { it.isNotBlank() }?.let(::money)
+            when {
+                annual == null || months == null -> { error = tx("Indicá la tasa y el plazo del préstamo nuevo.", "Enter the new loan’s rate and term."); null }
+                fee.isNotBlank() && cost == null -> { error = tx("Revisá la comisión.", "Check the fee."); null }
+                choice == ScenarioChoice.REFINANCE -> debtId?.let { DebtScenarioRequest.refinance(it, annual, months, cost) }
+                else -> DebtScenarioRequest.consolidate(chosen.sorted(), annual, months, cost)
+            }
+        }
         else -> {
             val principal = money(amount)?.takeIf { it.signum() > 0 }
             val cuota = payment.takeIf { it.isNotBlank() }?.let(::money)
@@ -102,6 +121,8 @@ fun DebtScenarioForm(model: AppModel, choice: ScenarioChoice) {
         Caption(when (choice) {
             ScenarioChoice.PAY_OFF -> tx("Elegí una deuda: DINCR calcula cuánto te quedaría libre cada mes si la pagás completa.", "Choose a debt: DINCR shows how much you’d have left each month if you pay it off.")
             ScenarioChoice.EXTRA_PAYMENT -> tx("Elegí una deuda y el abono: DINCR muestra qué pasa si tu banco baja la cuota o acorta el plazo.", "Choose a debt and the amount: DINCR shows what happens if your lender lowers the payment or shortens the term.")
+            ScenarioChoice.REFINANCE -> tx("Elegí una deuda y lo que te ofrecen (tasa y plazo): DINCR compara tu cuota, cuánto tardás y cuánto pagás de intereses.", "Choose a debt and the offer (rate and term): DINCR compares your payment, how long it takes and the interest.")
+            ScenarioChoice.CONSOLIDATE -> tx("Elegí las deudas que pagarías con un solo préstamo y lo que te ofrecen: DINCR compara hoy contra una sola cuota.", "Choose the debts one loan would pay and the offer: DINCR compares today with a single payment.")
             else -> tx("Probá una deuda nueva: DINCR calcula cuánto te quedaría libre cada mes con su cuota.", "Try a new debt: DINCR shows how much you’d have left each month with its payment.")
         })
         if (choice == ScenarioChoice.NEW_DEBT) {
@@ -119,14 +140,29 @@ fun DebtScenarioForm(model: AppModel, choice: ScenarioChoice) {
             when (val list = debts) {
                 null -> Caption(tx("Cargando tus deudas…", "Loading your debts…"))
                 emptyList<Debt>() -> Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."), color = Dincr.colors.text)
-                else -> ChoiceChips(list.map { it.id to (it.name ?: tx("Deuda", "Debt")) }, debtId ?: -1L, { debtId = it }, label = tx("Deuda", "Debt"))
+                else -> if (choice == ScenarioChoice.CONSOLIDATE) {
+                    list.forEach { debt ->
+                        Row(Modifier.fillMaxWidth().testTag("scenario.pick.${debt.id}"), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(debt.id in chosen, { on -> chosen = if (on) chosen + debt.id else chosen - debt.id })
+                            Text(debt.name ?: tx("Deuda", "Debt"), color = Dincr.colors.text)
+                        }
+                    }
+                } else ChoiceChips(list.map { it.id to (it.name ?: tx("Deuda", "Debt")) }, debtId ?: -1L, { debtId = it }, label = tx("Deuda", "Debt"))
+            }
+            if (choice == ScenarioChoice.REFINANCE || choice == ScenarioChoice.CONSOLIDATE) {
+                OutlinedTextField(rate, { rate = it }, label = { Text(tx("Tasa anual del préstamo nuevo (%)", "New loan’s annual rate (%)")) }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth().testTag("scenario.loan.rate"))
+                OutlinedTextField(term, { term = it }, label = { Text(tx("Plazo (meses)", "Term (months)")) }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().testTag("scenario.loan.term"))
+                MoneyField(tx("Comisión o gastos (opcional)", "Fee or costs (optional)"), fee, { fee = it }, modifier = Modifier.testTag("scenario.loan.fee"))
             }
             if (choice == ScenarioChoice.EXTRA_PAYMENT) {
                 MoneyField(tx("¿Cuánto querés abonar?", "How much do you want to pay?"), amount, { amount = it }, modifier = Modifier.testTag("scenario.amount"))
             }
         }
         error?.let { com.dincr.design.ErrorState(it) }
-        DincrPrimaryButton(tx("Calcular", "Calculate"), loading = busy, enabled = choice == ScenarioChoice.NEW_DEBT || debtId != null,
+        DincrPrimaryButton(tx("Calcular", "Calculate"), loading = busy,
+            enabled = if (choice == ScenarioChoice.CONSOLIDATE) chosen.size >= 2 else choice == ScenarioChoice.NEW_DEBT || debtId != null,
             modifier = Modifier.testTag("scenario.run"), onClick = {
                 error = null
                 val built = request() ?: return@DincrPrimaryButton
@@ -149,7 +185,20 @@ private fun DebtScenarioResultSection(result: DebtScenarioResult) {
     Section(tx("Resultado", "Result")) {
         AmountLine(tx("Te queda libre al mes hoy", "Left each month today"), result.monthlyLeftover.current)
         val options = result.options
-        if (options != null) {
+        val comparison = result.comparison
+        if (comparison != null) {
+            AmountLine(tx("Cuota hoy", "Payment today"), comparison.current?.monthlyPayment)
+            AmountLine(tx("Cuota nueva", "New payment"), comparison.scenario?.monthlyPayment)
+            AmountLine(tx("Te quedaría libre al mes", "Left each month"), result.monthlyLeftover.scenario, emphasize = true)
+            InfoLine(tx("Hoy terminás en", "Today you finish in"), months(comparison.current?.months))
+            InfoLine(tx("Con el préstamo nuevo", "With the new loan"), months(comparison.scenario?.months))
+            comparison.scenario?.fee?.takeIf { it.signum() > 0 }?.let { AmountLine(tx("Comisión", "Fee"), it) }
+            val saved = comparison.totalSaved
+            Column(Modifier.testTag("scenario.result.saved")) {
+                AmountLine(if (saved == null || saved.signum() >= 0) tx("Ahorrás en intereses y costos", "You save in interest and costs")
+                    else tx("Te costaría de más", "It would cost you more"), saved?.abs())
+            }
+        } else if (options != null) {
             options.lowerInstallment?.let { lower ->
                 Text(tx("Si tu banco baja la cuota", "If your lender lowers the payment"), style = MaterialTheme.typography.titleSmall, color = Dincr.colors.text)
                 AmountLine(tx("Cuota nueva", "New payment"), lower.monthlyPayment)
