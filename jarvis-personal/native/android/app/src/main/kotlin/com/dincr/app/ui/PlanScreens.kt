@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.Payments
@@ -63,7 +65,8 @@ import kotlinx.coroutines.launch
  * E1 — the Plan tab: exactly Aguinaldo, Tu plan del mes (UX-3: Estrategia + Distribución as one
  * plan; the row keeps the Estrategia route and gate), Deudas (UX-4: where debts are managed, every
  * plan; Hoy keeps a shortcut), Ingresos y base (UX-7: the declared income and essential expenses, every plan), Gastos fijos (FX-1:
- * VIP and the Owner see, add and remove their fixed expenses), Salvavidas and Distribución de dinero (kept as a transitional access
+ * VIP and the Owner see, add and remove their fixed expenses), Salvavidas, Proyecciones and Escenarios (VIP; WE-1, from
+ * Patrimonio) and Distribución de dinero (kept as a transitional access
  * until its retirement is approved), each behind its historical plan gate. A row the plan does not
  * include stays visible, locked, and opens the plans screen. The Owner passes every gate by the
  * server role ([Profile.planTier]). Goals live in Hoy; Presupuesto and Calendario inside Tu plan del mes,
@@ -74,6 +77,7 @@ import kotlinx.coroutines.launch
 fun PlanHubScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val plan = profile?.planTier ?: PlanTier.FREE
+    val vipOn = model.isOn(OpsFlag.VIP_INTELLIGENCE)
     RefreshableTab(model, tx("Plan", "Plan")) {
         DincrCard {
             Column {
@@ -92,6 +96,16 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
                     tx("Lo que pagás todos los meses", "What you pay every month"), nav, "fixedExpenses")
                 PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Shield, tx("Salvavidas", "Emergency fund"),
                     tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers"), nav, "salvavidas")
+                // WE-1: Proyecciones and Escenarios moved here from Patrimonio (VIP, paused with vip_intelligence).
+                if (plan.allows(Feature.STRATEGY_VIP) && !vipOn) {
+                    NavRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), tx("En pausa por mantenimiento", "Paused for maintenance")) {}
+                    NavRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), tx("En pausa por mantenimiento", "Paused for maintenance")) {}
+                } else {
+                    PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Timeline, tx("Proyecciones", "Projections"),
+                        tx("Cómo se ven tus finanzas en 1 a 12 meses", "Your finances in 1 to 12 months"), nav, "projections")
+                    PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Science, tx("Escenarios", "Scenarios"),
+                        tx("¿Qué pasa si gano o gasto más?", "What if I earn or spend more?"), nav, "scenarios")
+                }
                 PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.PieChart, tx("Distribución de dinero", "Money distribution"),
                     tx("Cómo repartir tu sobrante", "How to split your surplus"), nav, "distribution")
             }

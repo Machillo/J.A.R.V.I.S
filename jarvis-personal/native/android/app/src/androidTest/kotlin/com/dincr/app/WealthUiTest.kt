@@ -25,7 +25,7 @@ import org.junit.Test
 /**
  * §15 PR 8 — Patrimonio: Cuentas and the mail connections (the existing screens; VIP and the Owner,
  * locked below and opening Suscripción), what is owed by debt from Plan → Deudas (every plan), and
- * no net worth figure (K-3). iOS twin: `WealthUITests`. FakeBackend only.
+ * the net worth on top for VIP and the Owner (WE-2). iOS twin: `WealthUITests`. FakeBackend only.
  */
 class WealthUiTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -78,9 +78,11 @@ class WealthUiTest {
         for (plan in listOf("free", "basic")) {
             launch(plan)
             waitUntil("debts ($plan)") { tagged("wealth.debts.composition") && present("Tarjeta de ejemplo") }
-            // Patrimonio neto (WE-2), Cuentas, Proyecciones and Escenarios: locked to VIP. Conexiones de correo is the Owner's alone.
-            assertEquals("$plan: locked rows", 4, count(fromVip))
-            assertFalse("$plan: no Conexiones de correo", present(tx("Conexiones de correo", "Mail connections")))
+            // Patrimonio neto (WE-2) and Cuentas: locked to VIP. Proyecciones and Escenarios live in Plan, Conexiones de correo in Perfil (WE-1).
+            assertEquals("$plan: locked rows", 2, count(fromVip))
+            for (moved in listOf(tx("Conexiones de correo", "Mail connections"), tx("Proyecciones", "Projections"), tx("Escenarios", "Scenarios"))) {
+                assertFalse("$plan: $moved moved", present(moved))
+            }
             assertFalse("$plan: no net worth figure", tagged("wealth.netWorth.amount"))
             click(tx("Cuentas", "Accounts"))
             waitUntil("Suscripción ($plan)") { present(tx("Suscripción actual", "Current subscription")) }
@@ -98,8 +100,8 @@ class WealthUiTest {
     @Test fun vipOpensCuentasButNotTheMailConnections() {
         launch("vip")
         assertFalse(present(fromVip))
-        // Reading mail is the Owner's alone during the launch.
-        assertFalse("no Conexiones de correo for a VIP", present(tx("Conexiones de correo", "Mail connections")))
+        // The mail connections live in Perfil (WE-1).
+        assertFalse("Conexiones de correo live in Perfil", present(tx("Conexiones de correo", "Mail connections")))
         click(tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"))
         waitUntil("the banks") { present("BAC") }
         assertEquals(wealth, selectedTab())
@@ -110,10 +112,7 @@ class WealthUiTest {
     @Test fun theOwnerOpensCuentasAndKeepsJarvis() {
         // The fixture seeds the connected mailbox and detected accounts for a VIP launch; the Owner reaches them by role.
         launch("vip", role = "owner")
-        click(tx("Conexiones de correo", "Mail connections"))
-        waitUntil("the mailbox") { present("ejemplo@correo.test") }
-        assertEquals("opened from Patrimonio, it keeps Patrimonio selected", wealth, selectedTab())
-        back()
+        assertFalse("Conexiones de correo live in Perfil", present(tx("Conexiones de correo", "Mail connections")))
         click(tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"))
         waitUntil("the banks") { present("BAC") }
         back()

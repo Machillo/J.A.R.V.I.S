@@ -6,7 +6,7 @@ final class DebtScenarioUITests: XCTestCase {
     private func launch() -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrTab", "wealth",
+        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrTab", "plan",
                                "-DincrPlan", "vip", "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
         app.launch()
         return app
@@ -17,7 +17,7 @@ final class DebtScenarioUITests: XCTestCase {
     }
 
     private func openScenarios(_ app: XCUIApplication) {
-        let entry = element("wealth.scenarios", in: app)
+        let entry = element("plan.scenarios", in: app)
         XCTAssertTrue(entry.waitForExistence(timeout: 15))
         entry.tap()
         XCTAssertTrue(app.navigationBars["Escenarios"].waitForExistence(timeout: 10))

@@ -61,6 +61,7 @@
   "SC-1",
   "FX-1",
   "FA-1",
+  "WE-1",
   "WE-2"
  ],
  "fixtures": {
@@ -980,9 +981,9 @@
    }
   },
   {
-   "id": "wealth.connections",
-   "name": "Patrimonio → Conexiones de correo (§15 PR 8; PR 10: Perfil → Correos financieros retired; L-1: reading mail is the Owner's alone during the launch): the mail connections",
-   "decision": "L-1",
+   "id": "profile.mail",
+   "name": "Perfil → Conexiones de correo (WE-1: moved from Patrimonio; L-1: reading mail is the Owner's alone during the launch): the mail connections",
+   "decision": "WE-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -998,16 +999,16 @@
     }
    ],
    "ios": {
-    "tab": "wealth",
-    "id": "wealth.connections",
+    "tab": "profile",
+    "id": "profile.mail",
     "locked_label": "Disponible desde VIP"
    },
    "android": {
-    "tab": "Patrimonio",
+    "tab": "Perfil",
     "text": "Conexiones de correo",
     "locked_text": "Disponible desde VIP",
     "en": {
-     "tab": "Wealth",
+     "tab": "Profile",
      "text": "Mail connections",
      "locked_text": "Available from VIP"
     }
@@ -1048,9 +1049,9 @@
    }
   },
   {
-   "id": "wealth.projections",
-   "name": "Patrimonio → Proyecciones (UX-13)",
-   "decision": "UX-13",
+   "id": "plan.projections",
+   "name": "Plan → Proyecciones (WE-1: moved from Patrimonio, which now shows what you have and owe)",
+   "decision": "WE-1",
    "plans": {
     "free": "VISIBLE_LOCKED",
     "basic": "VISIBLE_LOCKED",
@@ -1068,25 +1069,25 @@
     }
    ],
    "ios": {
-    "tab": "wealth",
-    "id": "wealth.projections",
+    "tab": "plan",
+    "id": "plan.projections",
     "locked_label": "Disponible desde VIP"
    },
    "android": {
-    "tab": "Patrimonio",
+    "tab": "Plan",
     "text": "Proyecciones",
     "locked_text": "Disponible desde VIP",
     "en": {
-     "tab": "Wealth",
+     "tab": "Plan",
      "text": "Projections",
      "locked_text": "Available from VIP"
     }
    }
   },
   {
-   "id": "wealth.scenarios",
-   "name": "Patrimonio → Escenarios (UX-13)",
-   "decision": "UX-13",
+   "id": "plan.scenarios",
+   "name": "Plan → Escenarios (WE-1: moved from Patrimonio)",
+   "decision": "WE-1",
    "plans": {
     "free": "VISIBLE_LOCKED",
     "basic": "VISIBLE_LOCKED",
@@ -1112,16 +1113,16 @@
     }
    ],
    "ios": {
-    "tab": "wealth",
-    "id": "wealth.scenarios",
+    "tab": "plan",
+    "id": "plan.scenarios",
     "locked_label": "Disponible desde VIP"
    },
    "android": {
-    "tab": "Patrimonio",
+    "tab": "Plan",
     "text": "Escenarios",
     "locked_text": "Disponible desde VIP",
     "en": {
-     "tab": "Wealth",
+     "tab": "Plan",
      "text": "Scenarios",
      "locked_text": "Available from VIP"
     }

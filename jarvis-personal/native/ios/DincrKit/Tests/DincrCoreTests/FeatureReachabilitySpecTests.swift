@@ -70,7 +70,7 @@ import Testing
     }
 
     @Test func mailReadingIsTheOwnersAlone() {
-        for id in ["wealth.connections", "plan.aguinaldo"] {
+        for id in ["profile.mail", "plan.aguinaldo"] {
             #expect(feature(id).state("owner") == "AVAILABLE", "\(id)")
             for plan in ["free", "basic", "vip"] { #expect(feature(id).state(plan) == "OWNER_ONLY", "\(id) \(plan)") }
         }

@@ -36,8 +36,8 @@ final class WealthUITests: XCTestCase {
             let row = element("wealth.accounts", in: app)
             XCTAssertTrue(row.waitForExistence(timeout: 10), "\(context): wealth.accounts")
             XCTAssertTrue(row.label.contains("Disponible desde VIP"), "\(context): wealth.accounts not locked (\(row.label))")
-            // Conexiones de correo is the Owner's alone during the launch: not even shown locked.
-            XCTAssertFalse(element("wealth.connections", in: app).exists, "\(context): no Conexiones de correo")
+            // Conexiones de correo live in Perfil; Proyecciones and Escenarios in Plan.
+            for moved in ["wealth.connections", "wealth.projections", "wealth.scenarios"] { XCTAssertFalse(element(moved, in: app).exists, "\(context): \(moved)") }
             element("wealth.accounts", in: app).tap()
             XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10), context)
             back(app)
@@ -64,21 +64,21 @@ final class WealthUITests: XCTestCase {
         accounts.tap()
         XCTAssertTrue(element("accounts.bank.bac", in: app).waitForExistence(timeout: 10))
         back(app)
-        XCTAssertFalse(element("wealth.connections", in: app).exists, "no Conexiones de correo for a VIP")
+        XCTAssertFalse(element("wealth.connections", in: app).exists, "Conexiones de correo live in Perfil")
         XCTAssertTrue(reveal("wealth.debts.composition", in: app).exists)
     }
 
     func testTheOwnerOpensCuentasAndKeepsJarvis() {
         // The fixture seeds the connected mailbox and detected accounts for a VIP launch; the Owner reaches them by role.
         let app = launch(plan: "vip", role: "owner")
-        element("wealth.connections", in: app).tap()
-        XCTAssertTrue(element("mail.status.connected", in: app).waitForExistence(timeout: 10))
-        back(app)
-        element("wealth.accounts", in: app).tap()
+        XCTAssertFalse(element("wealth.connections", in: app).exists, "Conexiones de correo live in Perfil")
+        reveal("wealth.accounts", in: app).tap()
         XCTAssertTrue(element("accounts.bank.bac", in: app).waitForExistence(timeout: 10))
         back(app)
         app.tabBars.buttons["Perfil"].tap()
         XCTAssertTrue(element("profile.jarvis", in: app).waitForExistence(timeout: 10))
+        element("profile.mail", in: app).tap()
+        XCTAssertTrue(element("mail.status.connected", in: app).waitForExistence(timeout: 10))
     }
 
     /// WE-2: VIP and the Owner see what they have minus what they owe, on top of Patrimonio.

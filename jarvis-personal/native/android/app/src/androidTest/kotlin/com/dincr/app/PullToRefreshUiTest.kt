@@ -115,7 +115,7 @@ class PullToRefreshUiTest {
             tab(planTab)
             waitUntil("$context: Plan") { present(tx("Ingresos y base", "Income and base")) }
             assertEquals("$context: Tu plan del mes", plan == "free", present(locks[0]))
-            // Aguinaldo and Conexiones de correo read mail: Owner-only rows during the launch.
+            // Aguinaldo reads mail: an Owner-only row during the launch.
             assertEquals("$context: Aguinaldo only for the Owner", role == "owner", present(tx("Aguinaldo", "Aguinaldo")))
             pullKeeping(listOfNotNull(tx("Aguinaldo", "Aguinaldo").takeIf { role == "owner" }, tx("Tu plan del mes", "Your plan for the month"), tx("Ingresos y base", "Income and base")), locks, "$context Plan")
             assertEquals("$context: still on Plan", planTab, selectedTab())
@@ -124,8 +124,7 @@ class PullToRefreshUiTest {
             waitUntil("$context: debts") { tagged("wealth.debts.composition") }
             assertEquals("$context: Cuentas", plan != "vip", present(locks[1]))
             val debts = reads("/user-product/finance/debts")
-            assertEquals("$context: Conexiones only for the Owner", role == "owner", present(tx("Conexiones de correo", "Mail connections")))
-            pullKeeping(listOfNotNull(tx("Cuentas", "Accounts"), tx("Conexiones de correo", "Mail connections").takeIf { role == "owner" }), locks, "$context Patrimonio")
+            pullKeeping(listOf(tx("Cuentas", "Accounts")), locks, "$context Patrimonio")
             assertEquals("$context: the debts read again, once", debts + 1, reads("/user-product/finance/debts"))
             assertTrue("$context: the debts after the refresh", tagged("wealth.debts.composition"))
 
