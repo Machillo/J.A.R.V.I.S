@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -82,8 +83,8 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
  * UX-13 / §15 PR 8 — the Patrimonio tab: what you have and what you owe. Cuentas: the accounts DINCR
  * detected in bank notices (VIP and the Owner, locked below). Deudas: how the active debts make up
  * what is owed, from Plan → Deudas' balances (every plan). The mail connections live in Perfil,
- * Proyecciones and Escenarios in Plan (WE-1). No net worth figure until P0.9 (K-3), no balance
- * invented. iOS: `WealthHubView`.
+ * Proyecciones and Escenarios in Plan (WE-1). WE-2: the net worth on top (VIP and the Owner, locked
+ * below; [NetWorthCard]); no balance invented. iOS: `WealthHubView`.
  * B17: pulling down reads the plan, the switches and the debts again; a failed read keeps what the card
  * showed ([LoadHandle.refresh]).
  */
@@ -93,6 +94,9 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
     val plan = profile?.planTier ?: PlanTier.FREE
     val debts = rememberLoad(model) { model.api.debts() }
     RefreshableTab(model, tx("Patrimonio", "Wealth"), extra = debts.refresh) {
+        // WE-2: what you have minus what you owe (VIP and the Owner; locked below VIP).
+        if (plan == PlanTier.VIP) NetWorthCard(model)
+        else DincrCard { Column(Modifier.testTag("wealth.netWorth")) { LockedRow(Icons.Rounded.AccountBalanceWallet, tx("Patrimonio neto", "Net worth"), PlanTier.VIP, nav) } }
         SectionTitle(tx("Cuentas", "Accounts"))
         DincrCard {
             Column {

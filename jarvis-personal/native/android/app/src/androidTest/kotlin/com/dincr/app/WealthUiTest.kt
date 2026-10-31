@@ -18,13 +18,14 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 /**
  * §15 PR 8 — Patrimonio: Cuentas and the mail connections (the existing screens; VIP and the Owner,
  * locked below and opening Suscripción), what is owed by debt from Plan → Deudas (every plan), and
- * no net worth figure (K-3). iOS twin: `WealthUITests`. FakeBackend only.
+ * the net worth on top for VIP and the Owner (WE-2). iOS twin: `WealthUITests`. FakeBackend only.
  */
 class WealthUiTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -77,12 +78,12 @@ class WealthUiTest {
         for (plan in listOf("free", "basic")) {
             launch(plan)
             waitUntil("debts ($plan)") { tagged("wealth.debts.composition") && present("Tarjeta de ejemplo") }
-            // Cuentas: locked to VIP. Proyecciones and Escenarios live in Plan, Conexiones de correo in Perfil (WE-1).
-            assertEquals("$plan: locked rows", 1, count(fromVip))
+            // Patrimonio neto (WE-2) and Cuentas: locked to VIP. Proyecciones and Escenarios live in Plan, Conexiones de correo in Perfil (WE-1).
+            assertEquals("$plan: locked rows", 2, count(fromVip))
             for (moved in listOf(tx("Conexiones de correo", "Mail connections"), tx("Proyecciones", "Projections"), tx("Escenarios", "Scenarios"))) {
                 assertFalse("$plan: $moved moved", present(moved))
             }
-            assertFalse("K-3: no net worth figure", present(netWorth))
+            assertFalse("$plan: no net worth figure", tagged("wealth.netWorth.amount"))
             click(tx("Cuentas", "Accounts"))
             waitUntil("Suscripción ($plan)") { present(tx("Suscripción actual", "Current subscription")) }
         }
@@ -106,7 +107,6 @@ class WealthUiTest {
         assertEquals(wealth, selectedTab())
         back()
         waitUntil("debts") { tagged("wealth.debts.composition") }
-        assertFalse("K-3: no net worth figure", present(netWorth))
     }
 
     @Test fun theOwnerOpensCuentasAndKeepsJarvis() {
@@ -118,5 +118,15 @@ class WealthUiTest {
         back()
         tab(tx("Perfil", "Profile"))
         waitUntil("JARVIS") { present("JARVIS") }
+    }
+
+    /** WE-2: VIP and the Owner see what they have minus what they owe, on top of Patrimonio. */
+    @Test fun vipAndTheOwnerSeeTheirNetWorth() {
+        for (role in listOf(null, "owner")) {
+            launch("vip", role = role)
+            waitUntil("net worth (${role ?: "vip"})") { tagged("wealth.netWorth.amount") }
+            assertTrue(tagged("wealth.assets") && tagged("wealth.liabilities"))
+            assertTrue(present("Salvavidas") && present(tx("Fondo de inversión", "Fondo de inversión")) && present(netWorth))
+        }
     }
 }

@@ -61,7 +61,8 @@
   "SC-1",
   "FX-1",
   "FA-1",
-  "WE-1"
+  "WE-1",
+  "WE-2"
  ],
  "fixtures": {
   "ios": {
@@ -906,6 +907,42 @@
      "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
     }
    ]
+  },
+  {
+   "id": "wealth.netWorth",
+   "name": "Patrimonio → Patrimonio neto (WE-2): what you have (accounts that count in net worth, the Salvavidas, investments) minus what you owe (debts, overdrawn accounts); unknown parts are named and leave it unknown",
+   "decision": "WE-2",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/wealth",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "wealth",
+    "id": "wealth.netWorth",
+    "locked_label": "Disponible desde VIP"
+   },
+   "android": {
+    "tab": "Patrimonio",
+    "text": "Patrimonio neto",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Wealth",
+     "text": "Net worth",
+     "locked_text": "Available from VIP"
+    }
+   }
   },
   {
    "id": "wealth.accounts",

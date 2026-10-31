@@ -27,6 +27,9 @@ extension FixtureBackend {
         case ("GET", "/jarvis/premium/strategy-dashboard"):
             guard isInternalRole else { return error(403, "No tienes permisos para realizar esta acción.") }
             return ok(strategyDashboard(owner: isOwnerRole))
+        case ("GET", "/user-product/vip/wealth"):
+            if let denied = needs(.vip) { return denied }
+            return ok(wealthSample(debts: debts.filter { (decimal($0["remaining_amount"]) ?? 0) > 0 }))
         case ("GET", "/user-product/vip/salvavidas"):
             if let denied = needs(.vip) { return denied }
             return ok(isOwnerRole ? ownerSalvavidas() : usersSalvavidas())
@@ -294,5 +297,20 @@ extension FixtureBackend {
                     "recommendations": ["Prioridad avalancha: Tarjeta de crédito.", "Salvavidas objetivo: ₡1.980.000 para 6 meses de cobertura."],
                     "data_policy": "El motor calcula solo con datos existentes."]
         }
+    }
+}
+
+extension FixtureBackend {
+    /// WE-2: what you have and owe, from the sample debts plus two synthetic accounts, the Salvavidas
+    /// and an investment. Android: FakeBackend.wealth.
+    func wealthSample(debts: [[String: Any]]) -> [String: Any] {
+        let owed = debts.reduce(Decimal(0)) { $0 + (decimal($1["remaining_amount"]) ?? 0) }
+        let accounts: [[String: Any]] = [["name": "Cuenta de ahorro", "amount": 350_000, "currency": "CRC", "original_amount": 350_000],
+                                         ["name": "Cuenta en dólares", "amount": 101_500, "currency": "USD", "original_amount": 200]]
+        let assets = Decimal(350_000 + 101_500 + 380_000 + 250_000)
+        return ["assets": ["accounts": accounts, "salvavidas": ["name": "Salvavidas", "amount": 380_000],
+                           "investments": [["name": "Fondo de inversión", "amount": 250_000]], "total": number(assets)],
+                "liabilities": ["debts": debts.map { ["name": $0["name"] ?? "", "amount": $0["remaining_amount"] ?? NSNull()] }, "accounts": [], "total": number(owed)],
+                "net_worth": number(assets - owed), "complete": true, "unknown": [String]()]
     }
 }
