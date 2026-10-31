@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Summarize
+import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,6 +66,8 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
         DincrCard {
             Column {
                 NavRow(Icons.Rounded.Summarize, tx("Resumen del mes", "Monthly summary"), tx("Ingresos, gastos y metas por mes", "Income, expenses and goals by month")) { nav.open("monthly") }
+                // RV-1: the month that closed, in three short cards (every plan).
+                NavRow(Icons.Rounded.TaskAlt, tx("Revisión del mes", "Monthly review"), tx("Cómo te fue el mes pasado, en simple", "How last month went, simply")) { nav.open("monthReview") }
                 // FA-1: the financial analysis in plain words (VIP and the Owner, whose plan is VIP); the
                 // Owner's full historical analysis stays in JARVIS.
                 Box(Modifier.testTag("analysis.financial")) {

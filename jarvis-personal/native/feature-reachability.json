@@ -63,7 +63,8 @@
   "FA-1",
   "WE-1",
   "WE-2",
-  "NT-1"
+  "NT-1",
+  "RV-1"
  ],
  "fixtures": {
   "ios": {
@@ -847,6 +848,50 @@
       "Analysis"
      ],
      "text": "Monthly summary"
+    }
+   }
+  },
+  {
+   "id": "analysis.review",
+   "name": "Movimientos → Análisis → Revisión del mes (RV-1): the month that closed in three short cards (how it went, what you achieved, one thing to do), from the monthly summary",
+   "decision": "RV-1",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/free/monthly-summary",
+     "gate": "feature:finance_overview",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "movements",
+    "via": [
+     "movements.analysis"
+    ],
+    "id": "analysis.review"
+   },
+   "android": {
+    "tab": "Movimientos",
+    "via": [
+     "Análisis"
+    ],
+    "text": "Revisión del mes",
+    "en": {
+     "tab": "Transactions",
+     "via": [
+      "Analysis"
+     ],
+     "text": "Monthly review"
     }
    }
   },
