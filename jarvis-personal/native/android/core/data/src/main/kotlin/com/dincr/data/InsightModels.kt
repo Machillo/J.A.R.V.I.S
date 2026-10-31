@@ -280,7 +280,15 @@ data class Aguinaldo(
     @SerialName("accrued_aguinaldo") val accruedAguinaldo: Money? = null,
     val months: List<Month> = emptyList(),
     @SerialName("missing_months") val missingMonths: List<String> = emptyList(),
+    /** AG-1: what to do with it (the backend's fixed split; null without an amount). */
+    val plan: Plan? = null,
 ) {
+    @Serializable
+    data class Plan(val amount: Money? = null, val items: List<Item> = emptyList(), @SerialName("unknown_rates") val unknownRates: List<String> = emptyList()) {
+        @Serializable
+        data class Item(val key: String? = null, val label: String? = null, val amount: Money? = null, val reason: String? = null)
+    }
+
     @Serializable
     data class Period(val start: String? = null, val end: String? = null, @SerialName("calculated_through") val calculatedThrough: String? = null, @SerialName("official_through") val officialThrough: String? = null)
 

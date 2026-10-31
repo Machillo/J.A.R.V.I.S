@@ -696,7 +696,11 @@ class FakeBackend(
         ))
         "/user-product/finance/strategy-vip" -> store?.let { ok(it.engine("strategy_vip")) } ?: ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
         "/user-product/finance/strategy-vip/simulate" -> ok(ScenarioResult(strategy(), strategy().copy(strategicMargin = BigDecimal(260000)), ScenarioResult.Delta(BigDecimal(46000), BigDecimal(50000), BigDecimal(4000))))
-        "/user-product/vip/aguinaldo" -> if (!mailConnected) error(409, "Conectá tu correo para calcular el aguinaldo.") else ok(Aguinaldo("OK", Aguinaldo.Period("${today.year - 1}-12-01", "${today.year}-11-30"), BigDecimal(5_190_000), BigDecimal(432_500)))
+        "/user-product/vip/aguinaldo" -> if (!mailConnected) error(409, "Conectá tu correo para calcular el aguinaldo.") else ok(Aguinaldo("OK", Aguinaldo.Period("${today.year - 1}-12-01", "${today.year}-11-30"), BigDecimal(5_190_000), BigDecimal(432_500),
+            // AG-1: the backend's fixed split (aguinaldo_plan.py) for the sample Salvavidas and debts.
+            plan = Aguinaldo.Plan(BigDecimal(432_500), listOf(
+                Aguinaldo.Plan.Item("december", "Diciembre", BigDecimal(64_875), "Regalos, marchamo y los gastos extra de fin de año, sin usar la tarjeta."),
+                Aguinaldo.Plan.Item("debt-1", "Tarjeta de ejemplo", BigDecimal(367_625), "Es tu deuda más cara (36 % al año): abonarle es lo que más intereses te ahorra.")))))
         "/user-product/vip/lifecycle/monthly-review" -> if (scenario != Scenario.POPULATED) ok(MonthlyReview("BASELINE", today.toString().take(7), "Tu primer mes con DINCR", "Todavía no hay suficiente historia para comparar."))
         // The backend's scorecard includes the health score; the app leaves that line out (K-2).
         else ok(MonthlyReview("OK", today.toString().take(7), "Hubo progreso, con áreas que DINCR debe reajustar.", "2 indicadores mejoraron y 1 empeoró.",

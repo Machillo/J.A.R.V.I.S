@@ -36,7 +36,8 @@ from backend.finance.emergency_fund import get_salvavidas_state, update_salvavid
 from backend.finance.intelligence import get_debt_advisory
 from backend.finance.models import SalvavidasUpdateRequest
 from backend.finance.strategic_engine import calculate_debt_strategies
-from backend.finance.service import calculate_aguinaldo
+from backend.finance import aguinaldo_plan
+from backend.finance.service import calculate_aguinaldo, get_debts
 from backend.user_product.gmail_service import (
     begin_gmail_connection,
     disconnect_gmail,
@@ -277,7 +278,14 @@ def vip_aguinaldo():
     require_feature("aguinaldo"); require_mail_reading()
     if not gmail_status().get("connected"):
         raise HTTPException(status_code=409, detail="Debes sincronizar tu email para calcular el aguinaldo.")
-    return calculate_aguinaldo()
+    report = calculate_aguinaldo()
+    # AG-1: what to do with it, from the same Salvavidas and debts the plan reads (read-only).
+    try:
+        salvavidas = get_salvavidas_state() or {}
+    except Exception:
+        salvavidas = {}
+    report["plan"] = aguinaldo_plan.build(report.get("accrued_aguinaldo"), salvavidas, get_debts() or [])
+    return report
 
 @router.get("/vip/gmail/status")
 def vip_gmail_status():

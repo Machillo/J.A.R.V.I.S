@@ -445,6 +445,34 @@ struct AguinaldoView: View {
     }
 }
 
+/// AG-1 — "¿En qué usarlo?": the fixed split of the aguinaldo, one line each with why.
+private struct AguinaldoPlanCard: View {
+    let plan: Aguinaldo.Plan
+    let items: [Aguinaldo.Plan.Item]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            Text(tx("¿En qué usarlo?", "What to use it for?")).font(DincrFont.title2).accessibilityAddTraits(.isHeader)
+            Text(tx("Una forma simple de repartirlo antes de que llegue.", "A simple way to split it before it arrives."))
+                .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                VStack(alignment: .leading, spacing: 2) {
+                    FigureRow(label: item.label ?? "", amount: item.amount, currency: "CRC")
+                    if let reason = item.reason { Text(reason).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+                }
+            }
+            if let unknown = plan.unknownRates, !unknown.isEmpty {
+                Text(tx("Sin tasa conocida, no se tomaron en cuenta: \(unknown.joined(separator: ", ")).", "Without a known rate, not considered: \(unknown.joined(separator: ", "))."))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("aguinaldo.plan")
+    }
+}
+
 private struct AguinaldoContent: View {
     let aguinaldo: Aguinaldo?
     let canReadMail: Bool
@@ -464,6 +492,7 @@ private struct AguinaldoContent: View {
                 }
             }
             .dincrCard()
+            if let plan = aguinaldo.plan, let items = plan.items, !items.isEmpty { AguinaldoPlanCard(plan: plan, items: items) }
         } else {
             EmptyStateView(symbol: "gift", title: tx("Todavía no podemos estimarlo", "We can’t estimate it yet"),
                            message: tx("Conectá tu correo en el Monitor de correo para detectar tus salarios.", "Connect your mail in the Email Monitor to detect your salaries.")) {
