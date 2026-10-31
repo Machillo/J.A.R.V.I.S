@@ -307,9 +307,9 @@ class FlowsTest {
         // next_45_days_minimum is the lowest projected balance, never labelled as the commitments.
         waitForText(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"))
         compose.onAllNodes(hasText(tx("Compromisos próximos 45 días", "Commitments next 45 days")), useUnmergedTree = true).assertCountEquals(0)
-        // Reading mail is the Owner's alone during the launch: no Conexiones de correo for a VIP.
-        tab(tx("Patrimonio", "Wealth"))
-        waitForText(tx("Cuentas", "Accounts"))
+        // Reading mail is the Owner's alone during the launch: no Conexiones de correo (Perfil) for a VIP.
+        tab(tx("Perfil", "Profile"))
+        waitForText(tx("Suscripción", "Subscription"))
         assertTrue(compose.onAllNodes(hasText(tx("Conexiones de correo", "Mail connections")), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
         // What was already imported stays reviewable from Movimientos, with the mailbox and Desconectar.
         tab(tx("Movimientos", "Transactions"))
@@ -327,9 +327,9 @@ class FlowsTest {
         waitForText(tx("tocá Corregir e indicá tu tipo de cambio", "tap Correct and enter your exchange rate"), substring = true)
     }
 
-    @Test fun theOwnerReadsMailFromPatrimonio() {
+    @Test fun theOwnerReadsMailFromPerfil() {
         launch(plan = "vip", role = "owner")
-        tab(tx("Patrimonio", "Wealth"))
+        tab(tx("Perfil", "Profile"))
         click(tx("Conexiones de correo", "Mail connections"))
         waitForText("ejemplo@correo.test")
         // The sync answer's failed_connections is a list of ids; an empty one is a plain success.

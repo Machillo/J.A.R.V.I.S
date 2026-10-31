@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Lock
@@ -108,8 +109,11 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
                 // UX-12: Free / Basic / VIP are subscriptions; "Plan" is the user's financial plan (Plan tab).
                 NavRow(Icons.Rounded.Star, tx("Suscripción", "Subscription"),
                     if (profile?.role == "owner") "DINCR Owner" else planName(profile?.plan) + (if (profile?.isCourtesy == true) tx(" · cortesía", " · courtesy") else "")) { nav.open("plans") }
-                // §15 PR 10: Cuentas and the mail (connections and review) live in Patrimonio → Cuentas /
-                // Conexiones de correo and Movimientos → Por revisar; Perfil no longer repeats them.
+                // Cuentas live in Patrimonio and the mail review in Movimientos → Por revisar; the mail
+                // connections are set up here (WE-1). Reading mail is the Owner's alone during the launch.
+                if (profile?.canReadMail == true) {
+                    NavRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices")) { nav.open("mail") }
+                }
                 NavRow(Icons.Rounded.Settings, tx("Ajustes de cuenta", "Account settings"), tx("Apariencia, datos y privacidad", "Appearance, data and privacy")) { nav.open("settings") }
                 NavRow(Icons.Rounded.Lock, tx("Seguridad", "Security"), tx("Bloqueo de la app", "App lock")) { nav.open("security") }
                 NavRow(Icons.Rounded.SupportAgent, tx("Ayuda y soporte", "Help and support"), tx("Reportá un problema o una idea", "Report a problem or an idea")) { nav.open("support") }

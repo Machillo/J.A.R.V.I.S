@@ -2,11 +2,12 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY E1 — the Plan tab: exactly seven rows, in this order (`PlanHubItem`): Aguinaldo,
+/// PARITY E1 — the Plan tab: exactly nine rows, in this order (`PlanHubItem`): Aguinaldo,
 /// Tu plan del mes (UX-3: Estrategia + Distribución as one plan; the row keeps the Estrategia
 /// identifier and gate), Deudas (UX-4: where debts are managed, every plan; Home keeps a shortcut),
 /// Ingresos y base (UX-7: the declared income and essential expenses, every plan), Gastos fijos
-/// (FX-1: VIP and the Owner see, add and remove their fixed expenses), Salvavidas and
+/// (FX-1: VIP and the Owner see, add and remove their fixed expenses), Salvavidas, Proyecciones and
+/// Escenarios (VIP; moved from Patrimonio) and
 /// Distribución de dinero (kept as a transitional access until its retirement is
 /// approved). A row the plan does not include stays visible, locked ("Disponible desde Basic/VIP"),
 /// and opens the plans screen; a row paused by an operational switch says so. Goals are on Home;
@@ -74,6 +75,8 @@ struct PlanHubView: View {
         case .incomeBase: IncomeBaseView()
         case .fixedExpenses: FixedExpensesView()
         case .salvavidas: SalvavidasView()
+        case .projections: ProjectionsView()
+        case .scenarios: ScenariosView()
         case .distribution: DistributionView()
         }
     }
@@ -88,6 +91,8 @@ extension PlanHubItem {
         case .incomeBase: tx("Ingresos y base", "Income and base")
         case .fixedExpenses: tx("Gastos fijos", "Fixed expenses")
         case .salvavidas: "Salvavidas"
+        case .projections: tx("Proyecciones", "Projections")
+        case .scenarios: tx("Escenarios", "Scenarios")
         case .distribution: tx("Distribución de dinero", "Money distribution")
         }
     }
@@ -100,6 +105,8 @@ extension PlanHubItem {
         case .incomeBase: tx("Ingreso y gastos esenciales", "Income and essential expenses")
         case .fixedExpenses: tx("Lo que pagás todos los meses", "What you pay every month")
         case .salvavidas: tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers")
+        case .projections: tx("Tus próximos meses", "Your next months")
+        case .scenarios: tx("¿Y si gano o gasto distinto?", "What if I earn or spend differently?")
         case .distribution: tx("Cómo repartir tu sobrante del mes", "How to split this month’s surplus")
         }
     }
@@ -112,6 +119,8 @@ extension PlanHubItem {
         case .incomeBase: "banknote"
         case .fixedExpenses: "list.bullet.rectangle"
         case .salvavidas: "lifepreserver"
+        case .projections: "chart.line.uptrend.xyaxis"
+        case .scenarios: "slider.horizontal.3"
         case .distribution: "chart.pie"
         }
     }

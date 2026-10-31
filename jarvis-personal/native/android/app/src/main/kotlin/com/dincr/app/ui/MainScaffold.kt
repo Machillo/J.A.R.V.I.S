@@ -76,7 +76,7 @@ enum class Destination(val route: String, val icon: ImageVector) {
          * Screens opened from several tabs (UX-4: Deudas, from Plan and from the shortcuts on Hoy,
          * Movimientos, Salvavidas and DINCR; UX-7: Ingresos y base, from Plan and from Hoy's missing
          * figures; Tus ahorros, from Metas y ahorros and Salvavidas; the mail screen, from Movimientos → Por revisar,
-         * Patrimonio → Conexiones de correo and a mail connection's return; Cuentas, from Patrimonio; §15 PR 5:
+         * Perfil → Conexiones de correo and a mail connection's return; Cuentas, from Patrimonio; §15 PR 5:
          * Presupuesto, Calendario and Movimientos recurrentes, from Plan and Perfil):
          * they keep the tab they were opened from highlighted.
          */
@@ -89,10 +89,11 @@ enum class Destination(val route: String, val icon: ImageVector) {
         fun of(route: String?): Destination = when (route?.substringBefore('/')) {
             null, "home", "debts", "goals", "attention" -> HOME
             "movements", "monthly" -> MOVEMENTS
-            "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "fixedExpenses", "planPreferences" -> PLAN
-            // UX-13: Movimientos → Análisis; Patrimonio → Proyecciones / Escenarios.
+            // WE-1: Plan → Proyecciones / Escenarios.
+            "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "fixedExpenses", "planPreferences", "scenarios", "projections" -> PLAN
+            // UX-13: Movimientos → Análisis.
             "analysis", "ownerAnalysis", "financialAnalysis" -> MOVEMENTS
-            "wealth", "scenarios", "projections" -> WEALTH
+            "wealth" -> WEALTH
             // Perfil → Finanzas (budget, calendar, recurring), Cuentas and everything else.
             else -> PROFILE
         }

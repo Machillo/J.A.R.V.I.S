@@ -81,7 +81,7 @@ class NavigationUiTest {
         // Reportes and Revisión del mes were retired (they repeated the summary).
         assertFalse(present(tx("Reportes", "Reports"))); assertFalse(present(tx("Revisión del mes", "Monthly review")))
         back()
-        tab(tx("Patrimonio", "Wealth"))
+        tab(tx("Plan", "Plan"))
         click(tx("Proyecciones", "Projections")); waitUntil("projections") { present(tx("Proyecciones", "Projections")) }; back()
         click(tx("Escenarios", "Scenarios")); waitUntil("scenarios") { present(tx("Escenarios", "Scenarios")) }; back()
     }
@@ -95,7 +95,7 @@ class NavigationUiTest {
         // Reportes and Revisión del mes were retired: nothing locked is left in Análisis.
         assertFalse(present(tx("Reportes", "Reports")) || present(tx("Revisión del mes", "Monthly review")))
         back()
-        tab(tx("Patrimonio", "Wealth"))
+        tab(tx("Plan", "Plan"))
         waitUntil("projections locked") { present(tx("Proyecciones", "Projections")) && present(tx("Disponible desde VIP", "Available from VIP")) }
         launch("basic")
         waitUntil("Hoy") { present(tx("Hoy", "Today")) }

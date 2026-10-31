@@ -36,18 +36,19 @@ class FeatureReachabilitySpecTest {
         "plan.salvavidas" to Feature.STRATEGY_VIP, "plan.distribution" to Feature.STRATEGY_BASIC,
         // UX-13: the former DINCR tab's entries, in Movimientos → Análisis, Patrimonio and Hoy.
         "home.attention" to Feature.STRATEGY_VIP,
-        "wealth.projections" to Feature.STRATEGY_VIP, "wealth.scenarios" to Feature.STRATEGY_VIP,
+        // WE-1: Proyecciones and Escenarios moved to Plan.
+        "plan.projections" to Feature.STRATEGY_VIP, "plan.scenarios" to Feature.STRATEGY_VIP,
         // §15 PR 6: the same mail review, from Movimientos → Por revisar.
         "movements.review" to Feature.GMAIL_AUTOMATION,
         // §15 PR 5: Presupuesto and Calendario inside Tu plan del mes, Movimientos recurrentes inside Ingresos y base.
         "month.budget" to Feature.GUIDED_BUDGET, "month.calendar" to Feature.GUIDED_BUDGET, "incomeBase.recurring" to Feature.RECURRING_ITEMS,
-        // §15 PR 8: Patrimonio → Cuentas, Conexiones de correo and Deudas.
+        // §15 PR 8: Patrimonio → Cuentas and Deudas (Conexiones de correo moved to Perfil, WE-1).
         "wealth.accounts" to Feature.GMAIL_AUTOMATION, "wealth.debts" to Feature.DEBTS,
     )
 
     /** L-1: reading mail (Conexiones de correo, the aguinaldo from CCSS notices) is the Owner's alone. */
     @Test fun mailReadingIsTheOwnersAlone() {
-        listOf("wealth.connections", "plan.aguinaldo").forEach { id ->
+        listOf("profile.mail", "plan.aguinaldo").forEach { id ->
             assertEquals(id, "AVAILABLE", state(id, "owner"))
             listOf("free", "basic", "vip").forEach { assertEquals("$id $it", "OWNER_ONLY", state(id, it)) }
         }

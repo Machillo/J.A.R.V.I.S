@@ -26,9 +26,9 @@ final class ProjectionsUITests: XCTestCase {
     }
 
     private func openProjections(_ app: XCUIApplication) {
-        XCTAssertTrue(app.tabBars.buttons["Patrimonio"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Patrimonio"].tap()
-        open("wealth.projections", in: app)
+        XCTAssertTrue(app.tabBars.buttons["Plan"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Plan"].tap()
+        open("plan.projections", in: app)
         XCTAssertTrue(app.navigationBars["Proyecciones"].waitForExistence(timeout: 10))
     }
 
@@ -116,8 +116,8 @@ final class ProjectionsUITests: XCTestCase {
 
     func testFreeAndBasicKeepProjectionsLocked() {
         for plan in ["free", "basic"] {
-            let app = launch(plan: plan, tab: "wealth")
-            let row = element("wealth.projections", in: app)
+            let app = launch(plan: plan, tab: "plan")
+            let row = element("plan.projections", in: app)
             XCTAssertTrue(row.waitForExistence(timeout: 10), plan)
             XCTAssertTrue(row.label.contains("Disponible desde VIP"), plan)
             app.terminate()

@@ -11,14 +11,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.TextButton
-import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Summarize
-import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -82,10 +79,11 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
 }
 
 /**
- * UX-13 / §15 PR 8 — the Patrimonio tab. Cuentas: the accounts DINCR detected in bank notices and the
- * mail connections that read them (the existing screens; VIP and the Owner, locked below). Deudas:
- * how the active debts make up what is owed, from Plan → Deudas' balances (every plan). Proyecciones
- * and Escenarios (VIP). No net worth figure until P0.9 (K-3), no balance invented. iOS: `WealthHubView`.
+ * UX-13 / §15 PR 8 — the Patrimonio tab: what you have and what you owe. Cuentas: the accounts DINCR
+ * detected in bank notices (VIP and the Owner, locked below). Deudas: how the active debts make up
+ * what is owed, from Plan → Deudas' balances (every plan). The mail connections live in Perfil,
+ * Proyecciones and Escenarios in Plan (WE-1). No net worth figure until P0.9 (K-3), no balance
+ * invented. iOS: `WealthHubView`.
  * B17: pulling down reads the plan, the switches and the debts again; a failed read keeps what the card
  * showed ([LoadHandle.refresh]).
  */
@@ -93,7 +91,6 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
 fun WealthScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val plan = profile?.planTier ?: PlanTier.FREE
-    val vipOn = model.isOn(OpsFlag.VIP_INTELLIGENCE)
     val debts = rememberLoad(model) { model.api.debts() }
     RefreshableTab(model, tx("Patrimonio", "Wealth"), extra = debts.refresh) {
         SectionTitle(tx("Cuentas", "Accounts"))
@@ -105,27 +102,10 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
                 } else {
                     NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices")) { nav.open("accounts") }
                 }
-                // Reading mail is the Owner's alone during the launch (Profile.canReadMail).
-                if (profile?.canReadMail == true) {
-                    NavRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices")) { nav.open("mail") }
-                }
             }
         }
         SectionTitle(tx("Deudas", "Debts"))
         WealthDebtsCard(debts, nav)
-        SectionTitle(tx("Proyecciones", "Projections"))
-        if (plan == PlanTier.VIP && !vipOn) FeaturePaused(model, OpsFlag.VIP_INTELLIGENCE)
-        DincrCard {
-            Column {
-                if (plan != PlanTier.VIP) {
-                    LockedRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), PlanTier.VIP, nav)
-                    LockedRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), PlanTier.VIP, nav)
-                } else if (vipOn) {
-                    NavRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), tx("Cómo se ven tus finanzas en 1 a 12 meses", "Your finances in 1 to 12 months")) { nav.open("projections") }
-                    NavRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), tx("¿Qué pasa si gano o gasto más?", "What if I earn or spend more?")) { nav.open("scenarios") }
-                }
-            }
-        }
     }
 }
 

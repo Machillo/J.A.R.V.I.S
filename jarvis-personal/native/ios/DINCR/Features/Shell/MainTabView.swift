@@ -17,7 +17,6 @@ struct MainTabView: View {
         return Tab(rawValue: args[index + 1]) ?? .home
     }()
     @State private var profilePath = NavigationPath()
-    @State private var wealthPath = NavigationPath()
     @State private var offeringLock = false
     /// A quick action (App Shortcut, Back Tap) asked for the editor of a new expense.
     @State private var quickExpense = false
@@ -61,11 +60,10 @@ struct MainTabView: View {
         }
     }
 
-    /// §15 PR 10: the mail connection's return opens the mail screen in its home, Patrimonio →
-    /// Conexiones de correo (Perfil no longer lists it).
+    /// The mail connection's return opens the mail screen in its home, Perfil → Conexiones de correo.
     private func openMailConnections() {
-        selection = .wealth
-        wealthPath = NavigationPath([ProfileRoute.mail])
+        selection = .profile
+        profilePath = NavigationPath([ProfileRoute.mail])
     }
 
     /// The Owner's scene (DESIGN.md → Owner identity) comes only from the server role in `/auth/me`.
@@ -87,10 +85,7 @@ struct MainTabView: View {
             NavigationStack { PlanHubView() }
                 .tabItem { Label(tx("Plan", "Plan"), systemImage: "target") }
                 .tag(Tab.plan)
-            NavigationStack(path: $wealthPath) {
-                WealthHubView()
-                    .navigationDestination(for: ProfileRoute.self) { route in ProfileRouteDestination(route: route) }
-            }
+            NavigationStack { WealthHubView() }
                 .tabItem { Label(tx("Patrimonio", "Wealth"), systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(Tab.wealth)
             NavigationStack(path: $profilePath) {
@@ -105,8 +100,7 @@ struct MainTabView: View {
     }
 }
 
-/// Routes of the Profile tab, also opened from the Owner's Today and (the mail screen, after a mail
-/// connection's return) from Patrimonio. JARVIS is the Owner's personal
+/// Routes of the Profile tab, also opened from the Owner's Today. JARVIS is the Owner's personal
 /// space (`Jarvis.isAvailable`); its screens close themselves for any other identity.
 enum ProfileRoute: Hashable {
     case mail
