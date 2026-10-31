@@ -59,7 +59,8 @@
   "J-WEA",
   "J-MEM",
   "SC-1",
-  "FX-1"
+  "FX-1",
+  "FA-1"
  ],
  "fixtures": {
   "ios": {
@@ -1090,33 +1091,23 @@
    }
   },
   {
-   "id": "analysis.owner",
-   "name": "Movimientos → Análisis → Análisis financiero (§15 PR 11): the Owner's historical analysis in its Análisis mode, without the health score (P3.7) or the net worth (P0.9); JARVIS → Análisis financiero keeps the full one",
-   "decision": "PR-11",
+   "id": "analysis.financial",
+   "name": "Movimientos → Análisis → Análisis financiero (FA-1): the user's last twelve months in plain words (a normal month, how much is saved and goes to debts, the months side by side, what is above normal this month); VIP and the Owner, locked below VIP. The Owner's full historical analysis stays in JARVIS → Análisis financiero",
+   "decision": "FA-1",
    "plans": {
-    "free": "OWNER_ONLY",
-    "basic": "OWNER_ONLY",
-    "vip": "OWNER_ONLY",
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
    "backend": [
     {
      "method": "GET",
-     "path": "/transactions/analysis/summary",
-     "gate": "internal_only",
-     "used_by": []
-    },
-    {
-     "method": "GET",
-     "path": "/finance/net-worth",
-     "gate": "internal_only",
-     "used_by": []
-    },
-    {
-     "method": "GET",
-     "path": "/finance/engine",
-     "gate": "internal_only",
-     "used_by": []
+     "path": "/user-product/vip/financial-analysis",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
     }
    ],
    "ios": {
@@ -1124,7 +1115,8 @@
     "via": [
      "movements.analysis"
     ],
-    "id": "analysis.owner"
+    "id": "analysis.financial",
+    "locked_label": "Disponible desde VIP"
    },
    "android": {
     "tab": "Movimientos",
@@ -1132,12 +1124,14 @@
      "Análisis"
     ],
     "text": "Análisis financiero",
+    "locked_text": "Disponible desde VIP",
     "en": {
      "tab": "Transactions",
      "via": [
       "Analysis"
      ],
-     "text": "Financial analysis"
+     "text": "Financial analysis",
+     "locked_text": "Available from VIP"
     }
    }
   },

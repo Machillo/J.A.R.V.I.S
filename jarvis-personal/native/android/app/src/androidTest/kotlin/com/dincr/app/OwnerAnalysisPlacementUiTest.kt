@@ -19,10 +19,11 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * §15 PR 11 — the Owner's historical financial analysis in Movimientos → Análisis, in its Análisis
- * mode: income and expenses, spending by category, month end and recommendations, with no health score
- * (P3.7) and no net worth (P0.9). Free, Basic and VIP never see the entry. JARVIS → Análisis financiero
- * keeps every section. iOS twin: `OwnerAnalysisPlacementUITests`. FakeBackend only.
+ * FA-1 — Movimientos → Análisis → Análisis financiero for VIP and the Owner: their own months in plain
+ * words (a normal month, how much is saved and goes to debts, the months side by side, what is above
+ * normal this month). Free and Basic see the row locked; it opens Suscripción. JARVIS → Análisis
+ * financiero keeps the Owner's full historical analysis. iOS twin: `OwnerAnalysisPlacementUITests`.
+ * FakeBackend only.
  */
 class OwnerAnalysisPlacementUiTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -63,26 +64,37 @@ class OwnerAnalysisPlacementUiTest {
     }
 
     private val financialAnalysis get() = tx("Análisis financiero", "Financial analysis")
+    private fun reveal(tag: String) {
+        waitUntil(tag) { tagged(tag) }
+        compose.onAllNodes(hasTestTag(tag)).onFirst().performScrollTo()
+    }
 
-    @Test fun freeBasicAndVipNeverSeeTheOwnerEntry() {
-        for (plan in listOf("free", "basic", "vip")) {
+    @Test fun freeAndBasicSeeTheAnalysisLockedAndItOpensSuscripcion() {
+        for (plan in listOf("free", "basic")) {
             launch(plan)
             openAnalysis()
-            assertFalse(plan, tagged("analysis.owner") || present(financialAnalysis))
+            waitUntil("$plan: locked row") { present(tx("Disponible desde VIP", "Available from VIP")) }
+            assertTrue(plan, tagged("analysis.financial"))
+            click(financialAnalysis)
+            waitUntil("$plan: Suscripción") { present(tx("Suscripción actual", "Current subscription")) }
         }
     }
 
-    @Test fun theOwnerSeesTheAnalysisModeWithoutScoreOrNetWorth() {
-        launch("vip", role = "owner")
-        openAnalysis()
-        click(financialAnalysis)
-        waitUntil("flow") { tagged("jarvis.analysis.flow") }
-        waitUntil("month end") { tagged("jarvis.analysis.monthEnd") && present(tx("Saldo proyectado al cierre (estimación)", "Projected month-end balance (estimate)")) }
-        assertTrue(tagged("jarvis.analysis.spending"))
-        assertFalse("no net worth", tagged("analysis.networth") || present(tx("Patrimonio neto", "Net worth")))
-        assertFalse("no health score", present(tx("Salud financiera", "Financial health")) || present("/ 100") || present("de 100"))
-        // Opened from Movimientos, the Owner's analysis stays in Movimientos.
-        assertTrue(compose.onAllNodes(hasText(tx("Movimientos", "Transactions")) and isSelectable()).fetchSemanticsNodes().isNotEmpty())
+    @Test fun vipAndTheOwnerReadTheirNumbersInPlainWords() {
+        for (role in listOf(null, "owner")) {
+            val who = role ?: "vip"
+            launch("vip", role = role)
+            openAnalysis()
+            click(financialAnalysis)
+            waitUntil("$who: normal month") { tagged("analysis.financial.left") && present(tx("En un mes normal te sobran", "In a normal month you have")) }
+            assertTrue(who, present(tx("Guardás 10 de cada 100 que entran.", "You save 10 of every 100 that come in.")))
+            assertTrue(who, tagged("analysis.financial.debts"))
+            reveal("analysis.financial.months")
+            reveal("analysis.financial.rises")
+            assertTrue(who, present(tx("Comida:", "Comida:")))
+            // Not the Owner's historical analysis: no score and no net worth here.
+            assertFalse(who, tagged("jarvis.analysis.flow") || tagged("analysis.networth") || present(tx("Salud financiera", "Financial health")))
+        }
     }
 
     @Test fun jarvisKeepsTheFullAnalysis() {

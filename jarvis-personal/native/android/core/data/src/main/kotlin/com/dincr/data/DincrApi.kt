@@ -143,6 +143,8 @@ class DincrApi(private val client: ApiClient) {
     /** Owner only: CONFIRMAR — records the distribution the Owner carried out, once per confirmation key. */
     suspend fun ownerConfirmExactDistribution(request: ExactDistributionConfirmRequest): ExactDistributionConfirmation =
         client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution/confirm", request)
+    /** FA-1: VIP and the Owner. A read: it never writes. */
+    suspend fun financialAnalysis(): FinancialAnalysis = client.get("/user-product/vip/financial-analysis")
     suspend fun salvavidas(): Salvavidas = client.get("/user-product/vip/salvavidas")
     suspend fun updateSalvavidas(update: SalvavidasUpdate): Salvavidas = client.send("PUT", "/user-product/vip/salvavidas", update)
 

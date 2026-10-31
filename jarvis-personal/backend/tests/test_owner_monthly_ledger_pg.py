@@ -311,3 +311,74 @@ def test_saved_is_goals_and_salvavidas_contributions_never_income_minus_spending
     # 1, 8 and 15 October; the 22nd is after today.
     assert october["saved"] == {"total": 8200.0, "goals": 700.0, "salvavidas": 7500.0}
     assert november["saved"] == {"total": 900.0, "goals": 900.0, "salvavidas": 0.0}, "nothing after today is counted"
+
+
+@pytest.mark.parametrize("role", ["user", "owner"])
+def test_financial_analysis_is_twelve_months_of_the_resumen_figures(db, monkeypatch, role):
+    from backend.auth.current_user import reset_current_user
+    from backend.user_product import financial_analysis, free_service
+
+    q(db, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 30, 'Comida', '2026-08-10 12:00')", (WS_A,))
+    q(db, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 70, 'Ropa', '2026-11-05 12:00')", (WS_A,))
+    monkeypatch.setattr(financial_analysis, "costa_rica_today", lambda: date(2026, 11, 15))
+    token = _as(role)
+    try:
+        before = _row_counts(db)
+        analysis = financial_analysis.get_financial_analysis()
+        after = _row_counts(db)
+        summaries = {period: free_service.get_free_monthly_summary(period) for period in ("2026-08", "2026-10", "2026-11")}
+    finally:
+        reset_current_user(token)
+    months = {month["period"]: month for month in analysis["months"]}
+    assert [month["period"] for month in analysis["months"]][0] == "2025-12" and len(months) == 12
+    assert [month["period"] for month in analysis["months"] if month["partial"]] == ["2026-11"], "only the month in course"
+    for period, summary in summaries.items():
+        for key in ("income", "expenses", "debt_paid"):
+            assert months[period][key] == summary[key], (period, key)
+        assert months[period]["saved"] == summary["saved"]["total"]
+    assert before == after, "a read never writes"
+
+
+def _row_counts(conn):
+    with conn.cursor() as cur:
+        counts = {}
+        for table in ("transactions", "salaries", "expenses", "payroll_events", "financial_goals"):
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            counts[table] = cur.fetchone()[0]
+        return counts
+
+
+def test_financial_analysis_compares_this_month_with_the_last_complete_months(db, monkeypatch):
+    from backend.auth.current_user import reset_current_user
+    from backend.user_product import financial_analysis
+
+    # Only this workspace: the other one keeps the shared October rows and nothing else.
+    q(db, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 30, 'Comida', '2026-08-10 12:00')", (WS_A,))
+    q(db, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 70, 'Ropa', '2026-11-05 12:00')", (WS_A,))
+    q(db, "INSERT INTO expenses (workspace_id, amount, category, created_at) VALUES (%s, 999, 'Viajes', '2026-11-06 12:00')", (WS_B,))
+    monkeypatch.setattr(financial_analysis, "costa_rica_today", lambda: date(2026, 11, 15))
+    token = _as("user")
+    try:
+        analysis = financial_analysis.get_financial_analysis()
+    finally:
+        reset_current_user(token)
+    # The months before November that recorded spending: August (Comida 30) and October (Comida
+    # 60 + 25, and 400 of uncategorized movements). September recorded none: it is not averaged.
+    assert analysis["categories"] == [
+        {"category": "Ropa", "current": 70.0, "average": 0.0},
+        {"category": "Comida", "current": 0.0, "average": 57.5},
+        {"category": "Sin categoría", "current": 0.0, "average": 200.0},
+    ]
+
+
+def test_without_earlier_spending_the_average_is_unknown_not_zero(db, monkeypatch):
+    from backend.auth.current_user import reset_current_user
+    from backend.user_product import financial_analysis
+
+    monkeypatch.setattr(financial_analysis, "costa_rica_today", lambda: date(2026, 10, 20))
+    token = _as("user")
+    try:
+        analysis = financial_analysis.get_financial_analysis()
+    finally:
+        reset_current_user(token)
+    assert analysis["categories"] and all(row["average"] is None for row in analysis["categories"])

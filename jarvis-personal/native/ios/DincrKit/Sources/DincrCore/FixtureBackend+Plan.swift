@@ -33,6 +33,9 @@ extension FixtureBackend {
         case ("PUT", "/user-product/vip/salvavidas"):
             if let denied = needs(.vip) { return denied }
             return updateSalvavidas(body)
+        case ("GET", "/user-product/vip/financial-analysis"):
+            if let denied = needs(.vip) { return denied }
+            return ok(financialAnalysis())
         case ("GET", "/transactions/analysis/summary"), ("GET", "/finance/net-worth"), ("GET", "/finance/engine"):
             guard isInternalRole else { return error(403, "No tienes permisos para realizar esta acción.") }
             return ok(analysis(path))

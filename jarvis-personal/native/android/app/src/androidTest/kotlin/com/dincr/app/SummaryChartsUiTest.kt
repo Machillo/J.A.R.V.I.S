@@ -78,7 +78,7 @@ class SummaryChartsUiTest {
         for ((plan, role) in listOf("free" to null, "basic" to null, "vip" to null, "vip" to "owner")) {
             val context = role ?: plan
             launch(plan = plan, role = role)
-            assertEquals("$context: the Owner entry stays the Owner's", role == "owner", tagged("analysis.owner"))
+            assertEquals("$context: the financial analysis row", plan != "vip", present(tx("Disponible desde VIP", "Available from VIP")))
             click(tx("Resumen del mes", "Monthly summary"))
             waitUntil("$context: totals") { tagged("summary.income") && tagged("summary.expenses") && tagged("summary.saved") }
             assertEquals("$context: only the Owner has the ledger detail", role == "owner", tagged("summary.owner.detail"))

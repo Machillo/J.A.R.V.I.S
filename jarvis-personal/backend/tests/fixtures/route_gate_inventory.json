@@ -2080,6 +2080,14 @@
  },
  {
   "method": "GET",
+  "path": "/user-product/vip/financial-analysis",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
   "path": "/user-product/vip/financial-identity",
   "gates": [
    "feature:financial_accounts"

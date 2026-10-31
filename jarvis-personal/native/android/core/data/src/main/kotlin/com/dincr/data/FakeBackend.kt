@@ -600,6 +600,7 @@ class FakeBackend(
             path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
                 needs(PlanTier.VIP) ?: mail(method, path, segments, query, body)
             path == "/user-product/vip/salvavidas" -> needs(PlanTier.VIP) ?: salvavidas(method, body)
+            path == "/user-product/vip/financial-analysis" -> needs(PlanTier.VIP) ?: ok(financialAnalysis())
             method == "POST" && path == "/user-product/finance/strategy-vip/debt-scenario" -> needs(PlanTier.VIP) ?: debtScenario(body)
             path.startsWith("/user-product/vip") || path.startsWith("/user-product/finance/strategy-vip") -> needs(PlanTier.VIP) ?: vip(path)
             else -> error(404, "Not Found")
@@ -864,6 +865,37 @@ class FakeBackend(
     private fun categories(period: String, income: Boolean = false) = colonesMovements
         .filter { it.kind == (if (income) MovementKind.INCOME else MovementKind.EXPENSE) && it.transactionDate?.startsWith(period) == true }
         .groupBy { it.category ?: "Sin categoría" }.map { (category, rows) -> CategoryTotal(category, rows.sumOf { it.amount }) }.sortedByDescending { it.amount }
+
+    /**
+     * FA-1: twelve months up to this one. The sample movements cover only the last days, so the three
+     * months before this one are fixed synthetic complete months (whatever the date the tests run on);
+     * the current month (`partial`) comes from the movements, and its categories are compared with a
+     * fixed synthetic average (Comida above it; every other category at its usual amount).
+     * iOS: FixtureBackend.financialAnalysis.
+     */
+    private fun financialAnalysis(): FinancialAnalysis {
+        val current = today.toString().take(7)
+        val months = (11 downTo 0).map { back ->
+            val period = today.minusMonths(back.toLong()).toString().take(7)
+            if (back == 0) {
+                val (income, expenses) = totals(period)
+                FinancialAnalysis.Month(period, income, expenses, BigDecimal.ZERO, BigDecimal.ZERO, partial = true)
+            } else {
+                val complete = if (back <= 3) BigDecimal.ONE else BigDecimal.ZERO
+                FinancialAnalysis.Month(period, complete * BigDecimal(1_000_000), complete * BigDecimal(600_000),
+                    complete * BigDecimal(100_000), complete * BigDecimal(100_000))
+            }
+        }
+        val average = mapOf("Comida" to BigDecimal(10_000), "Vivienda" to BigDecimal(400_000))
+        val now = categories(current)
+        val names = now.mapNotNull { it.category } + average.keys.filter { name -> now.none { it.category == name } }.sorted()
+        val rows = names.map { name ->
+            val amount = now.firstOrNull { it.category == name }?.amount ?: BigDecimal.ZERO
+            // Every other category is at its usual amount: only Comida is above normal.
+            FinancialAnalysis.Category(name, amount, average[name] ?: amount)
+        }
+        return FinancialAnalysis(months, rows)
+    }
 
     private fun freeDashboard(): FreeDashboard {
         val month = today.toString().take(7)

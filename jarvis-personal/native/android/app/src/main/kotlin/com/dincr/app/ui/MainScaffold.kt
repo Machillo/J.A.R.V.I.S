@@ -91,7 +91,7 @@ enum class Destination(val route: String, val icon: ImageVector) {
             "movements", "monthly" -> MOVEMENTS
             "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "fixedExpenses", "planPreferences" -> PLAN
             // UX-13: Movimientos → Análisis; Patrimonio → Proyecciones / Escenarios.
-            "analysis", "ownerAnalysis" -> MOVEMENTS
+            "analysis", "ownerAnalysis", "financialAnalysis" -> MOVEMENTS
             "wealth", "scenarios", "projections" -> WEALTH
             // Perfil → Finanzas (budget, calendar, recurring), Cuentas and everything else.
             else -> PROFILE
@@ -183,6 +183,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("analysis") { AnalysisScreen(model, nav) }
                             // §15 PR 11: the Owner's historical analysis in its Análisis mode (JARVIS keeps the full one).
                             composable("ownerAnalysis") { OwnerOnly(model, nav) { JarvisAnalysisScreen(model, nav, analysisMode = true) } }
+                            composable("financialAnalysis") { FinancialAnalysisScreen(model, nav) }
                             composable("scenarios") { ScenariosScreen(model, nav) }
                             composable("attention") { AttentionScreen(model, nav) }
                             composable("projections") { ProjectionsScreen(model, nav) }
