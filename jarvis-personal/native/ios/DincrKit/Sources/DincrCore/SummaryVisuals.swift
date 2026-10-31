@@ -26,10 +26,35 @@ public enum SummaryVisuals {
     /// E05: the month's expenses by category, in the backend's order (largest first). A category
     /// without an amount stays unknown, so the donut and its shares are not drawn.
     public static func categories(_ summary: MonthlySummary, language: AppLanguage = .current) -> Composition {
-        Composition((summary.categories ?? []).enumerated().map { index, row in
+        Composition(categoryItems(summary, language: language))
+    }
+
+    static func categoryItems(_ summary: MonthlySummary, language: AppLanguage) -> [CompositionItem] {
+        (summary.categories ?? []).enumerated().map { index, row in
             let label = row.category.flatMap { $0.isEmpty ? nil : $0 } ?? language.pick("Sin categoría", "Uncategorized")
             return CompositionItem(id: "\(index)-\(label)", label: label, value: row.amount)
+        }
+    }
+
+    /// "¿De dónde entró?": the period's income by category (`income_categories`, largest first).
+    public static func incomeSources(_ summary: MonthlySummary, language: AppLanguage = .current) -> Composition {
+        Composition((summary.incomeCategories ?? []).enumerated().map { index, row in
+            let label = row.category.flatMap { $0.isEmpty ? nil : $0 } ?? language.pick("Sin categoría", "Uncategorized")
+            return CompositionItem(id: "in-\(index)-\(label)", label: label, value: row.amount)
         })
+    }
+
+    /// "¿A dónde se fue?": spending by category, then debt payments and what was saved, each only
+    /// when the backend sent it above zero (an unknown amount is never drawn as zero).
+    public static func outflows(_ summary: MonthlySummary, language: AppLanguage = .current) -> Composition {
+        var items = categoryItems(summary, language: language)
+        if let debt = summary.debtPaid, debt > 0 {
+            items.append(CompositionItem(id: "out-debts", label: language.pick("Pagos de deudas", "Debt payments"), value: debt))
+        }
+        if let saved = summary.saved?.total, saved > 0 {
+            items.append(CompositionItem(id: "out-saved", label: language.pick("Ahorro", "Savings"), value: saved))
+        }
+        return Composition(items)
     }
 
     public static func flowNotice(_ flow: Flow, language: AppLanguage = .current) -> String? {

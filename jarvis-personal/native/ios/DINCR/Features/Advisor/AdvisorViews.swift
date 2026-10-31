@@ -159,19 +159,31 @@ private struct GatedEntry<Destination: View>: View {
     }
 }
 
-/// PARITY D7 — monthly summary (Free and up). E04/E05: the month's income vs expenses as bars and its
-/// expenses by category as a donut (`SummaryVisuals`), below the amounts, which stay as the text.
+/// PARITY D7 — Resumen (Free and up), simple on purpose: a month or a whole year, what came in and
+/// went out, what was saved (money put aside, never income minus spending), and two donuts: where
+/// the money came from and where it went. Every figure is the backend's
+/// (`/free/monthly-summary?period=YYYY-MM|YYYY`). The Owner's ledger detail stays one tap away.
 struct MonthlySummaryView: View {
     @Environment(AppModel.self) private var model
+    @State private var yearly = false
     @State private var period = Period.current
+    @State private var year = String(Period.current.prefix(4))
+
+    private var selected: String { yearly ? year : period }
 
     var body: some View {
         ScreenScroll(title: tx("Resumen del mes", "Monthly summary")) {
-            MonthPicker(period: $period)
-            AsyncContent(load: { try await model.service.monthlySummary(period: period) }) { summary, _ in
+            Picker(tx("Periodo", "Period"), selection: $yearly) {
+                Text(tx("Mes", "Month")).tag(false)
+                Text(tx("Año", "Year")).tag(true)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("summary.scope")
+            if yearly { YearPicker(year: $year) } else { MonthPicker(period: $period) }
+            AsyncContent(load: { try await model.service.monthlySummary(period: selected) }) { summary, _ in
                 SummaryContent(summary: summary)
             }
-            .id(period)
+            .id(selected)
         }
     }
 }
@@ -180,43 +192,85 @@ private struct SummaryContent: View {
     let summary: MonthlySummary
 
     var body: some View {
-        let flow = SummaryVisuals.flow(summary)
-        if summary.isOwnerLedger {
-            // The Owner's ledger: each figure with what it means, period and completeness (OwnerReadingViews.swift).
-            OwnerMonthSummary(summary: summary)
-        } else {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                FigureRow(label: tx("Ingresos", "Income"), amount: summary.income, sign: .income)
-                FigureRow(label: tx("Gastos", "Expenses"), amount: summary.expenses, sign: .expense)
-                FigureRow(label: tx("Pagado a deudas", "Paid to debts"), amount: summary.debtPaid)
-                FigureRow(label: tx("Balance", "Balance"), amount: summary.balance)
-                FigureRow(label: tx("Ahorrado", "Saved"), amount: summary.savings)
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            FigureRow(label: tx("Ingresos", "Income"), amount: summary.income, sign: .income)
+                .accessibilityIdentifier("summary.income")
+            FigureRow(label: tx("Gastos", "Expenses"), amount: summary.expenses, sign: .expense)
+                .accessibilityIdentifier("summary.expenses")
+            if let debt = summary.debtPaid, debt > 0 {
+                FigureRow(label: tx("Pagos de deudas", "Debt payments"), amount: debt)
             }
-            .dincrCard()
-        }
-        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-            SectionHeader(title: tx("Ingresos frente a gastos", "Income vs expenses"))
-            if case .bars(let month) = flow {
-                IncomeExpenseChart(months: [month])
-                    .accessibilityIdentifier("summary.flow.chart")
-            } else if let notice = SummaryVisuals.flowNotice(flow) {
+            FigureRow(label: tx("Lo que guardaste", "What you saved"), amount: summary.saved?.total)
+                .accessibilityIdentifier("summary.saved")
+            if let saved = summary.saved, (saved.goals ?? 0) > 0 || (saved.salvavidas ?? 0) > 0 {
+                SavedBreakdown(saved: saved)
+            }
+            if let notice = SummaryVisuals.flowNotice(SummaryVisuals.flow(summary)) {
                 Text(notice).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
                     .accessibilityIdentifier("summary.flow.notice")
             }
         }
         .dincrCard()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("summary.flow")
-        // The donut's own legend lists every category with its amount (and share when exact); a
-        // segment opens nothing yet (filtered movements need P5.1).
+        if summary.isOwnerLedger { OwnerLedgerDetail(summary: summary) }
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-            SectionHeader(title: tx("Gastos por categoría", "Expenses by category"))
-            CompositionDonut(title: tx("Gastos por categoría", "Expenses by category"), composition: SummaryVisuals.categories(summary),
+            SectionHeader(title: tx("¿De dónde entró?", "Where did it come from?"))
+            CompositionDonut(title: tx("Ingresos por categoría", "Income by category"), composition: SummaryVisuals.incomeSources(summary),
+                             color: DincrColor.chartIncome, showsTotal: false)
+        }
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("summary.incomeSources")
+        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            SectionHeader(title: tx("¿A dónde se fue?", "Where did it go?"))
+            CompositionDonut(title: tx("Gastos, deudas y ahorro", "Spending, debts and savings"), composition: SummaryVisuals.outflows(summary),
                              color: DincrColor.chartExpense, showsTotal: false)
         }
         .dincrCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("summary.categories")
+    }
+}
+
+/// "A metas ₡X · Al Salvavidas ₡Y": where the saved money went.
+private struct SavedBreakdown: View {
+    @Environment(AppModel.self) private var model
+    let saved: MonthlySummary.Saved
+
+    var body: some View {
+        let format = model.moneyFormat
+        let parts = [
+            (saved.goals ?? 0) > 0 ? tx("A metas \(format.string(saved.goals ?? 0))", "To goals \(format.string(saved.goals ?? 0))") : nil,
+            (saved.salvavidas ?? 0) > 0 ? tx("Al Salvavidas \(format.string(saved.salvavidas ?? 0))", "To your emergency fund \(format.string(saved.salvavidas ?? 0))") : nil,
+        ].compactMap { $0 }
+        Text(parts.joined(separator: " · ")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            .accessibilityIdentifier("summary.saved.breakdown")
+    }
+}
+
+/// The Owner: a short line when the period still has things to review (its figures may change),
+/// and the ledger's full reading one tap away (OwnerReadingViews.swift).
+private struct OwnerLedgerDetail: View {
+    let summary: MonthlySummary
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            if summary.complete == false {
+                Label(tx("Todavía hay cosas por revisar: estas cifras pueden cambiar.", "There are still things to review: these figures may change."),
+                      systemImage: "exclamationmark.circle")
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
+                    .accessibilityIdentifier("summary.owner.incomplete")
+            }
+            DisclosureGroup(isExpanded: $expanded) {
+                OwnerMonthSummary(summary: summary).padding(.top, DincrSpacing.s2)
+            } label: {
+                Text(tx("Ver el detalle", "See the detail")).font(DincrFont.label).foregroundStyle(DincrColor.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("summary.owner.detail")
+            }
+            .tint(DincrColor.tint)
+        }
+        .dincrCard()
     }
 }
 

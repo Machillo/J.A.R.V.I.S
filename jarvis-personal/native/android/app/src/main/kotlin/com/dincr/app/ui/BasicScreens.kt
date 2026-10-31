@@ -50,7 +50,6 @@ import com.dincr.data.SummaryVisuals
 import com.dincr.data.WholeNumberInput
 import com.dincr.design.CategoryBars
 import com.dincr.design.CompositionDonut
-import com.dincr.design.IncomeExpenseBars
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
 import com.dincr.design.DincrPrimaryButton
@@ -76,57 +75,73 @@ fun monthLabel(month: YearMonth): String =
     month.format(java.time.format.DateTimeFormatter.ofPattern(tx("MMMM yyyy", "MMMM yyyy"), if (tx("es", "en") == "es") java.util.Locale.forLanguageTag("es-CR") else java.util.Locale.US)).replaceFirstChar { it.uppercase() }
 
 /**
- * D7 — monthly summary (all plans). E04/E05: the month's income vs expenses as bars and its expenses
- * by category as a donut ([SummaryVisuals]), below the amounts, which stay as the text.
+ * D7 — Resumen (all plans), simple on purpose: a month or a whole year, what came in and went out,
+ * what was saved (money put aside, never income minus spending), and two donuts: where the money
+ * came from and where it went ([SummaryVisuals]). The Owner's ledger detail stays one tap away.
+ * iOS: `MonthlySummaryView`.
  */
 @Composable
 fun MonthlySummaryScreen(model: AppModel, nav: Navigator) {
+    var yearly by remember { mutableStateOf(false) }
     var month by remember { mutableStateOf(YearMonth.now()) }
-    val summary = rememberLoad(model, month) { model.api.monthlySummary(month.toString()) }
+    var year by remember { mutableStateOf(YearMonth.now().year) }
+    val period = if (yearly) year.toString() else month.toString()
+    val summary = rememberLoad(model, period) { model.api.monthlySummary(period) }
     DetailScaffold(tx("Resumen del mes", "Monthly summary"), nav::back) {
-        MonthPicker(month, { month = it })
+        Box(Modifier.testTag("summary.scope")) {
+            ChoiceChips(listOf(false to tx("Mes", "Month"), true to tx("Año", "Year")), yearly, { yearly = it })
+        }
+        if (yearly) YearPicker(year, { year = it }) else MonthPicker(month, { month = it })
         LoadContent(summary) { s ->
-            if (s.isOwnerLedger) {
-                // The Owner's ledger: each figure with what it means, period and completeness (OwnerMonthViews.kt).
-                OwnerMonthSummary(s)
-                DincrCard {
-                    Column {
-                        AmountLine(tx("Ahorros", "Savings"), s.savings)
-                        OwnerSavingsNote()
-                        s.goals?.progress?.let { ProgressLine(it / 100.0, tx("Metas: ${it.toInt()} %", "Goals: ${it.toInt()} %")) }
-                    }
-                }
-            } else DincrCard {
+            DincrCard {
                 Column {
-                    AmountLine(tx("Ingresos", "Income"), s.income, sign = com.dincr.data.MoneyFormat.Sign.INCOME)
-                    AmountLine(tx("Gastos", "Expenses"), s.expenses)
-                    AmountLine(tx("Pagos de deuda", "Debt payments"), s.debtPaid)
-                    AmountLine(tx("Balance", "Balance"), s.balance, emphasize = true)
-                    AmountLine(tx("Ahorros", "Savings"), s.savings)
-                    s.goals?.progress?.let { ProgressLine(it / 100.0, tx("Metas: ${it.toInt()} %", "Goals: ${it.toInt()} %")) }
-                }
-            }
-            s.topCategory?.let { top -> Section(tx("Donde más gastaste", "Where you spent most")) { AmountLine(top.category ?: tx("Sin categoría", "Uncategorized"), top.amount) } }
-            Box(Modifier.testTag("summary.flow")) {
-                Section(tx("Ingresos frente a gastos", "Income vs expenses")) {
-                    when (val flow = SummaryVisuals.flow(s)) {
-                        is SummaryVisuals.Flow.Bars -> Box(Modifier.testTag("summary.flow.chart")) {
-                            IncomeExpenseBars(listOf(Triple(shortMonth(flow.month), flow.income, flow.expenses)),
-                                title = tx("Ingresos y gastos de ${shortMonth(flow.month)}", "Income and expenses for ${shortMonth(flow.month)}"))
-                        }
-                        else -> Text(SummaryVisuals.flowNotice(flow).orEmpty(), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2,
-                            modifier = Modifier.testTag("summary.flow.notice"))
+                    Box(Modifier.testTag("summary.income")) { AmountLine(tx("Ingresos", "Income"), s.income, sign = com.dincr.data.MoneyFormat.Sign.INCOME) }
+                    Box(Modifier.testTag("summary.expenses")) { AmountLine(tx("Gastos", "Expenses"), s.expenses) }
+                    s.debtPaid?.takeIf { it.signum() > 0 }?.let { AmountLine(tx("Pagos de deudas", "Debt payments"), it) }
+                    Box(Modifier.testTag("summary.saved")) { AmountLine(tx("Lo que guardaste", "What you saved"), s.saved?.total, emphasize = true) }
+                    s.saved?.let { saved ->
+                        val format = Dincr.money
+                        val parts = listOfNotNull(
+                            saved.goals?.takeIf { it.signum() > 0 }?.let { tx("A metas ${format.format(it)}", "To goals ${format.format(it)}") },
+                            saved.salvavidas?.takeIf { it.signum() > 0 }?.let { tx("Al Salvavidas ${format.format(it)}", "To your emergency fund ${format.format(it)}") })
+                        if (parts.isNotEmpty()) Caption(parts.joinToString(" · "))
+                    }
+                    SummaryVisuals.flowNotice(SummaryVisuals.flow(s))?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2, modifier = Modifier.testTag("summary.flow.notice"))
                     }
                 }
             }
-            // The donut's own legend lists every category with its amount (and share when exact); a
-            // segment opens nothing yet (filtered movements need P5.1).
+            if (s.isOwnerLedger) DincrCard {
+                Column {
+                    // The Owner: a short line while the period has things to review; the ledger one tap away (OwnerMonthViews.kt).
+                    if (s.complete == false) Text(tx("Todavía hay cosas por revisar: estas cifras pueden cambiar.", "There are still things to review: these figures may change."),
+                        style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.warning, modifier = Modifier.testTag("summary.owner.incomplete"))
+                    Disclosure(tx("Ver el detalle", "See the detail"), "summary.owner.detail") { OwnerMonthSummary(s) }
+                }
+            }
+            Box(Modifier.testTag("summary.incomeSources")) {
+                Section(tx("¿De dónde entró?", "Where did it come from?")) {
+                    CompositionDonut(tx("Ingresos por categoría", "Income by category"), SummaryVisuals.incomeSources(s), color = Dincr.colors.chartIncome, showsTotal = false)
+                }
+            }
             Box(Modifier.testTag("summary.categories")) {
-                Section(tx("Gastos por categoría", "Expenses by category")) {
-                    CompositionDonut(tx("Gastos por categoría", "Expenses by category"), SummaryVisuals.categories(s), showsTotal = false)
+                Section(tx("¿A dónde se fue?", "Where did it go?")) {
+                    CompositionDonut(tx("Gastos, deudas y ahorro", "Spending, debts and savings"), SummaryVisuals.outflows(s), showsTotal = false)
                 }
             }
         }
+    }
+}
+
+/** A year with arrows (Resumen → Año); never after the current year. iOS: `YearPicker`. */
+@Composable
+private fun YearPicker(year: Int, onChange: (Int) -> Unit) {
+    val current = YearMonth.now().year
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        IconButton({ onChange(year - 1) }) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = tx("Año anterior", "Previous year")) }
+        Text(year.toString(), style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text, modifier = Modifier.weight(1f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        IconButton({ onChange(year + 1) }, enabled = year < current) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = tx("Año siguiente", "Next year")) }
     }
 }
 

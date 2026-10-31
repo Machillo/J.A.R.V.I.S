@@ -6,8 +6,6 @@ with goals the progress is the same as before. Synthetic data.
 """
 from __future__ import annotations
 
-from datetime import date
-
 import pytest
 
 from backend.user_product import free_service
@@ -48,7 +46,9 @@ def _summary(monkeypatch, *, profile, goals):
     monkeypatch.setattr(free_service, "get_connection", lambda: _Conn(profile, goals))
     monkeypatch.setattr(free_service, "_period_totals", lambda *_a: {"income": 500000.0, "expenses": 200000.0, "debt_paid": 0.0})
     monkeypatch.setattr(free_service, "_categories", lambda *_a: [])
-    monkeypatch.setattr(free_service, "_month", lambda _period: date(2026, 10, 1))
+    # The breakdown has its own tests (test_owner_monthly_ledger_pg.py); here it stays out of the way.
+    monkeypatch.setattr(free_service.summary_breakdown, "income_categories", lambda *_a, **_k: [])
+    monkeypatch.setattr(free_service.summary_breakdown, "saved", lambda *_a: {"total": 0.0, "goals": 0.0, "salvavidas": 0.0})
     return free_service.get_free_monthly_summary("2026-10")
 
 
