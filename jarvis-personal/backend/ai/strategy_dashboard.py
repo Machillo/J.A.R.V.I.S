@@ -11,6 +11,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
+from backend.ai import owner_commitments
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
@@ -584,8 +585,8 @@ def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]
     """Recurring living commitments used for forward projections.
 
     Debts stay authoritative in ``debts`` and are never duplicated from
-    ``fixed_expenses``. For the non-debt recurring base we keep the commitments
-    the holder marked as unavoidable in V1: house and phone line.
+    ``fixed_expenses``. Every other active fixed expense is part of the
+    non-debt recurring base (house and phone line included).
     """
     debt_names = {str(d.get("name") or "").lower().strip() for d in debts}
     with get_connection() as conn:
@@ -613,13 +614,15 @@ def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]
         is_debt_like = _is_debt_like_fixed_expense(row, debt_names)
         is_house = name == "casa" or category == "vivienda"
         is_phone_line = "línea" in name or "linea" in name or category in {"teléfono", "telefono", "telefonía", "telefonia"}
-        is_strategy_living = (is_house or is_phone_line) and not is_debt_like
+        # Every fixed expense is a life cost the plan respects (owner_commitments); house and phone
+        # line keep their name. A fixed expense that is a debt is already counted in ``debts``.
+        is_strategy_living = not is_debt_like
         item = {
             "id": row.get("id"),
             "name": row.get("name"),
             "category": row.get("category"),
             "monthly_amount": round(monthly, 2),
-            "reason": "mandatory_living" if is_strategy_living else ("debt_duplicate" if is_debt_like else "not_mandatory_for_projection"),
+            "reason": ("mandatory_living" if is_house or is_phone_line else "recurring_living") if is_strategy_living else "debt_duplicate",
         }
         if is_strategy_living:
             included.append(item)
@@ -741,12 +744,14 @@ def _month_keys_between(start: date, end: date) -> list[str]:
 def _pending_mandatory_fixed_expenses(
     cycle_report: dict[str, Any],
     salvavidas: dict[str, Any],
+    fixed_ids: set[int] | None = None,
 ) -> dict[str, Any]:
-    """Reserve mandatory recurrent bills that are due in this cycle and not detected as paid."""
+    """Reserve recurrent bills due in this cycle and not detected as paid: ``fixed_ids`` (every
+    fixed expense that is not a debt, owner_commitments) plus the Salvavidas mandatory ones."""
     cycle_start = _parse_iso_date((cycle_report.get("cycle") or {}).get("start"))
     cycle_end = _parse_iso_date((cycle_report.get("cycle") or {}).get("end"))
     mandatory = list(salvavidas.get("mandatory_expenses") or [])
-    mandatory_ids = {int(item["id"]) for item in mandatory if item.get("id") is not None}
+    mandatory_ids = {int(item["id"]) for item in mandatory if item.get("id") is not None} | set(fixed_ids or ())
     if not cycle_start or not cycle_end or not mandatory_ids:
         return {"total": 0.0, "items": []}
 
@@ -1042,6 +1047,16 @@ def _distribution_warnings(cycle_report: dict[str, Any], salvavidas: dict[str, A
     return warnings
 
 
+def _automatic_savings_warnings(automatic: dict[str, Any], taken: float) -> list[dict[str, str]]:
+    """Says that the Salvavidas automatic contributions are already out of the distribution."""
+    if taken <= 0:
+        return []
+    amount, each = owner_commitments.colones(taken), owner_commitments.colones(automatic.get("per_contribution"))
+    return [{"code": "automatic_savings", "message": tx(
+        f"{amount} de este ciclo ya van solos al Salvavidas (ahorro automático de {each}); ya están descontados de esta distribución.",
+        f"{amount} of this cycle already go to your emergency fund by themselves (automatic saving of {each}); they are already taken out of this distribution.")}]
+
+
 def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str, Any]:
     """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea).
 
@@ -1119,9 +1134,12 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         )
     post_cut = _fetch_post_cut_expenses(workspace_id, cycle_report)
     new_spending_after_cut = _f(post_cut.get("total"))
-    committed_spending = statement_spending + new_spending_after_cut
+    # Expenses recorded by hand (not bank movements) also reduce what can be distributed.
+    manual = owner_commitments.manual_expenses(workspace_id, cycle_report, date.today())
+    manual_spending = _f(manual.get("total"))
+    committed_spending = statement_spending + new_spending_after_cut + manual_spending
 
-    pending_mandatory = _pending_mandatory_fixed_expenses(cycle_report, salvavidas)
+    pending_mandatory = _pending_mandatory_fixed_expenses(cycle_report, salvavidas, owner_commitments.fixed_expense_ids(living))
     mandatory_fixed_pending = _f(pending_mandatory.get("total"))
     distributable_cash = _fetch_distributable_cash(workspace_id)
 
@@ -1156,6 +1174,18 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         emergency_monthly_base=emergency_monthly_base,
         split_every_cent=manual_available is not None,
     )
+    # The Salvavidas automatic contributions still to come go by themselves: the distribution says
+    # only what to move on top of them (owner_commitments.absorb).
+    automatic = owner_commitments.automatic_savings(salvavidas, cycle_report, date.today())
+    automatic_taken = 0.0
+    if automatic["amount"] > 0:
+        amounts, automatic_taken = owner_commitments.absorb(director.get("allocation_amounts") or {}, automatic["amount"])
+        base = max(_f(director.get("allocation_base_amount")) - automatic_taken, 0.0)
+        percentages, items = _allocation_from_amounts(amounts, base, exact=manual_available is not None)
+        shown = {key: next((item["amount"] for item in items if item["key"] == key), 0.0) for key in amounts}
+        director = {**director, "allocation_amounts": shown, "allocation": percentages, "allocation_items": items,
+                    "allocation_base_amount": round(base, 2), "safe_to_spend": shown.get("vida_controlada", 0.0),
+                    "investment_recommended": shown.get("inversion", 0.0), "investment_target": shown.get("inversion", 0.0)}
     allocation = director.get("allocation") or {}
     allocation_amounts = director.get("allocation_amounts") or {}
     allocation_items = director.get("allocation_items") or []
@@ -1315,7 +1345,10 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         "allocation_items": allocation_items,
         "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
         "distribution_source": "manual_amount" if manual_available is not None else "estimate",
-        "distribution_warnings": _distribution_warnings(cycle_report, salvavidas, manual=manual_available is not None),
+        "distribution_warnings": _distribution_warnings(cycle_report, salvavidas, manual=manual_available is not None)
+        + _automatic_savings_warnings(automatic, automatic_taken),
+        "automatic_savings": {**automatic, "taken_from_distribution": round(automatic_taken, 2)},
+        "manual_expenses": manual,
         # The exact amount is the base as typed (no deduction lines); the estimate keeps its formula.
         "distribution_formula": {
             "manual_available": round(manual_available, 2),

@@ -42,6 +42,7 @@ def owner_strategy(monkeypatch):
     monkeypatch.setattr(sd, "get_salvavidas_state", lambda: {"current_amount": 0, "monthly_base": 300000})
     monkeypatch.setattr(sd, "_fetch_post_cut_expenses", lambda *_a: {"total": 0})
     monkeypatch.setattr(sd, "_pending_mandatory_fixed_expenses", lambda *_a: {"total": 0})
+    monkeypatch.setattr(sd.owner_commitments, "manual_expenses", lambda *_a: {"total": 0.0, "count": 0})
     monkeypatch.setattr(sd, "_fetch_distributable_cash", lambda *_a: 0.0)
     monkeypatch.setattr(sd, "_fetch_active_financial_goals", lambda *_a: [])
     monkeypatch.setattr(sd, "_fetch_investment_portfolio", lambda *_a, **_k: {})
