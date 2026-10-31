@@ -2,11 +2,9 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// UX-13 — Movimientos → Análisis: the monthly summary (every plan), reports (Basic+, paused with
-/// `advanced_reports`) and the monthly review (VIP, paused with `vip_intelligence`). The same screens
-/// the retired DINCR tab opened; below its plan a row stays visible, locked, and opens Suscripción.
-/// §15 PR 11: the Owner (role, never a plan) also gets the historical financial analysis, in its
-/// Análisis mode (no health score until P3.7, no net worth until P0.9); JARVIS keeps the full one.
+/// UX-13 — Movimientos → Análisis: the monthly summary (every plan) and, FA-1, the financial analysis
+/// in plain words (VIP and the Owner; below VIP the row stays visible, locked, and opens Suscripción).
+/// The Owner's full historical analysis stays in JARVIS → Análisis financiero.
 struct AnalysisHubView: View {
     @Environment(AppModel.self) private var model
 
@@ -15,15 +13,9 @@ struct AnalysisHubView: View {
             VStack(spacing: DincrSpacing.s2) {
                 GatedEntry(minimum: .free, flag: nil, symbol: "calendar.badge.checkmark", title: tx("Resumen del mes", "Monthly summary"),
                            subtitle: tx("Ingresos, gastos y categorías", "Income, expenses and categories"), id: "analysis.summary") { MonthlySummaryView() }
-                if Jarvis.isAvailable(to: model.profile) {
-                    NavigationLink { OwnerAnalysisView(mode: .analysis) } label: {
-                        HubRow(symbol: "chart.pie", title: tx("Análisis financiero", "Financial analysis"),
-                               subtitle: tx("Tu historial: flujo, gasto y cierre del mes", "Your history: cash flow, spending and month end"))
-                    }
-                    .buttonStyle(.plain)
-                    .dincrCard(padding: DincrSpacing.s3)
-                    .accessibilityIdentifier("analysis.owner")
-                }
+                GatedEntry(minimum: .vip, flag: nil, symbol: "chart.pie", title: tx("Análisis financiero", "Financial analysis"),
+                           subtitle: tx("Tus números explicados en palabras simples", "Your numbers explained in simple words"),
+                           id: "analysis.financial") { FinancialAnalysisView() }
             }
         }
     }

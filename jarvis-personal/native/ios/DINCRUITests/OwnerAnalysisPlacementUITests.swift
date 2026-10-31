@@ -1,9 +1,10 @@
 import XCTest
 
-/// §15 PR 11 — the Owner's historical financial analysis in Movimientos → Análisis, in its Análisis
-/// mode: income and expenses, spending by category, month end and recommendations, with no health score
-/// (P3.7) and no net worth (P0.9). Free, Basic and VIP never see the entry. JARVIS → Análisis financiero
-/// keeps every section. Android twin: `OwnerAnalysisPlacementUiTest`. Fixture data only.
+/// FA-1 — Movimientos → Análisis → Análisis financiero for VIP and the Owner: their own months in
+/// plain words (a normal month, how much is saved and goes to debts, the months side by side, what is
+/// above normal this month). Free and Basic see the row locked; it opens Suscripción. JARVIS →
+/// Análisis financiero keeps the Owner's full historical analysis. Android twin:
+/// `OwnerAnalysisPlacementUiTest`. Fixture data only.
 final class OwnerAnalysisPlacementUITests: XCTestCase {
     private func launch(plan: String? = nil, role: String? = nil, tab: String) -> XCUIApplication {
         let app = XCUIApplication()
@@ -38,27 +39,37 @@ final class OwnerAnalysisPlacementUITests: XCTestCase {
         return element(id, in: app).exists
     }
 
-    func testFreeBasicAndVipNeverSeeTheOwnerEntry() {
-        for plan in [nil, "basic", "vip"] as [String?] {
+    func testFreeAndBasicSeeTheAnalysisLockedAndItOpensSuscripcion() {
+        for plan in [nil, "basic"] as [String?] {
             let app = launch(plan: plan, tab: "movements")
             open("movements.analysis", in: app)
-            XCTAssertTrue(element("analysis.summary", in: app).waitForExistence(timeout: 10), plan ?? "free")
-            XCTAssertFalse(element("analysis.owner", in: app).exists, plan ?? "free")
+            let entry = element("analysis.financial", in: app)
+            XCTAssertTrue(entry.waitForExistence(timeout: 10), plan ?? "free")
+            XCTAssertTrue(entry.label.contains("Disponible desde VIP"), "\(plan ?? "free"): \(entry.label)")
+            entry.tap()
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Suscripción actual")).firstMatch.waitForExistence(timeout: 10), plan ?? "free")
             app.terminate()
         }
     }
 
-    func testTheOwnerSeesTheAnalysisModeWithoutScoreOrNetWorth() {
-        let app = launch(plan: "vip", role: "owner", tab: "movements")
-        open("movements.analysis", in: app)
-        open("analysis.owner", in: app)
-        XCTAssertTrue(app.navigationBars["Análisis financiero"].waitForExistence(timeout: 10))
-        XCTAssertTrue(element("jarvis.analysis.flow", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(reveal("jarvis.analysis.spending", in: app))
-        XCTAssertTrue(reveal("jarvis.analysis.monthEnd", in: app))
-        for hidden in ["jarvis.analysis.health", "jarvis.analysis.networth"] { XCTAssertFalse(element(hidden, in: app).exists, hidden) }
-        for hidden in ["/100", "Salud financiera"] { XCTAssertFalse(contains(hidden, in: app), hidden) }
-        XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map { $0.label }, ["Hoy", "Movimientos", "Plan", "Patrimonio", "Perfil"])
+    func testVipAndTheOwnerReadTheirNumbersInPlainWords() {
+        for role in [nil, "owner"] as [String?] {
+            let who = role ?? "vip"
+            let app = launch(plan: "vip", role: role, tab: "movements")
+            open("movements.analysis", in: app)
+            open("analysis.financial", in: app)
+            XCTAssertTrue(app.navigationBars["Análisis financiero"].waitForExistence(timeout: 10), who)
+            XCTAssertTrue(element("analysis.financial.left", in: app).waitForExistence(timeout: 10), who)
+            XCTAssertTrue(contains("En un mes normal te sobran", in: app), who)
+            XCTAssertTrue(reveal("analysis.financial.saved", in: app) && contains("Guardás 10 de cada 100 que entran.", in: app), who)
+            XCTAssertTrue(reveal("analysis.financial.debts", in: app), who)
+            XCTAssertTrue(reveal("analysis.financial.months", in: app), who)
+            XCTAssertTrue(reveal("analysis.financial.rises", in: app) && contains("Comida:", in: app), who)
+            // Not the Owner's historical analysis: no score and no net worth here.
+            for hidden in ["jarvis.analysis.health", "jarvis.analysis.networth"] { XCTAssertFalse(element(hidden, in: app).exists, hidden) }
+            XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map { $0.label }, ["Hoy", "Movimientos", "Plan", "Patrimonio", "Perfil"])
+            app.terminate()
+        }
     }
 
     func testJarvisKeepsTheFullAnalysis() {

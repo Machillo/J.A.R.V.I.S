@@ -860,6 +860,39 @@ public actor FixtureBackend: HTTPTransport {
         return summary
     }
 
+    /// FA-1: twelve months up to this one. The sample movements cover only the last days, so the three
+    /// months before this one are fixed synthetic complete months (whatever the date the tests run on);
+    /// the current month (`partial`) comes from the movements, and its categories are compared with a
+    /// fixed synthetic average (Comida above it; every other category at its usual amount).
+    /// Android: FakeBackend.financialAnalysis.
+    func financialAnalysis() -> [String: Any] {
+        let current = String(day(0).prefix(7))
+        let calendar = Calendar(identifier: .gregorian)
+        let periods: [String] = (0..<12).reversed().map { back in
+            let date = calendar.date(byAdding: .month, value: -back, to: today) ?? today
+            let parts = calendar.dateComponents([.year, .month], from: date)
+            return String(format: "%04d-%02d", parts.year!, parts.month!)
+        }
+        let months: [[String: Any]] = periods.enumerated().map { index, period in
+            if period == current {
+                let (income, expenses) = totals(period)
+                return ["period": period, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "saved": 0, "partial": true]
+            }
+            let complete = index >= 8
+            return ["period": period, "income": complete ? 1_000_000 : 0, "expenses": complete ? 600_000 : 0,
+                    "debt_paid": complete ? 100_000 : 0, "saved": complete ? 100_000 : 0, "partial": false]
+        }
+        let average: [String: Decimal] = ["Comida": 10_000, "Vivienda": 400_000]
+        let now = categories(current)
+        let names = now.compactMap { $0["category"] as? String } + average.keys.filter { name in !now.contains { $0["category"] as? String == name } }.sorted()
+        let rows: [[String: Any]] = names.map { name in
+            let amount = now.first { $0["category"] as? String == name }.flatMap { decimal($0["amount"]) } ?? 0
+            // Every other category is at its usual amount: only Comida is above normal.
+            return ["category": name, "current": number(amount), "average": number(average[name] ?? amount)]
+        }
+        return ["months": months, "categories": rows]
+    }
+
     /// This month's recorded movements, as the command center's `reports.current`.
     private func currentMonthTotals() -> [String: Any] {
         let month = String(day(0).prefix(7))

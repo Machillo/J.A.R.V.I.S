@@ -1,6 +1,5 @@
 package com.dincr.app.ui
 
-import com.dincr.data.Jarvis
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.foundation.layout.Box
 import com.dincr.design.CompositionDonut
@@ -55,9 +54,8 @@ fun FinancialDisclaimer() {
 }
 
 /**
- * UX-13 — Movimientos → Análisis: the monthly summary (every plan), reports (Basic+, paused with
- * `advanced_reports`) and the monthly review (VIP, paused with `vip_intelligence`). The same screens
- * the retired DINCR tab opened; below its plan a row stays visible, locked, and opens Suscripción.
+ * UX-13 — Movimientos → Análisis: the monthly summary (every plan) and, FA-1, the financial analysis
+ * in plain words (VIP and the Owner; below VIP the row stays visible, locked, and opens Suscripción).
  */
 @Composable
 fun AnalysisScreen(model: AppModel, nav: Navigator) {
@@ -69,10 +67,14 @@ fun AnalysisScreen(model: AppModel, nav: Navigator) {
         DincrCard {
             Column {
                 NavRow(Icons.Rounded.Summarize, tx("Resumen del mes", "Monthly summary"), tx("Ingresos, gastos y metas por mes", "Income, expenses and goals by month")) { nav.open("monthly") }
-                // §15 PR 11: the Owner (role, never a plan) also gets the historical financial analysis, in its
-                // Análisis mode (no health score until P3.7, no net worth until P0.9); JARVIS keeps the full one.
-                if (Jarvis.isAvailable(profile)) Box(Modifier.testTag("analysis.owner")) {
-                    NavRow(Icons.Rounded.PieChart, tx("Análisis financiero", "Financial analysis"), tx("Tu historial: flujo, gasto y cierre del mes", "Your history: cash flow, spending and month end")) { nav.open("ownerAnalysis") }
+                // FA-1: the financial analysis in plain words (VIP and the Owner, whose plan is VIP); the
+                // Owner's full historical analysis stays in JARVIS.
+                Box(Modifier.testTag("analysis.financial")) {
+                    if (plan != PlanTier.VIP) {
+                        LockedRow(Icons.Rounded.PieChart, tx("Análisis financiero", "Financial analysis"), PlanTier.VIP, nav)
+                    } else {
+                        NavRow(Icons.Rounded.PieChart, tx("Análisis financiero", "Financial analysis"), tx("Tus números explicados en palabras simples", "Your numbers explained in simple words")) { nav.open("financialAnalysis") }
+                    }
                 }
             }
         }

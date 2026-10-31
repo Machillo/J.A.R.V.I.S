@@ -42,7 +42,7 @@ final class NavigationUITests: XCTestCase {
     func testVipReachesEveryFormerDincrFunctionInItsNewHome() {
         let app = launch(plan: "vip", tab: "movements")
         open("movements.analysis", in: app)
-        for (id, title) in [("analysis.summary", "Resumen del mes")] {
+        for (id, title) in [("analysis.summary", "Resumen del mes"), ("analysis.financial", "Análisis financiero")] {
             open(id, in: app)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), title)
             app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -65,6 +65,7 @@ final class NavigationUITests: XCTestCase {
         // Reportes and Revisión del mes were retired (they repeated the summary).
         XCTAssertFalse(element("analysis.reports", in: free).exists)
         XCTAssertFalse(element("analysis.review", in: free).exists)
+        XCTAssertTrue(element("analysis.financial", in: free).label.contains("Disponible desde VIP"))
         free.tabBars.buttons["Patrimonio"].tap()
         XCTAssertTrue(element("wealth.projections", in: free).waitForExistence(timeout: 10))
         XCTAssertTrue(element("wealth.projections", in: free).label.contains("Disponible desde VIP"))
@@ -75,6 +76,7 @@ final class NavigationUITests: XCTestCase {
         open("movements.analysis", in: basic)
         XCTAssertTrue(element("analysis.summary", in: basic).waitForExistence(timeout: 10))
         XCTAssertFalse(element("analysis.reports", in: basic).exists)
+        XCTAssertTrue(element("analysis.financial", in: basic).label.contains("Disponible desde VIP"))
     }
 
     func testTheOwnerKeepsTheFiveTabsAndJarvis() {

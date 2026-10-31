@@ -29,6 +29,7 @@ from backend.user_product.free_service import (
 )
 from backend.user_product.vip_service import get_vip_command_center
 from backend.user_product.debt_scenarios import simulate_debt_scenario
+from backend.user_product.financial_analysis import get_financial_analysis
 from backend.ai.strategy_dashboard import get_premium_strategy_dashboard
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
 from backend.finance.intelligence import get_debt_advisory
@@ -248,6 +249,10 @@ def vip_debt_advisory(extra_cash: float | None = None):
 @router.get("/vip/debt-strategies")
 def vip_debt_strategies():
     require_feature("strategy_vip"); return calculate_debt_strategies(canonical_rates=True)
+
+@router.get("/vip/financial-analysis")
+def vip_financial_analysis():
+    require_feature("strategy_vip"); return get_financial_analysis()
 
 @router.get("/vip/salvavidas")
 def vip_salvavidas():
