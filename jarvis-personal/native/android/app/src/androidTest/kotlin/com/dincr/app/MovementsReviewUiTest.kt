@@ -7,6 +7,8 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -18,7 +20,6 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -93,8 +94,24 @@ class MovementsReviewUiTest {
         // Opened from Movimientos, the review keeps Movimientos selected.
         assertEquals(tx("Movimientos", "Transactions"), selectedTab())
         back()
-        waitUntil("the confirmed notice is now a movement") { present("Compra en supermercado") }
-        assertTrue(tagged("movements.analysis"))
+        // The list shows the month (with its picker above); the new movement may sit below the fold.
+        waitUntil("the confirmed notice is now a movement") {
+            present("Compra en supermercado") || run {
+                compose.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().indices.forEach { index ->
+                    runCatching { compose.onAllNodes(hasScrollToNodeAction())[index].performScrollToNode(hasText("Compra en supermercado", substring = true)) }
+                }
+                present("Compra en supermercado")
+            }
+        }
+        // Back to the top (the search did scroll): Análisis is still there.
+        waitUntil("Análisis") {
+            tagged("movements.analysis") || run {
+                compose.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().indices.forEach { index ->
+                    runCatching { compose.onAllNodes(hasScrollToNodeAction())[index].performScrollToNode(hasTestTag("movements.analysis")) }
+                }
+                tagged("movements.analysis")
+            }
+        }
     }
 
     @Test fun theOwnerReviewsTooAndKeepsJarvis() {

@@ -64,6 +64,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
+import com.dincr.data.MovementMonth
 import com.dincr.data.SearchText
 import com.dincr.data.Movement
 import com.dincr.data.PendingConversion
@@ -101,6 +102,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     var state by remember { mutableStateOf<Load<List<Movement>>>(Load.Loading) }
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(MovementFilter.ALL) }
+    // One month at a time (the current one when it opens); a search looks through every month.
+    var month by rememberSaveable { mutableStateOf(java.time.YearMonth.now().toString()) }
     var editing by remember { mutableStateOf<EditorMode?>(null) }
     var pendingDelete by remember { mutableStateOf<Movement?>(null) }
     var refreshing by remember { mutableStateOf(false) }
@@ -166,13 +169,16 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                             }
                             if (filter == MovementFilter.DEBT) DincrTonalButton(tx("Gestionar deudas", "Manage debts"), { nav.open("debts") })
                         }
+                        if (query.isBlank()) androidx.compose.foundation.layout.Box(Modifier.testTag("movements.month")) {
+                            MonthPicker(java.time.YearMonth.parse(month), { month = it.toString() })
+                        }
                     }
                 }
                 when (val s = state) {
                     Load.Loading -> item { Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) { SkeletonBlock(rows = 5, showsFigure = false) } }
                     is Load.Failed -> item { Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) { ErrorState(s.message) { scope.launch { state = Load.Loading; load() } } } }
                     is Load.Ready -> {
-                        val visible = s.value.filter {
+                        val visible = MovementMonth.rows(s.value, month, query).filter {
                             val kindMatches = when (filter) {
                                 MovementFilter.ALL -> true
                                 MovementFilter.INCOME -> it.kind == MovementKind.INCOME
@@ -184,9 +190,13 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                         if (visible.isEmpty()) item {
                             Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) {
                                 val none = s.value.isEmpty()
-                                EmptyState(if (none) Icons.Rounded.Inbox else Icons.Rounded.Search,
-                                    if (none) tx("Todavía no hay movimientos", "No transactions yet") else tx("Nada coincide con tu búsqueda", "Nothing matches your search"),
-                                    if (none) tx("Registrá tu primer ingreso o gasto para empezar.", "Record your first income or expense to begin.") else tx("Probá otra palabra o cambiá el filtro.", "Try another word or change the filter."),
+                                val emptyMonth = !none && query.isBlank() && filter == MovementFilter.ALL
+                                EmptyState(if (none || emptyMonth) Icons.Rounded.Inbox else Icons.Rounded.Search,
+                                    when { none -> tx("Todavía no hay movimientos", "No transactions yet"); emptyMonth -> tx("Sin movimientos en este mes", "No transactions this month")
+                                        else -> tx("Nada coincide con tu búsqueda", "Nothing matches your search") },
+                                    when { none -> tx("Registrá tu primer ingreso o gasto para empezar.", "Record your first income or expense to begin.")
+                                        emptyMonth -> tx("Cambiá de mes con las flechas o buscá un movimiento.", "Change the month with the arrows or search for a transaction.")
+                                        else -> tx("Probá otra palabra o cambiá el filtro.", "Try another word or change the filter.") },
                                     if (none) ({ DincrPrimaryButton(tx("Agregar movimiento", "Add transaction"), { editing = EditorMode.Create }) }) else null)
                             }
                         }
