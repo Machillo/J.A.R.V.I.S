@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from backend.core.database import get_connection
 from backend.core.time import costa_rica_today
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
-from backend.finance import balance_movements, payroll_receipts
+from backend.finance import balance_movements, payroll_receipts, salary_projection
 from backend.finance.debt_automation import schedule_automation_enabled
 from backend.finance.debt_extra_payment import record_extra_payment
 from backend.finance.category_catalog import normalize_category, expense_type_for_category, owner_context
@@ -568,44 +568,6 @@ def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = T
             conn.commit()
     debts_key = "debts_to_update" if dry_run else "debts_updated"
     return {"dry_run": dry_run, "installments": plan, debts_key: updated}
-
-def _monthly_amount_from_frequency(amount: float, frequency: str | None) -> float:
-    frequency = (frequency or 'monthly').lower().strip()
-    amount = _as_float(amount)
-    if frequency == 'weekly':
-        return amount * 4.333
-    if frequency in {'biweekly', 'cada_2_semanas', 'quincenal'}:
-        return amount * 2.166
-    if frequency == 'annual':
-        return amount / 12
-    return amount
-
-
-def _variable_payroll_deductions(gross_amount: float, deductions: list[dict]) -> tuple[float, list[dict]]:
-    """Rebajos aplicables a OT/bonos/VGH.
-
-    Si el salario base mensual ya está guardado como neto, no repetimos rebajos fijos
-    semanales sobre el salario base. Para ingresos extra aplicamos solo rebajos
-    porcentuales configurados.
-    """
-    total = 0.0
-    details = []
-    for deduction in deductions:
-        deduction_type = str(deduction.get('deduction_type') or '').lower().strip()
-        amount = _as_float(deduction.get('amount'))
-        if deduction_type == 'percentage':
-            calculated = gross_amount * (amount / 100)
-            total += calculated
-            details.append({
-                'name': deduction.get('name'),
-                'deduction_type': deduction_type,
-                'base_amount': amount,
-                'frequency': deduction.get('frequency'),
-                'calculated_monthly_amount': calculated,
-                'applies_to': 'extra_income',
-            })
-    return total, details
-
 
 def add_salary(amount: float, source: str):
     user_id = get_current_user_id()
@@ -1947,99 +1909,9 @@ def calculate_monthly_salary_projection():
         ).fetchall()]
 
     base_salary_net = _latest_base_salary(workspace_id)
+    return {"month": start_month[:7],
+            **salary_projection.project(profile, deductions, payroll_events, current_bonuses, base_salary_net)}
 
-    if profile:
-        hourly_rate = float(profile["hourly_rate"] or 0)
-        weekly_hours = float(profile["regular_hours_per_week"] or 0)
-        base_monthly_gross = hourly_rate * weekly_hours * 4.333
-    else:
-        hourly_rate = 0.0
-        weekly_hours = 0.0
-        base_monthly_gross = base_salary_net
-
-    # Regla V1:
-    # - Si hay perfil laboral, el salario base se calcula desde hourly_rate y rebajos reales.
-    # - La tabla salaries solo se usa como respaldo si no hay perfil laboral.
-    fixed_deduction_details = []
-    fixed_deductions_total = 0.0
-    if base_salary_net > 0 and not profile:
-        base_monthly_net = base_salary_net
-    else:
-        for deduction in deductions:
-            amount = _as_float(deduction.get("amount"))
-            deduction_type = str(deduction.get("deduction_type") or "").lower().strip()
-            if deduction_type == "percentage":
-                calculated = base_monthly_gross * (amount / 100)
-            else:
-                calculated = _monthly_amount_from_frequency(amount, deduction.get("frequency"))
-            fixed_deductions_total += calculated
-            fixed_deduction_details.append({
-                "name": deduction.get("name"),
-                "deduction_type": deduction_type or "fixed",
-                "base_amount": amount,
-                "frequency": deduction.get("frequency"),
-                "calculated_monthly_amount": calculated,
-                "applies_to": "base_salary",
-            })
-        base_monthly_net = max(base_monthly_gross - fixed_deductions_total, 0)
-
-    positive_payroll_gross = sum(max(_as_float(event.get("amount")), 0) for event in payroll_events)
-    vgh_gross = sum(min(_as_float(event.get("amount")), 0) for event in payroll_events)
-    bonuses_gross = sum(_as_float(item.get("amount")) for item in current_bonuses)
-
-    extra_base = positive_payroll_gross + max(bonuses_gross, 0)
-    extra_deductions_total, extra_deduction_details = _variable_payroll_deductions(
-        extra_base,
-        deductions,
-    )
-
-    if extra_base > 0:
-        payroll_extra_deduction = extra_deductions_total * (positive_payroll_gross / extra_base)
-        bonus_deduction = extra_deductions_total * (max(bonuses_gross, 0) / extra_base)
-    else:
-        payroll_extra_deduction = 0.0
-        bonus_deduction = 0.0
-
-    # VGH es tiempo no trabajado: resta bruto directo y no recibe rebajo positivo.
-    payroll_events_gross = positive_payroll_gross + vgh_gross
-    payroll_events_net = (positive_payroll_gross - payroll_extra_deduction) + vgh_gross
-    bonuses_net = bonuses_gross - bonus_deduction if bonuses_gross > 0 else bonuses_gross
-
-    projected_gross = base_monthly_gross + payroll_events_gross + bonuses_gross
-    projected_net = base_monthly_net + payroll_events_net + bonuses_net
-
-    return {
-        "status": "OK" if (base_monthly_net > 0 or profile) else "MISSING_BASE_SALARY",
-        "month": start_month[:7],
-        "base": {
-            "hourly_rate": hourly_rate,
-            "regular_hours_per_week": weekly_hours,
-            "base_monthly_gross": round(base_monthly_gross, 2),
-            "base_monthly_net": round(base_monthly_net, 2),
-            "base_salary_source": "salaries" if base_salary_net > 0 else "employment_profile",
-        },
-        "adjustments": {
-            "payroll_events_total": round(payroll_events_gross, 2),
-            "payroll_events_net": round(payroll_events_net, 2),
-            "bonuses_gross": round(bonuses_gross, 2),
-            "bonuses_net": round(bonuses_net, 2),
-            "projected_gross": round(projected_gross, 2),
-            "events": payroll_events,
-            "bonuses": current_bonuses,
-        },
-        "deductions": {
-            "total_deductions": round(fixed_deductions_total + extra_deductions_total, 2),
-            "fixed_deductions_total": round(fixed_deductions_total, 2),
-            "extra_deductions_total": round(extra_deductions_total, 2),
-            "details": fixed_deduction_details + extra_deduction_details,
-        },
-        "results": {
-            "base_net": round(base_monthly_net, 2),
-            "projected_net": round(projected_net, 2),
-            "current_month_adjustments_net": round(projected_net - base_monthly_net, 2),
-            "current_month_adjustments_gross": round(payroll_events_gross + bonuses_gross, 2),
-        }
-    }
 
 def delete_expense(expense_id: int):
     workspace_id = get_current_workspace_id()

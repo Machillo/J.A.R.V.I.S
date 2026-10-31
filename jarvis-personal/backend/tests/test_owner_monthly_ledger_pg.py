@@ -112,6 +112,9 @@ def db(admin_uri, monkeypatch):
     from backend.user_product import free_service
     monkeypatch.setattr(free_service, "owner_account_context",
                         lambda _conn, _account, _workspace: get_current_user().get("role") == "owner")
+    # The Owner's salary rule depends on the month in course: these tests run in mid-November 2026.
+    from backend.user_product import owner_ledger
+    monkeypatch.setattr(owner_ledger, "costa_rica_today", lambda: date(2026, 11, 15), raising=False)
     database.close_idle_connections()
     try:
         yield conn
@@ -151,6 +154,7 @@ def test_the_owner_month_counts_money_received_and_reports_gross_payroll_apart(d
         "pending_mail_count": 1,
         "complete": False,
         "incomplete_reasons": ["pending_mail_review", "unclassified_movements"],
+        "salary": 2000, "salary_estimated": False,  # a closed month with salary received keeps it
     }
 
 
@@ -158,9 +162,8 @@ def test_record_timestamps_are_costa_rica_dates(db):
     september, november = _month(SEPTEMBER, OCTOBER), _month(NOVEMBER, DECEMBER)
     assert september["gross_expenses"] == 25, "22:00 on 30 Sep in Costa Rica is September"
     assert november["payroll_accrued"]["overtime_gross"] == 40, "01:00 on 1 Nov in Costa Rica is November"
-    # November has gross payroll and no deposit: not a complete month.
-    assert november["income"] == 0 and november["complete"] is False
-    assert november["incomplete_reasons"] == ["payroll_without_deposit"]
+    # November is the month in course: its salary is the projection (base 2000 + the 40 of overtime).
+    assert november["income"] == 2040 and november["salary_estimated"] is True
     assert november["expenses"] == 0 and november["unmatched_refunds"] == 30
 
 
@@ -382,3 +385,77 @@ def test_without_earlier_spending_the_average_is_unknown_not_zero(db, monkeypatc
     finally:
         reset_current_user(token)
     assert analysis["categories"] and all(row["average"] is None for row in analysis["categories"])
+
+
+# The Owner's salary rule (owner_ledger.owner_salary): his pay is known before it arrives. The month
+# in course and a closed month without a deposit show the projected net salary (JARVIS's formula);
+# a closed month with salary received keeps it; the estimate never adds to a deposit. Synthetic data.
+def _today(monkeypatch, value):
+    from backend.user_product import owner_ledger
+    monkeypatch.setattr(owner_ledger, "costa_rica_today", lambda: value, raising=False)
+
+
+def test_the_month_in_course_shows_the_whole_projected_salary_from_its_first_day(db, monkeypatch):
+    _today(monkeypatch, date(2026, 11, 1))
+    november = _month(NOVEMBER, DECEMBER)
+    assert november["income"] == 2040 and november["salary"] == 2040 and november["salary_estimated"] is True
+    assert "payroll_without_deposit" not in november["incomplete_reasons"]
+    assert "salary_estimated" not in november["incomplete_reasons"], "the month in course is not over"
+
+
+def test_a_deposit_in_the_month_in_course_is_not_counted_twice(db):
+    q(db, "INSERT INTO transactions (workspace_id, transaction_date, amount, transaction_type, category) VALUES (%s, '2026-11-14', 1000, 'income', 'Salario')", (WS_A,))
+    q(db, "INSERT INTO transactions (workspace_id, transaction_date, amount, transaction_type, category) VALUES (%s, '2026-11-14', 70, 'income', 'Inversión')", (WS_A,))
+    november = _month(NOVEMBER, DECEMBER)
+    assert november["income"] == 2040 + 70, "the first half's deposit is inside the projected salary; other income adds"
+
+
+def test_a_closed_month_without_a_deposit_is_estimated_and_not_complete(db, monkeypatch):
+    _today(monkeypatch, date(2026, 12, 15))
+    november = _month(NOVEMBER, DECEMBER)
+    assert november["income"] == 2040 and november["salary_estimated"] is True
+    assert november["complete"] is False and "salary_estimated" in november["incomplete_reasons"]
+    october = _month(OCTOBER, NOVEMBER)
+    assert october["income"] == 3000 and october["salary_estimated"] is False, "received salary stays"
+
+
+def test_the_projection_uses_the_employment_profile_and_its_deductions(db):
+    q(db, "CREATE TABLE employment_profile (id BIGSERIAL PRIMARY KEY, workspace_id UUID, hourly_rate NUMERIC, regular_hours_per_week NUMERIC)")
+    q(db, "CREATE TABLE payroll_deductions (id BIGSERIAL PRIMARY KEY, workspace_id UUID, name TEXT, deduction_type TEXT, amount NUMERIC, frequency TEXT)")
+    q(db, "INSERT INTO employment_profile (workspace_id, hourly_rate, regular_hours_per_week) VALUES (%s, 1000, 40)", (WS_A,))
+    q(db, "INSERT INTO payroll_deductions (workspace_id, name, deduction_type, amount, frequency) VALUES (%s, 'CCSS', 'percentage', 10, 'monthly')", (WS_A,))
+    q(db, "INSERT INTO employment_profile (workspace_id, hourly_rate, regular_hours_per_week) VALUES (%s, 9999, 48)", (WS_B,))
+    november = _month(NOVEMBER, DECEMBER)
+    # 1000 × 40 × 4.333 = 173 320 gross, 10 % off = 155 988; the 40 of overtime nets 36.
+    assert november["income"] == 155988 + 36
+
+
+def test_the_owner_income_sources_name_the_estimated_salary(db):
+    from backend.auth.current_user import reset_current_user
+    from backend.user_product import free_service
+
+    token = _as("owner")
+    try:
+        november = free_service.get_free_monthly_summary("2026-11")
+    finally:
+        reset_current_user(token)
+    token = _as("user")
+    try:
+        users = free_service.get_free_monthly_summary("2026-11")
+    finally:
+        reset_current_user(token)
+    assert november["income_categories"] == [{"category": "Salario (estimado)", "amount": 2040.0}]
+    assert sum(row["amount"] for row in november["income_categories"]) == november["income"]
+    # Regular accounts keep their totals: November's overtime as recorded (UTC dates), no projected salary.
+    assert users["income"] == 80 + 40 and not any("estimado" in row["category"] for row in users["income_categories"])
+
+
+def test_jarvis_projection_and_the_ledger_share_one_formula():
+    from backend.finance import salary_projection
+
+    profile = {"hourly_rate": 1000, "regular_hours_per_week": 40}
+    deductions = [{"name": "CCSS", "deduction_type": "percentage", "amount": 10, "frequency": "monthly"},
+                  {"name": "Asociación", "deduction_type": "fixed", "amount": 5000, "frequency": "monthly"}]
+    result = salary_projection.project(profile, deductions, [{"amount": 100}, {"amount": -20}], [{"amount": 50}], 0)
+    assert result["results"]["base_net"] == 150988.0           # 173 320 − 17 332 − 5 000
+    assert result["results"]["projected_net"] == 150988.0 + 90 - 20 + 45
