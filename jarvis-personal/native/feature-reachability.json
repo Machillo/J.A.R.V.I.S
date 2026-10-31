@@ -847,52 +847,6 @@
    }
   },
   {
-   "id": "analysis.reports",
-   "name": "Movimientos → Análisis → Reportes (UX-13)",
-   "decision": "UX-13",
-   "plans": {
-    "free": "VISIBLE_LOCKED",
-    "basic": "AVAILABLE",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/basic/reports",
-     "gate": "feature:basic_reports",
-     "used_by": [
-      "basic",
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "movements",
-    "via": [
-     "movements.analysis"
-    ],
-    "id": "analysis.reports",
-    "locked_label": "Disponible desde Basic"
-   },
-   "android": {
-    "tab": "Movimientos",
-    "via": [
-     "Análisis"
-    ],
-    "text": "Reportes",
-    "locked_text": "Disponible desde Basic",
-    "en": {
-     "tab": "Transactions",
-     "via": [
-      "Analysis"
-     ],
-     "text": "Reports",
-     "locked_text": "Available from Basic"
-    }
-   }
-  },
-  {
    "id": "home.attention",
    "name": "Hoy → Para atender / Ver todas (UX-13: replaces DINCR hoy)",
    "decision": "UX-13",
@@ -1131,51 +1085,6 @@
     "en": {
      "tab": "Wealth",
      "text": "Scenarios",
-     "locked_text": "Available from VIP"
-    }
-   }
-  },
-  {
-   "id": "analysis.review",
-   "name": "Movimientos → Análisis → Revisión del mes (UX-13)",
-   "decision": "UX-13",
-   "plans": {
-    "free": "VISIBLE_LOCKED",
-    "basic": "VISIBLE_LOCKED",
-    "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
-   },
-   "backend": [
-    {
-     "method": "GET",
-     "path": "/user-product/vip/lifecycle/monthly-review",
-     "gate": "feature:strategy_vip",
-     "used_by": [
-      "vip"
-     ]
-    }
-   ],
-   "ios": {
-    "tab": "movements",
-    "via": [
-     "movements.analysis"
-    ],
-    "id": "analysis.review",
-    "locked_label": "Disponible desde VIP"
-   },
-   "android": {
-    "tab": "Movimientos",
-    "via": [
-     "Análisis"
-    ],
-    "text": "Revisión del mes",
-    "locked_text": "Disponible desde VIP",
-    "en": {
-     "tab": "Transactions",
-     "via": [
-      "Analysis"
-     ],
-     "text": "Monthly review",
      "locked_text": "Available from VIP"
     }
    }

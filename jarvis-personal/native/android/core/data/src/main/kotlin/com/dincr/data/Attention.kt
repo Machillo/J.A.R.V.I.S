@@ -34,7 +34,8 @@ data class AttentionItem(
         INCOME_BASE("incomeBase", "incomeBase"),
         STRATEGY("strategy", "strategy"),
         MOVEMENTS("movements", "movements"),
-        MONTHLY_REVIEW("monthlyReview", "review"),
+        // The monthly review was retired (it repeated the summary): the advisor's item opens the Resumen.
+        MONTHLY_REVIEW("monthlyReview", "monthly"),
     }
 }
 

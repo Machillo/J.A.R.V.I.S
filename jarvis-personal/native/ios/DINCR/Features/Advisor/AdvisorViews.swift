@@ -15,10 +15,6 @@ struct AnalysisHubView: View {
             VStack(spacing: DincrSpacing.s2) {
                 GatedEntry(minimum: .free, flag: nil, symbol: "calendar.badge.checkmark", title: tx("Resumen del mes", "Monthly summary"),
                            subtitle: tx("Ingresos, gastos y categorías", "Income, expenses and categories"), id: "analysis.summary") { MonthlySummaryView() }
-                GatedEntry(minimum: .basic, flag: .advancedReports, symbol: "doc.text.magnifyingglass", title: tx("Reportes", "Reports"),
-                           subtitle: tx("Comparación con el mes anterior", "Comparison with the previous month"), id: "analysis.reports") { ReportsView() }
-                GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "checklist", title: tx("Revisión del mes", "Monthly review"),
-                           subtitle: tx("Cómo te fue y qué sigue", "How it went and what’s next"), id: "analysis.review") { MonthlyReviewView() }
                 if Jarvis.isAvailable(to: model.profile) {
                     NavigationLink { OwnerAnalysisView(mode: .analysis) } label: {
                         HubRow(symbol: "chart.pie", title: tx("Análisis financiero", "Financial analysis"),
@@ -392,121 +388,6 @@ struct ScenariosView: View {
             result = try await model.service.simulate(ScenarioRequest(monthlyIncomeChange: incomeChange, monthlyExpenseChange: expenseChange, oneTimeExtra: oneTime))
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos simularlo.", "We couldn’t simulate it."))
-        }
-    }
-}
-
-/// PARITY F8 — monthly review (VIP).
-struct MonthlyReviewView: View {
-    @Environment(AppModel.self) private var model
-    @State private var period = Period.current
-
-    var body: some View {
-        ScreenScroll(title: tx("Revisión del mes", "Monthly review")) {
-            MonthPicker(period: $period)
-            AsyncContent(load: { try await model.service.monthlyReview(period: period) }) { review, _ in
-                ReviewContent(review: review)
-            }
-            .id(period)
-            FinancialDisclaimer()
-        }
-    }
-}
-
-private struct ReviewContent: View {
-    let review: MonthlyReview
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(review.headline ?? tx("Tu mes", "Your month")).font(DincrFont.title2)
-            if let summary = review.summary { Text(summary).font(DincrFont.body).foregroundStyle(DincrColor.text2) }
-        }
-        .dincrCard()
-        ForEach(Array(review.publicScorecard.enumerated()), id: \.offset) { _, line in
-            ScoreLineRow(line: line).dincrCard(padding: DincrSpacing.s3)
-        }
-        if let next = review.nextMonth {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                SectionHeader(title: tx("El próximo mes", "Next month"))
-                Text(next.title ?? "").font(DincrFont.body.weight(.semibold))
-                if let amount = next.amount { FigureRow(label: tx("Monto sugerido", "Suggested amount"), amount: amount) }
-                if let rationale = next.rationale { Text(rationale).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
-            }
-            .dincrCard()
-        }
-    }
-}
-
-/// One indicator of the review: its value (money or months) and how it moved since the previous
-/// month; an unknown trend says nothing. Same wording as Android's `ScoreLineRow`.
-private struct ScoreLineRow: View {
-    let line: MonthlyReview.ScoreLine
-
-    var body: some View {
-        let label = line.label ?? line.key ?? ""
-        if let explanation = line.explanation {
-            InfoRow(label: label, value: explanation)
-        } else if line.unit == "CRC" {
-            FigureRow(label: titled(label), amount: line.current.map { Decimal($0) })
-        } else {
-            InfoRow(label: titled(label), value: value)
-        }
-    }
-
-    private func titled(_ label: String) -> String { trend.map { "\(label) · \($0)" } ?? label }
-
-    private var trend: String? {
-        switch line.trend {
-        case "improved": tx("mejoró", "improved")
-        case "declined": tx("empeoró", "got worse")
-        case "unchanged": tx("sin cambios", "no change")
-        default: nil
-        }
-    }
-
-    private var value: String {
-        guard let current = line.current else { return "—" }
-        let number = current.formatted(.number.precision(.fractionLength(0...1)))
-        guard line.unit == "months" else { return number }
-        return current == 1 ? tx("1 mes", "1 month") : tx("\(number) meses", "\(number) months")
-    }
-}
-
-/// Reports (Basic; `advanced_reports`).
-struct ReportsView: View {
-    @Environment(AppModel.self) private var model
-    @State private var period = Period.current
-
-    var body: some View {
-        ScreenScroll(title: tx("Reportes", "Reports")) {
-            MonthPicker(period: $period)
-            AsyncContent(load: { try await model.service.report(period: period) }) { report, _ in
-                ReportContent(report: report)
-            }
-            .id(period)
-        }
-    }
-}
-
-private struct ReportContent: View {
-    let report: MonthReport
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            FigureRow(label: tx("Ingresos", "Income"), amount: report.income, sign: .income)
-            FigureRow(label: tx("Gastos", "Expenses"), amount: report.expenses, sign: .expense)
-            FigureRow(label: tx("Pagado a deudas", "Paid to debts"), amount: report.debtPaid)
-            FigureRow(label: tx("Aportes a metas", "Goal contributions"), amount: report.goalContributions)
-            FigureRow(label: tx("Ahorrado", "Saved"), amount: report.saved)
-        }
-        .dincrCard()
-        if let comparison = report.comparison {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                SectionHeader(title: tx("Mes anterior", "Previous month"))
-                FigureRow(label: tx("Ingresos", "Income"), amount: comparison.income)
-                FigureRow(label: tx("Gastos", "Expenses"), amount: comparison.expenses)
-            }
-            .dincrCard()
         }
     }
 }

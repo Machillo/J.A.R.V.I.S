@@ -163,7 +163,8 @@ struct AttentionDestinationView: View {
         case .incomeBase: IncomeBaseView()
         case .strategy: PlanStrategyView()
         case .movements: MovementsView()
-        case .monthlyReview: MonthlyReviewView()
+        // The monthly review was retired (it repeated the summary): the advisor's item opens the Resumen.
+        case .monthlyReview: MonthlySummaryView()
         }
     }
 }
@@ -177,7 +178,7 @@ extension AttentionItem.Destination {
         case .incomeBase: tx("Ver ingresos y base", "See income and base")
         case .strategy: tx("Ver tu plan del mes", "See your plan for the month")
         case .movements: tx("Ver movimientos", "See transactions")
-        case .monthlyReview: tx("Ver revisión del mes", "See monthly review")
+        case .monthlyReview: tx("Ver resumen del mes", "See monthly summary")
         }
     }
 }

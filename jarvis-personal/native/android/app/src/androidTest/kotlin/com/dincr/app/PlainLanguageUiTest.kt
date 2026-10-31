@@ -65,16 +65,4 @@ class PlainLanguageUiTest {
         waitUntil("left after your commitments") { present(tx("Libre después de tus compromisos", "Left after your commitments")) }
         noMargin.forEach { assertFalse(it, present(it)) }
     }
-
-    @Test fun theMonthlyReviewSaysHowEachIndicatorMoved() {
-        launch("vip")
-        tab(tx("Movimientos", "Transactions"))
-        click(tx("Análisis", "Analysis"))
-        click(tx("Revisión del mes", "Monthly review"))
-        // The fixture's labels are the backend's Spanish ones; the trend words and units are the app's.
-        waitUntil("debt") { present("Deuda total · ${tx("mejoró", "improved")}") }
-        waitUntil("coverage") { present("Meses que cubre tu fondo de emergencia · ${tx("sin cambios", "no change")}") }
-        waitUntil("one month") { present(tx("1 mes", "1 month")) }
-        waitUntil("flow") { present("Ingresos menos gastos · ${tx("empeoró", "got worse")}") }
-    }
 }

@@ -16,6 +16,7 @@ import androidx.test.core.app.ApplicationProvider
 import android.content.Intent
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -77,8 +78,8 @@ class NavigationUiTest {
         tab(tx("Movimientos", "Transactions"))
         click(tx("Análisis", "Analysis"))
         click(tx("Resumen del mes", "Monthly summary")); waitUntil("summary") { present(tx("Ingresos", "Income")) }; back()
-        click(tx("Reportes", "Reports")); waitUntil("reports") { present(tx("Pagos de deuda", "Debt payments")) }; back()
-        click(tx("Revisión del mes", "Monthly review")); waitUntil("review") { present(tx("Revisión mensual", "Monthly review")) }; back()
+        // Reportes and Revisión del mes were retired (they repeated the summary).
+        assertFalse(present(tx("Reportes", "Reports"))); assertFalse(present(tx("Revisión del mes", "Monthly review")))
         back()
         tab(tx("Patrimonio", "Wealth"))
         click(tx("Proyecciones", "Projections")); waitUntil("projections") { present(tx("Proyecciones", "Projections")) }; back()
@@ -91,8 +92,8 @@ class NavigationUiTest {
         tab(tx("Movimientos", "Transactions"))
         click(tx("Análisis", "Analysis"))
         waitUntil("summary row") { present(tx("Resumen del mes", "Monthly summary")) }
-        waitUntil("locked from Basic") { present(tx("Disponible desde Basic", "Available from Basic")) }
-        waitUntil("locked from VIP") { present(tx("Disponible desde VIP", "Available from VIP")) }
+        // Reportes and Revisión del mes were retired: nothing locked is left in Análisis.
+        assertFalse(present(tx("Reportes", "Reports")) || present(tx("Revisión del mes", "Monthly review")))
         back()
         tab(tx("Patrimonio", "Wealth"))
         waitUntil("projections locked") { present(tx("Proyecciones", "Projections")) && present(tx("Disponible desde VIP", "Available from VIP")) }
@@ -100,9 +101,8 @@ class NavigationUiTest {
         waitUntil("Hoy") { present(tx("Hoy", "Today")) }
         tab(tx("Movimientos", "Transactions"))
         click(tx("Análisis", "Analysis"))
-        waitUntil("reports open for Basic") { present(tx("Tu mes comparado con el anterior", "Your month vs the previous one")) }
-        assertTrue("Basic: no Basic lock", !present(tx("Disponible desde Basic", "Available from Basic")))
-        waitUntil("review locked for Basic") { present(tx("Disponible desde VIP", "Available from VIP")) }
+        waitUntil("summary for Basic") { present(tx("Resumen del mes", "Monthly summary")) }
+        assertFalse(present(tx("Reportes", "Reports")) || present(tx("Revisión del mes", "Monthly review")))
     }
 
     @Test fun theOwnerKeepsTheFiveTabsAndJarvis() {
