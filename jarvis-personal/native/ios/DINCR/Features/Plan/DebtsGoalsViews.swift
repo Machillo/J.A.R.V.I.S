@@ -319,6 +319,8 @@ struct GoalsView: View {
     struct Snapshot: Equatable {
         let goals: [Goal]
         let plans: [SavingsPlan]
+        /// GO-1: what is left in a normal month (VIP and the Owner; nil when unknown or below VIP).
+        var normalLeft: Decimal? = nil
     }
 
     var body: some View {
@@ -337,7 +339,10 @@ struct GoalsView: View {
                 let service = model.service
                 async let goals = service.goals()
                 async let plans = service.savingsPlans()
-                return Snapshot(goals: try await goals, plans: try await plans)
+                // Optional: a failed read only leaves out the "how long" line.
+                let normalLeft = model.planTier.rank >= PlanTier.vip.rank
+                    ? (try? await service.financialAnalysis()).flatMap(FinancialReading.normal)?.left : nil
+                return Snapshot(goals: try await goals, plans: try await plans, normalLeft: normalLeft)
             }) { snapshot, _ in
                 GoalsContent(snapshot: snapshot, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
                              contribute: { action = .contribute($0) }, save: { action = .save($0) }, edit: { goalForm = .edit($0) },
@@ -388,6 +393,7 @@ struct GoalsView: View {
 }
 
 private struct GoalsContent: View {
+    @Environment(\.moneyFormat) private var format
     let snapshot: GoalsView.Snapshot
     let canWrite: Bool
     let canEdit: Bool
@@ -419,6 +425,11 @@ private struct GoalsContent: View {
                     FigureRow(label: tx("Meta", "Target"), amount: target)
                 }
                 if let date = goal.targetDate { InfoRow(label: tx("Fecha objetivo", "Target date"), value: Day.label(date)) }
+                // GO-1: what the goal takes, in plain words.
+                ForEach(Array(GoalPlan.lines(goal, today: Date(), normalLeft: snapshot.normalLeft, format: format).enumerated()), id: \.offset) { _, line in
+                    Text(line).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2).fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityIdentifier("goal.plan.\(goal.id)")
                 if canWrite {
                     HStack(spacing: DincrSpacing.s2) {
                         if goal.canContribute {

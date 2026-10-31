@@ -40,6 +40,8 @@ import com.dincr.data.GoalContribution
 import com.dincr.data.GoalRequest
 import com.dincr.data.IdempotencyKey
 import com.dincr.data.PlanTier
+import com.dincr.data.FinancialReading
+import com.dincr.data.GoalPlan
 import com.dincr.data.SavingsContribution
 import com.dincr.data.SavingsPlan
 import com.dincr.data.SavingsPlanRequest
@@ -53,14 +55,19 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import kotlinx.coroutines.launch
 
-private data class GoalsData(val goals: List<Goal>, val plans: List<SavingsPlan>)
+/** GO-1: [normalLeft] is what is left in a normal month (VIP and the Owner; null when unknown or below VIP). */
+private data class GoalsData(val goals: List<Goal>, val plans: List<SavingsPlan>, val normalLeft: BigDecimal? = null)
 
 /** E6/E7 — goals and savings plans for every plan (edits need Basic, as the backend requires). */
 @Composable
 fun GoalsScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
     val advanced = (profile?.planTier ?: PlanTier.FREE).allows(Feature.STRATEGY_BASIC)
-    val data = rememberLoad(model) { GoalsData(model.api.goals(), model.api.savingsPlans()) }
+    val data = rememberLoad(model) {
+        // Optional: a failed read only leaves out the "how long" line.
+        val normalLeft = if (profile?.planTier == PlanTier.VIP) runCatching { FinancialReading.normal(model.api.financialAnalysis())?.left }.getOrNull() else null
+        GoalsData(model.api.goals(), model.api.savingsPlans(), normalLeft)
+    }
     var goalForm by remember { mutableStateOf<Goal?>(null) }
     var creatingGoal by remember { mutableStateOf(false) }
     var planForm by remember { mutableStateOf<SavingsPlan?>(null) }
@@ -83,7 +90,8 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
         Box(Modifier.testTag("goals.declaredSavings")) {
             DincrCard { NavRow(Icons.Rounded.Payments, tx("Tus ahorros", "Your savings"), tx("Ahorros disponibles y meta de fondo de emergencia", "Available savings and emergency fund target")) { nav.open("declaredSavings") } }
         }
-        LoadContent(data) { (goals, plans) ->
+        LoadContent(data) { loaded ->
+            val (goals, plans) = loaded
             SectionTitle(tx("Metas", "Goals"))
             if (goals.isEmpty()) EmptyState(Icons.Rounded.Flag, tx("Todavía no tenés metas", "No goals yet"), tx("Definí para qué estás ahorrando y cuánto necesitás.", "Set what you’re saving for and how much you need.")) {
                 DincrPrimaryButton(tx("Crear meta", "Create goal"), { creatingGoal = true })
@@ -101,7 +109,8 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
                             MoneyText(goal.targetAmount)
                         }
                         percentOf(goal.currentAmount, goal.targetAmount)?.let { ProgressLine(it, tx("${Dincr.money.format(goal.currentAmount ?: BigDecimal.ZERO)} ahorrados", "${Dincr.money.format(goal.currentAmount ?: BigDecimal.ZERO)} saved")) }
-                        monthlyNeeded(goal)?.let { AmountLine(tx("Necesitás por mes", "You need each month"), it) }
+                        // GO-1: what the goal takes, in plain words.
+                        Column(Modifier.testTag("goal.plan.${goal.id}")) { GoalPlan.lines(goal, LocalDate.now(), loaded.normalLeft, Dincr.money).forEach { Caption(it) } }
                         Row {
                             if (goal.canContribute) TextButton({ contributeGoal = goal }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Aportar", "Contribute"), color = Dincr.colors.tint) }
                             if (advanced) TextButton({ goalForm = goal }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Editar", "Edit"), color = Dincr.colors.tint) }
@@ -176,15 +185,6 @@ fun statusLabel(status: String?) = when (status) {
     "paused" -> tx("En pausa", "Paused")
     "completed" -> tx("Completada", "Completed")
     else -> null
-}
-
-/** Presentation only: what is left over the months to the target date (at least one). */
-private fun monthlyNeeded(goal: Goal): BigDecimal? {
-    val date = goal.targetDate?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() } ?: return null
-    val remaining = goal.remaining ?: return null
-    if (remaining.signum() <= 0) return null
-    val months = java.time.temporal.ChronoUnit.MONTHS.between(LocalDate.now().withDayOfMonth(1), date.withDayOfMonth(1)).coerceAtLeast(1)
-    return remaining.divide(BigDecimal(months), 2, java.math.RoundingMode.HALF_UP)
 }
 
 @Composable
