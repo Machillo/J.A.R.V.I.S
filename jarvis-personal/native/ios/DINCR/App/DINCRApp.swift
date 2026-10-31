@@ -29,6 +29,10 @@ struct DINCRApp: App {
                 // A mail OAuth return opened by the system (the authentication session delivers it
                 // directly otherwise). Sign-in callbacks only ever come through the session.
                 .onOpenURL { url in Task { await model.handleOpenURL(url) } }
+                // NT-1: the reminders follow the session (scheduled once ready, removed on sign-out).
+                .onChange(of: model.phase) { _, phase in
+                    Task { if phase == .ready { await ReminderScheduler.refresh(model) } else if phase == .signedOut { await ReminderScheduler.clear() } }
+                }
                 // A quick action (App Shortcut, Back Tap) only asks for a screen; the shell opens it
                 // once signed in and unlocked. `-DincrQuickAction` does the same for UI tests.
                 .onChange(of: QuickActionInbox.shared.pending, initial: true) { _, _ in
@@ -42,7 +46,7 @@ struct DINCRApp: App {
                     // every sheet, alert and share sheet covers the balances.
                     PrivacyCover.shared.update(visible: phase != .active && model.appLock.isEnabled)
                     switch phase {
-                    case .active: Task { await model.onForeground() }
+                    case .active: Task { await model.onForeground(); await ReminderScheduler.refresh(model) }
                     case .background: model.onBackground()
                     default: break
                     }

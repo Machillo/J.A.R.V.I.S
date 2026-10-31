@@ -114,6 +114,8 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
                 if (profile?.canReadMail == true) {
                     NavRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices")) { nav.open("mail") }
                 }
+                // NT-1: reminders on the phone.
+                RemindersRow(model)
                 NavRow(Icons.Rounded.Settings, tx("Ajustes de cuenta", "Account settings"), tx("Apariencia, datos y privacidad", "Appearance, data and privacy")) { nav.open("settings") }
                 NavRow(Icons.Rounded.Lock, tx("Seguridad", "Security"), tx("Bloqueo de la app", "App lock")) { nav.open("security") }
                 NavRow(Icons.Rounded.SupportAgent, tx("Ayuda y soporte", "Help and support"), tx("Reportá un problema o una idea", "Report a problem or an idea")) { nav.open("support") }

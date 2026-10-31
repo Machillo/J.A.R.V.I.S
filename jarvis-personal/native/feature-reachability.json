@@ -62,7 +62,8 @@
   "FX-1",
   "FA-1",
   "WE-1",
-  "WE-2"
+  "WE-2",
+  "NT-1"
  ],
  "fixtures": {
   "ios": {
@@ -977,6 +978,41 @@
      "tab": "Wealth",
      "text": "Accounts",
      "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "profile.reminders",
+   "name": "Perfil → Recordatorios (NT-1): reminders on the phone (local notifications, no server): the day before a debt payment or a fixed expense, the Salvavidas contribution day and the first day of a month",
+   "decision": "NT-1",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/finance/debts",
+     "gate": "feature:debts",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.reminders"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Recordatorios",
+    "en": {
+     "tab": "Profile",
+     "text": "Reminders"
     }
    }
   },

@@ -260,6 +260,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 // other answer moves the gate as always.
                 if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity(keepOnTransient = true) }
                 syncOnReturn()
+                ReminderScheduler.refresh(getApplication(), this@AppModel)
             }
         }
         startFlagLoop()
@@ -458,6 +459,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             if (!wasReady) refreshFlags()
             reconcileStore()
             if (!wasReady) syncOnReturn()
+            if (!wasReady) ReminderScheduler.refresh(getApplication(), this@AppModel)
         }
     }
 
@@ -522,6 +524,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         _flags.value = FeatureFlags()
         _notice.value = null
         _pendingRoute.value = null
+        ReminderScheduler.clear(getApplication())
         _phase.value = Phase.SignedOut
     }
 

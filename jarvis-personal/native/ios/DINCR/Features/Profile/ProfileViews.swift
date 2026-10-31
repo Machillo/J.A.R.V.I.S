@@ -42,6 +42,8 @@ struct ProfileHubView: View {
     @State private var exporting = false
     @State private var exportFile: ExportFile?
     @State private var error: String?
+    @State private var reminders = ReminderScheduler.isEnabled
+    @State private var remindersDenied = false
 
     var body: some View {
         List {
@@ -84,6 +86,18 @@ struct ProfileHubView: View {
                 } else {
                     LockedListRow(title: tx("Atajos de iPhone", "iPhone Shortcuts"), symbol: "bolt.horizontal", tier: ShortcutLinking.minimumPlan, id: "profile.shortcuts")
                 }
+                // NT-1: reminders on the phone (cuotas, gastos fijos, Salvavidas, fin de mes).
+                Toggle(isOn: Binding(get: { reminders }, set: { on in Task { await setReminders(on) } })) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tx("Recordatorios", "Reminders"))
+                            Text(remindersDenied ? tx("Permitilas en Ajustes › DINCR › Notificaciones.", "Allow them in Settings › DINCR › Notifications.")
+                                                 : tx("Cuotas, gastos fijos, Salvavidas y fin de mes", "Payments, fixed expenses, emergency fund and month end"))
+                                .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                        }
+                    } icon: { Image(systemName: "bell") }
+                }
+                .accessibilityIdentifier("profile.reminders")
                 Picker(selection: $appearance) {
                     Text(tx("Automático", "Automatic")).tag(Appearance.system.rawValue)
                     Text(tx("Claro", "Light")).tag(Appearance.light.rawValue)
@@ -164,6 +178,18 @@ struct ProfileHubView: View {
 
     /// G8 — the export goes to a protected temporary file for the share sheet; it is removed at
     /// launch, sign-out and deletion.
+    private func setReminders(_ on: Bool) async {
+        if on {
+            let granted = await ReminderScheduler.enable(model)
+            reminders = granted
+            remindersDenied = !granted
+        } else {
+            await ReminderScheduler.disable()
+            reminders = false
+            remindersDenied = false
+        }
+    }
+
     private func export() async {
         exporting = true; error = nil
         defer { exporting = false }

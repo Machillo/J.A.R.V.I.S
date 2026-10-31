@@ -14,6 +14,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -74,6 +75,8 @@ class LockedRowsUiTest {
             launch(plan, role)
             assertFalse("$plan/$role: locked rows", present(fromBasic) || present(fromVip))
             listOf(budget, calendar, mail, accounts, tx("Movimientos recurrentes", "Recurring transactions")).forEach { assertFalse("$plan/$role: $it", present(it)) }
+            // NT-1: every plan can turn the reminders on the phone on or off.
+            assertTrue("$plan/$role: Recordatorios", present(tx("Recordatorios", "Reminders")))
             assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
         }
     }
