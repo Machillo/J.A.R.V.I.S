@@ -5,12 +5,17 @@ taxonomy the codebase already defines (``finance/balance_movements.py``,
 ``email_monitor/movement_taxonomy.py``, ``finance/receivable_semantics.py``) the same way on Hoy,
 Movimientos > Resumen del mes, the Movimientos list and JARVIS > Análisis financiero:
 
-- income is money received: ``income`` movements (deposits) plus the ``salaries`` table (the
-  declared net salary that actually arrives);
-- gross payroll is reported apart and never added to income or to the result: overtime and VGH
-  (``payroll_events``, VGH negative) and ``bonuses``. The salary projection takes CCSS and income
-  tax from these amounts and the money arrives inside the salary deposit, so adding them would
-  count the deposit twice;
+- income: ``income`` movements plus the month's salary, decided by the salary rule below;
+- the salary (the Owner's alone: his pay is known before it arrives). A month's salary is the
+  projected net salary (``finance/salary_projection.py``, the JARVIS formula: base net plus that
+  month's overtime and bonuses net of deductions, minus its VGH) for the month in course, from
+  its first day, and for a closed month with no salary received. A closed month with salary
+  received keeps what was received: salary deposits (``income`` movements in "Salario") plus the
+  ``salaries`` table. Without a projection (no employment profile and no base salary) the salary
+  is what was received. The estimate replaces the received deposits of its month, never adds to
+  them; a closed month whose salary is estimated is not complete (``salary_estimated``);
+- gross payroll is also reported apart (``payroll_accrued``): overtime and VGH (``payroll_events``,
+  VGH negative) and ``bonuses``. Only their net reaches income, inside the salary;
 - spending: ``expense`` movements plus the ``expenses`` table, net of ``refund`` movements (a
   refund is never income; spending never goes below 0, the rest is an unmatched refund);
 - debt payments: ``debt_payment`` movements, a line of their own;
@@ -39,12 +44,17 @@ from datetime import date
 from decimal import Decimal
 from typing import Iterable
 
+from backend.core.time import costa_rica_today
+from backend.finance import salary_projection
+
 INCOME = "income"
 EXPENSES = "expenses"
 REFUNDS = "refunds"
 DEBT_PAYMENTS = "debt_payments"
 OTHER_INFLOWS = "other_inflows"
 PAYROLL_ACCRUED = "payroll_accrued"
+SALARY_ESTIMATED = "salary_estimated"
+SALARY_CATEGORY = "Salario"
 NOT_COUNTED = "not_counted"
 UNCLASSIFIED = "unclassified"
 
@@ -173,7 +183,7 @@ RECORD_MONTHS = {
 }
 
 LEDGER_TABLES = ("salaries", "payroll_events", "bonuses", "expenses")
-OPTIONAL_TABLES = LEDGER_TABLES + ("finva_email_candidates",)
+OPTIONAL_TABLES = LEDGER_TABLES + ("finva_email_candidates", "employment_profile", "payroll_deductions")
 
 
 def _existing_tables(conn) -> set[str]:
@@ -205,7 +215,74 @@ def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
             "AND NOT COALESCE(is_internal_transfer,FALSE) AND transaction_date >= %s AND transaction_date < %s",
             (workspace_id, start, end),
         ).fetchone()["count"]
-    return month_totals([(row["ledger_type"], row["total"], row["count"]) for row in groups], pending_mail=pending, **record)
+    salary = owner_salary(conn, workspace_id, start, end, tables)
+    # The rule's salary replaces what was received in its months (salaries table and "Salario" deposits).
+    record["salaries"] = _decimal(record["salaries"]) + salary["salary"] - salary["received"]
+    totals = month_totals([(row["ledger_type"], row["total"], row["count"]) for row in groups], pending_mail=pending, **record)
+    if salary["closed_estimated"]:
+        totals["incomplete_reasons"] = totals["incomplete_reasons"] + [SALARY_ESTIMATED]
+        totals["complete"] = False
+    return {**totals, "salary": _money(salary["salary"]), "salary_estimated": salary["estimated"]}
+
+
+def _next_month(month: date) -> date:
+    return date(month.year + (month.month == 12), 1 if month.month == 12 else month.month + 1, 1)
+
+
+def _months(start: date, end: date) -> list[date]:
+    months, month = [], start.replace(day=1)
+    while month < end:
+        months.append(month)
+        month = _next_month(month)
+    return months
+
+
+def _rows(conn, sql: str, params: tuple) -> list[dict]:
+    return [dict(row) for row in conn.execute(sql, params).fetchall()]
+
+
+def owner_salary(conn, workspace_id: str, start: date, end: date, tables: set[str] | None = None) -> dict:
+    """The salary of ``[start, end)`` by the salary rule, month by month: ``salary`` (what counts),
+    ``received`` (deposits and ``salaries`` rows it replaces), ``estimated`` (any month projected)
+    and ``closed_estimated`` (a closed month projected). SELECT only."""
+    tables = _existing_tables(conn) if tables is None else tables
+    transaction_date = _transaction_date_sql()
+    current = costa_rica_today().replace(day=1)
+    profile = (conn.execute(
+        "SELECT hourly_rate, regular_hours_per_week FROM employment_profile WHERE workspace_id=%s ORDER BY id DESC LIMIT 1",
+        (workspace_id,)).fetchone() if "employment_profile" in tables else None)
+    deductions = (_rows(conn, "SELECT name, deduction_type, amount, frequency FROM payroll_deductions WHERE workspace_id=%s",
+                        (workspace_id,)) if "payroll_deductions" in tables else [])
+    base = (conn.execute(
+        """SELECT amount FROM salaries WHERE workspace_id=%s
+           ORDER BY CASE WHEN LOWER(source) LIKE '%%base%%' THEN 0 WHEN LOWER(source) LIKE '%%mensual%%' THEN 1 ELSE 2 END, id DESC
+           LIMIT 1""", (workspace_id,)).fetchone() if "salaries" in tables else None)
+    base_net = salary_projection.as_float(base["amount"] if base else 0)
+    projectable = bool(profile) or base_net > 0
+    result = {"salary": Decimal("0"), "received": Decimal("0"), "estimated": False, "closed_estimated": False}
+    for month in _months(start, end):
+        month_end = _next_month(month)
+        deposits = conn.execute(
+            f"""SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE workspace_id=%s
+                AND LOWER(BTRIM(COALESCE(transaction_type,'')))='income' AND LOWER(BTRIM(COALESCE(category,'')))='salario'
+                AND {transaction_date} >= %s AND {transaction_date} < %s""", (workspace_id, month, month_end)).fetchone()["total"]
+        declared = conn.execute(RECORD_SUMS["salaries"][1], (workspace_id, month, month_end)).fetchone()["total"] if "salaries" in tables else 0
+        received = _decimal(deposits) + _decimal(declared)
+        result["received"] += received
+        if month > current or not projectable or (month < current and received > 0):
+            result["salary"] += received
+            continue
+        events = (_rows(conn, """SELECT amount FROM payroll_events WHERE workspace_id=%s
+                    AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s""",
+                        (workspace_id, month, month_end)) if "payroll_events" in tables else [])
+        bonuses = (_rows(conn, """SELECT amount FROM bonuses WHERE workspace_id=%s
+                    AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s""",
+                         (workspace_id, month, month_end)) if "bonuses" in tables else [])
+        projected = salary_projection.project(dict(profile) if profile else None, deductions, events, bonuses, base_net)
+        result["salary"] += _decimal(projected["results"]["projected_net"])
+        result["estimated"] = True
+        result["closed_estimated"] = result["closed_estimated"] or month < current
+    return result
 
 
 def classify_movement(row: dict) -> dict:

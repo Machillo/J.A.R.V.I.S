@@ -4,9 +4,9 @@ what was saved.
 - ``period``: ``YYYY-MM`` is a month, ``YYYY`` a whole year; anything else is refused (422).
 - income by category: the same rows each account's income total counts. Everyone: ``salaries``
   (their category, else "Salario"), ``payroll_events`` (overtime, "Horas extra") and ``income``
-  movements. The verified Owner's income follows his ledger (``owner_ledger``): salaries and
-  ``income`` movements only, on the Costa Rica date of the record tables; gross payroll is not
-  income there.
+  movements. The verified Owner's income follows his ledger (``owner_ledger``): his salary by its
+  rule (``owner_salary``: projected for the month in course and for a closed month without a
+  deposit) and the other ``income`` movements; gross payroll is not income there.
 - saved ("lo que guardaste"): money the user put aside in the period, never income minus spending:
   contributions to their goals (``finva_goal_contributions``) and the Salvavidas automatic
   contributions their active plan schedules in the period up to today (``salvavidas_plan``, the
@@ -24,6 +24,7 @@ from fastapi import HTTPException
 
 from backend.core.time import costa_rica_today
 from backend.finance import salvavidas_plan
+from backend.user_product import owner_ledger
 
 
 def period_range(value: str | None) -> tuple[date, date, str, str]:
@@ -51,16 +52,22 @@ def _table_exists(conn, name: str) -> bool:
 def income_categories(conn, workspace_id: str, start: date, end: date, *, transaction_date: str, owner: Any = False) -> list[dict]:
     """Income in ``[start, end)`` by category, largest first."""
     if owner:
-        # The Owner's ledger: salaries + income movements; record tables on their Costa Rica date.
-        sql = f"""SELECT category, ROUND(SUM(amount),2) AS amount FROM (
-                    SELECT COALESCE(NULLIF(BTRIM(category),''),'Salario') AS category, amount FROM salaries
-                      WHERE workspace_id=%s AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s
-                    UNION ALL
-                    SELECT COALESCE(NULLIF(BTRIM(category),''),'Sin categoría'), amount FROM transactions
-                      WHERE workspace_id=%s AND LOWER(BTRIM(COALESCE(transaction_type,'')))='income'
-                        AND {transaction_date} >= %s AND {transaction_date} < %s
-                  ) q GROUP BY 1 HAVING SUM(amount) <> 0 ORDER BY amount DESC"""
-        params: tuple = (workspace_id, start, end, workspace_id, start, end)
+        # The Owner's ledger: the salary by its rule (owner_ledger.owner_salary, "Salario (estimado)"
+        # when any month of it is projected) and the other income movements.
+        rows = conn.execute(
+            f"""SELECT COALESCE(NULLIF(BTRIM(category),''),'Sin categoría') AS category, ROUND(SUM(amount),2) AS amount FROM transactions
+                WHERE workspace_id=%s AND LOWER(BTRIM(COALESCE(transaction_type,'')))='income'
+                  AND LOWER(BTRIM(COALESCE(category,'')))<>'salario'
+                  AND {transaction_date} >= %s AND {transaction_date} < %s
+                GROUP BY 1 HAVING SUM(amount) <> 0""",
+            (workspace_id, start, end),
+        ).fetchall()
+        salary = owner_ledger.owner_salary(conn, workspace_id, start, end)
+        items = [{"category": row["category"], "amount": round(float(row["amount"] or 0), 2)} for row in rows]
+        if salary["salary"]:
+            label = "Salario (estimado)" if salary["estimated"] else owner_ledger.SALARY_CATEGORY
+            items.append({"category": label, "amount": round(float(salary["salary"]), 2)})
+        return sorted(items, key=lambda item: item["amount"], reverse=True)
     else:
         sql = f"""SELECT category, ROUND(SUM(amount),2) AS amount FROM (
                     SELECT COALESCE(NULLIF(BTRIM(category),''),'Salario') AS category, amount FROM salaries

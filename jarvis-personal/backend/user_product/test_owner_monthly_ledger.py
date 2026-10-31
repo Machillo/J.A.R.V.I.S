@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.auth.current_user import reset_current_user, set_current_user
-from backend.user_product import owner_ledger
+from backend.user_product import owner_ledger, summary_breakdown
 from backend.user_product.owner_ledger import (
     DEBT_PAYMENTS, EXPENSES, INCOME, NOT_COUNTED, OTHER_INFLOWS, PAYROLL_ACCRUED, REFUNDS, UNCLASSIFIED, concept_of,
     month_totals,
@@ -248,6 +248,8 @@ def test_resumen_del_mes_uses_the_ledger_only_for_the_owner(role, expected, monk
     monkeypatch.setattr(free_service, "_period_totals", lambda *_a: dict(LEGACY_TOTALS))
     monkeypatch.setattr(free_service, "_categories", lambda *_a: [])
     monkeypatch.setattr(owner_ledger, "owner_month_totals", lambda *_a: dict(OWNER_TOTALS))
+    monkeypatch.setattr(summary_breakdown, "income_categories", lambda *_a, **_k: [])
+    monkeypatch.setattr(summary_breakdown, "saved", lambda *_a: {"total": 0.0, "goals": 0.0, "salvavidas": 0.0})
     token = _as(role)
     try:
         summary = free_service.get_free_monthly_summary("2026-10")
