@@ -78,8 +78,9 @@ class NavigationUiTest {
         tab(tx("Movimientos", "Transactions"))
         click(tx("Análisis", "Analysis"))
         click(tx("Resumen del mes", "Monthly summary")); waitUntil("summary") { present(tx("Ingresos", "Income")) }; back()
-        // Reportes and Revisión del mes were retired (they repeated the summary).
-        assertFalse(present(tx("Reportes", "Reports"))); assertFalse(present(tx("Revisión del mes", "Monthly review")))
+        // Reportes was retired (it repeated the summary); RV-1 brought back a simple Revisión del mes.
+        assertFalse(present(tx("Reportes", "Reports")))
+        click(tx("Revisión del mes", "Monthly review")); waitUntil("review") { tagged("review.card.0") }; back()
         back()
         tab(tx("Plan", "Plan"))
         click(tx("Proyecciones", "Projections")); waitUntil("projections") { present(tx("Proyecciones", "Projections")) }; back()
@@ -92,8 +93,9 @@ class NavigationUiTest {
         tab(tx("Movimientos", "Transactions"))
         click(tx("Análisis", "Analysis"))
         waitUntil("summary row") { present(tx("Resumen del mes", "Monthly summary")) }
-        // Reportes and Revisión del mes were retired: nothing locked is left in Análisis.
-        assertFalse(present(tx("Reportes", "Reports")) || present(tx("Revisión del mes", "Monthly review")))
+        // Reportes was retired; Revisión del mes (RV-1) is every plan's, never locked.
+        assertFalse(present(tx("Reportes", "Reports")))
+        assertTrue(present(tx("Revisión del mes", "Monthly review")))
         back()
         tab(tx("Plan", "Plan"))
         waitUntil("projections locked") { present(tx("Proyecciones", "Projections")) && present(tx("Disponible desde VIP", "Available from VIP")) }
@@ -102,7 +104,8 @@ class NavigationUiTest {
         tab(tx("Movimientos", "Transactions"))
         click(tx("Análisis", "Analysis"))
         waitUntil("summary for Basic") { present(tx("Resumen del mes", "Monthly summary")) }
-        assertFalse(present(tx("Reportes", "Reports")) || present(tx("Revisión del mes", "Monthly review")))
+        assertFalse(present(tx("Reportes", "Reports")))
+        assertTrue(present(tx("Revisión del mes", "Monthly review")))
     }
 
     @Test fun theOwnerKeepsTheFiveTabsAndJarvis() {

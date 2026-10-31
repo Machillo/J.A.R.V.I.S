@@ -42,7 +42,7 @@ final class NavigationUITests: XCTestCase {
     func testVipReachesEveryFormerDincrFunctionInItsNewHome() {
         let app = launch(plan: "vip", tab: "movements")
         open("movements.analysis", in: app)
-        for (id, title) in [("analysis.summary", "Resumen del mes"), ("analysis.financial", "Análisis financiero")] {
+        for (id, title) in [("analysis.summary", "Resumen del mes"), ("analysis.review", "Revisión del mes"), ("analysis.financial", "Análisis financiero")] {
             open(id, in: app)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), title)
             app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -62,9 +62,9 @@ final class NavigationUITests: XCTestCase {
         let free = launch(tab: "movements")
         open("movements.analysis", in: free)
         XCTAssertTrue(element("analysis.summary", in: free).waitForExistence(timeout: 10))
-        // Reportes and Revisión del mes were retired (they repeated the summary).
+        // Reportes was retired (it repeated the summary); RV-1 brought back a simple Revisión del mes for every plan.
         XCTAssertFalse(element("analysis.reports", in: free).exists)
-        XCTAssertFalse(element("analysis.review", in: free).exists)
+        XCTAssertFalse(element("analysis.review", in: free).label.contains("Disponible desde"))
         XCTAssertTrue(element("analysis.financial", in: free).label.contains("Disponible desde VIP"))
         free.tabBars.buttons["Plan"].tap()
         XCTAssertTrue(element("plan.projections", in: free).waitForExistence(timeout: 10))

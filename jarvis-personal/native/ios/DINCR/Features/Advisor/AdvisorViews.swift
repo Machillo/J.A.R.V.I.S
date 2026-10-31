@@ -2,7 +2,7 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// UX-13 — Movimientos → Análisis: the monthly summary (every plan) and, FA-1, the financial analysis
+/// UX-13 — Movimientos → Análisis: the monthly summary and, RV-1, the monthly review (every plan); FA-1, the financial analysis
 /// in plain words (VIP and the Owner; below VIP the row stays visible, locked, and opens Suscripción).
 /// The Owner's full historical analysis stays in JARVIS → Análisis financiero.
 struct AnalysisHubView: View {
@@ -13,6 +13,9 @@ struct AnalysisHubView: View {
             VStack(spacing: DincrSpacing.s2) {
                 GatedEntry(minimum: .free, flag: nil, symbol: "calendar.badge.checkmark", title: tx("Resumen del mes", "Monthly summary"),
                            subtitle: tx("Ingresos, gastos y categorías", "Income, expenses and categories"), id: "analysis.summary") { MonthlySummaryView() }
+                // RV-1: the month that closed, in three short cards (every plan).
+                GatedEntry(minimum: .free, flag: nil, symbol: "checkmark.seal", title: tx("Revisión del mes", "Monthly review"),
+                           subtitle: tx("Cómo te fue el mes pasado, en simple", "How last month went, simply"), id: "analysis.review") { MonthReviewView() }
                 GatedEntry(minimum: .vip, flag: nil, symbol: "chart.pie", title: tx("Análisis financiero", "Financial analysis"),
                            subtitle: tx("Tus números explicados en palabras simples", "Your numbers explained in simple words"),
                            id: "analysis.financial") { FinancialAnalysisView() }
