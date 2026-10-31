@@ -21,10 +21,10 @@ struct AnalysisHubView: View {
     }
 }
 
-/// UX-13 / §15 PR 8 — the Patrimonio tab. Cuentas: the accounts DINCR detected in bank notices and
-/// the mail connections that read them (the existing screens; VIP and the Owner, locked below).
-/// Deudas: how the active debts make up what is owed, from Plan → Deudas' balances (every plan).
-/// Proyecciones and Escenarios (VIP). No net worth figure until P0.9 (K-3), no balance invented.
+/// UX-13 / §15 PR 8 — the Patrimonio tab: what you have and what you owe. Cuentas: the accounts
+/// DINCR detected in bank notices (VIP and the Owner, locked below). Deudas: how the active debts
+/// make up what is owed, from Plan → Deudas' balances (every plan). The mail connections live in
+/// Perfil, Proyecciones and Escenarios in Plan. No net worth figure until P0.9 (K-3), no balance invented.
 /// B17: pulling down reads the plan, the switches and the debts again; a failed read keeps what the
 /// card showed (`PullRefresh`).
 struct WealthHubView: View {
@@ -38,18 +38,8 @@ struct WealthHubView: View {
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
                            subtitle: tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"), id: "wealth.accounts") { AccountsView() }
-                // Reading mail is the Owner's alone during the launch: no row, not even locked, for anyone else.
-                if model.canReadMail {
-                    GatedEntry(minimum: .vip, flag: nil, symbol: "envelope", title: tx("Conexiones de correo", "Mail connections"),
-                               subtitle: tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices"), id: "wealth.connections") { EmailMonitorView() }
-                }
                 SectionHeader(title: tx("Deudas", "Debts"))
                 WealthDebtsCard(debts: debts) { Task { await loadDebts(refreshing: false) } }
-                SectionHeader(title: tx("Proyecciones", "Projections"))
-                GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "chart.line.uptrend.xyaxis", title: tx("Proyecciones", "Projections"),
-                           subtitle: tx("Tus próximos meses", "Your next months"), id: "wealth.projections") { ProjectionsView() }
-                GatedEntry(minimum: .vip, flag: .vipIntelligence, symbol: "slider.horizontal.3", title: tx("Escenarios", "Scenarios"),
-                           subtitle: tx("¿Y si gano o gasto distinto?", "What if I earn or spend differently?"), id: "wealth.scenarios") { ScenariosView() }
             }
         }
         .task { await loadDebts(refreshing: false) }

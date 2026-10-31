@@ -62,8 +62,8 @@ struct ProfileHubView: View {
                 .dincrRowBackground()
             }
             // UX-7: the declared situation lives in Plan → Ingresos y base and Tu plan del mes → Ajustes.
-            // §15 PR 10: Cuentas and the mail (connections and review) live in Patrimonio → Cuentas /
-            // Conexiones de correo and Movimientos → Por revisar; Perfil no longer repeats them.
+            // Cuentas live in Patrimonio and the mail review in Movimientos → Por revisar; the mail
+            // connections (connect, permissions, check for notices) are set up here, in Perfil.
             // §15 PR 10 (option A): Presupuesto and Calendario live in Plan → Tu plan del mes, Movimientos
             // recurrentes in Plan → Ingresos y base; Perfil no longer repeats them.
             Section(tx("Cuenta", "Account")) {
@@ -72,6 +72,11 @@ struct ProfileHubView: View {
                     .accessibilityIdentifier("profile.subscription")
                 NavigationLink { SecurityView() } label: { Label(tx("Seguridad", "Security"), systemImage: "lock") }
                     .accessibilityIdentifier("profile.security")
+                // Reading mail is the Owner's alone during the launch: no row, not even locked, for anyone else.
+                if model.canReadMail {
+                    NavigationLink(value: ProfileRoute.mail) { Label(tx("Conexiones de correo", "Mail connections"), systemImage: "envelope") }
+                        .accessibilityIdentifier("profile.mail")
+                }
                 // SC-1: iOS only. VIP and the Owner open it; Free and Basic see it locked (opens Suscripción).
                 if ShortcutLinking.isAvailable(to: model.profile) {
                     NavigationLink { ShortcutsSettingsView() } label: { Label(tx("Atajos de iPhone", "iPhone Shortcuts"), systemImage: "bolt.horizontal") }

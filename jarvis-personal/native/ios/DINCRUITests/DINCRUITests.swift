@@ -263,8 +263,8 @@ final class DINCRUITests: XCTestCase {
     /// candidates → confirm. Only the provider page is simulated; the real one is DEVICE REQUIRED.
     /// Reading mail is the Owner's alone during the launch, so the flow runs as the Owner.
     func testEmailMonitorConnectReviewFlow() {
-        let app = launch("mailOnboarding", extra: ["-DincrTab", "wealth", "-DincrRole", "owner"])
-        open("wealth.connections", in: app)
+        let app = launch("mailOnboarding", extra: ["-DincrTab", "profile", "-DincrRole", "owner"])
+        open("profile.mail", in: app)
         XCTAssertTrue(app.descendants(matching: .any)["mail.readonly"].waitForExistence(timeout: 5))
         let accept = app.buttons["mail.consent.accept"]
         XCTAssertTrue(accept.waitForExistence(timeout: 5))

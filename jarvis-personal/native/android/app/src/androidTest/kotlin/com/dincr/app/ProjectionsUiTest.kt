@@ -23,7 +23,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * UX-14 — Patrimonio → Proyecciones: a VIP with every input known sees the 1, 3, 6 and 12-month
+ * UX-14 — Plan → Proyecciones (WE-1; formerly Patrimonio): a VIP with every input known sees the 1, 3, 6 and 12-month
  * points; a VIP with unknown inputs sees no figure, only what is missing and a link to the existing
  * screen that takes it. Hoy shows no projection. iOS twin: `ProjectionsUITests`. FakeBackend only.
  */
@@ -72,7 +72,7 @@ class ProjectionsUiTest {
     private fun back() { scenario?.onActivity { it.onBackPressedDispatcher.onBackPressed() }; compose.waitForIdle() }
 
     private fun openProjections() {
-        tab(tx("Patrimonio", "Wealth"))
+        tab(tx("Plan", "Plan"))
         click(tx("Proyecciones", "Projections"))
     }
 
@@ -142,7 +142,7 @@ class ProjectionsUiTest {
     @Test fun freeAndBasicKeepProjectionsLocked() {
         for (plan in listOf("free", "basic")) {
             launch(plan = plan)
-            tab(tx("Patrimonio", "Wealth"))
+            tab(tx("Plan", "Plan"))
             waitUntil("locked ($plan)") { present(tx("Disponible desde VIP", "Available from VIP")) }
             click(tx("Proyecciones", "Projections"))
             waitUntil("Suscripción ($plan)") { present(tx("Suscripción actual", "Current subscription")) }

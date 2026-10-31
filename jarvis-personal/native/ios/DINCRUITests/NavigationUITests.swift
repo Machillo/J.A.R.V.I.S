@@ -47,8 +47,8 @@ final class NavigationUITests: XCTestCase {
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), title)
             app.navigationBars.buttons.element(boundBy: 0).tap()
         }
-        app.tabBars.buttons["Patrimonio"].tap()
-        for (id, title) in [("wealth.projections", "Proyecciones"), ("wealth.scenarios", "Escenarios")] {
+        app.tabBars.buttons["Plan"].tap()
+        for (id, title) in [("plan.projections", "Proyecciones"), ("plan.scenarios", "Escenarios")] {
             open(id, in: app)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), title)
             app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -66,10 +66,10 @@ final class NavigationUITests: XCTestCase {
         XCTAssertFalse(element("analysis.reports", in: free).exists)
         XCTAssertFalse(element("analysis.review", in: free).exists)
         XCTAssertTrue(element("analysis.financial", in: free).label.contains("Disponible desde VIP"))
-        free.tabBars.buttons["Patrimonio"].tap()
-        XCTAssertTrue(element("wealth.projections", in: free).waitForExistence(timeout: 10))
-        XCTAssertTrue(element("wealth.projections", in: free).label.contains("Disponible desde VIP"))
-        XCTAssertTrue(element("wealth.scenarios", in: free).label.contains("Disponible desde VIP"))
+        free.tabBars.buttons["Plan"].tap()
+        XCTAssertTrue(element("plan.projections", in: free).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("plan.projections", in: free).label.contains("Disponible desde VIP"))
+        XCTAssertTrue(element("plan.scenarios", in: free).label.contains("Disponible desde VIP"))
         free.terminate()
 
         let basic = launch(plan: "basic", tab: "movements")
