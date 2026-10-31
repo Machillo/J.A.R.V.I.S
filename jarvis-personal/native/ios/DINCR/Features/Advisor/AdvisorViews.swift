@@ -30,10 +30,18 @@ struct AnalysisHubView: View {
 struct WealthHubView: View {
     @Environment(AppModel.self) private var model
     @State private var debts: LoadState<[Debt]> = .loading
+    @State private var netWorthToken = 0
 
     var body: some View {
         ScreenScroll(title: tx("Patrimonio", "Wealth")) {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                // WE-2: what you have minus what you owe (VIP and the Owner; locked below VIP).
+                if model.planTier.rank >= PlanTier.vip.rank {
+                    NetWorthCard().id(netWorthToken)
+                } else {
+                    GatedEntry(minimum: .vip, flag: nil, symbol: "scalemass", title: tx("Patrimonio neto", "Net worth"),
+                               subtitle: tx("Lo que tenés menos lo que debés", "What you have minus what you owe"), id: "wealth.netWorth") { EmptyView() }
+                }
                 SectionHeader(title: tx("Cuentas", "Accounts"))
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
@@ -53,7 +61,7 @@ struct WealthHubView: View {
             }
         }
         .task { await loadDebts(refreshing: false) }
-        .refreshable { await model.refreshTab { await loadDebts(refreshing: true) } }
+        .refreshable { await model.refreshTab { netWorthToken += 1; return await loadDebts(refreshing: true) } }
     }
 
     /// Returns whether the debts were read. A refresh that fails keeps the debts already shown.
@@ -75,6 +83,57 @@ struct WealthHubView: View {
             }
             return false
         }
+    }
+}
+
+/// WE-2 — net worth: the figure (or what is missing to know it), what you have and what you owe.
+private struct NetWorthCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        AsyncContent(fallback: tx("No pudimos calcular tu patrimonio.", "We couldn’t work out your net worth."),
+                     load: { try await model.service.wealth() }) { wealth, _ in
+            VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+                Text(tx("Patrimonio neto", "Net worth")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                if let net = wealth.netWorth {
+                    MoneyText(net, font: DincrFont.displayAmount)
+                        .accessibilityIdentifier("wealth.netWorth.amount")
+                    Text(net < 0 ? tx("Hoy debés más de lo que tenés.", "Today you owe more than you have.")
+                                 : tx("Es lo que te quedaría si vendieras todo y pagaras todas tus deudas.", "It is what you would keep if you sold everything and paid every debt."))
+                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                } else if let notice = wealth.missingNotice() {
+                    Text(notice).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        .accessibilityIdentifier("wealth.netWorth.missing")
+                }
+                WealthGroup(title: tx("Lo que tenés", "What you have"), total: wealth.assets?.total, items: wealth.owned, id: "wealth.assets")
+                WealthGroup(title: tx("Lo que debés", "What you owe"), total: wealth.liabilities?.total, items: wealth.owed(), id: "wealth.liabilities")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dincrCard()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("wealth.netWorth")
+        }
+    }
+}
+
+private struct WealthGroup: View {
+    let title: String
+    let total: Decimal?
+    let items: [Wealth.Item]
+    let id: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            FigureRow(label: title, amount: total).font(DincrFont.body.weight(.semibold))
+            if items.isEmpty {
+                Text(tx("Nada registrado.", "Nothing recorded.")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            }
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                FigureRow(label: item.name ?? tx("Sin nombre", "Unnamed"), amount: item.amount).font(DincrFont.bodySmall)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(id)
     }
 }
 

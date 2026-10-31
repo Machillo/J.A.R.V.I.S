@@ -599,6 +599,7 @@ class FakeBackend(
             // VIP
             path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
                 needs(PlanTier.VIP) ?: mail(method, path, segments, query, body)
+            path == "/user-product/vip/wealth" -> needs(PlanTier.VIP) ?: ok(wealth())
             path == "/user-product/vip/salvavidas" -> needs(PlanTier.VIP) ?: salvavidas(method, body)
             path == "/user-product/vip/financial-analysis" -> needs(PlanTier.VIP) ?: ok(financialAnalysis())
             method == "POST" && path == "/user-product/finance/strategy-vip/debt-scenario" -> needs(PlanTier.VIP) ?: debtScenario(body)
@@ -895,6 +896,19 @@ class FakeBackend(
             FinancialAnalysis.Category(name, amount, average[name] ?: amount)
         }
         return FinancialAnalysis(months, rows)
+    }
+
+    /** WE-2: what you have and owe, from the sample debts plus two synthetic accounts, the Salvavidas and an investment. iOS: FixtureBackend.wealthSample. */
+    private fun wealth(): Wealth {
+        val active = debts.filter { (it.remainingAmount ?: BigDecimal.ZERO).signum() > 0 }
+        val owed = active.fold(BigDecimal.ZERO) { sum, debt -> sum + (debt.remainingAmount ?: BigDecimal.ZERO) }
+        val assets = BigDecimal(350_000 + 101_500 + 380_000 + 250_000)
+        return Wealth(
+            Wealth.Assets(listOf(Wealth.Item("Cuenta de ahorro", BigDecimal(350_000), "CRC", BigDecimal(350_000)), Wealth.Item("Cuenta en dólares", BigDecimal(101_500), "USD", BigDecimal(200))),
+                Wealth.Item("Salvavidas", BigDecimal(380_000)), listOf(Wealth.Item("Fondo de inversión", BigDecimal(250_000))), assets),
+            Wealth.Liabilities(active.map { Wealth.Item(it.name, it.remainingAmount) }, emptyList(), owed),
+            assets - owed, true,
+        )
     }
 
     private fun freeDashboard(): FreeDashboard {

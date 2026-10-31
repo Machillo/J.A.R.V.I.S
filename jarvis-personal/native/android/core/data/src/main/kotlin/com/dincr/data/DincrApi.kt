@@ -145,6 +145,8 @@ class DincrApi(private val client: ApiClient) {
         client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution/confirm", request)
     /** FA-1: VIP and the Owner. A read: it never writes. */
     suspend fun financialAnalysis(): FinancialAnalysis = client.get("/user-product/vip/financial-analysis")
+    /** WE-2: VIP and the Owner. A read: it never writes. */
+    suspend fun wealth(): Wealth = client.get("/user-product/vip/wealth")
     suspend fun salvavidas(): Salvavidas = client.get("/user-product/vip/salvavidas")
     suspend fun updateSalvavidas(update: SalvavidasUpdate): Salvavidas = client.send("PUT", "/user-product/vip/salvavidas", update)
 

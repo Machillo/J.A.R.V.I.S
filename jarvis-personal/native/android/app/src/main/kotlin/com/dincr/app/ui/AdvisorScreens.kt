@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -96,6 +97,9 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
     val vipOn = model.isOn(OpsFlag.VIP_INTELLIGENCE)
     val debts = rememberLoad(model) { model.api.debts() }
     RefreshableTab(model, tx("Patrimonio", "Wealth"), extra = debts.refresh) {
+        // WE-2: what you have minus what you owe (VIP and the Owner; locked below VIP).
+        if (plan == PlanTier.VIP) NetWorthCard(model)
+        else DincrCard { Column(Modifier.testTag("wealth.netWorth")) { LockedRow(Icons.Rounded.AccountBalanceWallet, tx("Patrimonio neto", "Net worth"), PlanTier.VIP, nav) } }
         SectionTitle(tx("Cuentas", "Accounts"))
         DincrCard {
             Column {

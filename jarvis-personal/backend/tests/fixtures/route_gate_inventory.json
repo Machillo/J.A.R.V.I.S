@@ -2360,6 +2360,14 @@
  },
  {
   "method": "GET",
+  "path": "/user-product/vip/wealth",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
   "path": "/users-admin/users",
   "gates": [
    "owner_service"
