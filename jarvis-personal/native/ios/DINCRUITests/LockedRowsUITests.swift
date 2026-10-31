@@ -37,7 +37,7 @@ final class LockedRowsUITests: XCTestCase {
     }
 
     /// §15 PR 10 (option A): Perfil keeps no locked rows: Presupuesto and Calendario are locked inside Plan →
-    /// Tu plan del mes (`PlanOrganizeUITests`), Correos and Cuentas in Patrimonio (`WealthUITests`). SC-1: the
+    /// Tu plan del mes (`PlanOrganizeUITests`), Cuentas in Patrimonio (`WealthUITests`); the mail connections in Perfil (WE-1, Owner only). SC-1: the
     /// only locked row Perfil adds back is Atajos de iPhone (`profile.shortcuts`), a Perfil setting by nature.
     func testPerfilHasNoLockedRowsLeftAndTheOwnerKeepsJarvis() {
         for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), (nil, "owner")] as [(String?, String?)] {
@@ -50,9 +50,11 @@ final class LockedRowsUITests: XCTestCase {
                 XCTAssertTrue(shortcuts.exists && shortcuts.frame.contains(element.frame),
                               "\(role ?? plan ?? "free"): locked row outside Atajos de iPhone (\(element.identifier))")
             }
-            for id in ["profile.budget", "profile.calendar", "profile.recurring", "profile.mail", "profile.accounts"] {
+            for id in ["profile.budget", "profile.calendar", "profile.recurring", "profile.accounts"] {
                 XCTAssertFalse(app.descendants(matching: .any)[id].exists, "\(role ?? plan ?? "free"): \(id)")
             }
+            // WE-1: the mail connections are back in Perfil, the Owner's alone (never shown locked).
+            XCTAssertEqual(app.descendants(matching: .any)["profile.mail"].exists, role == "owner", "\(role ?? plan ?? "free"): profile.mail")
             XCTAssertEqual(row("profile.jarvis", in: app).exists, role == "owner")
             app.terminate()
         }
