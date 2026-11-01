@@ -63,4 +63,18 @@ import Testing
             #expect(error.status == 404)
         }
     }
+
+    /// DS-2: refinance one debt / consolidate several: today against the new loan.
+    @Test func refinanceAndConsolidateCompareTodayWithTheNewLoan() async throws {
+        let request = DebtScenarioRequest.consolidate(debtIds: [31, 32], annualRate: 15, termMonths: 48, fee: 20_000)
+        let body = try JSONSerialization.jsonObject(with: APIClient.encoder.encode(request)) as? [String: Any]
+        #expect(body?["kind"] as? String == "consolidate" && body?["debt_ids"] as? [Int] == [31, 32] && body?["amount"] as? Int == 20_000)
+        let service = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero))
+        let together = try await service.debtScenario(request)
+        #expect(together.comparison?.current?.monthlyPayment == 95_000, "both installments today")
+        #expect(together.debts?.count == 2 && together.comparison?.scenario?.months == 48)
+        let one = try await service.debtScenario(.refinance(debtId: 31, annualRate: 12, termMonths: 24, fee: nil))
+        #expect(one.comparison?.scenario?.monthlyPayment != nil && one.debt?.id == 31)
+        await #expect(throws: (any Error).self) { try await service.debtScenario(.consolidate(debtIds: [31], annualRate: 12, termMonths: 24, fee: nil)) }
+    }
 }

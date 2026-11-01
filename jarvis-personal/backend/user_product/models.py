@@ -95,14 +95,17 @@ class BasicSimulationRequest(BaseModel):
 
 
 class DebtScenarioRequest(BaseModel):
-    """A debt what-if (debt_scenarios.py): pay one off, an extra payment to one, or a new debt."""
-    kind: Literal["pay_off", "extra_payment", "new_debt"]
+    """A debt what-if (debt_scenarios.py): pay one off, an extra payment to one, a new debt, refinance
+    one (`debt_id`, new `annual_rate` and `term_months`, optional fee as `amount`) or consolidate
+    several (`debt_ids`, same terms)."""
+    kind: Literal["pay_off", "extra_payment", "new_debt", "refinance", "consolidate"]
     debt_id: int | None = Field(default=None, gt=0)
     amount: float | None = Field(default=None, gt=0, le=1_000_000_000_000, allow_inf_nan=False)
     monthly_payment: float | None = Field(default=None, gt=0, le=1_000_000_000_000, allow_inf_nan=False)
     annual_rate: float | None = Field(default=None, ge=0, le=500, allow_inf_nan=False)
     term_months: int | None = Field(default=None, gt=0, le=600)
     name: str | None = Field(default=None, max_length=80)
+    debt_ids: list[int] | None = Field(default=None, max_length=50)
 
 
 class VipSimulationRequest(BaseModel):

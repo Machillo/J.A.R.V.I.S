@@ -1,10 +1,12 @@
 import Foundation
 
 /// `POST /finance/strategy-vip/debt-scenario` (VIP): a what-if on one debt that is not saved — pay it
-/// off, an extra payment to it, or a new debt. Every answer is the money left each month after
+/// off, an extra payment to it, a new debt, refinance it (DS-2) or consolidate several (DS-2). Every answer is the money left each month after
 /// essentials and debt payments; nil is unknown, never ₡0 (Android: `DebtScenarioRequest`).
 public struct DebtScenarioRequest: Encodable, Sendable, Equatable {
-    public enum Kind: String, Encodable, Sendable, CaseIterable { case payOff = "pay_off", extraPayment = "extra_payment", newDebt = "new_debt" }
+    public enum Kind: String, Encodable, Sendable, CaseIterable {
+        case payOff = "pay_off", extraPayment = "extra_payment", newDebt = "new_debt", refinance, consolidate
+    }
     public let kind: Kind
     public let debtId: Int?
     public let amount: Decimal?
@@ -12,6 +14,7 @@ public struct DebtScenarioRequest: Encodable, Sendable, Equatable {
     public let annualRate: Decimal?
     public let termMonths: Int?
     public let name: String?
+    public var debtIds: [Int]? = nil
 
     public static func payOff(debtId: Int) -> DebtScenarioRequest {
         DebtScenarioRequest(kind: .payOff, debtId: debtId, amount: nil, monthlyPayment: nil, annualRate: nil, termMonths: nil, name: nil)
@@ -24,6 +27,16 @@ public struct DebtScenarioRequest: Encodable, Sendable, Equatable {
     /// The payment, or the rate and term for DINCR to compute it.
     public static func newDebt(name: String?, amount: Decimal, monthlyPayment: Decimal?, annualRate: Decimal?, termMonths: Int?) -> DebtScenarioRequest {
         DebtScenarioRequest(kind: .newDebt, debtId: nil, amount: amount, monthlyPayment: monthlyPayment, annualRate: annualRate, termMonths: termMonths, name: name)
+    }
+
+    /// One debt for a new loan at `annualRate` over `termMonths`; `fee` (optional) is borrowed too.
+    public static func refinance(debtId: Int, annualRate: Decimal, termMonths: Int, fee: Decimal?) -> DebtScenarioRequest {
+        DebtScenarioRequest(kind: .refinance, debtId: debtId, amount: fee, monthlyPayment: nil, annualRate: annualRate, termMonths: termMonths, name: nil)
+    }
+
+    /// Several debts paid with one new loan.
+    public static func consolidate(debtIds: [Int], annualRate: Decimal, termMonths: Int, fee: Decimal?) -> DebtScenarioRequest {
+        DebtScenarioRequest(kind: .consolidate, debtId: nil, amount: fee, monthlyPayment: nil, annualRate: annualRate, termMonths: termMonths, name: nil, debtIds: debtIds)
     }
 }
 
@@ -63,6 +76,19 @@ public struct DebtScenarioResult: Decodable, Sendable, Equatable {
         public let months: Int?
         public let interest: Decimal?
     }
+    /// Refinance / consolidate: today's debts against the new loan.
+    public struct Comparison: Decodable, Sendable, Equatable {
+        public struct Side: Decodable, Sendable, Equatable {
+            public let monthlyPayment: Decimal?
+            public let months: Int?
+            public let interest: Decimal?
+            public let fee: Decimal?
+        }
+        public let current: Side?
+        public let scenario: Side?
+        /// Today's interest minus the new loan's interest and fee: positive saves, negative costs more.
+        public let totalSaved: Decimal?
+    }
 
     public let kind: String
     public let debt: DebtView?
@@ -73,6 +99,8 @@ public struct DebtScenarioResult: Decodable, Sendable, Equatable {
     public let payoff: Payoff?
     public let warnings: [String]?
     public let explanation: String?
+    public let debts: [DebtView]?
+    public let comparison: Comparison?
 }
 
 extension DincrService {

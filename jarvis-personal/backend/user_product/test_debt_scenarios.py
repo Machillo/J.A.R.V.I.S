@@ -171,6 +171,56 @@ def test_unusable_inputs_are_a_422_with_a_stable_code(endpoint):
 
 def test_the_request_refuses_non_finite_or_unknown_inputs():
     for bad in ({"kind": "pay_off", "debt_id": 1, "amount": float("nan")}, {"kind": "new_debt", "amount": float("inf")},
-                {"kind": "refinance"}, {"kind": "new_debt", "amount": 10, "term_months": 0}, {"kind": "pay_off", "debt_id": 0}):
+                {"kind": "mortgage"}, {"kind": "new_debt", "amount": 10, "term_months": 0}, {"kind": "pay_off", "debt_id": 0}):
         with pytest.raises(ValidationError):
             DebtScenarioRequest(**bad)
+
+
+# Refinance one debt / consolidate several into one loan: today's payments, months and interest
+# against the new loan's; a fee is borrowed and counted as a cost; unknowns stay unknown.
+def test_refinancing_at_a_lower_rate_frees_money_and_saves_interest():
+    result = build_debt_scenario(snapshot(), "refinance", debt_id=1, annual_rate=18, term_months=12)
+    comparison = result["comparison"]
+    assert comparison["current"]["monthly_payment"] == 60_000
+    new = comparison["scenario"]["monthly_payment"]
+    assert 0 < new < 60_000 and result["monthly_leftover"]["change"] == round(60_000 - new, 2)
+    assert comparison["scenario"]["months"] == 12
+    assert comparison["total_saved"] > 0, "a lower rate costs less interest"
+    assert result["debt"]["id"] == 1 and result["debts"][0]["name"] == "Tarjeta A"
+
+
+def test_a_fee_is_borrowed_and_counted_as_a_cost():
+    free = build_debt_scenario(snapshot(), "refinance", debt_id=1, annual_rate=18, term_months=12)
+    paid = build_debt_scenario(snapshot(), "refinance", debt_id=1, annual_rate=18, term_months=12, amount=50_000)
+    assert paid["debt"]["remaining_amount"] == 650_000
+    assert paid["comparison"]["scenario"]["fee"] == 50_000
+    assert paid["comparison"]["total_saved"] < free["comparison"]["total_saved"] - 50_000
+
+
+def test_consolidating_two_debts_into_one_payment():
+    result = build_debt_scenario(snapshot(), "consolidate", debt_ids=[1, 2], annual_rate=15, term_months=48)
+    assert result["debt"]["remaining_amount"] == 3_000_000 and result["debt"]["id"] is None
+    assert [debt["name"] for debt in result["debts"]] == ["Tarjeta A", "Préstamo B"]
+    assert result["comparison"]["current"]["monthly_payment"] == 160_000
+    assert result["monthly_leftover"]["change"] == round(160_000 - result["comparison"]["scenario"]["monthly_payment"], 2)
+
+
+def test_consolidating_needs_two_debts_and_terms():
+    with pytest.raises(DebtScenarioError) as one:
+        build_debt_scenario(snapshot(), "consolidate", debt_ids=[1, 1], annual_rate=15, term_months=48)
+    assert one.value.code == "debts_required"
+    with pytest.raises(DebtScenarioError) as terms:
+        build_debt_scenario(snapshot(), "refinance", debt_id=1)
+    assert terms.value.code == "terms_required"
+    with pytest.raises(DebtScenarioError) as other:
+        build_debt_scenario(snapshot(), "consolidate", debt_ids=[1, 99], annual_rate=15, term_months=48)
+    assert other.value.code == "debt_not_found", "a debt outside the caller's snapshot is never used"
+
+
+def test_an_unknown_rate_leaves_the_interest_comparison_unknown():
+    debts = copy.deepcopy(snapshot()["debts"])
+    debts[0]["interest_rate"] = None
+    result = build_debt_scenario(snapshot(debts=debts), "refinance", debt_id=1, annual_rate=18, term_months=12)
+    assert result["comparison"]["current"]["interest"] is None and result["comparison"]["total_saved"] is None
+    assert result["comparison"]["scenario"]["monthly_payment"] is not None, "the new loan is still known"
+    assert any("tasa" in warning or "rate" in warning for warning in result["warnings"])
