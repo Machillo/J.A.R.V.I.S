@@ -5,7 +5,7 @@ import XCTest
 /// income and expenses ("Movimientos recurrentes") inside Ingresos y base (every plan); back returns to
 /// Plan. Metas y ahorro stays in Hoy. Android twin: `PlanOrganizeUiTest`. Fixture data only.
 final class PlanOrganizeUITests: XCTestCase {
-    private static let entries = ["plan.aguinaldo", "plan.strategy", "plan.debts", "plan.incomeBase", "plan.salvavidas", "plan.projections", "plan.scenarios", "plan.distribution"]
+    private static let entries = ["plan.aguinaldo", "plan.strategy", "plan.debts", "plan.incomeBase", "plan.salvavidas", "plan.retirement", "plan.projections", "plan.scenarios", "plan.distribution"]
 
     private func launch(plan: String? = nil, role: String? = nil, tab: String = "plan") -> XCUIApplication {
         let app = XCUIApplication()

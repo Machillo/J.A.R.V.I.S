@@ -28,7 +28,7 @@ import Testing
 
     @Test func planHasExactlyItsRowsInOrder() {
         // UX-4: Deudas joins Plan after "Tu plan del mes"; the other rows keep their order.
-        #expect(PlanHubItem.allCases.map(\.rawValue) == ["aguinaldo", "strategy", "debts", "incomeBase", "fixedExpenses", "salvavidas", "projections", "scenarios", "distribution"])
+        #expect(PlanHubItem.allCases.map(\.rawValue) == ["aguinaldo", "strategy", "debts", "incomeBase", "fixedExpenses", "salvavidas", "retirement", "projections", "scenarios", "distribution"])
     }
 
     @Test func eachRowKeepsItsHistoricalGate() {

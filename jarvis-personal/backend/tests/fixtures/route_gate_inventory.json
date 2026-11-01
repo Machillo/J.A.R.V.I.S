@@ -2301,6 +2301,21 @@
  },
  {
   "method": "GET",
+  "path": "/user-product/vip/retirement",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/vip/retirement",
+  "gates": [
+   "feature:strategy_vip"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/user-product/vip/salvavidas",
   "gates": [
    "feature:strategy_vip"
