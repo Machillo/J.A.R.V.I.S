@@ -319,7 +319,7 @@ public actor FixtureBackend: HTTPTransport {
         case ("GET", "/user-product/free/monthly-summary"): return ok(monthlySummary(query["period"] ?? String(day(0).prefix(7))))
         case ("GET", "/user-product/free/movements"):
             // Expenses waiting for the close have no colones amount: listed apart, like the backend.
-            return ok(movements.filter { !isPending($0) }.sorted { ($0["transaction_date"] as? String ?? "") > ($1["transaction_date"] as? String ?? "") })
+            return ok(movements.filter { !isPending($0) }.sorted(by: Self.listOrder))
         case ("GET", "/user-product/finance/expenses/paid-with-options"): return ok(paidWithOptions())
         case ("GET", "/user-product/finance/expenses/pending-conversion"): return ok(pendingConversion())
         case ("POST", "/user-product/finance/expenses/pending-conversion/close"): return closePending(body)
@@ -1062,10 +1062,32 @@ public actor FixtureBackend: HTTPTransport {
         return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
     }
 
+    /// The list's order: newest day first; within a day, what was added in the session first (newest
+    /// first), then the sample rows in their usual order (by how many days back they are, then id). On
+    /// the first days of a month the recent sample rows share a day (`recent`): they keep that order.
+    static let sampleOffset: [Int: Int] = [11: 0, 10: 0, 12: 1, 9: 1, 13: 2, 8: 3, 7: 4, 6: 6, 5: 9, 4: 18]
+
+    static func listOrder(_ a: [String: Any], _ b: [String: Any]) -> Bool {
+        let dayA = a["transaction_date"] as? String ?? "", dayB = b["transaction_date"] as? String ?? ""
+        if dayA != dayB { return dayA > dayB }
+        let idA = a["source_id"] as? Int ?? 0, idB = b["source_id"] as? Int ?? 0
+        let rankA = sampleOffset[idA] ?? -1, rankB = sampleOffset[idB] ?? -1
+        return rankA != rankB ? rankA < rankB : idA > idB
+    }
+
+    /// A recent sample date (the last days, 0–9): kept inside the current month, so Movimientos (which
+    /// lists the month in course) shows the sample rows on any date, the 1st included. Android: `recent`.
+    static func recent(_ offset: Int, today: Date) -> String {
+        let calendar = Calendar(identifier: .gregorian)
+        let dayOfMonth = calendar.component(.day, from: today)
+        return day(min(offset, dayOfMonth - 1), today: today)
+    }
+
     typealias Seed = (movements: [[String: Any]], debts: [[String: Any]], goals: [[String: Any]], savings: [[String: Any]], recurring: [[String: Any]])
 
     static func seed(today: Date) -> Seed {
-        func day(_ offset: Int) -> String { Self.day(offset, today: today) }
+        // The last days stay in the month in course (see `recent`); older rows keep their real date.
+        func day(_ offset: Int) -> String { offset < 10 ? Self.recent(offset, today: today) : Self.day(offset, today: today) }
         func row(_ origin: String, _ id: Int, _ offset: Int, _ description: String, _ amount: Decimal, _ type: String, _ category: String, editable: Bool = true) -> [String: Any] {
             ["movement_id": "\(origin):\(id)", "source_id": id, "origin": origin, "transaction_date": day(offset), "description": description,
              "amount": number(amount), "transaction_type": type, "category": category, "notes": "", "editable": editable]
@@ -1097,7 +1119,8 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     static func sampleCandidates(today: Date) -> [[String: Any]] {
-        func day(_ offset: Int) -> String { Self.day(offset, today: today) }
+        // A confirmed notice becomes a movement of the month in course (see `recent`).
+        func day(_ offset: Int) -> String { Self.recent(offset, today: today) }
         return [
             // Like the parsers, `bank` is the institution CODE (`bac`, `popular`); detected accounts carry
             // the display label in `bank_name`. Institutions are public names; the rest is invented.
