@@ -340,6 +340,9 @@ class FakeBackend(
             path == "/jarvis/premium/debt-savings-blocks" || path.startsWith("/jarvis/premium/debt-savings-blocks/") -> when {
                 !isOwner -> error(403, "No tienes permisos para realizar esta acción.")
                 method == "GET" -> ok(debtBlocks.state())
+                method == "POST" && path.endsWith("/apply") ->
+                    debtBlocks.apply(segments[segments.size - 2], body?.let { runCatching { json.decodeFromJsonElement(DebtSavingsBlockApply.serializer(), it) }.getOrNull() })
+                        ?.let { ok(it) } ?: error(404, "No encontramos ese ahorro.")
                 method == "POST" -> when (debtBlocks.create(body?.let { runCatching { json.decodeFromJsonElement(DebtSavingsBlockCreate.serializer(), it) }.getOrNull() })) {
                     200 -> ok(Acknowledgement("OK"))
                     409 -> error(409, "Esa deuda ya tiene un ahorro bloqueado.")

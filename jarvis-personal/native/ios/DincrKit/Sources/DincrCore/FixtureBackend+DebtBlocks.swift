@@ -2,8 +2,9 @@ import Foundation
 
 // The fixture backend's Plan → Ahorro para deudas routes (Debug demos and tests only). Same shapes and
 // access rule as FastAPI (`ai/owner_debt_blocks.py`, `ai/owner_debt_block_store.py`): `/jarvis/*`
-// admits only the verified Owner; one block per debt at a time (409). Every name and amount is invented
-// (CLAUDE.md §4.F); the proposal is a fixed sample, not the engine.
+// admits only the verified Owner; one block per debt at a time (409); a matured block is paid into its
+// debt once (apply). Every name and amount is invented (CLAUDE.md §4.F); the proposal is a fixed sample,
+// not the engine. The Owner starts with one block that matured yesterday, waiting for its abono.
 
 extension FixtureBackend {
     func debtBlocksRoute(_ method: String, _ path: String, _ body: [String: Any]) -> Answer? {
@@ -12,6 +13,17 @@ extension FixtureBackend {
         switch method {
         case "GET":
             return ok(debtBlocksState())
+        case "POST" where path.hasSuffix("/apply"):
+            let parts = path.split(separator: "/")
+            let id = parts.count >= 2 ? String(parts[parts.count - 2]) : ""
+            guard id == Self.maturedBlockId, !ownerMaturedBlockPaid else { return error(404, "No encontramos ese ahorro.") }
+            guard let amount = decimal(body["amount"]), amount > 0,
+                  let outcome = body["outcome"] as? String, ["reduce_term", "reduce_installment"].contains(outcome) else {
+                return error(422, "Revisá el abono.")
+            }
+            ownerMaturedBlockPaid = true
+            return ok(["status": "OK", "replayed": false, "block": ["id": id, "applied": ["amount": Self.number(amount), "outcome": outcome,
+                                                                                          "new_remaining_amount": 120_000, "left_over": 0]]])
         case "POST":
             guard let debtId = body["debt_id"] as? Int, let weekly = decimal(body["weekly_amount"]), weekly > 0,
                   let start = body["start_date"] as? String, let term = body["term_months"] as? Int, (3...60).contains(term) else {
@@ -37,18 +49,30 @@ extension FixtureBackend {
         }
     }
 
-    private func monthDayISO(monthsAhead: Int) -> String {
+    private func monthDayISO(monthsAhead: Int, daysAhead: Int = 0) -> String {
         let calendar = Calendar(identifier: .gregorian)
-        let day = calendar.date(byAdding: .month, value: monthsAhead, to: today) ?? today
+        let month = calendar.date(byAdding: .month, value: monthsAhead, to: today) ?? today
+        let day = calendar.date(byAdding: .day, value: daysAhead, to: month) ?? month
         let parts = calendar.dateComponents([.year, .month, .day], from: day)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
-    /// One proposal while no block exists; with a block the debt is taken and nothing is left to lock.
+    static let maturedBlockId = "fixture-matured-1"
+
+    /// The block that matured yesterday (another debt), waiting for its abono until it is paid.
+    private var maturedDebtBlock: [String: Any] {
+        ["id": Self.maturedBlockId, "debt_id": 802, "debt_name": "Tarjeta de ejemplo", "mode": "block", "weekly_amount": 5_000,
+         "start_date": "2026-01-01", "maturity_date": monthDayISO(monthsAhead: 0, daysAhead: -1), "term_months": 3, "contributions_total": 13, "contributions_done": 13,
+         "saved_so_far": 65_000, "total_at_maturity": 65_000, "next_date": NSNull(), "matured": true]
+    }
+
+    /// One proposal while no running block exists; with one the debt is taken and nothing is left to lock.
     private func debtBlocksState() -> [String: Any] {
-        let base: [String: Any] = ["weekly_safe_amount": ownerDebtBlocks.isEmpty ? 13_500 : 0, "committed_weekly": ownerDebtBlocks.isEmpty ? 0 : 13_500,
-                                   "short_debts": [Any](), "warnings": ["average_income_estimated"], "blocks": ownerDebtBlocks]
-        guard ownerDebtBlocks.isEmpty else { return base.merging(["status": "no_surplus", "proposal": NSNull()]) { $1 } }
+        let running = ownerDebtBlocks
+        let blocks = (ownerMaturedBlockPaid ? [] : [maturedDebtBlock]) + ownerDebtBlocks
+        let base: [String: Any] = ["weekly_safe_amount": running.isEmpty ? 13_500 : 0, "committed_weekly": running.isEmpty ? 0 : 13_500,
+                                   "short_debts": [Any](), "warnings": ["average_income_estimated"], "blocks": blocks]
+        guard running.isEmpty else { return base.merging(["status": "no_surplus", "proposal": NSNull()]) { $1 } }
         let proposal: [String: Any] = [
             "mode": "block", "debt": ["id": 801, "name": "Préstamo de ejemplo", "remaining_amount": 1_200_000, "interest_rate": 24],
             "weekly_amount": 13_500, "contributions": 26, "term_months": 6,

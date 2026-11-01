@@ -16,6 +16,8 @@ Rules (decided by the Owner, 2026-11-01):
   the probable income (the last months with overtime and bonus), so the money is never left
   waiting in a locked account after the debt is gone; a block that would save more than the debt
   will owe is shortened or made smaller.
+- The bank asks a minimum per contribution for some terms (``MIN_CONTRIBUTION``: ₡3 750 for 3
+  months, the Owner's bank as of 2026-11-01); a block below it is never proposed.
 - The savings' own interest is never counted: if it comes, it is a bonus.
 - What locking costs against paying the same money every week straight into the debt (the
   debt's interest on the money while it waits) is shown, never hidden.
@@ -35,6 +37,12 @@ PRESAVE_SHARE = 0.25       # of the weekly amount while short debts are paid fir
 STEP = 500.0               # weekly amounts are whole multiples of ₡500, rounded down
 PAYDAY = 3                 # Thursday (date.weekday())
 WEEKS_PER_MONTH = 52 / 12
+# The bank's minimum per contribution, by term in months (a term not listed has no known minimum).
+MIN_CONTRIBUTION = {3: 3750.0}
+
+
+def minimum_contribution(term_months: int) -> float:
+    return MIN_CONTRIBUTION.get(int(term_months), 0.0)
 
 
 def _f(value: Any) -> float:
@@ -108,7 +116,7 @@ def _block(target: dict[str, Any], weekly: float, max_term: int, direct_monthly:
         amount = weekly
         if term == MIN_TERM_MONTHS and amount * len(dates) > owed:
             amount = math.floor(owed / len(dates) / STEP) * STEP if dates else 0.0
-        if amount >= STEP and amount * len(dates) <= owed:
+        if amount >= max(STEP, minimum_contribution(term)) and amount * len(dates) <= owed:
             saved = round(amount * len(dates), 2)
             return {"weekly_amount": amount, "contributions": len(dates), "term_months": term,
                     "start_date": start.isoformat(), "maturity_date": maturity.isoformat(), "total_saved": saved,
@@ -141,6 +149,7 @@ def propose(*, today: date, safe_monthly_attack: float, probable_monthly_attack:
             "weekly_safe_amount": max(weekly_amount(safe) - max(_f(committed_weekly), 0.0), 0.0),
             "committed_weekly": round(max(_f(committed_weekly), 0.0), 2), "savings_interest_counted": False,
             "min_term_months": MIN_TERM_MONTHS, "presave_share": PRESAVE_SHARE,
+            "min_contribution": {str(term): amount for term, amount in MIN_CONTRIBUTION.items()},
             "warnings": list(warnings or []), "proposal": None}
     active = [item for item in debts if _f(item.get("remaining_amount")) > 0.01
               and str(item.get("id")) not in {str(debt_id) for debt_id in blocked_debt_ids}]
@@ -160,7 +169,10 @@ def propose(*, today: date, safe_monthly_attack: float, probable_monthly_attack:
         return {**base, "status": "short_debts_only", "short_debts": short_view}
 
     if shorts:
-        mode, weekly = "presave", math.floor(base["weekly_safe_amount"] * PRESAVE_SHARE / STEP) * STEP
+        # A quarter of the weekly amount, never below what the bank accepts for the term.
+        mode = "presave"
+        weekly = max(math.floor(base["weekly_safe_amount"] * PRESAVE_SHARE / STEP) * STEP, minimum_contribution(MIN_TERM_MONTHS))
+        weekly = weekly if weekly <= base["weekly_safe_amount"] else 0.0
         max_term = MIN_TERM_MONTHS
         direct = 0.0   # the rest of the attack goes to the short debts, not to this one
     else:

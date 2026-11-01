@@ -9,11 +9,18 @@ how much every payday, from when and for how many months. From then on:
 - the next proposal only uses what is left of the weekly amount and never targets a debt that
   already has a block.
 
-Reading never writes; creating and cancelling are the Owner's explicit commands. Owner only (the
-JARVIS router). Nothing is inferred from bank data.
+When a block matures the Owner pays what it holds into its debt and records it (POST .../apply):
+one extraordinary payment to principal (``finance/debt_extra_payment.record_extra_payment``), with
+the bank's choice: a shorter term (the installment stays) or a lower installment (the new one is
+stored). The block is then closed. The next block needs nothing else: the strategy reads the lower
+balance or installment, so whatever was freed is part of the next proposal.
+
+Reading never writes; creating, cancelling and applying are the Owner's explicit commands. Owner
+only (the JARVIS router). Nothing is inferred from bank data.
 """
 from __future__ import annotations
 
+import json
 import math
 import uuid
 from datetime import date, timedelta
@@ -22,12 +29,17 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.ai.preferences import get_preference, set_preference
+from backend.auth.current_user import get_current_workspace_id
+from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.core.time import costa_rica_today
 from backend.finance import debt_savings_blocks
+from backend.finance.debt_extra_payment import record_extra_payment
 from backend.finance.service import get_debts
 
 PREFERENCE_KEY = "debt_savings_blocks"
+SOURCE = "debt_savings_block"
+OUTCOMES = ("reduce_term", "reduce_installment")
 MAX_TERM_MONTHS = 60
 MAX_WEEKLY = 999_999_999.99
 START_WINDOW_DAYS = (-31, 62)   # a block started up to a month ago, or starting within two months
@@ -61,8 +73,14 @@ def normalize(raw: Any) -> list[dict[str, Any]]:
         result.append({"id": str(block["id"]), "debt_id": block["debt_id"], "debt_name": block.get("debt_name"),
                        "mode": block.get("mode") if block.get("mode") in ("block", "presave") else "block",
                        "weekly_amount": weekly, "start_date": start.isoformat(), "maturity_date": maturity.isoformat(),
-                       "term_months": block.get("term_months"), "created_at": block.get("created_at")})
+                       "term_months": block.get("term_months"), "created_at": block.get("created_at"),
+                       "applied": block.get("applied") if isinstance(block.get("applied"), dict) else None})
     return result
+
+
+def open_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Blocks not paid into their debt yet (running, or matured and waiting for the abono)."""
+    return [block for block in blocks if not block.get("applied")]
 
 
 def stored_blocks() -> list[dict[str, Any]]:
@@ -90,7 +108,7 @@ def with_progress(block: dict[str, Any], today: date) -> dict[str, Any]:
 
 def active(blocks: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
     """Blocks not yet matured: they still take money every payday."""
-    return [block for block in blocks if _day(block["maturity_date"]) > today]
+    return [block for block in open_blocks(blocks) if _day(block["maturity_date"]) > today]
 
 
 def weekly_committed(blocks: list[dict[str, Any]], today: date) -> float:
@@ -107,6 +125,11 @@ def create_block(payload: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=tx("Indicá cuánto ahorrás cada jueves.", "Say how much you save every Thursday."))
     if not isinstance(term, int) or not debt_savings_blocks.MIN_TERM_MONTHS <= term <= MAX_TERM_MONTHS:
         raise HTTPException(status_code=422, detail=tx("El plazo va de 3 a 60 meses.", "The term is 3 to 60 months."))
+    minimum = debt_savings_blocks.minimum_contribution(term)
+    if weekly < minimum:
+        shown = "₡" + f"{round(minimum):,}".replace(",", ".")
+        raise HTTPException(status_code=422, detail=tx(f"A {term} meses el banco pide al menos {shown} por aporte.",
+                                                       f"For {term} months the bank asks at least {shown} per contribution."))
     if not start or not today + timedelta(days=START_WINDOW_DAYS[0]) <= start <= today + timedelta(days=START_WINDOW_DAYS[1]):
         raise HTTPException(status_code=422, detail=tx("Revisá la fecha del primer ahorro.", "Check the first saving's date."))
     debt = next((row for row in (get_debts() or [])
@@ -133,3 +156,57 @@ def cancel_block(block_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=tx("No encontramos ese ahorro.", "We couldn't find that saving."))
     set_preference(PREFERENCE_KEY, {"blocks": kept})
     return {"status": "OK", "deleted": block_id}
+
+
+def apply_block(block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """The block matured and the Owner paid what it held into its debt: record the extraordinary
+    payment and close the block, in one transaction. A second call returns the first answer."""
+    today = costa_rica_today()
+    amount = _amount(payload.get("amount"))
+    outcome = payload.get("outcome")
+    new_installment = payload.get("new_monthly_payment")
+    if amount is None:
+        raise HTTPException(status_code=422, detail=tx("Indicá cuánto abonaste.", "Say how much you paid."))
+    if outcome not in OUTCOMES:
+        raise HTTPException(status_code=422, detail=tx("Indicá qué hizo el banco con el abono.", "Say what the bank did with the payment."))
+    if outcome == "reduce_installment":
+        new_installment = _amount(new_installment)
+        if new_installment is None:
+            raise HTTPException(status_code=422, detail=tx("Indicá la cuota nueva.", "Enter the new installment."))
+    else:
+        new_installment = None
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        # One change at a time per workspace; the preference row is read and written in this transaction.
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"{SOURCE}:{workspace_id}",))
+        row = conn.execute(
+            "SELECT preference_value FROM user_preferences WHERE workspace_id=%s AND preference_key=%s FOR UPDATE",
+            (workspace_id, PREFERENCE_KEY),
+        ).fetchone()
+        blocks = normalize(row["preference_value"] if row else {})
+        block = next((item for item in blocks if item["id"] == block_id), None)
+        if block is None:
+            raise HTTPException(status_code=404, detail=tx("No encontramos ese ahorro.", "We couldn't find that saving."))
+        if block.get("applied"):
+            return {"status": "OK", "replayed": True, "block": block}
+        if _day(block["maturity_date"]) > today:
+            raise HTTPException(status_code=409, detail=tx("Ese ahorro todavía no vence.", "That saving hasn't matured yet."))
+        payment = record_extra_payment(
+            conn, workspace_id, int(block["debt_id"]), amount, payment_date=today.isoformat(),
+            description="Abono de ahorro bloqueado", new_monthly_payment=new_installment, source=SOURCE,
+            transaction_source=SOURCE, transaction_note=f"{SOURCE}:{block_id}",
+        )
+        if payment is None:   # the debt is gone or is not this workspace's: nothing is written
+            raise HTTPException(status_code=404, detail=tx("No encontramos esa deuda.", "We couldn't find that debt."))
+        applied = {"applied_at": today.isoformat(), "amount": amount, "outcome": outcome,
+                   "principal_amount": payment["principal_amount"], "new_remaining_amount": payment["new_remaining_amount"],
+                   "new_monthly_payment": new_installment, "payment_id": payment["payment_id"],
+                   "left_over": round(max(amount - float(payment["principal_amount"]), 0.0), 2)}
+        block = {**block, "applied": applied}
+        stored = [block if item["id"] == block_id else item for item in blocks]
+        conn.execute(
+            "UPDATE user_preferences SET preference_value=%s::jsonb, updated_at=NOW() WHERE workspace_id=%s AND preference_key=%s",
+            (json.dumps({"blocks": stored}, ensure_ascii=False), workspace_id, PREFERENCE_KEY),
+        )
+        conn.commit()
+    return {"status": "OK", "replayed": False, "block": block}

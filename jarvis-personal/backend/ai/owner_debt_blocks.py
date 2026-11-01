@@ -93,4 +93,4 @@ def get_owner_debt_savings_blocks() -> dict[str, Any]:
         blocked_debt_ids={block["debt_id"] for block in running})
     return {**result, "automatic_savings_monthly": automatic, "average_monthly_income": average,
             "base_monthly_income": round(base_income, 2),
-            "blocks": [owner_debt_block_store.with_progress(block, today) for block in blocks]}
+            "blocks": [owner_debt_block_store.with_progress(block, today) for block in owner_debt_block_store.open_blocks(blocks)]}

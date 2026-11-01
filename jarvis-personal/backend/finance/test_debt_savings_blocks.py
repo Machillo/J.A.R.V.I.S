@@ -62,7 +62,8 @@ def test_short_debts_are_paid_first_while_a_quarter_is_saved_for_the_next_long_d
     result = propose([debt(1, 60_000, 2), debt(2, 900_000, 24)])
     block = result["proposal"]
     assert [item["id"] for item in result["short_debts"]] == [1]
-    assert (block["mode"], block["debt"]["id"], block["weekly_amount"], block["term_months"]) == ("presave", 2, 3000, 3)
+    # A quarter of 13 500 is 3 000, below the bank's ₡3 750 for 3 months: the minimum is proposed.
+    assert (block["mode"], block["debt"]["id"], block["weekly_amount"], block["term_months"]) == ("presave", 2, 3750, 3)
 
 
 def test_only_short_debts_or_no_money_give_no_block():
@@ -96,3 +97,12 @@ def test_the_salvavidas_automatic_savings_come_out_of_the_other_shares_first():
     assert safe_attack(attack=50000, surplus=80000, automatic=10833.33) == 50000      # the other 30 000 absorb it
     assert safe_attack(attack=50000, surplus=55000, automatic=10833.33) == 44166.67
     assert safe_attack(attack=5000, surplus=5000, automatic=10833.33) == 0.0
+
+
+def test_the_banks_minimum_per_contribution_is_never_undercut():
+    """₡3 750 per contribution for 3 months (the Owner's bank): a smaller block is never proposed."""
+    assert blocks.minimum_contribution(3) == 3750 and blocks.minimum_contribution(6) == 0
+    # Fitting the block to what a small debt will owe would need less than ₡3 750 a week: pay it directly.
+    assert propose([debt(1, 45_000, 6, rate=0.0, minimum=5000)])["status"] == "pay_directly"
+    # Pre-saving needs at least the minimum: with ₡3 500 a week of safe money there is no block.
+    assert propose([debt(1, 60_000, 2), debt(2, 900_000, 24)], safe=15500)["status"] == "no_surplus"

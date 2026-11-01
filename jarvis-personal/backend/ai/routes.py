@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from backend.ai.models import DebtSavingsBlockRequest, ExactDistributionConfirmRequest, ExactDistributionRequest, JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest, ProfilePreferencesRequest
+from backend.ai.models import DebtSavingsBlockApplyRequest, DebtSavingsBlockRequest, ExactDistributionConfirmRequest, ExactDistributionRequest, JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest, ProfilePreferencesRequest
 from backend.ai.jarvis_engine import process_message, create_initial_financial_strategy
 from backend.ai.owner_distribution import confirm_owner_distribution
 from backend.ai.premium_orchestrator import get_current_strategy_summary
@@ -9,7 +9,7 @@ from backend.ai.preferences import get_sports_preferences, update_sports_prefere
 from backend.core.events import get_upcoming_events
 from backend.sports.service import ensure_owner_sports_preferences, get_sports_calendar_summary
 
-from backend.ai.owner_debt_block_store import cancel_block, create_block
+from backend.ai.owner_debt_block_store import apply_block, cancel_block, create_block
 from backend.ai.owner_debt_blocks import get_owner_debt_savings_blocks
 from backend.ai.strategy_dashboard import get_additional_card_report, get_owner_exact_distribution, get_premium_strategy_dashboard
 
@@ -58,6 +58,12 @@ def jarvis_debt_savings_blocks():
 def jarvis_create_debt_savings_block(request: DebtSavingsBlockRequest):
     """The Owner created a locked savings block at the bank: record it so the plan sets it aside."""
     return create_block(request.model_dump())
+
+
+@router.post("/premium/debt-savings-blocks/{block_id}/apply")
+def jarvis_apply_debt_savings_block(block_id: str, request: DebtSavingsBlockApplyRequest):
+    """The block matured and its money was paid into the debt: record the payment, close the block."""
+    return apply_block(block_id, request.model_dump())
 
 
 @router.delete("/premium/debt-savings-blocks/{block_id}")

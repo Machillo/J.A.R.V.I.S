@@ -41,6 +41,19 @@ final class DebtSavingsBlocksUITests: XCTestCase {
         XCTAssertTrue(reveal("debtBlocks.block.fixture-block-1", in: app).exists)
     }
 
+    func testAMaturedSavingIsPaidIntoItsDebtAndLeavesTheList() {
+        let app = launch(plan: "vip", role: "owner")
+        reveal("plan.debtBlocks", in: app).tap()
+        reveal("debtBlocks.pay.fixture-matured-1", in: app).tap()
+        let save = element("debtBlocks.applySave", in: app)
+        XCTAssertTrue(save.waitForExistence(timeout: 10))
+        save.tap()
+        let notice = element("debtBlocks.notice", in: app)
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        XCTAssertTrue(notice.label.contains("Listo"), notice.label)
+        XCTAssertFalse(element("debtBlocks.block.fixture-matured-1", in: app).exists)
+    }
+
     func testNoPlanSeesTheRow() {
         for plan in [nil, "basic", "vip"] as [String?] {
             let app = launch(plan: plan)
