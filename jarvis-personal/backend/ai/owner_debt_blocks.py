@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from backend.ai import owner_debt_block_store
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.time import costa_rica_today
@@ -84,7 +85,12 @@ def get_owner_debt_savings_blocks() -> dict[str, Any]:
         debts, recurring_monthly_extra=probable, first_month_extra=0.0, owner_rules=True)
     if any(debt.get("interest_rate") is None for debt in debts):
         warnings.append("interest_rate_unknown")
-    result = debt_savings_blocks.propose(today=today, safe_monthly_attack=safe, probable_monthly_attack=probable,
-                                         debts=order, warnings=warnings)
+    blocks = owner_debt_block_store.stored_blocks()
+    running = owner_debt_block_store.active(blocks, today)
+    result = debt_savings_blocks.propose(
+        today=today, safe_monthly_attack=safe, probable_monthly_attack=probable, debts=order, warnings=warnings,
+        committed_weekly=owner_debt_block_store.weekly_committed(blocks, today),
+        blocked_debt_ids={block["debt_id"] for block in running})
     return {**result, "automatic_savings_monthly": automatic, "average_monthly_income": average,
-            "base_monthly_income": round(base_income, 2)}
+            "base_monthly_income": round(base_income, 2),
+            "blocks": [owner_debt_block_store.with_progress(block, today) for block in blocks]}

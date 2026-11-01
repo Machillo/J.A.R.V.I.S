@@ -126,20 +126,24 @@ def _recommendation(rate: float | None) -> dict[str, str]:
 
 
 def propose(*, today: date, safe_monthly_attack: float, probable_monthly_attack: float,
-            debts: list[dict[str, Any]], warnings: list[str] | None = None) -> dict[str, Any]:
+            debts: list[dict[str, Any]], warnings: list[str] | None = None,
+            committed_weekly: float = 0.0, blocked_debt_ids: set | frozenset = frozenset()) -> dict[str, Any]:
     """The next block, or why there is none.
 
     ``debts``: the active debts in the strategy's payoff order, each with ``remaining_amount``,
     ``interest_rate`` (None: unknown), ``minimum_payment`` and ``payoff_month`` (the probable
-    payoff month; None: not within the plan).
+    payoff month; None: not within the plan). ``committed_weekly``: what the blocks already running
+    take every payday (only the rest is proposed); ``blocked_debt_ids``: debts that already have one.
     """
     safe = max(_f(safe_monthly_attack), 0.0)
     probable = max(_f(probable_monthly_attack), safe)
     base = {"safe_monthly_attack": round(safe, 2), "probable_monthly_attack": round(probable, 2),
-            "weekly_safe_amount": weekly_amount(safe), "savings_interest_counted": False,
+            "weekly_safe_amount": max(weekly_amount(safe) - max(_f(committed_weekly), 0.0), 0.0),
+            "committed_weekly": round(max(_f(committed_weekly), 0.0), 2), "savings_interest_counted": False,
             "min_term_months": MIN_TERM_MONTHS, "presave_share": PRESAVE_SHARE,
             "warnings": list(warnings or []), "proposal": None}
-    active = [item for item in debts if _f(item.get("remaining_amount")) > 0.01]
+    active = [item for item in debts if _f(item.get("remaining_amount")) > 0.01
+              and str(item.get("id")) not in {str(debt_id) for debt_id in blocked_debt_ids}]
     if not active:
         return {**base, "status": "no_debts"}
     if base["weekly_safe_amount"] < STEP:

@@ -35,6 +35,7 @@ def client(monkeypatch):
     monkeypatch.setattr(owner_debt_blocks, "average_income", lambda *_a: (620_000.0, False))
     monkeypatch.setattr(owner_debt_blocks, "costa_rica_today", lambda: date(2026, 11, 2))
     monkeypatch.setattr(owner_debt_blocks, "get_current_workspace_id", lambda: "ws-test")
+    monkeypatch.setattr(owner_debt_blocks.owner_debt_block_store, "stored_blocks", lambda: [])
     client = TestClient(main.app)
     client.role, client.calls = role, calls
     return client
