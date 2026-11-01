@@ -9,7 +9,7 @@ import Foundation
 /// every gate by role (`Profile.planTier` is VIP for the server's Owner role only); the backend
 /// still decides every request.
 public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
-    case aguinaldo, strategy, debts, incomeBase, fixedExpenses, salvavidas, retirement, projections, scenarios, distribution
+    case aguinaldo, strategy, debts, debtBlocks, incomeBase, fixedExpenses, salvavidas, retirement, projections, scenarios, distribution
 
     public var id: String { rawValue }
 
@@ -20,11 +20,12 @@ public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
     /// Proyecciones and Escenarios: VIP (`strategy_vip`), paused with `vip_intelligence` (moved from Patrimonio).
     /// Retiro (RT-1): VIP (`strategy_vip`).
     /// Aguinaldo: VIP, and only where mail is read (`readsMail`): the Owner's alone during the launch.
+    /// Ahorro para deudas: the Owner's alone (`ownerOnly`; the JARVIS router answers no one else).
     public var minimum: PlanTier {
         switch self {
         case .debts, .incomeBase: .free
         case .strategy, .distribution: .basic
-        case .aguinaldo, .salvavidas, .fixedExpenses, .retirement, .projections, .scenarios: .vip
+        case .aguinaldo, .debtBlocks, .salvavidas, .fixedExpenses, .retirement, .projections, .scenarios: .vip
         }
     }
 
@@ -33,12 +34,15 @@ public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
     public var killSwitch: OpsFlag? {
         switch self {
         case .aguinaldo, .salvavidas, .projections, .scenarios: .vipIntelligence
-        case .strategy, .debts, .incomeBase, .fixedExpenses, .retirement, .distribution: nil
+        case .strategy, .debts, .debtBlocks, .incomeBase, .fixedExpenses, .retirement, .distribution: nil
         }
     }
 
     /// The row is computed from mail DINCR reads (CCSS payroll notices): shown only with mail reading.
     public var readsMail: Bool { self == .aguinaldo }
+
+    /// The row is the Owner's alone: hidden for every plan (`Jarvis.isAvailable`).
+    public var ownerOnly: Bool { self == .debtBlocks }
 
     public enum Availability: Equatable, Sendable {
         /// Not shown at all (an Owner-only row for anyone else).
@@ -49,10 +53,11 @@ public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
         case paused(OpsFlag)
     }
 
-    /// `canReadMail` is `Profile.canReadMail`; it defaults to false so a caller that forgets it hides
-    /// the mail rows rather than offering them.
-    public func availability(tier: PlanTier, flags: FeatureFlags, canReadMail: Bool = false) -> Availability {
+    /// `canReadMail` is `Profile.canReadMail` and `isOwner` is `Jarvis.isAvailable(to:)`; both default to
+    /// false so a caller that forgets them hides those rows rather than offering them.
+    public func availability(tier: PlanTier, flags: FeatureFlags, canReadMail: Bool = false, isOwner: Bool = false) -> Availability {
         if readsMail && !canReadMail { return .hidden }
+        if ownerOnly && !isOwner { return .hidden }
         guard tier.rank >= minimum.rank else { return .locked(minimum) }
         if let killSwitch, !flags.isEnabled(killSwitch) { return .paused(killSwitch) }
         return .available

@@ -93,6 +93,7 @@ class FakeBackend(
     private val records = FakeRecords(today)
     private fun snapshot() = FakePlanRoutes.Snapshot(colonesMovements, debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
+    private val debtBlocks by lazy { FakeDebtBlocks(today) }
     private val isInternal get() = profile.role == "owner"
     /** `/user-product/appearance`: one stored choice for the fixture account; none means the defaults. */
     private var appearance: AppearancePrefs? = null
@@ -334,6 +335,18 @@ class FakeBackend(
                 (money("amount") ?: java.math.BigDecimal.ZERO).signum() <= 0 -> error(422, "Indicá un monto mayor que cero.")
                 text("currency") != null && text("currency") != "CRC" -> error(422, "Por ahora la distribución exacta es solo en colones (CRC).")
                 else -> ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role, manualAmount = money("amount")))
+            }
+            // DB-1: the Owner's locked savings blocks (FakeDebtBlocks).
+            path == "/jarvis/premium/debt-savings-blocks" || path.startsWith("/jarvis/premium/debt-savings-blocks/") -> when {
+                !isOwner -> error(403, "No tienes permisos para realizar esta acción.")
+                method == "GET" -> ok(debtBlocks.state())
+                method == "POST" -> when (debtBlocks.create(body?.let { runCatching { json.decodeFromJsonElement(DebtSavingsBlockCreate.serializer(), it) }.getOrNull() })) {
+                    200 -> ok(Acknowledgement("OK"))
+                    409 -> error(409, "Esa deuda ya tiene un ahorro bloqueado.")
+                    else -> error(422, "Revisá el ahorro.")
+                }
+                method == "DELETE" -> if (debtBlocks.cancel(segments.last())) ok(Acknowledgement("OK")) else error(404, "No encontramos ese ahorro.")
+                else -> error(405, "Método no permitido.")
             }
             path == "/jarvis/premium/strategy-dashboard" && method == "GET" ->
                 if (!isOwner) error(403, "No tienes permisos para realizar esta acción.") else ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role))

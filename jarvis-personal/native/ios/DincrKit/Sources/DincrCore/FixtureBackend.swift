@@ -72,6 +72,8 @@ public actor FixtureBackend: HTTPTransport {
     /// Plan → Gastos fijos (Owner): the Owner's active fixed expenses (FixtureBackend+FixedExpenses.swift).
     /// Invented names and amounts.
     var ownerFixedExpenses: [FixtureFixedExpense] = FixtureFixedExpense.seed
+    /// Plan → Ahorro para deudas (Owner): the locked savings blocks recorded (FixtureBackend+DebtBlocks.swift).
+    var ownerDebtBlocks: [[String: Any]] = []
     /// Perfil → Atajos de iPhone (FixtureBackend+Shortcuts.swift): the account's current shortcut token
     /// (invented, never a real credential) and the captures received, by Idempotency-Key.
     var shortcutToken: String?
@@ -361,6 +363,7 @@ public actor FixtureBackend: HTTPTransport {
         default: break
         }
 
+        if let answer = debtBlocksRoute(method, path, body) { return answer }
         if let answer = planRoute(method, path, query, body) { return answer }
         if parts.starts(with: ["user-product", "free", "movements"]), parts.count == 4 { return editMovement(method, parts[3].removingPercentEncoding ?? parts[3], body) }
         if parts.starts(with: ["user-product", "finance", "debts"]), parts.count >= 4 { return debt(method, id(at: 3), parts.count == 5 ? parts[4] : nil, body) }

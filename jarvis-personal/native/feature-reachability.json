@@ -65,7 +65,8 @@
   "WE-2",
   "NT-1",
   "RV-1",
-  "RT-1"
+  "RT-1",
+  "DB-1"
  ],
  "fixtures": {
   "ios": {
@@ -512,6 +513,49 @@
     "en": {
      "tab": "Plan",
      "text": "Debts"
+    }
+   }
+  },
+  {
+   "id": "plan.debtBlocks",
+   "name": "Plan → Ahorro para deudas (DB-1: the Owner's locked savings blocks — weekly Thursday savings at the bank, chosen and sized by his strategy, paid into a long debt when they mature)",
+   "decision": "DB-1",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/jarvis/premium/debt-savings-blocks",
+     "gate": "router_roles:owner",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/jarvis/premium/debt-savings-blocks",
+     "gate": "router_roles:owner",
+     "used_by": []
+    },
+    {
+     "method": "DELETE",
+     "path": "/jarvis/premium/debt-savings-blocks/{block_id}",
+     "gate": "router_roles:owner",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.debtBlocks"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Ahorro para deudas",
+    "en": {
+     "tab": "Plan",
+     "text": "Savings for debts"
     }
    }
   },

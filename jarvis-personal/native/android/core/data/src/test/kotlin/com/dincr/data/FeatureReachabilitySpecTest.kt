@@ -58,6 +58,12 @@ class FeatureReachabilitySpecTest {
         listOf("free", "basic", "vip").forEach { assertFalse(it, profile("user", it).canReadMail) }
     }
 
+    /** DB-1: Ahorro para deudas is the Owner's alone (the row shows only to [Jarvis.isAvailable]). */
+    @Test fun debtSavingsBlocksAreTheOwnersAlone() {
+        assertEquals("AVAILABLE", state("plan.debtBlocks", "owner"))
+        listOf("free", "basic", "vip").forEach { assertEquals(it, "OWNER_ONLY", state("plan.debtBlocks", it)) }
+    }
+
     @Test fun planGatesFollowTheSpec() {
         gated.forEach { (id, feature) ->
             PlanTier.entries.forEach { tier ->

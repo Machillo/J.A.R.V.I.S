@@ -90,7 +90,7 @@ enum class Destination(val route: String, val icon: ImageVector) {
             null, "home", "debts", "goals", "attention" -> HOME
             "movements", "monthly" -> MOVEMENTS
             // WE-1: Plan → Proyecciones / Escenarios.
-            "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "fixedExpenses", "planPreferences", "scenarios", "projections", "retirement" -> PLAN
+            "plan", "aguinaldo", "strategy", "salvavidas", "distribution", "incomeBase", "fixedExpenses", "planPreferences", "scenarios", "projections", "retirement", "debtBlocks" -> PLAN
             // UX-13: Movimientos → Análisis.
             "analysis", "ownerAnalysis", "financialAnalysis", "monthReview" -> MOVEMENTS
             "wealth" -> WEALTH
@@ -187,6 +187,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("financialAnalysis") { FinancialAnalysisScreen(model, nav) }
                             composable("monthReview") { MonthReviewScreen(model, nav) }
                             composable("retirement") { RetirementScreen(model, nav) }
+                            composable("debtBlocks") { DebtSavingsBlocksScreen(model, nav) }
                             composable("scenarios") { ScenariosScreen(model, nav) }
                             composable("attention") { AttentionScreen(model, nav) }
                             composable("projections") { ProjectionsScreen(model, nav) }

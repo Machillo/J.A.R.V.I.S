@@ -2,7 +2,8 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY E1 — the Plan tab: exactly ten rows (RT-1 adds Retiro after Salvavidas), in this order (`PlanHubItem`): Aguinaldo,
+/// PARITY E1 — the Plan tab: exactly eleven rows (RT-1 adds Retiro after Salvavidas; the Owner's Ahorro para deudas
+/// follows Deudas), in this order (`PlanHubItem`): Aguinaldo,
 /// Tu plan del mes (UX-3: Estrategia + Distribución as one plan; the row keeps the Estrategia
 /// identifier and gate), Deudas (UX-4: where debts are managed, every plan; Home keeps a shortcut),
 /// Ingresos y base (UX-7: the declared income and essential expenses, every plan), Gastos fijos
@@ -29,7 +30,8 @@ struct PlanHubView: View {
 
     @ViewBuilder
     private func row(_ item: PlanHubItem) -> some View {
-        let availability = item.availability(tier: model.planTier, flags: model.flags, canReadMail: model.canReadMail)
+        let availability = item.availability(tier: model.planTier, flags: model.flags, canReadMail: model.canReadMail,
+                                             isOwner: Jarvis.isAvailable(to: model.profile))
         switch availability {
         case .hidden:
             EmptyView()
@@ -72,6 +74,7 @@ struct PlanHubView: View {
         case .aguinaldo: AguinaldoView()
         case .strategy: PlanStrategyView()
         case .debts: DebtsView()
+        case .debtBlocks: DebtSavingsBlocksView()
         case .incomeBase: IncomeBaseView()
         case .fixedExpenses: FixedExpensesView()
         case .salvavidas: SalvavidasView()
@@ -89,6 +92,7 @@ extension PlanHubItem {
         case .aguinaldo: tx("Aguinaldo", "Aguinaldo")
         case .strategy: tx("Tu plan del mes", "Your plan for the month")
         case .debts: tx("Deudas", "Debts")
+        case .debtBlocks: tx("Ahorro para deudas", "Savings for debts")
         case .incomeBase: tx("Ingresos y base", "Income and base")
         case .fixedExpenses: tx("Gastos fijos", "Fixed expenses")
         case .salvavidas: "Salvavidas"
@@ -104,6 +108,7 @@ extension PlanHubItem {
         case .aguinaldo: tx("Estimado según tus salarios", "Estimated from your salaries")
         case .strategy: tx("Cuánto podés repartir y cómo", "How much you can split, and how")
         case .debts: tx("Saldos, cuotas y pagos", "Balances, payments")
+        case .debtBlocks: tx("Ahorro bloqueado que se abona a tus deudas", "Locked savings paid into your debts")
         case .incomeBase: tx("Ingreso y gastos esenciales", "Income and essential expenses")
         case .fixedExpenses: tx("Lo que pagás todos los meses", "What you pay every month")
         case .salvavidas: tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers")
@@ -119,6 +124,7 @@ extension PlanHubItem {
         case .aguinaldo: "gift"
         case .strategy: "map"
         case .debts: "creditcard"
+        case .debtBlocks: "lock.square"
         case .incomeBase: "banknote"
         case .fixedExpenses: "list.bullet.rectangle"
         case .salvavidas: "lifepreserver"
