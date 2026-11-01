@@ -57,6 +57,8 @@ struct DebtSavingsBlocksView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .dincrCard()
+            // A container keeps its children's identifiers (the headline, the button).
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("debtBlocks.proposal")
         } else if let message = DebtSavingsReading.statusMessage(state) {
             Text(message).font(DincrFont.body).frame(maxWidth: .infinity, alignment: .leading).dincrCard()
@@ -80,6 +82,7 @@ struct DebtSavingsBlocksView: View {
                                 .accessibilityIdentifier("debtBlocks.remove.\(block.id)")
                         }
                     }
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("debtBlocks.block.\(block.id)")
                 }
             }
