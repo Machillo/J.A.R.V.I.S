@@ -60,6 +60,8 @@ final class OwnerAnalysisPlacementUITests: XCTestCase {
             open("analysis.financial", in: app)
             XCTAssertTrue(app.navigationBars["Análisis financiero"].waitForExistence(timeout: 10), who)
             XCTAssertTrue(element("analysis.financial.left", in: app).waitForExistence(timeout: 10), who)
+            // HS-1: the simple health reading on top (one word, a reason, one action).
+            XCTAssertTrue(element("analysis.financial.health", in: app).exists, who)
             XCTAssertTrue(contains("En un mes normal te sobran", in: app), who)
             XCTAssertTrue(reveal("analysis.financial.saved", in: app) && contains("Guardás 10 de cada 100 que entran.", in: app), who)
             XCTAssertTrue(reveal("analysis.financial.debts", in: app), who)

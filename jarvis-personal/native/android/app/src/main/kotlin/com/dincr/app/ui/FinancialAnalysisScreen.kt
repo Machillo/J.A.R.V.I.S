@@ -14,6 +14,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.FinancialAnalysis
 import com.dincr.data.FinancialReading
+import com.dincr.data.HealthReading
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
 import com.dincr.design.IncomeExpenseBars
@@ -29,9 +30,16 @@ import com.dincr.design.generated.DincrSpacing
  */
 @Composable
 fun FinancialAnalysisScreen(model: AppModel, nav: Navigator) {
-    val data = rememberLoad(model) { model.api.financialAnalysis() }
+    val data = rememberLoad(model) {
+        // The Salvavidas is optional: without it the reading leaves its coverage out.
+        val coverage = runCatching { model.api.salvavidas().coverageMonths }.getOrNull()
+        model.api.financialAnalysis() to coverage
+    }
     DetailScaffold(tx("Análisis financiero", "Financial analysis"), nav::back) {
-        LoadContent(data) { analysis -> FinancialAnalysisContent(analysis) }
+        LoadContent(data) { (analysis, coverage) ->
+            HealthReading.reading(FinancialReading.normal(analysis), coverage)?.let { HealthCard(it) }
+            FinancialAnalysisContent(analysis)
+        }
     }
 }
 
@@ -67,6 +75,24 @@ private fun FinancialAnalysisContent(analysis: FinancialAnalysis) {
         }
     }
     if (FinancialReading.canCompare(analysis)) RisesCard(FinancialReading.rises(analysis))
+}
+
+/** HS-1 — "Tu salud financiera": one word, the main reason and one thing to do ([HealthReading]). */
+@Composable
+private fun HealthCard(reading: HealthReading.Reading) {
+    val color = when (reading.level) {
+        HealthReading.Level.GOOD -> Dincr.colors.positive
+        HealthReading.Level.FAIR -> Dincr.colors.warning
+        HealthReading.Level.AT_RISK -> Dincr.colors.negative
+    }
+    DincrCard {
+        Column(Modifier.fillMaxWidth().testTag("analysis.financial.health"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+            Text(tx("Tu salud financiera", "Your financial health"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2, modifier = Modifier.semantics { heading() })
+            Text(reading.word, style = MaterialTheme.typography.headlineSmall, color = color)
+            Text(reading.reason, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text)
+            Caption(reading.action)
+        }
+    }
 }
 
 /** A title, the sentence that answers it, and one line saying what it means. */

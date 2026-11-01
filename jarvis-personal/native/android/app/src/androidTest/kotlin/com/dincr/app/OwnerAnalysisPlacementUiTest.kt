@@ -88,6 +88,8 @@ class OwnerAnalysisPlacementUiTest {
             click(financialAnalysis)
             waitUntil("$who: normal month") { tagged("analysis.financial.left") && present(tx("En un mes normal te sobran", "In a normal month you have")) }
             assertTrue(who, present(tx("Guardás 10 de cada 100 que entran.", "You save 10 of every 100 that come in.")))
+            // HS-1: the simple health reading on top (one word, a reason, one action).
+            assertTrue(who, tagged("analysis.financial.health") && present(tx("Tu salud financiera", "Your financial health")))
             assertTrue(who, tagged("analysis.financial.debts"))
             reveal("analysis.financial.months")
             reveal("analysis.financial.rises")
