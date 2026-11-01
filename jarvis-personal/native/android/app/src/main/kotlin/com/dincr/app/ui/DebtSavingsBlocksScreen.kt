@@ -165,12 +165,17 @@ private fun ApplyBlockForm(model: AppModel, block: DebtSavingsBlocks.Block, onCa
     var amount by remember(block.id) { mutableStateOf(block.totalAtMaturity?.let(format::inputText).orEmpty()) }
     var outcome by remember(block.id) { mutableStateOf(DebtSavingsBlockApply.REDUCE_TERM) }
     var installment by remember(block.id) { mutableStateOf("") }
+    var remaining by remember(block.id) { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     MoneyField(tx("Cuánto abonaste", "How much you paid"), amount, { amount = it }, modifier = Modifier.testTag("debtBlocks.applyAmount"))
     ChoiceChips(listOf(DebtSavingsBlockApply.REDUCE_TERM to tx("Bajó el plazo", "Shortened the term"),
         DebtSavingsBlockApply.REDUCE_INSTALLMENT to tx("Bajó la cuota", "Lowered the installment")), outcome, { outcome = it }, tx("Qué hizo el banco", "What the bank did"))
+    if (outcome == DebtSavingsBlockApply.REDUCE_TERM) {
+        FormField(tx("Cuotas que te quedan", "Installments left"), remaining, { remaining = it }, keyboard = KeyboardType.Number,
+            modifier = Modifier.testTag("debtBlocks.remaining"))
+    }
     if (outcome == DebtSavingsBlockApply.REDUCE_INSTALLMENT) {
         MoneyField(tx("Cuota nueva", "New installment"), installment, { installment = it }, modifier = Modifier.testTag("debtBlocks.newInstallment"))
         Caption(tx("Lo que bajó la cuota se suma a tu siguiente ahorro.", "What the installment went down is added to your next saving."))
@@ -183,10 +188,14 @@ private fun ApplyBlockForm(model: AppModel, block: DebtSavingsBlocks.Block, onCa
             AmountInput.parse(installment, format.separators)?.takeIf { it.signum() > 0 }
                 ?: run { error = tx("Escribí la cuota nueva.", "Enter the new installment."); return@onClick }
         } else null
+        val left = if (outcome == DebtSavingsBlockApply.REDUCE_TERM) {
+            remaining.trim().toIntOrNull()?.takeIf { it in 1..600 }
+                ?: run { error = tx("Escribí cuántas cuotas te quedan.", "Enter how many installments are left."); return@onClick }
+        } else null
         saving = true; error = null
         scope.launch {
             model.load(tx("No pudimos guardar.", "We couldn’t save.")) {
-                model.api.applyDebtSavingsBlock(block.id, DebtSavingsBlockApply.of(paid, outcome, newInstallment))
+                model.api.applyDebtSavingsBlock(block.id, DebtSavingsBlockApply.of(paid, outcome, newInstallment, left))
             }
                 .onSuccess { onPaid(DebtSavingsReading.appliedMessage(it.block.applied, format)) }
                 .onFailure { if (it !is AuthException.SignedOut) error = it.message }

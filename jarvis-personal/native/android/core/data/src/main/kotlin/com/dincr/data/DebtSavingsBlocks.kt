@@ -88,14 +88,16 @@ data class DebtSavingsBlockApply(
     val amount: Money,
     val outcome: String,
     @SerialName("new_monthly_payment") val newMonthlyPayment: Money? = null,
+    @SerialName("remaining_installments") val remainingInstallments: Int? = null,
 ) {
     companion object {
         const val REDUCE_TERM = "reduce_term"
         const val REDUCE_INSTALLMENT = "reduce_installment"
 
-        /** The new installment travels only when the bank lowered it. */
-        fun of(amount: java.math.BigDecimal, outcome: String, newMonthlyPayment: java.math.BigDecimal?) =
-            DebtSavingsBlockApply(amount, outcome, newMonthlyPayment.takeIf { outcome == REDUCE_INSTALLMENT })
+        /** The new installment travels only when the bank lowered it; the installments left only after a shorter term. */
+        fun of(amount: java.math.BigDecimal, outcome: String, newMonthlyPayment: java.math.BigDecimal?, remainingInstallments: Int? = null) =
+            DebtSavingsBlockApply(amount, outcome, newMonthlyPayment.takeIf { outcome == REDUCE_INSTALLMENT },
+                remainingInstallments.takeIf { outcome == REDUCE_TERM })
     }
 }
 

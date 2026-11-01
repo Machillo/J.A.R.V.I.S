@@ -163,7 +163,9 @@ enum AmountAction: Identifiable {
 }
 
 /// One amount, typed in the user's own separators. Retrying the same amount after an error reuses
-/// its idempotency key, so a lost response never records the money twice.
+/// its idempotency key, so a lost response never records the money twice. A debt payment above the
+/// installment asks what the bank did with the extra (fewer installments, a lower installment, or
+/// nothing): the user types the new figure from the bank; nothing is guessed.
 struct AmountSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -173,6 +175,10 @@ struct AmountSheet: View {
     @State private var error: String?
     @State private var saving = false
     @State private var submission = AmountSubmission()
+    @State private var bank = BankChoice.unchanged
+    @State private var bankFigure = ""
+
+    enum BankChoice: Hashable { case unchanged, shorterTerm, lowerInstallment }
 
     var body: some View {
         NavigationStack {
@@ -184,6 +190,23 @@ struct AmountSheet: View {
                         .accessibilityIdentifier("amount.field")
                     if let error {
                         Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative)
+                    }
+                }
+                if isExtraPayment {
+                    Section(tx("Lo que pagaste de más", "What you paid above the installment")) {
+                        Picker(tx("¿Qué hizo el banco?", "What did the bank do?"), selection: $bank) {
+                            Text(tx("Nada cambió", "Nothing changed")).tag(BankChoice.unchanged)
+                            Text(tx("Bajó el plazo", "Shortened the term")).tag(BankChoice.shorterTerm)
+                            Text(tx("Bajó la cuota", "Lowered the installment")).tag(BankChoice.lowerInstallment)
+                        }
+                        .accessibilityIdentifier("amount.bank")
+                        if bank == .shorterTerm {
+                            TextField(tx("Cuotas que te quedan", "Installments left"), text: $bankFigure).keyboardType(.numberPad)
+                                .accessibilityIdentifier("amount.remainingInstallments")
+                        } else if bank == .lowerInstallment {
+                            TextField(tx("Cuota nueva", "New installment"), text: $bankFigure).keyboardType(.decimalPad)
+                                .accessibilityIdentifier("amount.newInstallment")
+                        }
                     }
                 }
             }
@@ -200,8 +223,15 @@ struct AmountSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .interactiveDismissDisabled(saving)
+    }
+
+    /// A debt payment above a known installment: the bank may have changed the term or the installment.
+    private var isExtraPayment: Bool {
+        guard case .payDebt(let debt) = action, let installment = debt.monthlyPayment, installment > 0,
+              let amount = AmountInput.parse(text, separators: model.moneyFormat.separators) else { return false }
+        return amount > installment
     }
 
     private var title: String {
@@ -248,7 +278,23 @@ struct AmountSheet: View {
         do {
             switch action {
             case .payDebt(let debt):
-                _ = try await model.service.payDebt(id: debt.id, amount: amount, idempotencyKey: key)
+                var afterExtra: DebtAfterExtra?
+                if isExtraPayment {
+                    switch bank {
+                    case .unchanged: afterExtra = nil
+                    case .shorterTerm:
+                        guard let count = Int(bankFigure.trimmingCharacters(in: .whitespaces)), (1...600).contains(count) else {
+                            error = tx("Escribí cuántas cuotas te quedan.", "Enter how many installments are left."); return
+                        }
+                        afterExtra = .remainingInstallments(count)
+                    case .lowerInstallment:
+                        guard let value = AmountInput.parse(bankFigure, separators: model.moneyFormat.separators), value > 0 else {
+                            error = tx("Escribí la cuota nueva.", "Enter the new installment."); return
+                        }
+                        afterExtra = .newMonthlyPayment(value)
+                    }
+                }
+                _ = try await model.service.payDebt(id: debt.id, amount: amount, idempotencyKey: key, afterExtra: afterExtra)
                 onDone(tx("Pago registrado", "Payment recorded"))
             case .contribute(let goal):
                 _ = try await model.service.contribute(goalID: goal.id, GoalContribution(amount: amount, contributionDate: Day.today()), idempotencyKey: key)

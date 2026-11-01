@@ -83,6 +83,15 @@ class UserDebtUpdateRequest(UserDebtCreateRequest):
 
 class DebtPaymentRequest(BaseModel):
     amount: float = Field(gt=0)
+    # What the bank did with an extra amount, as the user says it (one or none).
+    remaining_installments: int | None = Field(default=None, ge=1, le=600)
+    new_monthly_payment: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def one_adjustment(self):
+        if self.remaining_installments is not None and self.new_monthly_payment is not None:
+            raise ValueError("Indicá las cuotas que quedan o la cuota nueva, no las dos.")
+        return self
 
 
 class GoalContributionRequest(BaseModel):

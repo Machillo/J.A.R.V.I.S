@@ -101,4 +101,20 @@ import Testing
         let lower = try String(decoding: APIClient.encoder.encode(DebtSavingsBlockApply(amount: 351000, outcome: .reduceInstallment, newMonthlyPayment: 39000)), as: UTF8.self)
         #expect(lower.contains("\"new_monthly_payment\":39000"))
     }
+
+    @Test func aShorterTermCarriesTheInstallmentsLeft() throws {
+        let body = try String(decoding: APIClient.encoder.encode(DebtSavingsBlockApply(amount: 351000, outcome: .reduceTerm, newMonthlyPayment: nil,
+                                                                                         remainingInstallments: 12)), as: UTF8.self)
+        #expect(body.contains("\"remaining_installments\":12"))
+    }
+
+    @Test func aDebtPaymentCarriesWhatTheBankDidOnlyWhenTheUserSaidIt() throws {
+        func body(_ after: DebtAfterExtra?) throws -> String {
+            try String(decoding: APIClient.encoder.encode(DebtPaymentRequest(amount: 141500, afterExtra: after)), as: UTF8.self)
+        }
+        #expect(try body(nil) == "{\"amount\":141500}")
+        #expect(try body(.remainingInstallments(10)).contains("\"remaining_installments\":10"))
+        let lower = try body(.newMonthlyPayment(4104))
+        #expect(lower.contains("\"new_monthly_payment\":4104") && !lower.contains("remaining"))
+    }
 }

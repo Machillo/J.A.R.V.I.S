@@ -11,8 +11,8 @@ how much every payday, from when and for how many months. From then on:
 
 When a block matures the Owner pays what it holds into its debt and records it (POST .../apply):
 one extraordinary payment to principal (``finance/debt_extra_payment.record_extra_payment``), with
-the bank's choice: a shorter term (the installment stays) or a lower installment (the new one is
-stored). The block is then closed. The next block needs nothing else: the strategy reads the lower
+the bank's choice, with the new figure the Owner reads from the bank: a shorter term (the
+installments left are stored; the installment stays) or a lower installment (the new one is stored). The block is then closed. The next block needs nothing else: the strategy reads the lower
 balance or installment, so whatever was freed is part of the next proposal.
 
 Reading never writes; creating, cancelling and applying are the Owner's explicit commands. Owner
@@ -165,6 +165,7 @@ def apply_block(block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     amount = _amount(payload.get("amount"))
     outcome = payload.get("outcome")
     new_installment = payload.get("new_monthly_payment")
+    remaining = payload.get("remaining_installments")
     if amount is None:
         raise HTTPException(status_code=422, detail=tx("Indicá cuánto abonaste.", "Say how much you paid."))
     if outcome not in OUTCOMES:
@@ -173,8 +174,11 @@ def apply_block(block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         new_installment = _amount(new_installment)
         if new_installment is None:
             raise HTTPException(status_code=422, detail=tx("Indicá la cuota nueva.", "Enter the new installment."))
+        remaining = None
     else:
         new_installment = None
+        if not isinstance(remaining, int) or not 1 <= remaining <= 600:
+            raise HTTPException(status_code=422, detail=tx("Indicá cuántas cuotas te quedan.", "Enter how many installments are left."))
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         # One change at a time per workspace; the preference row is read and written in this transaction.
@@ -193,14 +197,14 @@ def apply_block(block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(status_code=409, detail=tx("Ese ahorro todavía no vence.", "That saving hasn't matured yet."))
         payment = record_extra_payment(
             conn, workspace_id, int(block["debt_id"]), amount, payment_date=today.isoformat(),
-            description="Abono de ahorro bloqueado", new_monthly_payment=new_installment, source=SOURCE,
+            description="Abono de ahorro bloqueado", new_monthly_payment=new_installment, remaining_installments=remaining, source=SOURCE,
             transaction_source=SOURCE, transaction_note=f"{SOURCE}:{block_id}",
         )
         if payment is None:   # the debt is gone or is not this workspace's: nothing is written
             raise HTTPException(status_code=404, detail=tx("No encontramos esa deuda.", "We couldn't find that debt."))
         applied = {"applied_at": today.isoformat(), "amount": amount, "outcome": outcome,
                    "principal_amount": payment["principal_amount"], "new_remaining_amount": payment["new_remaining_amount"],
-                   "new_monthly_payment": new_installment, "payment_id": payment["payment_id"],
+                   "new_monthly_payment": new_installment, "remaining_installments": remaining, "payment_id": payment["payment_id"],
                    "left_over": round(max(amount - float(payment["principal_amount"]), 0.0), 2)}
         block = {**block, "applied": applied}
         stored = [block if item["id"] == block_id else item for item in blocks]

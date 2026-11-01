@@ -161,9 +161,10 @@ public struct DincrService: Sendable {
         try await client.get("/user-product/finance/debts/\(id)/payments")
     }
 
-    public func payDebt(id: Int, amount: Decimal, idempotencyKey: String) async throws -> DebtPaymentResult {
+    public func payDebt(id: Int, amount: Decimal, idempotencyKey: String, afterExtra: DebtAfterExtra? = nil) async throws -> DebtPaymentResult {
         try WriteContract.checkAmount(amount)
-        return try await client.send("POST", "/user-product/finance/debts/\(id)/payments", body: AmountRequest(amount: amount), idempotencyKey: idempotencyKey)
+        return try await client.send("POST", "/user-product/finance/debts/\(id)/payments",
+                                     body: DebtPaymentRequest(amount: amount, afterExtra: afterExtra), idempotencyKey: idempotencyKey)
     }
 
     // MARK: Goals and savings plans (E6, E7)

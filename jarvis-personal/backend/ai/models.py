@@ -101,3 +101,4 @@ class DebtSavingsBlockApplyRequest(BaseModel):
     amount: float
     outcome: str
     new_monthly_payment: float | None = None
+    remaining_installments: int | None = None

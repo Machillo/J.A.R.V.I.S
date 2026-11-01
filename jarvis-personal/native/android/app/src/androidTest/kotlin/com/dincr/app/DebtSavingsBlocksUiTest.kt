@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
@@ -71,6 +72,9 @@ class DebtSavingsBlocksUiTest {
         click(tx("Plan", "Plan"), selectable = true)
         click(tx("Ahorro para deudas", "Savings for debts"))
         clickTag("debtBlocks.pay.fixture-matured-1")
+        // The bank shortened the term: the installments left, as the bank says them.
+        waitUntil("the installments field") { tagged("debtBlocks.remaining") }
+        compose.onAllNodes(hasTestTag("debtBlocks.remaining")).onFirst().performTextInput("12")
         clickTag("debtBlocks.applySave")
         waitUntil("the abono") { tagged("debtBlocks.notice") && present(tx("Listo", "Done")) && !tagged("debtBlocks.block.fixture-matured-1") }
     }

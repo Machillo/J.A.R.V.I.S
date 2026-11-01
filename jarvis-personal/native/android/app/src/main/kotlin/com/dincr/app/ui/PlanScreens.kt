@@ -183,9 +183,8 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
     }
     history?.let { debt -> DebtPaymentsDialog(model, debt) { history = null } }
     paying?.let { debt ->
-        AmountDialog(tx("Registrar pago", "Record payment"), tx("Pendiente: ${Dincr.money.format(debt.remainingAmount ?: BigDecimal.ZERO)}. Un pago mayor se ajusta al saldo.", "Outstanding: ${Dincr.money.format(debt.remainingAmount ?: BigDecimal.ZERO)}. A larger payment is capped at the balance."),
-            tx("Registrar", "Record"), onDismiss = { paying = null }) { amount, key ->
-            model.load(tx("No pudimos registrar el pago.", "We couldn’t record the payment.")) { model.api.payDebt(debt.id, amount, key) }.fold(
+        DebtPaymentDialog(debt, onDismiss = { paying = null }) { amount, key, afterExtra ->
+            model.load(tx("No pudimos registrar el pago.", "We couldn’t record the payment.")) { model.api.payDebt(debt.id, amount, key, afterExtra) }.fold(
                 { paying = null; debts.reload(); model.showNotice(tx("Pago registrado", "Payment recorded")); null },
                 { if (it is AuthException.SignedOut) null else it.message })
         }

@@ -53,6 +53,29 @@ public struct AmountRequest: Encodable, Sendable, Equatable {
     public let amount: Decimal
 }
 
+/// What the bank did with a payment above the installment, as the user reads it from the bank:
+/// the installments left or the new installment. Never guessed; nil keeps both.
+public enum DebtAfterExtra: Equatable, Sendable {
+    case remainingInstallments(Int)
+    case newMonthlyPayment(Decimal)
+}
+
+/// Body of `POST /user-product/finance/debts/{id}/payments`.
+struct DebtPaymentRequest: Encodable, Sendable, Equatable {
+    let amount: Decimal
+    let remainingInstallments: Int?
+    let newMonthlyPayment: Decimal?
+
+    init(amount: Decimal, afterExtra: DebtAfterExtra?) {
+        self.amount = amount
+        switch afterExtra {
+        case .remainingInstallments(let count): remainingInstallments = count; newMonthlyPayment = nil
+        case .newMonthlyPayment(let value): remainingInstallments = nil; newMonthlyPayment = value
+        case nil: remainingInstallments = nil; newMonthlyPayment = nil
+        }
+    }
+}
+
 public struct DebtPaymentResult: Decodable, Sendable, Equatable {
     public let status: String?
     public let debtId: Int?

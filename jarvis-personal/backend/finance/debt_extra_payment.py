@@ -5,6 +5,9 @@ The one way a pure extra payment is recorded: the debt's remaining balance goes 
 transaction records the money that left. Nothing is committed here: the caller commits, so a
 payment that is part of a larger operation (the Owner's confirmed distribution) is applied
 together with the rest of it or not at all.
+
+What the bank did with the extra money is the user's to say, never guessed (``adjust_after_extra``):
+fewer installments left (the term) or a lower installment. Without it the debt keeps both.
 """
 from __future__ import annotations
 
@@ -18,6 +21,25 @@ def _as_float(value: Any) -> float:
         return 0.0
 
 
+MAX_INSTALLMENTS = 600
+
+
+def adjust_after_extra(conn, workspace_id: str, debt_id: int, *, remaining_installments: int | None = None,
+                       new_monthly_payment: float | None = None) -> None:
+    """What the bank did with an extra payment, as the user said it: the installments left
+    (``term_months`` = installments already paid + the ones left) or the new installment."""
+    if remaining_installments is not None:
+        conn.execute(
+            "UPDATE debts SET term_months = COALESCE(installments_paid, 0) + %s, updated_at = NOW() WHERE id = %s AND workspace_id = %s",
+            (int(remaining_installments), debt_id, workspace_id),
+        )
+    if new_monthly_payment is not None:
+        conn.execute(
+            "UPDATE debts SET monthly_payment = %s, updated_at = NOW() WHERE id = %s AND workspace_id = %s",
+            (_as_float(new_monthly_payment), debt_id, workspace_id),
+        )
+
+
 def record_extra_payment(
     conn,
     workspace_id: str,
@@ -27,6 +49,7 @@ def record_extra_payment(
     payment_date: str,
     description: str = "",
     new_monthly_payment: float | None = None,
+    remaining_installments: int | None = None,
     source: str = "manual_extra",
     transaction_source: str = "manual_debt_extra",
     transaction_note: str = "",
@@ -72,6 +95,7 @@ def record_extra_payment(
          previous_payment, final_payment, description or "Abono extraordinario a principal",
          payment_date, int(debt.get("installments_paid") or 0), source),
     )
+    adjust_after_extra(conn, workspace_id, debt_id, remaining_installments=remaining_installments)
     note = f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"
     conn.execute(
         """INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type,

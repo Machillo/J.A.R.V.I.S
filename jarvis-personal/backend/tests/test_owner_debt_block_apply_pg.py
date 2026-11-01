@@ -92,10 +92,13 @@ def _block(cur, ws=WS):
 
 
 def test_a_matured_block_is_paid_into_its_debt_and_closed(db):
-    answer = _apply({"amount": 351000, "outcome": "reduce_term"})
+    answer = _apply({"amount": 351000, "outcome": "reduce_term", "remaining_installments": 12})
     assert answer["replayed"] is False
     debt = _debt(db)
     assert (float(debt["remaining_amount"]), float(debt["monthly_payment"])) == (649000, 60000), "a shorter term keeps the installment"
+    db.execute("SELECT term_months, installments_paid FROM debts WHERE workspace_id=%s", (WS,))
+    term = db.fetchone()
+    assert term["term_months"] - term["installments_paid"] == 12, "the installments left the Owner read from the bank"
     db.execute("SELECT payment_type, amount, source FROM debt_payments WHERE workspace_id=%s", (WS,))
     assert [(row["payment_type"], float(row["amount"]), row["source"]) for row in db.fetchall()] == [("extra_payment", 351000, "debt_savings_block")]
     db.execute("SELECT transaction_type, amount, source, notes FROM transactions WHERE workspace_id=%s", (WS,))
@@ -121,7 +124,7 @@ def test_a_retry_or_two_at_once_apply_it_once(db):
 
     def run():
         try:
-            results.append(_apply({"amount": 351000, "outcome": "reduce_term"}))
+            results.append(_apply({"amount": 351000, "outcome": "reduce_term", "remaining_installments": 12}))
         except Exception as error:  # noqa: BLE001
             errors.append(error)
 
@@ -137,6 +140,8 @@ def test_a_retry_or_two_at_once_apply_it_once(db):
 @pytest.mark.parametrize("payload, status", [
     ({"amount": 0, "outcome": "reduce_term"}, 422), ({"amount": "x", "outcome": "reduce_term"}, 422),
     ({"amount": 351000, "outcome": "who_knows"}, 422),
+    ({"amount": 351000, "outcome": "reduce_term"}, 422),   # the installments left are the Owner's to say
+    ({"amount": 351000, "outcome": "reduce_term", "remaining_installments": 0}, 422),
 ])
 def test_an_invalid_payment_writes_nothing(db, payload, status):
     with pytest.raises(HTTPException) as error:
@@ -147,21 +152,21 @@ def test_an_invalid_payment_writes_nothing(db, payload, status):
 def test_a_block_that_has_not_matured_writes_nothing(db, monkeypatch):
     monkeypatch.setattr(store, "costa_rica_today", lambda: date(2027, 5, 4))
     with pytest.raises(HTTPException) as error:
-        _apply({"amount": 351000, "outcome": "reduce_term"})
+        _apply({"amount": 351000, "outcome": "reduce_term", "remaining_installments": 12})
     assert error.value.status_code == 409 and _written(db) == (0, 0)
 
 
 def test_another_workspaces_block_or_a_debt_that_is_gone_writes_nothing(db):
     with pytest.raises(HTTPException) as error:
-        _apply({"amount": 351000, "outcome": "reduce_term"}, block_id="not-mine")
+        _apply({"amount": 351000, "outcome": "reduce_term", "remaining_installments": 12}, block_id="not-mine")
     assert error.value.status_code == 404
     db.execute("DELETE FROM debts WHERE workspace_id=%s", (WS,))
     with pytest.raises(HTTPException) as error:
-        _apply({"amount": 351000, "outcome": "reduce_term"})
+        _apply({"amount": 351000, "outcome": "reduce_term", "remaining_installments": 12})
     assert error.value.status_code == 404 and _written(db) == (0, 0) and not _block(db).get("applied")
 
 
 def test_more_than_the_debt_owes_pays_it_off_and_says_what_was_left(db):
-    applied = _apply({"amount": 1_050_000, "outcome": "reduce_term"})["block"]["applied"]
+    applied = _apply({"amount": 1_050_000, "outcome": "reduce_term", "remaining_installments": 1})["block"]["applied"]
     assert (applied["principal_amount"], applied["new_remaining_amount"], applied["left_over"]) == (1000000, 0, 50000)
     assert float(_debt(db)["remaining_amount"]) == 0

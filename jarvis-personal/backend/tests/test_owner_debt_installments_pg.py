@@ -261,6 +261,44 @@ def test_a_users_payment_keeps_its_existing_behaviour(pg):
     assert _q(pg, "SELECT source FROM transactions WHERE workspace_id=%s", (VIP["workspace"],)) == [("finva_debt_payment",)]
 
 
+def _plan(conn, debt_id: int):
+    return _q(conn, "SELECT monthly_payment, term_months - installments_paid FROM debts WHERE id=%s", (debt_id,))[0]
+
+
+def test_an_extra_payment_keeps_term_and_installment_unless_the_owner_says_what_the_bank_did(pg, monkeypatch):
+    """The Owner's report: an extra payment lowered the balance but neither the term nor the
+    installment. What the bank did is the Owner's to say; without it nothing is guessed."""
+    from backend.user_product import service
+
+    monkeypatch.setattr(service, "costa_rica_today", lambda: date(2026, 10, 15))
+    kept, shorter, lower = _debt(pg), _debt(pg), _debt(pg)
+    _owner(service.pay_user_debt, kept, 500)
+    assert _plan(pg, kept) == (110, 11), "no answer: the term and the installment stay"
+    _owner(service.pay_user_debt, shorter, 500, remaining_installments=5)
+    assert _plan(pg, shorter) == (110, 5), "the bank shortened the term: 5 installments left"
+    _owner(service.pay_user_debt, lower, 500, new_monthly_payment=60)
+    assert _plan(pg, lower) == (60, 11), "the bank lowered the installment"
+    assert _q(pg, "SELECT new_monthly_payment FROM debt_payments WHERE debt_id=%s", (lower,)) == [(60,)]
+
+
+def test_an_extra_payment_after_the_scheduled_installment_also_takes_what_the_bank_did(pg, monkeypatch):
+    from backend.user_product import service
+
+    debt_id = _debt(pg)
+    _apply(date(2026, 10, 15))
+    monkeypatch.setattr(service, "costa_rica_today", lambda: date(2026, 10, 16))
+    _owner(service.pay_user_debt, debt_id, 410, remaining_installments=4)   # 300 above the installment
+    assert _plan(pg, debt_id)[1] == 4
+
+
+def test_a_users_extra_payment_takes_what_the_bank_did_too(pg):
+    from backend.user_product import service
+
+    debt_id = _debt(pg, VIP)
+    _vip(service.pay_user_debt, debt_id, 300, new_monthly_payment=80)
+    assert _plan(pg, debt_id)[0] == 80
+
+
 # --- Owner only ---------------------------------------------------------------------------
 
 def test_a_user_cannot_apply_installments(pg):

@@ -47,6 +47,11 @@ final class DebtSavingsBlocksUITests: XCTestCase {
         reveal("debtBlocks.pay.fixture-matured-1", in: app).tap()
         let save = element("debtBlocks.applySave", in: app)
         XCTAssertTrue(save.waitForExistence(timeout: 10))
+        // The bank shortened the term: the installments left, as the bank says them.
+        let remaining = element("debtBlocks.remaining", in: app)
+        XCTAssertTrue(remaining.waitForExistence(timeout: 5))
+        remaining.tap()
+        remaining.typeText("12")
         save.tap()
         let notice = element("debtBlocks.notice", in: app)
         XCTAssertTrue(notice.waitForExistence(timeout: 10))

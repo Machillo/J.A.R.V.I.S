@@ -11,6 +11,7 @@ from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
 from backend.core.time import costa_rica_today
 from backend.finance.debt_automation import schedule_automation_enabled
+from backend.finance.debt_extra_payment import adjust_after_extra
 from backend.finance.service import apply_monthly_payment_to_debt, get_payroll_events
 from backend.finance.category_catalog import manual_expense_category, normalize_category, expense_type_for_category
 from backend.user_product.basic_service import _require_basic_tables
@@ -312,14 +313,17 @@ def create_user_debt(payload):
     return _with_rate_knowledge(row)
 
 
-def pay_user_debt(debt_id: int, amount: float):
+def pay_user_debt(debt_id: int, amount: float, remaining_installments: int | None = None,
+                  new_monthly_payment: float | None = None):
+    """Registrar pago. What the bank did with an extra amount (installments left, or a new
+    installment) is the user's to say (``adjust_after_extra``); without it the debt keeps both."""
     user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     payment = max(float(amount or 0), 0)
     if payment <= 0:
         raise HTTPException(status_code=400, detail="El pago debe ser mayor que cero.")
     if schedule_automation_enabled():
-        return _pay_owner_debt(debt_id, payment)
+        return _pay_owner_debt(debt_id, payment, remaining_installments, new_monthly_payment)
     with get_connection() as conn:
         debt = conn.execute(
             # Locked: a concurrent payment waits and then reads the reduced balance.
@@ -335,6 +339,8 @@ def pay_user_debt(debt_id: int, amount: float):
             "UPDATE debts SET remaining_amount=%s, updated_at=NOW() WHERE id=%s AND workspace_id=%s",
             (new_remaining, debt_id, workspace_id),
         )
+        adjust_after_extra(conn, workspace_id, debt_id, remaining_installments=remaining_installments,
+                           new_monthly_payment=new_monthly_payment)
         # Keep an auditable transaction; legacy user_id uses users(id), ownership uses workspace_id.
         conn.execute(
             """INSERT INTO transactions(
@@ -349,7 +355,8 @@ def pay_user_debt(debt_id: int, amount: float):
 
 
 
-def _pay_owner_debt(debt_id: int, payment: float) -> dict:
+def _pay_owner_debt(debt_id: int, payment: float, remaining_installments: int | None = None,
+                    new_monthly_payment: float | None = None) -> dict:
     """The verified Owner's debts follow their installment schedule (finance/debt_automation.py).
 
     A payment registered from the app goes through the same amortization command as the Owner's
@@ -357,7 +364,8 @@ def _pay_owner_debt(debt_id: int, payment: float) -> dict:
     debt_payments, and never charges an installment the daily automation already recorded (nor
     lets the automation record it again).
     """
-    result = apply_monthly_payment_to_debt(debt_id, payment, payment_date=costa_rica_today().isoformat())
+    result = apply_monthly_payment_to_debt(debt_id, payment, payment_date=costa_rica_today().isoformat(),
+                                           new_monthly_payment=new_monthly_payment, remaining_installments=remaining_installments)
     if result.get("status") == "ERROR":
         message = result.get("message") or "No pudimos registrar el pago."
         raise HTTPException(status_code=404 if "no encontrada" in message.lower() else 400, detail=message)

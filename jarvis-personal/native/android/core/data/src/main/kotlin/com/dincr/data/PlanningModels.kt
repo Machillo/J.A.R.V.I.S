@@ -83,6 +83,28 @@ data class DebtRequest(
 data class AmountRequest(val amount: Money)
 
 /**
+ * What the bank did with a payment above the installment, as the user reads it from the bank: the
+ * installments left or the new installment. Never guessed; null keeps both. iOS: `DebtAfterExtra`.
+ */
+sealed interface DebtAfterExtra {
+    data class RemainingInstallments(val count: Int) : DebtAfterExtra
+    data class NewMonthlyPayment(val amount: java.math.BigDecimal) : DebtAfterExtra
+}
+
+/** Body of `POST /user-product/finance/debts/{id}/payments`. */
+@Serializable
+data class DebtPaymentRequest(
+    val amount: Money,
+    @SerialName("remaining_installments") val remainingInstallments: Int? = null,
+    @SerialName("new_monthly_payment") val newMonthlyPayment: Money? = null,
+) {
+    companion object {
+        fun of(amount: java.math.BigDecimal, after: DebtAfterExtra?) = DebtPaymentRequest(amount,
+            (after as? DebtAfterExtra.RemainingInstallments)?.count, (after as? DebtAfterExtra.NewMonthlyPayment)?.amount)
+    }
+}
+
+/**
  * DEB-07a — one payment recorded in DINCR for a debt (`GET /finance/debts/{id}/payments`), newest
  * first: the date and the amount actually applied. iOS: `DebtPayment`.
  */

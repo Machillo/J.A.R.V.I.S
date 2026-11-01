@@ -104,4 +104,16 @@ class DebtSavingsBlocksTest {
         val lower = encoder.encodeToString(DebtSavingsBlockApply.serializer(), DebtSavingsBlockApply.of(BigDecimal(351000), DebtSavingsBlockApply.REDUCE_INSTALLMENT, BigDecimal(39000)))
         assertTrue(lower, lower.contains("\"new_monthly_payment\":39000"))
     }
+
+    @Test fun aDebtPaymentCarriesWhatTheBankDidOnlyWhenTheUserSaidIt() {
+        val encoder = Json { explicitNulls = false }
+        fun body(after: DebtAfterExtra?) = encoder.encodeToString(DebtPaymentRequest.serializer(), DebtPaymentRequest.of(BigDecimal(141500), after))
+        assertEquals("{\"amount\":141500}", body(null))
+        assertTrue(body(DebtAfterExtra.RemainingInstallments(10)).contains("\"remaining_installments\":10"))
+        val lower = body(DebtAfterExtra.NewMonthlyPayment(BigDecimal(4104)))
+        assertTrue(lower, lower.contains("\"new_monthly_payment\":4104") && !lower.contains("remaining"))
+        val block = encoder.encodeToString(DebtSavingsBlockApply.serializer(),
+            DebtSavingsBlockApply.of(BigDecimal(351000), DebtSavingsBlockApply.REDUCE_TERM, null, 12))
+        assertTrue(block, block.contains("\"remaining_installments\":12"))
+    }
 }

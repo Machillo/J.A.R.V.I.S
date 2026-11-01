@@ -129,7 +129,8 @@ def debts_delete(debt_id: int):
 
 @router.post("/finance/debts/{debt_id}/payments")
 def debt_payment(debt_id: int, request: DebtPaymentRequest):
-    require_feature("debts"); return pay_user_debt(debt_id, request.amount)
+    require_feature("debts")
+    return pay_user_debt(debt_id, request.amount, request.remaining_installments, request.new_monthly_payment)
 
 @router.get("/finance/debts/{debt_id}/payments")
 def debt_payments_list(debt_id: int):
