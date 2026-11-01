@@ -112,7 +112,7 @@ def test_create_user_debt_stores_the_rate_and_whether_it_is_known(monkeypatch, g
     monkeypatch.setattr(service, "mark_applied", lambda _c: None)
     service.create_user_debt(_payload(interest_rate=given))
     insert = next(params for sql, params in conn.calls if sql.startswith("INSERT INTO debts"))
-    assert (insert[6], insert[7]) == stored  # interest_rate, interest_rate_known
+    assert (insert[7], insert[8]) == stored  # interest_rate, interest_rate_known (after monthly_payment, monthly_payment_known)
 
 
 def test_update_user_debt_keeps_an_unconfirmed_historical_zero(monkeypatch):
@@ -122,10 +122,10 @@ def test_update_user_debt_keeps_an_unconfirmed_historical_zero(monkeypatch):
     monkeypatch.setattr(service, "mark_applied", lambda _c: None)
     service.update_user_debt(5, _payload(name="Nuevo nombre", interest_rate=0))
     update = next(params for sql, params in conn.calls if sql.startswith("UPDATE debts"))
-    assert (update[5], update[6]) == (0, None)
+    assert (update[6], update[7]) == (0, None)  # interest_rate, interest_rate_known (after the monthly payment pair)
     service.update_user_debt(5, _payload(interest_rate=0, interest_rate_confirmed=True))
     update = [params for sql, params in conn.calls if sql.startswith("UPDATE debts")][-1]
-    assert (update[5], update[6]) == (0.0, True)
+    assert (update[6], update[7]) == (0.0, True)
 
 
 def test_the_owner_writer_stores_no_rate_as_unknown(monkeypatch):
