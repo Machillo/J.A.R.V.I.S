@@ -230,6 +230,21 @@ fun AguinaldoScreen(model: AppModel, nav: Navigator) {
                 }
                 if (a.status == "NO_SALARY_DATA") StatusBanner(BannerTone.INFO, tx("Sin órdenes patronales", "No payroll notices"), tx("Todavía no encontramos órdenes de la CCSS en tu correo.", "We haven’t found CCSS payroll notices in your mail yet."))
                 if (a.missingMonths.isNotEmpty()) StatusBanner(BannerTone.INFO, tx("Faltan meses", "Missing months"), a.missingMonths.joinToString(", "))
+                // AG-1: "¿En qué usarlo?", the backend's fixed split, one line each with why.
+                a.plan?.takeIf { it.items.isNotEmpty() }?.let { plan ->
+                    DincrCard {
+                        Column(Modifier.testTag("aguinaldo.plan")) {
+                            Text(tx("¿En qué usarlo?", "What to use it for?"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
+                            Caption(tx("Una forma simple de repartirlo antes de que llegue.", "A simple way to split it before it arrives."))
+                            plan.items.forEach { item ->
+                                InfoLine(item.label.orEmpty(), item.amount?.let { crc.format(it) } ?: "—")
+                                item.reason?.let { Caption(it) }
+                            }
+                            if (plan.unknownRates.isNotEmpty()) Caption(tx("Sin tasa conocida, no se tomaron en cuenta: ${plan.unknownRates.joinToString(", ")}.",
+                                "Without a known rate, not considered: ${plan.unknownRates.joinToString(", ")}."))
+                        }
+                    }
+                }
                 a.months.forEach { m -> InfoLine(m.month.orEmpty(), m.totalEarned?.let { crc.format(it) } ?: "—") }
             }
         }

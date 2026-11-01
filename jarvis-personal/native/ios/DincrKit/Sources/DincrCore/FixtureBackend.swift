@@ -600,7 +600,11 @@ public actor FixtureBackend: HTTPTransport {
                        "delta": ["strategic_margin": 46_000, "monthly_income": 50_000, "essential_expenses": 4_000]])
         case "/user-product/vip/aguinaldo":
             guard mailConnected else { return error(409, "Conectá tu correo para calcular el aguinaldo.") }
-            return ok(["status": "OK", "period": ["start": "2025-12-01", "end": "2026-11-30"], "earned_salary_total": 5_190_000, "accrued_aguinaldo": 432_500])
+            return ok(["status": "OK", "period": ["start": "2025-12-01", "end": "2026-11-30"], "earned_salary_total": 5_190_000, "accrued_aguinaldo": 432_500,
+                      // AG-1: the backend's fixed split (aguinaldo_plan.py) for the sample Salvavidas and debts.
+                      "plan": ["amount": 432_500, "unknown_rates": [String](), "items": [
+                          ["key": "december", "label": "Diciembre", "amount": 64_875, "reason": "Regalos, marchamo y los gastos extra de fin de año, sin usar la tarjeta."],
+                          ["key": "debt-31", "label": "Tarjeta de crédito", "amount": 367_625, "reason": "Es tu deuda más cara (36 % al año): abonarle es lo que más intereses te ahorra."]]]])
         case "/user-product/vip/lifecycle/monthly-review":
             guard scenario == .populated else {
                 return ok(["status": "BASELINE", "period": String(day(0).prefix(7)), "headline": "Tu primer mes con DINCR", "summary": "Todavía no hay suficiente historia para comparar."])

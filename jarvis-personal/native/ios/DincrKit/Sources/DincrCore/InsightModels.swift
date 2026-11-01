@@ -324,6 +324,20 @@ public struct Aguinaldo: Decodable, Sendable, Equatable {
     public let accruedAguinaldo: Decimal?
     public let months: [Month]?
     public let missingMonths: [String]?
+    /// AG-1: what to do with it (the backend's fixed split; nil without an amount).
+    public let plan: Plan?
+
+    public struct Plan: Decodable, Sendable, Equatable {
+        public struct Item: Decodable, Sendable, Equatable {
+            public let key: String?
+            public let label: String?
+            public let amount: Decimal?
+            public let reason: String?
+        }
+        public let amount: Decimal?
+        public let items: [Item]?
+        public let unknownRates: [String]?
+    }
 }
 
 /// `GET /user-product/vip/lifecycle/monthly-review?period` (VIP).
