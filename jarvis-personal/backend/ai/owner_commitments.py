@@ -10,7 +10,10 @@ first (the "universe": everything recorded feeds the plan):
 - the Salvavidas automatic contributions still to come in the cycle: that money goes to the
   Salvavidas by itself, so the distribution tells the Owner only what to move on top of it. It
   comes out of the Salvavidas share first, then out of free spending, investment and the extra
-  for debt; an urgent goal keeps its share.
+  for debt; an urgent goal keeps its share;
+- the locked savings blocks' contributions still to come in the cycle (``owner_debt_block_store``):
+  that money is the debt attack, paid into the debt when the block matures, so it comes out of the
+  extra for debt first, then out of the other shares; an urgent goal keeps its share.
 
 Read-only: every statement only reads, scoped by the workspace. Owner only (``strategy_dashboard``
 calls it from the Owner blueprint).
@@ -20,11 +23,13 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+from backend.ai import owner_debt_block_store
 from backend.core.database import get_connection
 from backend.finance import salvavidas_plan
 
 # The order the automatic contributions are taken from (the urgent goal keeps its share).
 ABSORB_ORDER = ("fondo_de_emergencia", "vida_controlada", "inversion", "metas_o_inversion", "ataque_de_deuda")
+BLOCK_ABSORB_ORDER = ("ataque_de_deuda", "vida_controlada", "inversion", "metas_o_inversion", "fondo_de_emergencia")
 
 
 def _f(value: Any) -> float:
@@ -75,11 +80,25 @@ def automatic_savings(salvavidas: dict[str, Any], cycle_report: dict[str, Any], 
             "per_contribution": plan["amount"], "frequency": plan["frequency"]}
 
 
-def absorb(amounts: dict[str, float], automatic: float) -> tuple[dict[str, float], float]:
+def block_savings(blocks: list[dict[str, Any]], cycle_report: dict[str, Any], today: date) -> dict[str, Any]:
+    """The locked savings blocks' contributions from today to the end of the cycle."""
+    end = _day((cycle_report.get("cycle") or {}).get("end"))
+    if not end or end < today:
+        return {"amount": 0.0, "count": 0, "blocks": []}
+    rows = []
+    for block in blocks:
+        dates = owner_debt_block_store.contributions(block, today - timedelta(days=1), end)
+        if dates:
+            rows.append({"debt_name": block.get("debt_name"), "count": len(dates),
+                         "amount": round(len(dates) * block["weekly_amount"], 2)})
+    return {"amount": round(sum(row["amount"] for row in rows), 2), "count": sum(row["count"] for row in rows), "blocks": rows}
+
+
+def absorb(amounts: dict[str, float], automatic: float, order: tuple[str, ...] = ABSORB_ORDER) -> tuple[dict[str, float], float]:
     """The shares after the automatic contributions are taken out, and how much they took."""
     left = max(_f(automatic), 0.0)
     result = dict(amounts)
-    for key in ABSORB_ORDER:
+    for key in order:
         take = min(max(_f(result.get(key)), 0.0), left)
         result[key] = round(_f(result.get(key)) - take, 2)
         left = round(left - take, 2)

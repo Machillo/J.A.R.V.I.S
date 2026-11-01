@@ -11,7 +11,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
-from backend.ai import owner_commitments
+from backend.ai import owner_commitments, owner_debt_block_store
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
 from backend.user_product.debt_payments import with_known_payments
@@ -1058,6 +1058,38 @@ def _automatic_savings_warnings(automatic: dict[str, Any], taken: float) -> list
         f"{amount} of this cycle already go to your emergency fund by themselves (automatic saving of {each}); they are already taken out of this distribution.")}]
 
 
+def _block_savings_warnings(taken: float) -> list[dict[str, str]]:
+    """Says that the locked savings blocks' contributions are already out of the distribution."""
+    if taken <= 0:
+        return []
+    amount = owner_commitments.colones(taken)
+    return [{"code": "debt_savings_blocks", "message": tx(
+        f"{amount} de este ciclo ya van solos a tu ahorro bloqueado para deudas; ya están descontados de esta distribución.",
+        f"{amount} of this cycle already go to your locked debt savings by themselves; they are already taken out of this distribution.")}]
+
+
+def _stored_debt_blocks() -> list[dict[str, Any]]:
+    """The Owner's locked savings blocks; none when they cannot be read (the plan then shows them as free)."""
+    try:
+        return owner_debt_block_store.stored_blocks()
+    except Exception:
+        logger.warning("debt_savings_blocks_unavailable")
+        return []
+
+
+def _absorb_automatic(director: dict[str, Any], amount: float, order: tuple[str, ...], *, exact: bool) -> tuple[dict[str, Any], float]:
+    """The distribution after money that goes by itself is taken out of its shares, in ``order``."""
+    if amount <= 0:
+        return director, 0.0
+    amounts, taken = owner_commitments.absorb(director.get("allocation_amounts") or {}, amount, order)
+    base = max(_f(director.get("allocation_base_amount")) - taken, 0.0)
+    percentages, items = _allocation_from_amounts(amounts, base, exact=exact)
+    shown = {key: next((item["amount"] for item in items if item["key"] == key), 0.0) for key in amounts}
+    return {**director, "allocation_amounts": shown, "allocation": percentages, "allocation_items": items,
+            "allocation_base_amount": round(base, 2), "safe_to_spend": shown.get("vida_controlada", 0.0),
+            "investment_recommended": shown.get("inversion", 0.0), "investment_target": shown.get("inversion", 0.0)}, taken
+
+
 def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str, Any]:
     """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea).
 
@@ -1175,18 +1207,15 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         emergency_monthly_base=emergency_monthly_base,
         split_every_cent=manual_available is not None,
     )
-    # The Salvavidas automatic contributions still to come go by themselves: the distribution says
-    # only what to move on top of them (owner_commitments.absorb).
+    # The Salvavidas automatic contributions and the locked savings blocks' contributions still to
+    # come go by themselves: the distribution says only what to move on top of them
+    # (owner_commitments.absorb).
     automatic = owner_commitments.automatic_savings(salvavidas, cycle_report, date.today())
-    automatic_taken = 0.0
-    if automatic["amount"] > 0:
-        amounts, automatic_taken = owner_commitments.absorb(director.get("allocation_amounts") or {}, automatic["amount"])
-        base = max(_f(director.get("allocation_base_amount")) - automatic_taken, 0.0)
-        percentages, items = _allocation_from_amounts(amounts, base, exact=manual_available is not None)
-        shown = {key: next((item["amount"] for item in items if item["key"] == key), 0.0) for key in amounts}
-        director = {**director, "allocation_amounts": shown, "allocation": percentages, "allocation_items": items,
-                    "allocation_base_amount": round(base, 2), "safe_to_spend": shown.get("vida_controlada", 0.0),
-                    "investment_recommended": shown.get("inversion", 0.0), "investment_target": shown.get("inversion", 0.0)}
+    director, automatic_taken = _absorb_automatic(director, automatic["amount"], owner_commitments.ABSORB_ORDER,
+                                                  exact=manual_available is not None)
+    blocks = owner_commitments.block_savings(_stored_debt_blocks(), cycle_report, date.today())
+    director, blocks_taken = _absorb_automatic(director, blocks["amount"], owner_commitments.BLOCK_ABSORB_ORDER,
+                                               exact=manual_available is not None)
     allocation = director.get("allocation") or {}
     allocation_amounts = director.get("allocation_amounts") or {}
     allocation_items = director.get("allocation_items") or []
@@ -1347,8 +1376,9 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
         "distribution_source": "manual_amount" if manual_available is not None else "estimate",
         "distribution_warnings": _distribution_warnings(cycle_report, salvavidas, manual=manual_available is not None)
-        + _automatic_savings_warnings(automatic, automatic_taken),
+        + _automatic_savings_warnings(automatic, automatic_taken) + _block_savings_warnings(blocks_taken),
         "automatic_savings": {**automatic, "taken_from_distribution": round(automatic_taken, 2)},
+        "debt_savings_blocks": {**blocks, "taken_from_distribution": round(blocks_taken, 2)},
         "manual_expenses": manual,
         # The exact amount is the base as typed (no deduction lines); the estimate keeps its formula.
         "distribution_formula": {

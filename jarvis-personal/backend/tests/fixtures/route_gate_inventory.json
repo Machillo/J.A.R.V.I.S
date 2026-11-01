@@ -1219,6 +1219,20 @@
  },
  {
   "method": "POST",
+  "path": "/jarvis/premium/debt-savings-blocks",
+  "gates": [
+   "router_roles:owner"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/jarvis/premium/debt-savings-blocks/{block_id}",
+  "gates": [
+   "router_roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
   "path": "/jarvis/premium/initial-strategy",
   "gates": [
    "router_roles:owner"

@@ -69,6 +69,7 @@ def owner_inputs(monkeypatch):
     monkeypatch.setattr(sd, "_fetch_distributable_cash", lambda *_a: CASH)
     monkeypatch.setattr(sd, "_fetch_active_financial_goals", lambda *_a: [dict(g) for g in state["goals"]])
     monkeypatch.setattr(sd, "_fetch_investment_portfolio", lambda *_a, **_k: {})
+    monkeypatch.setattr(sd, "_stored_debt_blocks", lambda: [dict(b) for b in state.get("blocks", [])])
     return state
 
 

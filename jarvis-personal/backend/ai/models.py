@@ -85,3 +85,12 @@ class ProfilePreferencesRequest(BaseModel):
     timezone: str | None = None
     language: str | None = None
     avatar_data_url: str | None = None
+
+
+class DebtSavingsBlockRequest(BaseModel):
+    """A locked savings block the Owner created at the bank (validated in owner_debt_block_store)."""
+    debt_id: int
+    weekly_amount: float
+    start_date: str
+    term_months: int
+    mode: str | None = None
