@@ -1,4 +1,4 @@
--- MANUAL rollback of 20261010120000_debt_monthly_payment_known.sql.
+-- MANUAL rollback of 20261101130000_debt_monthly_payment_known.sql.
 -- Human decision only; never run automatically.
 --
 -- Precondition: production no longer runs a backend that reads or writes

@@ -1,7 +1,7 @@
 """DEB-03: an unknown debt monthly payment is never a 0 payment (real PostgreSQL, Users paths).
 
 Through the real service functions on a production-shaped `debts` table (after migration
-20261010120000), synthetic rows:
+20261101130000), synthetic rows:
 - creating a debt without a payment stores it as unknown, and the debts list returns null;
 - a given payment, 0 included, is known;
 - editing: clearing a known payment makes it unknown; an unknown one sent back empty, or as an older
@@ -104,6 +104,15 @@ def test_editing_never_turns_an_unknown_payment_into_zero(db):
     assert _stored(db, debt) == (30000, True)
     service.update_user_debt(debt, _payload(monthly_payment=None))  # cleared
     assert _stored(db, debt) == (0, False)
+
+
+def test_an_unknown_payment_gives_no_payoff_date(db):
+    unknown = service.create_user_debt(_payload(interest_rate=24))["id"]
+    known = service.create_user_debt(_payload(name="Con cuota", interest_rate=24, monthly_payment=10000))["id"]
+    assert _listed(unknown)["estimated_payoff_months"] is None
+    assert _listed(unknown)["estimated_payoff_date"] is None
+    assert _listed(known)["estimated_payoff_months"] > 0
+    assert _listed(known)["estimated_payoff_date"] is not None
 
 
 def test_a_historical_row_reads_as_before(db):

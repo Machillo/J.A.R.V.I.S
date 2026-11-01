@@ -1,7 +1,7 @@
 """Debt monthly payments: known vs unknown (UNKNOWN ≠ 0).
 
 `debts.monthly_payment` is NOT NULL, and create_user_debt / update_user_debt stored "no payment
-given" as 0. `debts.monthly_payment_known` (migration 20261010120000) records whether DINCR knows
+given" as 0. `debts.monthly_payment_known` (migration 20261101130000) records whether DINCR knows
 the payment:
 - `monthly_payment_known` FALSE → unknown. The stored 0 is a placeholder, never a payment;
 - `monthly_payment_known` TRUE → the stored payment is known (0 is a real 0);

@@ -1,4 +1,4 @@
-"""The debt monthly-payment provenance migration (20261010120000) on a real PostgreSQL.
+"""The debt monthly-payment provenance migration (20261101130000) on a real PostgreSQL.
 
 A schema-faithful local copy (the ownership fixture's `debts`, as in production), synthetic rows.
 Migration only: preflight, apply, postflight, no historical row marked or rewritten, idempotency,
@@ -21,8 +21,8 @@ from backend.user_product.debt_payments import UNKNOWN_PAYMENT_SQL, known_monthl
 psycopg2 = pytest.importorskip("psycopg2")
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / "database/migrations/20261010120000_debt_monthly_payment_known.sql"
-ROLLBACK = ROOT / "database/rollback/20261010120000_debt_monthly_payment_known_rollback.sql"
+MIGRATION = ROOT / "database/migrations/20261101130000_debt_monthly_payment_known.sql"
+ROLLBACK = ROOT / "database/rollback/20261101130000_debt_monthly_payment_known_rollback.sql"
 A = IDENTITIES["A"]
 PREFLIGHT = """
 SELECT 'missing table' WHERE to_regclass('public.debts') IS NULL

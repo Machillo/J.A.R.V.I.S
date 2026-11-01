@@ -32,7 +32,7 @@
 --   UNION ALL
 --   SELECT 'existing rows were marked: ' || count(*) FROM public.debts WHERE monthly_payment_known IS NOT NULL
 --   HAVING count(*) > 0;
--- Rollback (manual, human decision): database/rollback/20261010120000_debt_monthly_payment_known_rollback.sql
+-- Rollback (manual, human decision): database/rollback/20261101130000_debt_monthly_payment_known_rollback.sql
 
 BEGIN;
 
@@ -43,6 +43,6 @@ ALTER TABLE public.debts ADD COLUMN IF NOT EXISTS monthly_payment_known BOOLEAN;
 
 COMMENT ON COLUMN public.debts.monthly_payment_known IS
     'TRUE: the monthly payment was given (0 is a real 0). FALSE: unknown (the stored 0 is a placeholder). '
-    'NULL: written before 20261010120000 or by the Owner finance paths, read as stored (see backend/user_product/debt_payments.py).';
+    'NULL: written before 20261101130000 or by the Owner finance paths, read as stored (see backend/user_product/debt_payments.py).';
 
 COMMIT;
