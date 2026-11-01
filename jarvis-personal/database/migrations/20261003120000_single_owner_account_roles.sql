@@ -8,6 +8,10 @@
 --   personal workspace, status 'active'): technical isolation used by login, 3 RLS policies
 --   and 3 integrity functions, none of which reads member_role. Workspace data owner is never
 --   the DINCR Owner. Shared financial workspaces are a future beta candidate, out of scope.
+-- - v_account_workspace_migration_status: dropped. A legacy diagnostic view of the account and
+--   workspace foundation, created by hand in production (no migration defines it); it selects
+--   member_role, so the column cannot be dropped while it exists. No code reads it and the API
+--   roles have no SELECT on it (verified 2026-11-01). The rollback recreates it.
 --
 -- Nothing is rewritten, promoted or silently transformed: the migration aborts before any
 -- change if an account or allowlist row holds a role other than user/owner, if a membership
@@ -80,6 +84,9 @@ ALTER TABLE public.allowed_users DROP CONSTRAINT IF EXISTS allowed_users_role_ch
 ALTER TABLE public.allowed_users
     ADD CONSTRAINT allowed_users_role_check CHECK (role IN ('user', 'owner'));
 
+-- The legacy diagnostic view is the only object that depends on member_role.
+DROP VIEW IF EXISTS public.v_account_workspace_migration_status;
+
 -- Membership has no role (its CHECK goes with the column).
 ALTER TABLE public.workspace_members DROP COLUMN IF EXISTS member_role;
 
@@ -94,4 +101,7 @@ COMMIT;
 --    WHERE NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = name)
 --   UNION ALL
 --   SELECT 'workspace_members.member_role still exists', column_name, NULL FROM information_schema.columns
---    WHERE table_schema = 'public' AND table_name = 'workspace_members' AND column_name = 'member_role';
+--    WHERE table_schema = 'public' AND table_name = 'workspace_members' AND column_name = 'member_role'
+--   UNION ALL
+--   SELECT 'legacy view still exists', viewname, NULL FROM pg_views
+--    WHERE schemaname = 'public' AND viewname = 'v_account_workspace_migration_status';

@@ -24,15 +24,22 @@ BEFORE = """
 CREATE TABLE allowed_users (id BIGSERIAL PRIMARY KEY, email TEXT NOT NULL UNIQUE, role TEXT NOT NULL DEFAULT 'user',
                             status TEXT NOT NULL DEFAULT 'pending');
 CREATE TABLE accounts (id UUID PRIMARY KEY, legacy_allowed_user_id BIGINT UNIQUE REFERENCES allowed_users(id),
-                       primary_email TEXT NOT NULL,
+                       primary_email TEXT NOT NULL, supabase_user_id UUID,
                        role TEXT NOT NULL DEFAULT 'user' CONSTRAINT accounts_role_check CHECK (role IN ('user', 'admin', 'owner')),
                        status TEXT NOT NULL DEFAULT 'active');
 CREATE TABLE workspaces (id UUID PRIMARY KEY, workspace_key TEXT NOT NULL UNIQUE,
-                         owner_account_id UUID NOT NULL REFERENCES accounts(id), name TEXT NOT NULL);
+                         owner_account_id UUID NOT NULL REFERENCES accounts(id), name TEXT NOT NULL,
+                         workspace_type TEXT NOT NULL DEFAULT 'personal');
 CREATE TABLE workspace_members (id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL REFERENCES workspaces(id),
                                 account_id UUID NOT NULL REFERENCES accounts(id),
                                 member_role TEXT NOT NULL DEFAULT 'member' CHECK (member_role IN ('owner', 'admin', 'member', 'viewer')),
                                 status TEXT NOT NULL DEFAULT 'active', UNIQUE(workspace_id, account_id));
+-- Legacy diagnostic view that exists in production only (no migration created it).
+CREATE VIEW v_account_workspace_migration_status AS
+SELECT au.id AS legacy_allowed_user_id, a.id AS account_id, wm.member_role
+FROM allowed_users au LEFT JOIN accounts a ON a.legacy_allowed_user_id = au.id
+LEFT JOIN workspaces w ON w.owner_account_id = a.id
+LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.account_id = a.id;
 """
 
 
@@ -180,3 +187,19 @@ def test_the_rollback_restores_member_role_for_the_owners_memberships(cur):
     cur.execute("SELECT column_default FROM information_schema.columns WHERE table_name = 'workspace_members' AND column_name = 'member_role'")
     assert cur.fetchone()[0].startswith("'member'")
 
+
+
+def _has_legacy_view(cur):
+    cur.execute("SELECT count(*) FROM pg_views WHERE viewname = 'v_account_workspace_migration_status'")
+    return cur.fetchone()[0] == 1
+
+
+def test_the_legacy_view_that_reads_member_role_does_not_block_the_migration(cur):
+    _person(cur, "user@example.test", "user")
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    assert not _has_member_role(cur)
+    assert not _has_legacy_view(cur)
+    cur.execute(ROLLBACK.read_text(encoding="utf-8"))
+    assert _has_legacy_view(cur)
+    cur.execute("SELECT member_role FROM v_account_workspace_migration_status")
+    assert cur.fetchall() == [("owner",)]
