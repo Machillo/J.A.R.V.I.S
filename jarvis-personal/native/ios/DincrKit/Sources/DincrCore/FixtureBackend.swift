@@ -1062,10 +1062,19 @@ public actor FixtureBackend: HTTPTransport {
         return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
     }
 
+    /// A recent sample date (the last days, 0–9): kept inside the current month, so Movimientos (which
+    /// lists the month in course) shows the sample rows on any date, the 1st included. Android: `recent`.
+    static func recent(_ offset: Int, today: Date) -> String {
+        let calendar = Calendar(identifier: .gregorian)
+        let dayOfMonth = calendar.component(.day, from: today)
+        return day(min(offset, dayOfMonth - 1), today: today)
+    }
+
     typealias Seed = (movements: [[String: Any]], debts: [[String: Any]], goals: [[String: Any]], savings: [[String: Any]], recurring: [[String: Any]])
 
     static func seed(today: Date) -> Seed {
-        func day(_ offset: Int) -> String { Self.day(offset, today: today) }
+        // The last days stay in the month in course (see `recent`); older rows keep their real date.
+        func day(_ offset: Int) -> String { offset < 10 ? Self.recent(offset, today: today) : Self.day(offset, today: today) }
         func row(_ origin: String, _ id: Int, _ offset: Int, _ description: String, _ amount: Decimal, _ type: String, _ category: String, editable: Bool = true) -> [String: Any] {
             ["movement_id": "\(origin):\(id)", "source_id": id, "origin": origin, "transaction_date": day(offset), "description": description,
              "amount": number(amount), "transaction_type": type, "category": category, "notes": "", "editable": editable]
@@ -1097,7 +1106,8 @@ public actor FixtureBackend: HTTPTransport {
     }
 
     static func sampleCandidates(today: Date) -> [[String: Any]] {
-        func day(_ offset: Int) -> String { Self.day(offset, today: today) }
+        // A confirmed notice becomes a movement of the month in course (see `recent`).
+        func day(_ offset: Int) -> String { Self.recent(offset, today: today) }
         return [
             // Like the parsers, `bank` is the institution CODE (`bac`, `popular`); detected accounts carry
             // the display label in `bank_name`. Institutions are public names; the rest is invented.

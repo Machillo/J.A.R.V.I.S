@@ -1014,7 +1014,9 @@ class FakeBackend(
         (if (currency == "USD" && base == "CRC") amount * rate else amount.divide(rate, 10, RoundingMode.HALF_UP)).setScale(2, RoundingMode.HALF_UP)
 
     private fun seed() {
-        fun day(offset: Long) = today.minusDays(offset).toString()
+        // The last days (0–9) stay in the month in course, so Movimientos (which lists the month in
+        // course) shows the sample rows on any date, the 1st included; older rows keep their real date.
+        fun day(offset: Long) = today.minusDays(if (offset < 10) minOf(offset, today.dayOfMonth - 1L) else offset).toString()
         movements += listOf(
             Movement("salary:8", 8, "salary", day(3), "Salario quincenal", BigDecimal(432500), "income", "Salario", "", true),
             Movement("salary:4", 4, "salary", day(18), "Salario quincenal", BigDecimal(432500), "income", "Salario", "", true),
