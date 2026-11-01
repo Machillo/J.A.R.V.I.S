@@ -64,7 +64,8 @@
   "WE-1",
   "WE-2",
   "NT-1",
-  "RV-1"
+  "RV-1",
+  "RT-1"
  ],
  "fixtures": {
   "ios": {
@@ -625,6 +626,50 @@
     "en": {
      "tab": "Plan",
      "text": "Emergency fund",
+     "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "plan.retirement",
+   "name": "Plan → Retiro (RT-1): the ROP and a voluntary pension declared by hand, read in simple words (years left, a common age reference against the normal month's income)",
+   "decision": "RT-1",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/retirement",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "PUT",
+     "path": "/user-product/vip/retirement",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.retirement",
+    "locked_label": "Disponible desde VIP"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Retiro",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Plan",
+     "text": "Retirement",
      "locked_text": "Available from VIP"
     }
    }

@@ -600,6 +600,7 @@ class FakeBackend(
             path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
                 needs(PlanTier.VIP) ?: mail(method, path, segments, query, body)
             path == "/user-product/vip/wealth" -> needs(PlanTier.VIP) ?: ok(wealth())
+            path == "/user-product/vip/retirement" -> needs(PlanTier.VIP) ?: retirement(method, body)
             path == "/user-product/vip/salvavidas" -> needs(PlanTier.VIP) ?: salvavidas(method, body)
             path == "/user-product/vip/financial-analysis" -> needs(PlanTier.VIP) ?: ok(financialAnalysis())
             method == "POST" && path == "/user-product/finance/strategy-vip/debt-scenario" -> needs(PlanTier.VIP) ?: debtScenario(body)
@@ -913,6 +914,17 @@ class FakeBackend(
             Wealth.Liabilities(active.map { Wealth.Item(it.name, it.remainingAmount) }, emptyList(), owed),
             assets - owed, true,
         )
+    }
+
+    /** RT-1: Plan → Retiro, a synthetic ROP balance; a PUT replaces it (every field is sent). iOS: FixtureBackend.retirement. */
+    private var retirementConfig = Retirement.Config(BigDecimal(3_000_000), null, 1991, 65)
+
+    private fun retirement(method: String, body: JsonObject?): HttpResponse {
+        if (method == "PUT" && body != null) {
+            val update = json.decodeFromJsonElement(RetirementUpdate.serializer(), body)
+            retirementConfig = Retirement.Config(update.ropBalance, update.voluntaryBalance, update.birthYear, update.retireAge ?: 65)
+        }
+        return ok(Retirement(retirementConfig))
     }
 
     private fun freeDashboard(): FreeDashboard {

@@ -7,7 +7,7 @@ from backend.user_product.models import (
     FinancialSituationRequest, PendingCloseRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
     FinancialAccountIdentityRequest, OwnAccountDeclareRequest, StatementCutDayRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
-    UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
+    UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest, RetirementUpdateRequest,
 )
 from backend.user_product.service import (
     create_expense_entry, create_income, create_user_debt, create_user_goal,
@@ -31,6 +31,7 @@ from backend.user_product.vip_service import get_vip_command_center
 from backend.user_product.debt_scenarios import simulate_debt_scenario
 from backend.user_product.financial_analysis import get_financial_analysis
 from backend.user_product.wealth import get_wealth
+from backend.user_product.retirement import get_retirement, update_retirement
 from backend.ai.strategy_dashboard import get_premium_strategy_dashboard
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
 from backend.finance.intelligence import get_debt_advisory
@@ -259,6 +260,14 @@ def vip_financial_analysis():
 @router.get("/vip/wealth")
 def vip_wealth():
     require_feature("strategy_vip"); return get_wealth()
+
+@router.get("/vip/retirement")
+def vip_retirement():
+    require_feature("strategy_vip"); return get_retirement()
+
+@router.put("/vip/retirement")
+def vip_retirement_update(request: RetirementUpdateRequest):
+    require_feature("strategy_vip"); return update_retirement(request.model_dump(exclude_unset=True))
 
 @router.get("/vip/salvavidas")
 def vip_salvavidas():

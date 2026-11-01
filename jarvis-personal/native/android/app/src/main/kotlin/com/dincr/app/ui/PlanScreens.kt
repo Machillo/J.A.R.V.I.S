@@ -11,6 +11,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Timeline
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.Payments
@@ -96,6 +97,9 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
                     tx("Lo que pagás todos los meses", "What you pay every month"), nav, "fixedExpenses")
                 PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Shield, tx("Salvavidas", "Emergency fund"),
                     tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers"), nav, "salvavidas")
+                // RT-1: the retirement savings (ROP and a voluntary pension), VIP.
+                PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.WbTwilight, tx("Retiro", "Retirement"),
+                    tx("Tu ROP y pensión voluntaria", "Your ROP and voluntary pension"), nav, "retirement")
                 // WE-1: Proyecciones and Escenarios moved here from Patrimonio (VIP, paused with vip_intelligence).
                 if (plan.allows(Feature.STRATEGY_VIP) && !vipOn) {
                     NavRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), tx("En pausa por mantenimiento", "Paused for maintenance")) {}

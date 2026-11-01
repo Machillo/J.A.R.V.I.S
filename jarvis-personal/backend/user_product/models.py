@@ -264,3 +264,11 @@ class PendingCloseRequest(BaseModel):
     """The close of one period of dollar expenses (pending_conversion.close_period): one rate for all."""
     period_key: str = Field(min_length=1, max_length=80)
     exchange_rate: float = Field(gt=0, le=100000)
+
+
+class RetirementUpdateRequest(BaseModel):
+    """RT-1 — Retiro: any of these; a field left out keeps its value, a null clears it."""
+    rop_balance: float | None = Field(default=None, ge=0, le=1_000_000_000_000, allow_inf_nan=False)
+    voluntary_balance: float | None = Field(default=None, ge=0, le=1_000_000_000_000, allow_inf_nan=False)
+    birth_year: int | None = Field(default=None, ge=1930, le=2100)
+    retire_age: int | None = Field(default=None, ge=50, le=80)

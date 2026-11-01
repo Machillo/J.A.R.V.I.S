@@ -30,6 +30,13 @@ extension FixtureBackend {
         case ("GET", "/user-product/vip/wealth"):
             if let denied = needs(.vip) { return denied }
             return ok(wealthSample(debts: debts.filter { (decimal($0["remaining_amount"]) ?? 0) > 0 }))
+        case ("GET", "/user-product/vip/retirement"):
+            if let denied = needs(.vip) { return denied }
+            return ok(["config": retirement])
+        case ("PUT", "/user-product/vip/retirement"):
+            if let denied = needs(.vip) { return denied }
+            for key in ["rop_balance", "voluntary_balance", "birth_year", "retire_age"] where body.keys.contains(key) { retirement[key] = body[key] }
+            return ok(["config": retirement])
         case ("GET", "/user-product/vip/salvavidas"):
             if let denied = needs(.vip) { return denied }
             return ok(isOwnerRole ? ownerSalvavidas() : usersSalvavidas())

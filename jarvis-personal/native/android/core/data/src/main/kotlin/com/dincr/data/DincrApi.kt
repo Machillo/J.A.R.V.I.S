@@ -147,6 +147,9 @@ class DincrApi(private val client: ApiClient) {
     suspend fun financialAnalysis(): FinancialAnalysis = client.get("/user-product/vip/financial-analysis")
     /** WE-2: VIP and the Owner. A read: it never writes. */
     suspend fun wealth(): Wealth = client.get("/user-product/vip/wealth")
+    /** RT-1: VIP and the Owner. */
+    suspend fun retirement(): Retirement = client.get("/user-product/vip/retirement")
+    suspend fun updateRetirement(update: RetirementUpdate): Retirement = client.send("PUT", "/user-product/vip/retirement", update)
     suspend fun salvavidas(): Salvavidas = client.get("/user-product/vip/salvavidas")
     suspend fun updateSalvavidas(update: SalvavidasUpdate): Salvavidas = client.send("PUT", "/user-product/vip/salvavidas", update)
 
