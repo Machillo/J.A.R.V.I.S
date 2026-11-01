@@ -9,6 +9,7 @@ from backend.ai.preferences import get_sports_preferences, update_sports_prefere
 from backend.core.events import get_upcoming_events
 from backend.sports.service import ensure_owner_sports_preferences, get_sports_calendar_summary
 
+from backend.ai.owner_debt_blocks import get_owner_debt_savings_blocks
 from backend.ai.strategy_dashboard import get_additional_card_report, get_owner_exact_distribution, get_premium_strategy_dashboard
 
 from backend.ai.profile_preferences import get_profile_preferences, update_profile_preferences
@@ -44,6 +45,12 @@ def jarvis_premium_initial_strategy():
 @router.get("/premium/strategy-dashboard")
 def jarvis_premium_strategy_dashboard():
     return get_premium_strategy_dashboard()
+
+
+@router.get("/premium/debt-savings-blocks")
+def jarvis_debt_savings_blocks():
+    """The next locked savings block for a debt, by the strategy (read-only proposal)."""
+    return get_owner_debt_savings_blocks()
 
 
 @router.post("/premium/strategy-dashboard/exact-distribution")

@@ -1210,6 +1210,14 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/jarvis/premium/debt-savings-blocks",
+  "gates": [
+   "router_roles:owner"
+  ],
+  "user_get": "denied"
+ },
+ {
   "method": "POST",
   "path": "/jarvis/premium/initial-strategy",
   "gates": [
