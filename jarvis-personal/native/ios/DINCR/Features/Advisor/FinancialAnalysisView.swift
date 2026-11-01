@@ -13,10 +13,49 @@ struct FinancialAnalysisView: View {
 
     var body: some View {
         ScreenScroll(title: tx("Análisis financiero", "Financial analysis")) {
-            AsyncContent(load: { try await model.service.financialAnalysis() }) { analysis, _ in
-                FinancialAnalysisContent(analysis: analysis)
+            AsyncContent(load: { () async throws -> Loaded in
+                // The Salvavidas is optional: without it the reading leaves its coverage out.
+                async let analysis = model.service.financialAnalysis()
+                let coverage = (try? await model.service.salvavidas())?.coverageMonths
+                return Loaded(analysis: try await analysis, coverageMonths: coverage)
+            }) { loaded, _ in
+                if let health = HealthReading.reading(FinancialReading.normal(loaded.analysis), coverageMonths: loaded.coverageMonths) {
+                    HealthCard(reading: health)
+                }
+                FinancialAnalysisContent(analysis: loaded.analysis)
             }
         }
+    }
+}
+
+private struct Loaded: Equatable {
+    let analysis: FinancialAnalysis
+    let coverageMonths: Double?
+}
+
+/// HS-1 — "Tu salud financiera": one word, the main reason and one thing to do (`HealthReading`).
+private struct HealthCard: View {
+    let reading: HealthReading.Reading
+
+    private var color: Color {
+        switch reading.level {
+        case .good: DincrColor.positive
+        case .fair: DincrColor.warning
+        case .atRisk: DincrColor.negative
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            Text(tx("Tu salud financiera", "Your financial health")).font(DincrFont.label).foregroundStyle(DincrColor.text2).accessibilityAddTraits(.isHeader)
+            Text(reading.word).font(DincrFont.title1).foregroundStyle(color).accessibilityIdentifier("health.word")
+            Text(reading.reason).font(DincrFont.body).foregroundStyle(DincrColor.text).fixedSize(horizontal: false, vertical: true)
+            Text(reading.action).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dincrCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("analysis.financial.health")
     }
 }
 
