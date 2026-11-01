@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Timeline
@@ -48,6 +49,7 @@ import com.dincr.data.StrategyContract
 import com.dincr.data.DebtProgress
 import com.dincr.data.DebtRequest
 import com.dincr.data.Feature
+import com.dincr.data.Jarvis
 import com.dincr.data.IdempotencyKey
 import com.dincr.data.InterestRateInput
 import com.dincr.data.PlanTier
@@ -65,7 +67,7 @@ import kotlinx.coroutines.launch
 /**
  * E1 — the Plan tab: exactly Aguinaldo, Tu plan del mes (UX-3: Estrategia + Distribución as one
  * plan; the row keeps the Estrategia route and gate), Deudas (UX-4: where debts are managed, every
- * plan; Hoy keeps a shortcut), Ingresos y base (UX-7: the declared income and essential expenses, every plan), Gastos fijos (FX-1:
+ * plan; Hoy keeps a shortcut), Ahorro para deudas (DB-1: the Owner's alone), Ingresos y base (UX-7: the declared income and essential expenses, every plan), Gastos fijos (FX-1:
  * VIP and the Owner see, add and remove their fixed expenses), Salvavidas, Proyecciones and Escenarios (VIP; WE-1, from
  * Patrimonio) and Distribución de dinero (kept as a transitional access
  * until its retirement is approved), each behind its historical plan gate. A row the plan does not
@@ -90,6 +92,9 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
                     tx("Cuánto podés repartir y cómo", "How much you can split, and how"), nav, "strategy", lockedRoute = "strategy")
                 PlanRow(plan.allows(Feature.DEBTS), PlanTier.FREE, Icons.Rounded.CreditCard, tx("Deudas", "Debts"),
                     tx("Saldos, cuotas y pagos", "Balances, payments"), nav, "debts")
+                // DB-1: the Owner's locked savings blocks for his long debts (the JARVIS router answers no one else).
+                if (profile?.let(Jarvis::isAvailable) == true) PlanRow(true, PlanTier.VIP, Icons.Rounded.Lock, tx("Ahorro para deudas", "Savings for debts"),
+                    tx("Ahorro bloqueado que se abona a tus deudas", "Locked savings paid into your debts"), nav, "debtBlocks")
                 // UX-7: the declared income and essential expenses, every plan (with Metas y ahorros → Tus ahorros it replaces Perfil → Situación).
                 PlanRow(true, PlanTier.FREE, Icons.Rounded.Payments, tx("Ingresos y base", "Income and base"),
                     tx("Ingreso y gastos esenciales", "Income and essential expenses"), nav, "incomeBase")

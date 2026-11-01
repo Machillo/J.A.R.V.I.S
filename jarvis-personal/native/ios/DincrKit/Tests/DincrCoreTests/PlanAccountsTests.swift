@@ -28,7 +28,7 @@ import Testing
 
     @Test func planHasExactlyItsRowsInOrder() {
         // UX-4: Deudas joins Plan after "Tu plan del mes"; the other rows keep their order.
-        #expect(PlanHubItem.allCases.map(\.rawValue) == ["aguinaldo", "strategy", "debts", "incomeBase", "fixedExpenses", "salvavidas", "retirement", "projections", "scenarios", "distribution"])
+        #expect(PlanHubItem.allCases.map(\.rawValue) == ["aguinaldo", "strategy", "debts", "debtBlocks", "incomeBase", "fixedExpenses", "salvavidas", "retirement", "projections", "scenarios", "distribution"])
     }
 
     @Test func eachRowKeepsItsHistoricalGate() {
@@ -45,10 +45,13 @@ import Testing
         // The aguinaldo is read from mail: hidden without mail reading (the Owner's alone), else VIP.
         #expect(PlanTier.allCases.allSatisfy { PlanHubItem.aguinaldo.availability(tier: $0, flags: on) == .hidden })
         #expect(PlanHubItem.aguinaldo.availability(tier: .basic, flags: on, canReadMail: true) == .locked(.vip))
+        // Ahorro para deudas: the Owner's alone, never a plan's.
+        #expect(PlanTier.allCases.allSatisfy { PlanHubItem.debtBlocks.availability(tier: $0, flags: on, canReadMail: true) == .hidden })
+        #expect(PlanHubItem.debtBlocks.availability(tier: .vip, flags: on, isOwner: true) == .available)
         #expect(PlanHubItem.strategy.availability(tier: .basic, flags: on) == .available)
         #expect(PlanHubItem.distribution.availability(tier: .basic, flags: on) == .available)
-        #expect(PlanHubItem.allCases.allSatisfy { $0.availability(tier: .vip, flags: on, canReadMail: true) == .available })
-        #expect(PlanHubItem.allCases.filter { !$0.readsMail }.allSatisfy { $0.availability(tier: .vip, flags: on) == .available })
+        #expect(PlanHubItem.allCases.filter { !$0.ownerOnly }.allSatisfy { $0.availability(tier: .vip, flags: on, canReadMail: true) == .available })
+        #expect(PlanHubItem.allCases.filter { !$0.readsMail && !$0.ownerOnly }.allSatisfy { $0.availability(tier: .vip, flags: on) == .available })
         // The aguinaldo and Salvavidas pause with vip_intelligence, not with gmail_automation.
         let paused = Self.off(.vipIntelligence)
         #expect(PlanHubItem.aguinaldo.availability(tier: .vip, flags: paused, canReadMail: true) == .paused(.vipIntelligence))
@@ -57,7 +60,9 @@ import Testing
         #expect(PlanHubItem.aguinaldo.availability(tier: .vip, flags: Self.off(.gmailAutomation), canReadMail: true) == .available)
         // The Owner passes every gate by the server role only.
         let owner = profile(role: "owner", plan: nil)
-        #expect(PlanHubItem.allCases.allSatisfy { $0.availability(tier: owner.planTier, flags: on, canReadMail: owner.canReadMail) == .available })
+        #expect(PlanHubItem.allCases.allSatisfy {
+            $0.availability(tier: owner.planTier, flags: on, canReadMail: owner.canReadMail, isOwner: Jarvis.isAvailable(to: owner)) == .available
+        })
         #expect(PlanHubItem.strategy.availability(tier: profile(plan: "owner").planTier, flags: on) == .locked(.basic))
     }
 

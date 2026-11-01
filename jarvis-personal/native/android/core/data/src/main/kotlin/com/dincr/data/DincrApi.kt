@@ -137,6 +137,10 @@ class DincrApi(private val client: ApiClient) {
     suspend fun strategyDashboard(): StrategyDashboard = client.get("/user-product/vip/strategy-dashboard")
     /** The Owner's strategy (`strategy.scope == "owner"`): only called when `/auth/me` says owner ([StrategyContract]). */
     suspend fun ownerStrategyDashboard(): StrategyDashboard = client.get("/jarvis/premium/strategy-dashboard")
+    suspend fun debtSavingsBlocks(): DebtSavingsBlocks = client.get("/jarvis/premium/debt-savings-blocks")
+    suspend fun createDebtSavingsBlock(request: DebtSavingsBlockCreate): Acknowledgement =
+        client.send("POST", "/jarvis/premium/debt-savings-blocks", request)
+    suspend fun cancelDebtSavingsBlock(id: String): Acknowledgement = client.send("DELETE", "/jarvis/premium/debt-savings-blocks/${encode(id)}")
     /** Owner only (phase 1): the same strategy applied to an amount the Owner confirms. Writes nothing. */
     suspend fun ownerExactDistribution(request: ExactDistributionRequest): StrategyDashboard =
         client.send("POST", "/jarvis/premium/strategy-dashboard/exact-distribution", request)

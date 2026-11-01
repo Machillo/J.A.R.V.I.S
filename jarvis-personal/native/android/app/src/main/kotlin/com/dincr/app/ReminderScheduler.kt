@@ -58,7 +58,9 @@ object ReminderScheduler {
             Reminders.bills(model.api.debts(), fixed)
         }.getOrElse { return }
         val saving = if (profile.planTier == PlanTier.VIP) runCatching { model.api.salvavidas().autoContribution }.getOrNull() else null
-        schedule(context, Reminders.plan(LocalDate.now(), bills, saving, model.moneyFormat))
+        // DB-1: the day each of the Owner's locked savings blocks matures.
+        val blocks = if (Jarvis.isAvailable(profile)) runCatching { model.api.debtSavingsBlocks().blocks.orEmpty() }.getOrDefault(emptyList()) else emptyList()
+        schedule(context, Reminders.plan(LocalDate.now(), bills, saving, model.moneyFormat, blocks = blocks))
     }
 
     private fun schedule(context: Context, plan: List<Reminders.Reminder>) {

@@ -46,7 +46,7 @@ import Testing
                 }
             }
             #expect(feature.state("owner") == "AVAILABLE")
-            #expect(item.availability(tier: .vip, flags: .unknown, canReadMail: true) != .hidden, "\(item.rawValue) owner")
+            #expect(item.availability(tier: .vip, flags: .unknown, canReadMail: true, isOwner: true) != .hidden, "\(item.rawValue) owner")
         }
     }
 

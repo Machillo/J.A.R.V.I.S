@@ -2,7 +2,8 @@ import Foundation
 
 // NT-1 — reminders on the phone (local notifications, no server): what the app already knows,
 // said before it happens. The day before a debt's payment day and a fixed expense's due day, the
-// day of a Salvavidas automatic contribution, and the first day of a month ("your month closed").
+// day of a Salvavidas automatic contribution, the day a locked savings block for a debt matures
+// (the Owner's, DB-1), and the first day of a month ("your month closed").
 // Only dates the user recorded (a debt without a payment day gives none); nothing is guessed. The
 // app schedules them on the phone (`ReminderScheduler`); this file only decides which and when, so
 // both apps say the same. Android twin: `Reminders.kt`.
@@ -44,7 +45,8 @@ public enum Reminders {
     }
 
     /// Every reminder from `today` (local) to `days` ahead, earliest first, at most `limit`.
-    public static func plan(today: Date, bills: [Bill], saving: SalvavidasAutoContribution?, days: Int = 35,
+    public static func plan(today: Date, bills: [Bill], saving: SalvavidasAutoContribution?,
+                            blocks: [DebtSavingsBlocks.Block] = [], days: Int = 35,
                             calendar: Calendar = Calendar(identifier: .gregorian), format: MoneyFormat,
                             language: AppLanguage = .current) -> [Reminder] {
         let start = calendar.startOfDay(for: today)
@@ -79,6 +81,16 @@ public enum Reminders {
                 }
                 index += 1
             }
+        }
+
+        // The day each locked savings block matures: pay what it holds into its debt.
+        for block in blocks {
+            guard let date = day(block.maturityDate, calendar), date >= start, date < end else { continue }
+            let debt = block.debtName ?? language.pick("tu deuda", "your debt")
+            let total = format.string(block.totalAtMaturity ?? 0)
+            result.append((date, Reminder(id: "dincr.reminder.block.\(block.id).\(key(date, calendar))", date: at(date, calendar),
+                                          title: language.pick("Hoy vence tu ahorro bloqueado", "Your locked saving matures today"),
+                                          body: language.pick("Abonale \(total) a \(debt).", "Pay \(total) into \(debt)."))))
         }
 
         // The first day of each next month: the month that ended.

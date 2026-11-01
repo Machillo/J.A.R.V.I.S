@@ -1,0 +1,52 @@
+import XCTest
+
+/// DB-1 — Plan → Ahorro para deudas: the Owner reads the strategy's next locked saving, records the one
+/// he created at the bank and sees it with its progress; no plan sees the row. Android twin:
+/// `DebtSavingsBlocksUiTest`. Fixture data only.
+@MainActor
+final class DebtSavingsBlocksUITests: XCTestCase {
+    private func launch(plan: String?, role: String? = nil) -> XCUIApplication {
+        let app = XCUIApplication()
+        var arguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrTab", "plan",
+                         "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
+        if let plan { arguments += ["-DincrPlan", plan] }
+        if let role { arguments += ["-DincrRole", role] }
+        app.launchArguments = arguments
+        app.launch()
+        return app
+    }
+
+    private func element(_ id: String, in app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }
+
+    private func reveal(_ id: String, in app: XCUIApplication) -> XCUIElement {
+        let target = element(id, in: app)
+        for _ in 0..<6 where !(target.waitForExistence(timeout: 2) && target.isHittable) { app.swipeUp() }
+        return target
+    }
+
+    func testTheOwnerRecordsTheProposedSavingAndSeesItsProgress() {
+        let app = launch(plan: "vip", role: "owner")
+        reveal("plan.debtBlocks", in: app).tap()
+        let headline = element("debtBlocks.headline", in: app)
+        XCTAssertTrue(headline.waitForExistence(timeout: 10))
+        XCTAssertTrue(headline.label.contains("cada jueves por 6 meses"), headline.label)
+        reveal("debtBlocks.create", in: app).tap()
+        let save = element("debtBlocks.save", in: app)
+        XCTAssertTrue(save.waitForExistence(timeout: 10))
+        save.tap()
+        // Recorded: the debt is taken, so nothing is left to lock, and the block shows its progress.
+        let status = element("debtBlocks.status", in: app)
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        XCTAssertTrue(status.label.contains("ya usan todo tu sobrante"), status.label)
+        XCTAssertTrue(reveal("debtBlocks.block.fixture-block-1", in: app).exists)
+    }
+
+    func testNoPlanSeesTheRow() {
+        for plan in [nil, "basic", "vip"] as [String?] {
+            let app = launch(plan: plan)
+            XCTAssertTrue(element("plan.debts", in: app).waitForExistence(timeout: 10))
+            XCTAssertFalse(element("plan.debtBlocks", in: app).exists, plan ?? "free")
+            app.terminate()
+        }
+    }
+}

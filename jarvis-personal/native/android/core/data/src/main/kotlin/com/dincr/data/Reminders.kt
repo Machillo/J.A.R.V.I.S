@@ -7,7 +7,8 @@ import java.time.LocalDateTime
 /**
  * NT-1 — reminders on the phone (local notifications, no server): what the app already knows, said
  * before it happens. The day before a debt's payment day and a fixed expense's due day, the day of a
- * Salvavidas automatic contribution, and the first day of a month ("your month closed"). Only dates
+ * Salvavidas automatic contribution, the day a locked savings block for a debt matures (the Owner's,
+ * DB-1), and the first day of a month ("your month closed"). Only dates
  * the user recorded (a debt without a payment day gives none); nothing is guessed. The app schedules
  * them on the phone (`ReminderScheduler`); this file only decides which and when, so both apps say
  * the same. iOS twin: `Reminders.swift`.
@@ -34,7 +35,8 @@ object Reminders {
 
     /** Every reminder from [today] to [days] ahead, earliest first, at most [LIMIT]. */
     fun plan(today: LocalDate, bills: List<Bill>, saving: Salvavidas.AutoContribution?, format: MoneyFormat,
-             days: Int = 35, language: AppLanguage = AppLanguage.current()): List<Reminder> {
+             days: Int = 35, language: AppLanguage = AppLanguage.current(),
+             blocks: List<DebtSavingsBlocks.Block> = emptyList()): List<Reminder> {
         val end = today.plusDays(days.toLong())
         val result = mutableListOf<Reminder>()
 
@@ -72,6 +74,17 @@ object Reminders {
                     language.pick("${format.format(amount)} para tu Salvavidas.", "${format.format(amount)} for your emergency fund."))
                 index++
             }
+        }
+
+        // The day each locked savings block matures: pay what it holds into its debt.
+        for (block in blocks) {
+            val date = block.maturityDate?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: continue
+            if (date < today || !date.isBefore(end)) continue
+            val debt = block.debtName ?: language.pick("tu deuda", "your debt")
+            val total = format.format(block.totalAtMaturity ?: BigDecimal.ZERO)
+            result += Reminder("dincr.reminder.block.${block.id}.$date", date.atTime(MORNING_HOUR, 0),
+                language.pick("Hoy vence tu ahorro bloqueado", "Your locked saving matures today"),
+                language.pick("Abonale $total a $debt.", "Pay $total into $debt."))
         }
 
         // The first day of each next month: the month that ended.

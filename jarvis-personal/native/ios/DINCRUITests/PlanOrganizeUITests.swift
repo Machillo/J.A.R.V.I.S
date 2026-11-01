@@ -5,7 +5,7 @@ import XCTest
 /// income and expenses ("Movimientos recurrentes") inside Ingresos y base (every plan); back returns to
 /// Plan. Metas y ahorro stays in Hoy. Android twin: `PlanOrganizeUiTest`. Fixture data only.
 final class PlanOrganizeUITests: XCTestCase {
-    private static let entries = ["plan.aguinaldo", "plan.strategy", "plan.debts", "plan.incomeBase", "plan.salvavidas", "plan.retirement", "plan.projections", "plan.scenarios", "plan.distribution"]
+    private static let entries = ["plan.aguinaldo", "plan.strategy", "plan.debts", "plan.debtBlocks", "plan.incomeBase", "plan.salvavidas", "plan.retirement", "plan.projections", "plan.scenarios", "plan.distribution"]
 
     private func launch(plan: String? = nil, role: String? = nil, tab: String = "plan") -> XCUIApplication {
         let app = XCUIApplication()
@@ -37,10 +37,12 @@ final class PlanOrganizeUITests: XCTestCase {
     func testPlanKeepsItsSixEntriesInOrder() {
         for (plan, role) in [(nil, nil), ("basic", nil), ("vip", nil), ("vip", "owner")] as [(String?, String?)] {
             let app = launch(plan: plan, role: role)
-            // The aguinaldo is read from mail: an Owner-only entry during the launch (L-1).
-            let entries = role == "owner" ? Self.entries : Self.entries.filter { $0 != "plan.aguinaldo" }
+            // The aguinaldo is read from mail: an Owner-only entry during the launch (L-1). Ahorro para
+            // deudas is the Owner's alone (DB-1).
+            let ownerOnly = ["plan.aguinaldo", "plan.debtBlocks"]
+            let entries = role == "owner" ? Self.entries : Self.entries.filter { !ownerOnly.contains($0) }
             XCTAssertTrue(element(entries[0], in: app).waitForExistence(timeout: 10))
-            XCTAssertEqual(element("plan.aguinaldo", in: app).exists, role == "owner", "\(role ?? plan ?? "free"): Aguinaldo only for the Owner")
+            for id in ownerOnly { XCTAssertEqual(element(id, in: app).exists, role == "owner", "\(role ?? plan ?? "free"): \(id) only for the Owner") }
             let frames = entries.map { element($0, in: app).frame.minY }
             XCTAssertEqual(frames, frames.sorted(), "\(role ?? plan ?? "free"): order")
             for id in ["plan.budget", "plan.calendar", "plan.recurring", "plan.goals"] { XCTAssertFalse(element(id, in: app).exists, id) }
