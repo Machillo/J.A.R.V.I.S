@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.auth.current_user import reset_current_user, set_current_user
+from backend.core.time import costa_rica_today
 from fastapi import HTTPException
 
 from backend.finance import routes, service
@@ -21,7 +22,9 @@ from backend.main import app
 from backend.financial_lifecycle import state as lifecycle_state
 
 WS_A, WS_B = "workspace-a", "workspace-b"
-TODAY = date.today()
+# DINCR's day (America/Costa_Rica), as apply_due_installments counts it: the server's UTC date is a
+# day ahead from 18:00 in Costa Rica, and the due installments would differ.
+TODAY = costa_rica_today()
 CREATED = TODAY - timedelta(days=150)  # five due installments by now
 
 

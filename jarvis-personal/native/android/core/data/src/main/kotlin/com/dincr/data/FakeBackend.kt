@@ -460,7 +460,7 @@ class FakeBackend(
                 accounts.filter { it.ownershipStatus == "own" }.sortedBy { if (it.accountType == "credit_card") 0 else 1 }
                     .map { PaidWithOptions.Option(it.id, it.accountName, it.bankName, it.accountType, it.accountLast4, it.currency) }))
             // Expenses waiting for the close have no colones amount: listed apart, like the backend.
-            path == "/user-product/free/movements" -> ok(colonesMovements.sortedWith(compareByDescending<Movement> { it.transactionDate }.thenByDescending { it.sourceId }))
+            path == "/user-product/free/movements" -> ok(colonesMovements.sortedWith(LIST_ORDER))
             path == "/user-product/finance/expenses/pending-conversion" -> ok(pendingConversion())
             path == "/user-product/finance/expenses/pending-conversion/close" && method == "POST" -> closePending(text("period_key").orEmpty(), money("exchange_rate"))
             (path == "/user-product/finance/income" || path == "/user-product/finance/expenses") && method == "POST" -> {
@@ -1069,6 +1069,16 @@ class FakeBackend(
     )
 
     private companion object {
+        /**
+         * The list's order: newest day first; within a day, what was added in the session first (newest
+         * first), then the sample rows in their usual order (by how many days back they are, then id). On
+         * the first days of a month the recent sample rows share a day (see `seed`): they keep that order.
+         * iOS: `FixtureBackend.listOrder`.
+         */
+        private val SAMPLE_OFFSET = mapOf(11L to 0, 10L to 0, 12L to 1, 9L to 1, 13L to 2, 8L to 3, 7L to 4, 6L to 6, 5L to 9, 4L to 18)
+        val LIST_ORDER: Comparator<Movement> = compareByDescending<Movement> { it.transactionDate }
+            .thenBy { SAMPLE_OFFSET[it.sourceId] ?: -1 }.thenByDescending { it.sourceId }
+
         /** Hoy's main sources and the movement list ([refreshedSourcesUnreachable]). */
         val REFRESHED_SOURCES = listOf("/user-product/free/dashboard", "/user-product/basic/dashboard",
             "/user-product/vip/command-center", "/user-product/free/movements")
