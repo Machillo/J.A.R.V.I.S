@@ -94,3 +94,10 @@ class DebtSavingsBlockRequest(BaseModel):
     start_date: str
     term_months: int
     mode: str | None = None
+
+
+class DebtSavingsBlockApplyRequest(BaseModel):
+    """What was paid into the debt when a block matured, and what the bank did (owner_debt_block_store)."""
+    amount: float
+    outcome: str
+    new_monthly_payment: float | None = None

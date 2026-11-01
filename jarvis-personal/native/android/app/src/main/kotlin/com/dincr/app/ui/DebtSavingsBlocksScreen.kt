@@ -22,6 +22,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AmountInput
 import com.dincr.data.AuthException
+import com.dincr.data.DebtSavingsBlockApply
 import com.dincr.data.DebtSavingsBlockCreate
 import com.dincr.data.DebtSavingsBlocks
 import com.dincr.data.DebtSavingsReading
@@ -37,24 +38,28 @@ import kotlinx.coroutines.launch
  * DB-1 — Plan → Ahorro para deudas (Owner only): the next locked savings block the strategy proposes
  * (which debt, how much every Thursday, for how long, what locking costs) and the blocks already
  * created at the bank, with their progress. The backend decides every number
- * (`GET /jarvis/premium/debt-savings-blocks`); "Ya lo creé en el banco" records a block (POST) and
- * "Quitar" removes one (DELETE): both are the Owner's explicit actions. iOS twin:
+ * (`GET /jarvis/premium/debt-savings-blocks`); "Ya lo creé en el banco" records a block (POST), "Quitar"
+ * removes one (DELETE) and, when a block matures, "Ya lo aboné" records what was paid into the debt and
+ * what the bank did (POST …/apply): all are the Owner's explicit actions. iOS twin:
  * `DebtSavingsBlocksView.swift`.
  */
 @Composable
 fun DebtSavingsBlocksScreen(model: AppModel, nav: Navigator) {
     val data = rememberLoad(model) { model.api.debtSavingsBlocks() }
+    var notice by remember { mutableStateOf<String?>(null) }
     DetailScaffold(tx("Ahorro para deudas", "Savings for debts"), nav::back) {
-        LoadContent(data) { state -> DebtSavingsBlocksContent(model, state) { data.reload() } }
+        notice?.let { DincrCard { Text(it, color = Dincr.colors.text, modifier = Modifier.fillMaxWidth().testTag("debtBlocks.notice")) } }
+        LoadContent(data) { state -> DebtSavingsBlocksContent(model, state, paid = { notice = it; data.reload() }) { data.reload() } }
     }
 }
 
 @Composable
-private fun DebtSavingsBlocksContent(model: AppModel, state: DebtSavingsBlocks, changed: () -> Unit) {
+private fun DebtSavingsBlocksContent(model: AppModel, state: DebtSavingsBlocks, paid: (String) -> Unit, changed: () -> Unit) {
     val format = Dincr.money
     val writes = model.isOn(OpsFlag.FINANCIAL_WRITES)
     var creating by remember(state) { mutableStateOf(false) }
     var removing by remember(state) { mutableStateOf<DebtSavingsBlocks.Block?>(null) }
+    var paying by remember(state) { mutableStateOf<String?>(null) }
     var error by remember(state) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -86,6 +91,10 @@ private fun DebtSavingsBlocksContent(model: AppModel, state: DebtSavingsBlocks, 
                 Column(Modifier.fillMaxWidth().testTag("debtBlocks.block.${block.id}"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
                     Text(block.debtName ?: tx("Deuda", "Debt"), style = MaterialTheme.typography.titleSmall, color = Dincr.colors.text)
                     DebtSavingsReading.blockLines(block, format).forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
+                    if (writes && block.matured == true) {
+                        if (paying == block.id) ApplyBlockForm(model, block, onCancel = { paying = null }, onPaid = paid)
+                        else DincrPrimaryButton(tx("Ya lo aboné", "I paid it"), modifier = Modifier.testTag("debtBlocks.pay.${block.id}"), onClick = { paying = block.id })
+                    }
                     if (writes) TextButton({ removing = block }, modifier = Modifier.heightIn(min = 48.dp).testTag("debtBlocks.remove.${block.id}")) {
                         Text(tx("Quitar", "Remove"), color = Dincr.colors.negative)
                     }
@@ -142,6 +151,44 @@ private fun CreateBlockForm(model: AppModel, proposal: DebtSavingsBlocks.Proposa
                 model.api.createDebtSavingsBlock(DebtSavingsBlockCreate(debtId, amount, start.toString(), term, proposal.mode))
             }
                 .onSuccess { onSaved() }
+                .onFailure { if (it !is AuthException.SignedOut) error = it.message }
+            saving = false
+        }
+    })
+    TextButton(onCancel, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Cancelar", "Cancel"), color = Dincr.colors.tint) }
+}
+
+/** The block matured and its money went into the debt: how much, and what the bank did with it. */
+@Composable
+private fun ApplyBlockForm(model: AppModel, block: DebtSavingsBlocks.Block, onCancel: () -> Unit, onPaid: (String) -> Unit) {
+    val format = Dincr.money
+    var amount by remember(block.id) { mutableStateOf(block.totalAtMaturity?.let(format::inputText).orEmpty()) }
+    var outcome by remember(block.id) { mutableStateOf(DebtSavingsBlockApply.REDUCE_TERM) }
+    var installment by remember(block.id) { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    MoneyField(tx("Cuánto abonaste", "How much you paid"), amount, { amount = it }, modifier = Modifier.testTag("debtBlocks.applyAmount"))
+    ChoiceChips(listOf(DebtSavingsBlockApply.REDUCE_TERM to tx("Bajó el plazo", "Shortened the term"),
+        DebtSavingsBlockApply.REDUCE_INSTALLMENT to tx("Bajó la cuota", "Lowered the installment")), outcome, { outcome = it }, tx("Qué hizo el banco", "What the bank did"))
+    if (outcome == DebtSavingsBlockApply.REDUCE_INSTALLMENT) {
+        MoneyField(tx("Cuota nueva", "New installment"), installment, { installment = it }, modifier = Modifier.testTag("debtBlocks.newInstallment"))
+        Caption(tx("Lo que bajó la cuota se suma a tu siguiente ahorro.", "What the installment went down is added to your next saving."))
+    }
+    error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.negative) }
+    DincrPrimaryButton(tx("Guardar", "Save"), loading = saving, modifier = Modifier.testTag("debtBlocks.applySave"), onClick = onClick@{
+        val paid = AmountInput.parse(amount, format.separators)?.takeIf { it.signum() > 0 }
+            ?: run { error = tx("Escribí un monto mayor que cero.", "Enter an amount above zero."); return@onClick }
+        val newInstallment = if (outcome == DebtSavingsBlockApply.REDUCE_INSTALLMENT) {
+            AmountInput.parse(installment, format.separators)?.takeIf { it.signum() > 0 }
+                ?: run { error = tx("Escribí la cuota nueva.", "Enter the new installment."); return@onClick }
+        } else null
+        saving = true; error = null
+        scope.launch {
+            model.load(tx("No pudimos guardar.", "We couldn’t save.")) {
+                model.api.applyDebtSavingsBlock(block.id, DebtSavingsBlockApply.of(paid, outcome, newInstallment))
+            }
+                .onSuccess { onPaid(DebtSavingsReading.appliedMessage(it.block.applied, format)) }
                 .onFailure { if (it !is AuthException.SignedOut) error = it.message }
             saving = false
         }

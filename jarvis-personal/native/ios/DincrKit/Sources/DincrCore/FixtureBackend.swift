@@ -74,6 +74,8 @@ public actor FixtureBackend: HTTPTransport {
     var ownerFixedExpenses: [FixtureFixedExpense] = FixtureFixedExpense.seed
     /// Plan → Ahorro para deudas (Owner): the locked savings blocks recorded (FixtureBackend+DebtBlocks.swift).
     var ownerDebtBlocks: [[String: Any]] = []
+    /// The block that matured yesterday was paid into its debt (FixtureBackend+DebtBlocks.swift).
+    var ownerMaturedBlockPaid = false
     /// Perfil → Atajos de iPhone (FixtureBackend+Shortcuts.swift): the account's current shortcut token
     /// (invented, never a real credential) and the captures received, by Idempotency-Key.
     var shortcutToken: String?

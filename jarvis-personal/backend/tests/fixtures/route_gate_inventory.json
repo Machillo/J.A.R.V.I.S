@@ -1233,6 +1233,13 @@
  },
  {
   "method": "POST",
+  "path": "/jarvis/premium/debt-savings-blocks/{block_id}/apply",
+  "gates": [
+   "router_roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
   "path": "/jarvis/premium/initial-strategy",
   "gates": [
    "router_roles:owner"

@@ -85,4 +85,20 @@ import Testing
         let before = calendar.date(from: DateComponents(year: 2026, month: 11, day: 1))!
         #expect(!Reminders.plan(today: before, bills: [], saving: nil, blocks: blocks, days: 35, format: colones).contains { $0.id.contains(".block.") })
     }
+
+    @Test func afterTheAbonoItSaysWhereTheDebtStandsAndWhatWasLeft() throws {
+        let decode = { (json: String) in try APIClient.decoder.decode(DebtSavingsBlockApplied.self, from: Data(json.utf8)).block.applied }
+        #expect(DebtSavingsReading.appliedMessage(try decode(#"{"block": {"id": "b1", "applied": {"amount": 351000, "outcome": "reduce_term", "new_remaining_amount": 649000, "left_over": 0}}}"#),
+                                                  format: colones, language: .spanish) == "Listo: tu deuda quedó en ₡649.000.")
+        #expect(DebtSavingsReading.appliedMessage(try decode(#"{"block": {"id": "b1", "applied": {"amount": 1050000, "outcome": "reduce_term", "new_remaining_amount": 0, "left_over": 50000}}}"#),
+                                                  format: colones, language: .spanish)
+                == "Listo: terminaste de pagar esa deuda. Te sobraron ₡50.000: mandalos a tu siguiente deuda o al Salvavidas.")
+    }
+
+    @Test func theAbonoCarriesTheNewInstallmentOnlyWhenTheBankLoweredIt() throws {
+        let term = try String(decoding: APIClient.encoder.encode(DebtSavingsBlockApply(amount: 351000, outcome: .reduceTerm, newMonthlyPayment: 39000)), as: UTF8.self)
+        #expect(term.contains("\"outcome\":\"reduce_term\"") && !term.contains("39000"))
+        let lower = try String(decoding: APIClient.encoder.encode(DebtSavingsBlockApply(amount: 351000, outcome: .reduceInstallment, newMonthlyPayment: 39000)), as: UTF8.self)
+        #expect(lower.contains("\"new_monthly_payment\":39000"))
+    }
 }

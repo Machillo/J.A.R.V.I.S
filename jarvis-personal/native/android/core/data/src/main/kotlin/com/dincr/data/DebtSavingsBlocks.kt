@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
  * The backend (`GET /jarvis/premium/debt-savings-blocks`, finance/debt_savings_blocks.py) decides
  * everything: which debt, how much every Thursday, for how long, what locking costs. This file only
  * decodes it and says it in short sentences, so both apps say the same. Recording a block created at
- * the bank (POST) and removing one (DELETE) are the Owner's explicit actions. iOS twin:
+ * the bank (POST), removing one (DELETE) and, when it matures, recording what was paid into the debt
+ * (POST …/apply) are the Owner's explicit actions. iOS twin:
  * `DebtSavingsBlocks.swift`.
  */
 @Serializable
@@ -80,6 +81,38 @@ data class DebtSavingsBlockCreate(
     @SerialName("term_months") val termMonths: Int,
     val mode: String? = null,
 )
+
+/** `POST /jarvis/premium/debt-savings-blocks/{id}/apply`: what was paid into the debt and what the bank did. */
+@Serializable
+data class DebtSavingsBlockApply(
+    val amount: Money,
+    val outcome: String,
+    @SerialName("new_monthly_payment") val newMonthlyPayment: Money? = null,
+) {
+    companion object {
+        const val REDUCE_TERM = "reduce_term"
+        const val REDUCE_INSTALLMENT = "reduce_installment"
+
+        /** The new installment travels only when the bank lowered it. */
+        fun of(amount: java.math.BigDecimal, outcome: String, newMonthlyPayment: java.math.BigDecimal?) =
+            DebtSavingsBlockApply(amount, outcome, newMonthlyPayment.takeIf { outcome == REDUCE_INSTALLMENT })
+    }
+}
+
+/** The answer of `…/apply`: the block, closed, with what was applied. */
+@Serializable
+data class DebtSavingsBlockApplied(val block: ClosedBlock) {
+    @Serializable
+    data class ClosedBlock(val id: String, val applied: Applied? = null)
+
+    @Serializable
+    data class Applied(
+        val amount: Money? = null,
+        val outcome: String? = null,
+        @SerialName("new_remaining_amount") val newRemainingAmount: Money? = null,
+        @SerialName("left_over") val leftOver: Money? = null,
+    )
+}
 
 object DebtSavingsReading {
     /** "5 nov 2026" for a `YYYY-MM-DD` date. */
@@ -154,6 +187,19 @@ object DebtSavingsReading {
             "interest_rate_unknown" -> language.pick("Alguna deuda no tiene tasa: el costo de bloquear puede ser mayor.", "Some debt has no rate: locking may cost more.")
             else -> null
         }
+    }
+
+    /** After the abono: where the debt stands, and what was left over (more than the debt owed). */
+    fun appliedMessage(applied: DebtSavingsBlockApplied.Applied?, format: MoneyFormat, language: AppLanguage = AppLanguage.current()): String {
+        applied ?: return language.pick("Listo: el abono quedó registrado.", "Done: the payment is recorded.")
+        val remaining = applied.newRemainingAmount ?: java.math.BigDecimal.ZERO
+        var text = if (remaining.signum() > 0) language.pick("Listo: tu deuda quedó en ${format.format(remaining)}.", "Done: your debt is now ${format.format(remaining)}.")
+        else language.pick("Listo: terminaste de pagar esa deuda.", "Done: that debt is paid off.")
+        applied.leftOver?.takeIf { it.signum() > 0 }?.let { left ->
+            text += language.pick(" Te sobraron ${format.format(left)}: mandalos a tu siguiente deuda o al Salvavidas.",
+                " ${format.format(left)} was left over: send it to your next debt or your emergency fund.")
+        }
+        return text
     }
 
     /** One block the Owner created: progress, or what to do when it matured. */

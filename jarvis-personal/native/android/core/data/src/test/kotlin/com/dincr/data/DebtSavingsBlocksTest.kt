@@ -88,4 +88,20 @@ class DebtSavingsBlocksTest {
         val body = Json.encodeToString(DebtSavingsBlockCreate.serializer(), DebtSavingsBlockCreate(801, BigDecimal(13500), "2026-11-05", 6, "block"))
         assertTrue(body, body.contains("\"debt_id\":801") && body.contains("\"weekly_amount\":13500") && body.contains("\"term_months\":6"))
     }
+
+    @Test fun afterTheAbonoItSaysWhereTheDebtStandsAndWhatWasLeft() {
+        fun applied(text: String) = json.decodeFromString(DebtSavingsBlockApplied.serializer(), text).block.applied
+        assertEquals("Listo: tu deuda quedó en ₡649.000.", DebtSavingsReading.appliedMessage(
+            applied("""{"block": {"id": "b1", "applied": {"amount": 351000, "outcome": "reduce_term", "new_remaining_amount": 649000, "left_over": 0}}}"""), colones, es))
+        assertEquals("Listo: terminaste de pagar esa deuda. Te sobraron ₡50.000: mandalos a tu siguiente deuda o al Salvavidas.", DebtSavingsReading.appliedMessage(
+            applied("""{"block": {"id": "b1", "applied": {"amount": 1050000, "outcome": "reduce_term", "new_remaining_amount": 0, "left_over": 50000}}}"""), colones, es))
+    }
+
+    @Test fun theAbonoCarriesTheNewInstallmentOnlyWhenTheBankLoweredIt() {
+        val encoder = Json { explicitNulls = false }
+        val term = encoder.encodeToString(DebtSavingsBlockApply.serializer(), DebtSavingsBlockApply.of(BigDecimal(351000), DebtSavingsBlockApply.REDUCE_TERM, BigDecimal(39000)))
+        assertTrue(term, term.contains("\"outcome\":\"reduce_term\"") && !term.contains("39000"))
+        val lower = encoder.encodeToString(DebtSavingsBlockApply.serializer(), DebtSavingsBlockApply.of(BigDecimal(351000), DebtSavingsBlockApply.REDUCE_INSTALLMENT, BigDecimal(39000)))
+        assertTrue(lower, lower.contains("\"new_monthly_payment\":39000"))
+    }
 }

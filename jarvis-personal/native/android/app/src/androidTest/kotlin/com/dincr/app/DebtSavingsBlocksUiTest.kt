@@ -66,6 +66,15 @@ class DebtSavingsBlocksUiTest {
         waitUntil("the recorded block") { tagged("debtBlocks.block.fixture-block-1") && present(tx("ya usan todo tu sobrante", "already use all of your safe")) }
     }
 
+    @Test fun aMaturedSavingIsPaidIntoItsDebtAndLeavesTheList() {
+        launch("vip", role = "owner")
+        click(tx("Plan", "Plan"), selectable = true)
+        click(tx("Ahorro para deudas", "Savings for debts"))
+        clickTag("debtBlocks.pay.fixture-matured-1")
+        clickTag("debtBlocks.applySave")
+        waitUntil("the abono") { tagged("debtBlocks.notice") && present(tx("Listo", "Done")) && !tagged("debtBlocks.block.fixture-matured-1") }
+    }
+
     @Test fun noPlanSeesTheRow() {
         for (plan in listOf("free", "basic", "vip")) {
             launch(plan)

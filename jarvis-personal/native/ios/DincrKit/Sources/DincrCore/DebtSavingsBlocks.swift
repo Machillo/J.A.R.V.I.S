@@ -4,7 +4,8 @@ import Foundation
 // backend (`GET /jarvis/premium/debt-savings-blocks`, finance/debt_savings_blocks.py) decides
 // everything: which debt, how much every Thursday, for how long, what locking costs. This file only
 // decodes it and says it in short sentences, so both apps say the same. Recording a block created at
-// the bank (POST) and removing one (DELETE) are the Owner's explicit actions. Android twin:
+// the bank (POST), removing one (DELETE) and, when it matures, recording what was paid into the debt
+// (POST …/apply) are the Owner's explicit actions. Android twin:
 // `DebtSavingsBlocks.kt`.
 
 public struct DebtSavingsBlocks: Decodable, Sendable, Equatable {
@@ -81,7 +82,37 @@ public struct DebtSavingsBlockCreate: Encodable, Sendable, Equatable {
     }
 }
 
+/// `POST /jarvis/premium/debt-savings-blocks/{id}/apply`: what was paid into the debt and what the bank
+/// did with it (a shorter term, or a lower installment: then the new one).
+public struct DebtSavingsBlockApply: Encodable, Sendable, Equatable {
+    public enum Outcome: String, Sendable, CaseIterable { case reduceTerm = "reduce_term", reduceInstallment = "reduce_installment" }
+    public let amount: Decimal
+    public let outcome: String
+    public let newMonthlyPayment: Decimal?
+
+    public init(amount: Decimal, outcome: Outcome, newMonthlyPayment: Decimal?) {
+        self.amount = amount; self.outcome = outcome.rawValue
+        self.newMonthlyPayment = outcome == .reduceInstallment ? newMonthlyPayment : nil
+    }
+}
+
+/// The answer of `…/apply`: the block, closed, with what was applied.
+public struct DebtSavingsBlockApplied: Decodable, Sendable, Equatable {
+    public struct Applied: Decodable, Sendable, Equatable {
+        public let amount: Decimal?
+        public let outcome: String?
+        public let newRemainingAmount: Decimal?
+        public let leftOver: Decimal?
+    }
+    public struct ClosedBlock: Decodable, Sendable, Equatable { public let id: String; public let applied: Applied? }
+    public let block: ClosedBlock
+}
+
 extension DincrService {
+    public func applyDebtSavingsBlock(id: String, _ request: DebtSavingsBlockApply) async throws -> DebtSavingsBlockApplied {
+        try await client.send("POST", "/jarvis/premium/debt-savings-blocks/\(id)/apply", body: request)
+    }
+
     public func debtSavingsBlocks() async throws -> DebtSavingsBlocks { try await client.get("/jarvis/premium/debt-savings-blocks") }
 
     public func createDebtSavingsBlock(_ request: DebtSavingsBlockCreate) async throws {
@@ -180,6 +211,20 @@ public enum DebtSavingsReading {
             default: nil
             }
         }
+    }
+
+    /// After the abono: where the debt stands, and what was left over (more than the debt owed).
+    public static func appliedMessage(_ applied: DebtSavingsBlockApplied.Applied?, format: MoneyFormat, language: AppLanguage = .current) -> String {
+        guard let applied else { return language.pick("Listo: el abono quedó registrado.", "Done: the payment is recorded.") }
+        var text = (applied.newRemainingAmount ?? 0) > 0
+            ? language.pick("Listo: tu deuda quedó en \(format.string(applied.newRemainingAmount ?? 0)).",
+                            "Done: your debt is now \(format.string(applied.newRemainingAmount ?? 0)).")
+            : language.pick("Listo: terminaste de pagar esa deuda.", "Done: that debt is paid off.")
+        if let left = applied.leftOver, left > 0 {
+            text += language.pick(" Te sobraron \(format.string(left)): mandalos a tu siguiente deuda o al Salvavidas.",
+                                  " \(format.string(left)) was left over: send it to your next debt or your emergency fund.")
+        }
+        return text
     }
 
     /// One block the Owner created: progress, or what to do when it matured.

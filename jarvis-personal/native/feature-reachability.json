@@ -544,6 +544,12 @@
      "path": "/jarvis/premium/debt-savings-blocks/{block_id}",
      "gate": "router_roles:owner",
      "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/jarvis/premium/debt-savings-blocks/{block_id}/apply",
+     "gate": "router_roles:owner",
+     "used_by": []
     }
    ],
    "ios": {

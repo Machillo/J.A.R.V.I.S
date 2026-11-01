@@ -37,6 +37,11 @@ def test_a_block_created_at_the_bank_is_stored_with_its_maturity(saved):
     assert store.stored_blocks()[0]["id"] == block["id"]
 
 
+def test_the_banks_minimum_applies_only_to_its_term(saved):
+    assert store.create_block({**BLOCK, "term_months": 3, "weekly_amount": 3750})["block"]["term_months"] == 3
+    assert store.create_block({**BLOCK, "debt_id": 2, "weekly_amount": 3000})["block"]["weekly_amount"] == 3000
+
+
 def test_one_block_per_debt_at_a_time(saved):
     store.create_block(dict(BLOCK))
     with pytest.raises(HTTPException) as error:
@@ -50,6 +55,7 @@ def test_one_block_per_debt_at_a_time(saved):
     ({"debt_id": 3}, 404),               # already paid
     ({"weekly_amount": 0}, 422), ({"weekly_amount": -500}, 422), ({"weekly_amount": "abc"}, 422),
     ({"term_months": 2}, 422), ({"term_months": 61}, 422), ({"term_months": 6.5}, 422),
+    ({"term_months": 3, "weekly_amount": 3000}, 422),   # the bank asks at least ₡3 750 a contribution for 3 months
     ({"start_date": "2026-09-01"}, 422), ({"start_date": "2027-03-01"}, 422), ({"start_date": "mañana"}, 422),
 ])
 def test_an_invalid_block_is_refused_and_nothing_is_stored(saved, change, status):
