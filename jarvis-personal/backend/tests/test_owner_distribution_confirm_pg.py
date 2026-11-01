@@ -529,3 +529,27 @@ def test_the_cycle_report_does_not_count_a_confirmed_extra_payment_as_an_install
     source = inspect.getsource(service.get_financial_cycle_report)
     query = source[source.index("debt_payments = [dict(row)"):source.index("income_transactions =")]
     assert "source IS DISTINCT FROM 'owner_distribution'" in query
+
+
+def test_a_distribution_with_an_automatic_saving_can_be_confirmed(db, monkeypatch):
+    """The Salvavidas automatic contributions still to come in the cycle are taken out of the shares
+    (owner_commitments.absorb): the shares add up to the amount minus them, and CONFIRMAR accepts it
+    (it refused every exact amount while an automatic saving was on: "no suma exactamente")."""
+    class Today(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 11, 2)
+    monkeypatch.setattr(sd, "date", Today)
+    monkeypatch.setattr(sd, "_safe_cycle_report", lambda: {"income": {"expected_total": 900_000, "received_from_transactions": 0},
+                                                           "expenses": {"spending_only": 0}, "debts": {"payments_current_period": 0},
+                                                           "cycle": {"start": "2026-10-28", "end": "2026-11-10"}})
+    db.execute("""UPDATE user_preferences SET preference_value = preference_value || %s::jsonb
+                  WHERE workspace_id=%s AND preference_key='salvavidas'""",
+               ('{"auto_contribution": {"enabled": true, "amount": 2500, "frequency": "weekly", "start_date": "2026-10-29"}}', WS))
+    preview = _preview("47000")
+    strategy = preview["strategy"]
+    taken = strategy["automatic_savings"]["taken_from_distribution"]
+    assert taken == 2_500, "Thursday 5 November, inside the cycle"
+    assert sum(_cents(item["amount"]) for item in strategy["allocation_items"]) == _cents(47_000 - taken)
+    result = _confirm("47000", "confirm-automatic-0001", _items(preview))
+    assert result["status"] == "applied"

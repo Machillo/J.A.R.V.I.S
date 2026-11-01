@@ -16,7 +16,10 @@ with the mechanisms the app already uses for each one:
   happens, so nothing is written for it.
 
 Consistency: the server recomputes the distribution and applies it only when it is exactly the
-one the Owner reviewed: same destinations and amounts to the cent, adding up to the amount, and
+one the Owner reviewed: same destinations and amounts to the cent, adding up to the amount (the
+part that goes by itself — the Salvavidas automatic contributions and the locked savings blocks'
+contributions still to come in the cycle — counts as already placed: it is taken out of the
+shares, not recorded here), and
 the same plan (``fingerprint``: which debt gets how much, which goal). Otherwise nothing is written.
 Everything is written in one transaction, committed once, under a per-workspace lock: a failure
 leaves nothing applied. A confirmation key identifies one confirmation; repeating it (double
@@ -169,7 +172,10 @@ def confirm_owner_distribution(amount: Any, currency: str, confirmation_key: str
         if items != _items_in_cents(expected_items):
             raise _conflict("La distribución cambió desde que la revisaste. Revisala de nuevo antes de confirmar.",
                             "The distribution changed since you reviewed it. Review it again before confirming.")
-        if sum(items.values()) != amount_cents:
+        # What goes by itself in the cycle is out of the shares already (owner_commitments.absorb).
+        by_itself = sum(_cents((strategy.get(key) or {}).get("taken_from_distribution"))
+                        for key in ("automatic_savings", "debt_savings_blocks"))
+        if sum(items.values()) + by_itself != amount_cents:
             raise _conflict("La distribución no suma exactamente el monto; no se registró nada.",
                             "The distribution does not add up to the amount exactly; nothing was recorded.")
 
