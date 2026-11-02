@@ -110,7 +110,8 @@ def _request_flags(method: str, path: str) -> list[str]:
         flags.append("gmail_automation")
     if path.startswith("/product-ops/billing/store"):
         flags.append("store_billing")
-    if path.startswith("/user-product/vip/") and not path.startswith(("/user-product/vip/gmail", "/user-product/vip/mail/")):
+    # Unlinking a shortcut is a withdrawal too: it never pauses.
+    if path.startswith("/user-product/vip/") and (method, path) != ("DELETE", "/user-product/vip/shortcuts/token") and not path.startswith(("/user-product/vip/gmail", "/user-product/vip/mail/")):
         flags.append("vip_intelligence")
     if path.startswith("/reports") or path.startswith("/user-product/basic/reports"):
         flags.append("advanced_reports")

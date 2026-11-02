@@ -45,7 +45,7 @@ def notifications_cron(x_cron_secret: str | None = Header(default=None)):
     expected = (os.getenv("NOTIFICATION_CRON_SECRET") or os.getenv("EMAIL_MONITOR_CRON_SECRET") or "").strip()
     if not expected:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="El cron de notificaciones no está configurado.")
-    if not x_cron_secret or not hmac.compare_digest(x_cron_secret, expected):
+    if not x_cron_secret or not hmac.compare_digest(x_cron_secret.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cron secret inválido.")
     try:
         result = send_due_notifications()
