@@ -87,6 +87,7 @@ private struct MailMonitorContent: View {
         }
         .refreshable { await load() }
         .task(id: generation) { await load() }
+        .onDisappear { Task { await model.refreshMailLeftovers() } }
         .onChange(of: model.mailOutcome) { _, _ in generation += 1 }
         .onChange(of: model.dataGeneration) { _, _ in generation += 1 }
         .sheet(item: $scopeSheet) { provider in

@@ -5,12 +5,14 @@ import XCTest
 /// confirmed; then it appears in the list. Free and Basic see the entry locked and it opens Suscripción.
 /// The five tabs and Análisis stay. Android twin: `MovementsReviewUiTest`. Fixture data only.
 final class MovementsReviewUITests: XCTestCase {
-    private func launch(plan: String? = nil, role: String? = nil) -> XCUIApplication {
+    private func launch(plan: String? = nil, role: String? = nil, leftovers: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
         var arguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrTab", "movements",
                          "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
         if let plan { arguments += ["-DincrPlan", plan] }
         if let role { arguments += ["-DincrRole", role] }
+        // L-2: a VIP sees the review only with what is left from before mail was paused.
+        if plan == "vip", role == nil, leftovers { arguments.append("-DincrMailLeftovers") }
         app.launchArguments = arguments
         app.launch()
         return app
@@ -29,16 +31,11 @@ final class MovementsReviewUITests: XCTestCase {
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", content)).firstMatch
     }
 
-    func testFreeAndBasicSeePorRevisarLockedAndItOpensSuscripcion() {
-        for plan in [nil, "basic"] as [String?] {
-            let app = launch(plan: plan)
-            let entry = element("movements.review", in: app)
-            XCTAssertTrue(entry.waitForExistence(timeout: 10), plan ?? "free")
-            XCTAssertTrue(entry.label.contains("Disponible desde VIP"), "\(plan ?? "free"): \(entry.label)")
-            XCTAssertTrue(element("movements.analysis", in: app).exists)
-            entry.tap()
-            XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10), plan ?? "free")
-            XCTAssertFalse(element("mail.accept.21", in: app).exists)
+    func testFreeBasicAndAVipWithoutHistoryDoNotSeePorRevisar() {
+        for plan in [nil, "basic", "vip"] as [String?] {
+            let app = launch(plan: plan, leftovers: false)
+            XCTAssertTrue(element("movements.analysis", in: app).waitForExistence(timeout: 10), plan ?? "free")
+            XCTAssertFalse(element("movements.review", in: app).exists, plan ?? "free")
             app.terminate()
         }
     }

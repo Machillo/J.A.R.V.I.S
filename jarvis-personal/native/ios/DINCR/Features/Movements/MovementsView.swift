@@ -56,14 +56,12 @@ struct MovementsView: View {
             Section {
                 NavigationLink { AnalysisHubView() } label: { Label(tx("Análisis", "Analysis"), systemImage: "chart.bar.doc.horizontal") }
                     .accessibilityIdentifier("movements.analysis")
-                // §15 PR 6: Movimientos → Por revisar — the bank notices detected in mail, reviewed in the
-                // existing Email Monitor (the same screen as Perfil's; VIP and the Owner, locked below).
-                if model.planTier == .vip {
+                // §15 PR 6: Movimientos → Por revisar — the bank notices detected in mail. Mail is paused
+                // outside the Owner (L-2): only a VIP's leftovers from before the pause still show it.
+                if model.showsMailReview {
                     // Back from the review, the list reloads: a confirmed notice is now a movement (as on Android).
                     NavigationLink { EmailMonitorView().onDisappear { Task { await load() } } } label: { Label(tx("Por revisar", "To review"), systemImage: "tray") }
                         .accessibilityIdentifier("movements.review")
-                } else {
-                    LockedListRow(title: tx("Por revisar", "To review"), symbol: "tray", tier: .vip, id: "movements.review")
                 }
             }
             if let status {

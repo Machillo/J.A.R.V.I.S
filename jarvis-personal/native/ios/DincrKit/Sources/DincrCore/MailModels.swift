@@ -57,6 +57,10 @@ public struct MailStatus: Decodable, Sendable, Equatable {
     public var consentRequired: Bool { consent?.required ?? true }
     /// The mailboxes to show: `/status` also returns disconnected (disabled) rows.
     public var mailboxes: [Connection] { (connections ?? []).filter { !$0.isDisabled } }
+    /// Mail is paused outside the Owner (L-2), so nobody else is offered it. A VIP who connected a mailbox
+    /// before the pause still reaches it: a stored authorization must stay disconnectable and imported
+    /// notices reviewable. Android: `MailStatus.hasLeftovers`.
+    public var hasLeftovers: Bool { !mailboxes.isEmpty || (pending ?? 0) > 0 }
 }
 
 public struct MailConsentRequest: Encodable, Sendable, Equatable {

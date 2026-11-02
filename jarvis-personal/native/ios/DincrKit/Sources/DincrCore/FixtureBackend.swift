@@ -128,7 +128,7 @@ public actor FixtureBackend: HTTPTransport {
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
                 today: Date = .now, language: AppLanguage = .current, identityRefreshFails: Bool = false, mailArrives: Bool = false, storeBillingOn: Bool = false, legalLapses: Bool = false,
-                pendingSample: Bool = false) {
+                pendingSample: Bool = false, mailLeftovers: Bool = true) {
         self.scenario = scenario
         self.identityRefreshFails = identityRefreshFails
         self.mailArrives = mailArrives
@@ -139,7 +139,8 @@ public actor FixtureBackend: HTTPTransport {
         // STORE images must not depend on the capture day.
         self.today = scenario == .store ? Self.date(StoreSample.today) : today
         self.storeBudget = scenario == .store ? StoreSample.budget(language) : nil
-        let vip = plan == .vip || scenario == .mailOnboarding
+        // Mail is the Owner's alone (L-2): the app's launches give a VIP a mailbox only with `-DincrMailLeftovers`.
+        let vip = (plan == .vip && (mailLeftovers || role == .owner)) || scenario == .mailOnboarding
         self.mailConnected = scenario == .populated && vip
         self.mailConsentAccepted = scenario == .populated && vip
         self.profile = Self.sampleProfile(scenario: scenario, plan: scenario == .mailOnboarding ? .vip : plan)

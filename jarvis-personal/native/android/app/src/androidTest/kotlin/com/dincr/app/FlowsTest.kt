@@ -47,7 +47,7 @@ class FlowsTest {
 
     private fun launch(fixture: String = "POPULATED", skipLogin: Boolean = true, plan: String = "free", role: String? = null): ActivityScenario<MainActivity> {
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
-            .putExtra("dincrFixtures", fixture).putExtra("dincrSkipLogin", skipLogin).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
+            .putExtra("dincrFixtures", fixture).putExtra("dincrSkipLogin", skipLogin).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan).putExtra("dincrMailLeftovers", true)
         role?.let { intent.putExtra("dincrRole", it) }
         return ActivityScenario.launch<MainActivity>(intent).also { scenario = it }
     }

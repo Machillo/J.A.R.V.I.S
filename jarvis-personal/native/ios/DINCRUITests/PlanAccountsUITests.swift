@@ -9,7 +9,7 @@ final class PlanAccountsUITests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         var arguments = ["-DincrDisableAnimations", "-DincrFixtures", scenario, "-DincrSkipLogin", "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
-        if let plan { arguments += ["-DincrPlan", plan] }
+        if let plan { arguments += ["-DincrPlan", plan, "-DincrMailLeftovers"] }
         if let role { arguments += ["-DincrRole", role] }
         if let tab { arguments += ["-DincrTab", tab] }
         app.launchArguments = arguments

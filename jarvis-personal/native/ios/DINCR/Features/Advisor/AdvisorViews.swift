@@ -47,7 +47,7 @@ struct WealthHubView: View {
                 SectionHeader(title: tx("Cuentas", "Accounts"))
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
-                           subtitle: tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"), id: "wealth.accounts") { AccountsView() }
+                           subtitle: tx("Tus cuentas propias y días de corte", "Your own accounts and cut days"), id: "wealth.accounts") { AccountsView() }
                 SectionHeader(title: tx("Deudas", "Debts"))
                 WealthDebtsCard(debts: debts) { Task { await loadDebts(refreshing: false) } }
             }

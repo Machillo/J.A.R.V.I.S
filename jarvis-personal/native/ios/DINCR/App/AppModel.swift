@@ -53,6 +53,16 @@ final class AppModel {
     var planTier: PlanTier { profile?.planTier ?? .free }
     /// Mail reading is the Owner's alone during the launch (`Profile.canReadMail`).
     var canReadMail: Bool { profile?.canReadMail == true }
+    /// L-2: a VIP's mailbox or notices from before the pause, the only way mail shows outside the Owner.
+    private(set) var mailLeftovers = false
+    /// The Owner always; anyone else only to review and disconnect what is left.
+    var showsMailReview: Bool { canReadMail || mailLeftovers }
+
+    /// Read for VIP only (the route is VIP's). A failed read keeps what is known.
+    func refreshMailLeftovers() async {
+        guard let profile, !profile.canReadMail, profile.planTier == .vip else { mailLeftovers = false; return }
+        if let status = try? await service.mailStatus() { mailLeftovers = status.hasLeftovers }
+    }
 
     let service: DincrService
     /// The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the
@@ -110,7 +120,9 @@ final class AppModel {
             service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency,
                                                             identityRefreshFails: refreshFails, mailArrives: mailArrives,
                                                             storeBillingOn: storeBilling, legalLapses: legalLapses,
-                                                            pendingSample: pendingSample))
+                                                            pendingSample: pendingSample,
+                                                            // `-DincrMailLeftovers`: a VIP who connected a mailbox before mail was paused (L-2).
+                                                            mailLeftovers: ProcessInfo.processInfo.arguments.contains("-DincrMailLeftovers")))
             returnSyncInterval = 0  // fixtures: every return reads again (UI tests do not wait a minute)
             self.shortcutTokens = InMemoryShortcutTokenStore()
         case let .unconfigured(reason):
@@ -303,6 +315,7 @@ final class AppModel {
                 appLock.attach(userID: profile.id)
                 Task {
                     await refreshFlags()
+                    await refreshMailLeftovers()
                     // A mail return that arrived before the app was ready (cold start) is redeemed now.
                     if let pending = retryMailReturn { await handleMailReturn(pending) }
                     await syncOnReturn()
@@ -439,6 +452,8 @@ final class AppModel {
     func handleMailReturn(_ mailReturn: MailReturn) async {
         // Each browser return is redeemed once, even when delivered twice.
         guard !handledMailReturns.contains(mailReturn.key) else { return }
+        // Mail is paused outside the Owner (L-2): a stray link opens nothing and says nothing.
+        if let profile, !profile.canReadMail { remember(mailReturn); return }
         guard mailReturn.isAuthorized, let flow = mailReturn.flow, let completion = mailReturn.completion else {
             remember(mailReturn)
             mailOutcome = MailReturn.message(mailReturn.status, language: language)

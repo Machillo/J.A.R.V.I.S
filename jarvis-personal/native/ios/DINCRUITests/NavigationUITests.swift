@@ -10,7 +10,7 @@ final class NavigationUITests: XCTestCase {
     private func launch(plan: String? = nil, role: String? = nil, tab: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         var arguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
-        if let plan { arguments += ["-DincrPlan", plan] }
+        if let plan { arguments += ["-DincrPlan", plan, "-DincrMailLeftovers"] }
         if let role { arguments += ["-DincrRole", role] }
         if let tab { arguments += ["-DincrTab", tab] }
         app.launchArguments = arguments

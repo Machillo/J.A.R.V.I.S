@@ -294,7 +294,7 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-setup-title">
                 <span>{tx("TUS INSTITUCIONES", "YOUR INSTITUTIONS")}</span>
                 <h1>{tx("Tus bancos en un solo lugar", "Your banks in one place")}</h1>
-                <p>{tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas; podrás autorizar por separado la lectura de correos financieros compatibles.", "Select the institutions you use. This selection does not connect your accounts; you can separately authorize reading compatible financial emails.")}</p>
+                <p>{tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas.", "Select the institutions you use. This selection does not connect your accounts.")}</p>
               </div>
               <div className="profile-bank-security"><ShieldCheck /><span><strong>{tx("Tu seguridad primero", "Your security comes first")}</strong><small>{tx(`${product} nunca te pedirá la contraseña de tu banco.`, `${product} will never ask for your bank password.`)}</small></span></div>
               <label className="profile-bank-search"><Search /><input value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder={tx("Buscar banco", "Search bank")} /></label>
