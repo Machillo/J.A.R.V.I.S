@@ -768,10 +768,17 @@ public actor FixtureBackend: HTTPTransport {
                 let correctedAmount = decimal(body["amount"])
                 let nativeAmount = decimal(candidate["original_amount"])
                 let storedAmount = decimal(candidate["amount"])
+                // Precomputed, like `rate` above: an autoclosure must not capture JSON dictionaries.
+                let correctedDate = body["transaction_date"] as? String
+                let noticeDate = candidate["transaction_date"] as? String
+                let correctedDescription = body["description"] as? String
+                let noticeDescription = candidate["description"] as? String
+                let correctedCategory = body["category"] as? String
+                let noticeCategory = candidate["category"] as? String
                 var row: [String: Any] = ["movement_id": "expense:\(expenseID)", "source_id": expenseID, "origin": "expense",
-                                          "transaction_date": body["transaction_date"] ?? candidate["transaction_date"] ?? day(0),
-                                          "description": body["description"] ?? candidate["description"] ?? "", "transaction_type": "expense",
-                                          "category": body["category"] ?? candidate["category"] ?? "", "notes": "", "editable": true]
+                                          "transaction_date": correctedDate ?? noticeDate ?? day(0),
+                                          "description": correctedDescription ?? noticeDescription ?? "", "transaction_type": "expense",
+                                          "category": correctedCategory ?? noticeCategory ?? "", "notes": "", "editable": true]
                 markPending(&row, typed: correctedAmount ?? nativeAmount ?? storedAmount ?? 0, currency: native)
                 row["financial_account_id"] = candidate["financial_account_id"]
                 movements.append(row)
