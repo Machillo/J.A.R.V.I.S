@@ -568,3 +568,29 @@ def test_a_distribution_with_an_automatic_saving_can_be_confirmed(db, monkeypatc
     assert result["status"] == "applied"
     actions = {item["action"] for item in result["confirmation"]["applied"]}
     assert "debt_extra_payment" in actions
+
+
+def test_the_pension_share_is_added_to_the_balance_retiro_shows_or_refused_while_unknown(db, monkeypatch):
+    """The voluntary complementary pension: CONFIRMAR adds its share to the balance Retiro shows; an
+    unknown balance is refused with nothing written (never taken as 0)."""
+    import json as _json
+
+    from backend.ai import owner_distribution
+
+    strategy = {"allocation_items": [{"key": "pension_complementaria", "amount": 10000.0}], "allocation_amounts": {}}
+    plan = owner_distribution.confirmation_plan(strategy, [])
+    assert plan["confirmable"] and plan["steps"][0]["action"] == "pension_contribution"
+
+    from backend.core.database import get_connection
+    with get_connection() as conn:
+        with pytest.raises(HTTPException) as error:
+            owner_distribution._contribute_to_pension(conn, WS, 10_000)
+        assert error.value.status_code == 409
+    db.execute("INSERT INTO user_preferences (workspace_id, preference_key, preference_value) VALUES (%s, 'retirement', %s)",
+               (WS, _json.dumps({"rop_balance": 1_000_000, "voluntary_balance": 0})))
+    with get_connection() as conn:
+        assert owner_distribution._contribute_to_pension(conn, WS, 10_000) == {"previous_amount": 0, "new_amount": 10_000}
+        conn.commit()
+    db.execute("SELECT preference_value FROM user_preferences WHERE workspace_id=%s AND preference_key='retirement'", (WS,))
+    value = db.fetchone()["preference_value"]
+    assert value["voluntary_balance"] == 10_000 and value["rop_balance"] == 1_000_000

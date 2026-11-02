@@ -32,8 +32,8 @@ from backend.core.database import get_connection
 from backend.finance import salvavidas_plan
 
 # The order the automatic contributions are taken from (the urgent goal keeps its share).
-ABSORB_ORDER = ("fondo_de_emergencia", "vida_controlada", "inversion", "metas_o_inversion", "ataque_de_deuda")
-BLOCK_ABSORB_ORDER = ("ataque_de_deuda", "vida_controlada", "inversion", "metas_o_inversion", "fondo_de_emergencia")
+ABSORB_ORDER = ("fondo_de_emergencia", "vida_controlada", "inversion", "metas_o_inversion", "pension_complementaria", "ataque_de_deuda")
+BLOCK_ABSORB_ORDER = ("ataque_de_deuda", "vida_controlada", "inversion", "metas_o_inversion", "pension_complementaria", "fondo_de_emergencia")
 
 
 def _f(value: Any) -> float:
