@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
 import androidx.compose.ui.platform.testTag
@@ -87,10 +88,11 @@ fun ownershipAction(option: AccountOwnership): String = when (option) {
 fun AccountsScreen(model: AppModel, nav: Navigator) {
     val data = rememberLoad(model) { loadAccounts(model) }
     LifecycleResumeEffect(Unit) { data.reload(); onPauseOrDispose { } }
+    val canRead = model.profile.collectAsStateWithLifecycle().value?.canReadMail == true
     var declaring by remember { mutableStateOf(false) }
     DetailScaffold(tx("Cuentas", "Accounts"), nav::back) {
         if (accountsPaused(model)) return@DetailScaffold
-        Caption(if (model.profile.value?.canReadMail == true) tx("Tus bancos según los avisos que DINCR leyó. DINCR no muestra saldos ni números de cuenta completos.",
+        Caption(if (canRead) tx("Tus bancos según los avisos que DINCR leyó. DINCR no muestra saldos ni números de cuenta completos.",
             "Your banks from the notices DINCR read. DINCR shows no balances or full account numbers.")
         else tx("Tus cuentas propias, para reconocer transferencias entre ellas. DINCR no muestra saldos ni números de cuenta completos.",
             "Your own accounts, to recognize transfers between them. DINCR shows no balances or full account numbers."))
@@ -102,7 +104,7 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
         LoadContent(data) { d ->
             val groups = d.groups
             if (groups.isEmpty()) EmptyState(Icons.Rounded.AccountBalance, tx("Sin cuentas todavía", "No accounts yet"),
-                if (model.profile.value?.canReadMail == true) tx("Las cuentas aparecen cuando DINCR procesa avisos de tu banco.", "Accounts appear when DINCR processes notices from your bank.")
+                if (canRead) tx("Las cuentas aparecen cuando DINCR procesa avisos de tu banco.", "Accounts appear when DINCR processes notices from your bank.")
                 else tx("Agregá las cuentas que son tuyas para reconocer transferencias entre ellas.", "Add the accounts that are yours to recognize transfers between them."))
             groups.forEach { group ->
                 DincrCard {
@@ -111,10 +113,11 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
                         BankLogo(group.bank)
                         Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
                             Text(bankGroupName(group), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
-                            Caption(listOf(
+                            Caption(listOfNotNull(
                                 tx("${group.accounts.size} ${if (group.accounts.size == 1) "cuenta" else "cuentas"}", "${group.accounts.size} account${if (group.accounts.size == 1) "" else "s"}"),
                                 tx("${group.movements} movimientos", "${group.movements} transactions"),
-                                tx("${group.pending} por revisar", "${group.pending} to review"),
+                                // Nothing pending says nothing: mail is paused outside the Owner (L-2).
+                                group.pending.takeIf { it > 0 }?.let { tx("$it por revisar", "$it to review") },
                             ).joinToString(" · "))
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Dincr.colors.textMuted)

@@ -91,7 +91,10 @@ private struct BankRow: View {
                 Text(group.title).font(DincrFont.body.weight(.semibold)).foregroundStyle(DincrColor.text)
                 Text(tx("\(group.accounts.count) \(group.accounts.count == 1 ? "cuenta" : "cuentas")", "\(group.accounts.count) \(group.accounts.count == 1 ? "account" : "accounts")"))
                     .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-                Text(tx("\(group.movements) movimientos · \(group.pending) por revisar", "\(group.movements) transactions · \(group.pending) to review"))
+                // Nothing pending says nothing: mail is paused outside the Owner (L-2).
+                Text(group.pending > 0
+                     ? tx("\(group.movements) movimientos · \(group.pending) por revisar", "\(group.movements) transactions · \(group.pending) to review")
+                     : tx("\(group.movements) movimientos", "\(group.movements) transactions"))
                     .font(DincrFont.caption).foregroundStyle(group.pending > 0 ? DincrColor.warning : DincrColor.textMuted)
             }
             Spacer(minLength: 0)
