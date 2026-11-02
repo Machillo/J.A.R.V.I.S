@@ -66,7 +66,8 @@ data class HomeToday(
                 if (spend?.amount == null) HomeInput.codes(spend?.missing) else emptyList(),
                 income, registered(month?.expenses), registered(month?.debtPaid), if (income == null) null else month?.balance,
                 debtBalance(debts, null), margin = spend?.monthlyMargin, lowestBalance = spend?.next45DaysMinimum,
-                budget = budgetLeft(budget), pending = pending(calendar, today))
+                budget = budgetLeft(budget), pending = pending(calendar, today),
+                cycle = month?.let(HomeStatus.Cycle::of))
             val director = center.director
             val headline = director?.headline?.trim()?.takeIf { it.isNotEmpty() }
             // The director needs inputs before recommending: priority `incomplete` (#326), or a known
@@ -168,7 +169,17 @@ data class HomeStatus(
     val lowestBalance: BigDecimal?,
     val budget: BudgetLeft?,
     val pending: Pending?,
+    /** The Owner only: income, expenses and result are this card statement's, not the calendar month's. */
+    val cycle: Cycle? = null,
 ) {
+    data class Cycle(val start: String, val end: String, val payment: String?) {
+        companion object {
+            fun of(totals: MonthTotals): Cycle? {
+                return Cycle(totals.periodStart ?: return null, totals.periodEnd ?: return null, totals.paymentDate)
+            }
+        }
+    }
+
     enum class Headline {
         /** Free and Basic: the month's result from registered movements. */
         MONTH_RESULT,

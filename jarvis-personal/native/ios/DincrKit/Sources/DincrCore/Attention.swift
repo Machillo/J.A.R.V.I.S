@@ -49,13 +49,13 @@ public enum AttentionList {
         return Today(visible: Array(all.prefix(todayLimit)), showsSeeAll: all.count > todayLimit)
     }
 
-    /// Presentation order: critical, high, medium, success. A severity the app doesn't know sits
+    /// Presentation order: critical, high, medium, then success and info. A severity the app doesn't know sits
     /// with medium (never downplayed below it, never above a known one).
     public static func rank(_ severity: String?) -> Int {
         switch severity?.lowercased() {
         case "critical": 0
         case "high": 1
-        case "success": 3
+        case "success", "info": 3
         default: 2
         }
     }

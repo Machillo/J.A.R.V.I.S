@@ -142,6 +142,7 @@ def get_vip_command_center() -> dict:
         # policy below keeps reading these months, unchanged.
         owner = owner_account_context(conn, account_id, workspace_id)
         report_months = _owner_report_months(conn, workspace_id, months) if owner else months
+        owner_cycle = owner_ledger.owner_cycle_totals(conn, workspace_id, today) if owner else None
         imported_income = imported_income_by_month(conn, workspace_id, _shift_month(current, -11))
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
@@ -198,6 +199,11 @@ def get_vip_command_center() -> dict:
     recurring_expense = round(sum(_monthly_equivalent(_money(row["amount"]), row["frequency"]) for row in recurring if row["item_type"] == "expense"), 2)
     monthly_income = income["monthly_income"]
     known_commitments = max(essentials, recurring_expense) + debt_minimums
+    if owner:
+        # The Owner's month is his card statement (owner_ledger): his salary is known before it
+        # arrives, and what he spends is on the statement, not in a declared estimate.
+        monthly_income = owner_cycle["income"]
+        known_commitments = owner_cycle["expenses"] + debt_minimums
     margin = round(monthly_income - known_commitments, 2)
     emergency_gap = max(emergency_target - savings, 0)
     all_assets = round(sum(_money(row["current_balance"]) for row in accounts if row.get("include_in_net_worth") and row.get("currency") == "CRC"), 2)
@@ -278,10 +284,11 @@ def get_vip_command_center() -> dict:
 
     alerts = []
     if income_known and margin < 0:
-        alerts.append({"severity": "critical", "title": tx("Este mes tus compromisos superan tus ingresos", "This month your commitments exceed your income"), "context": tx(f"Faltan {_money_text(abs(margin))} para cubrir compromisos conocidos.", f"{_money_text(abs(margin))} is missing to cover known commitments."), "action": tx("Antes de asumir otro pago, reducí los gastos que podés ajustar o buscá aumentar tus ingresos.", "Before taking on another payment, cut the expenses you can adjust or look for more income.")})
+        alerts.append({"severity": "critical", "title": (tx("En este corte tus compromisos superan tus ingresos", "In this statement your commitments exceed your income") if owner else tx("Este mes tus compromisos superan tus ingresos", "This month your commitments exceed your income")), "context": tx(f"Faltan {_money_text(abs(margin))} para cubrir compromisos conocidos.", f"{_money_text(abs(margin))} is missing to cover known commitments."), "action": tx("Antes de asumir otro pago, reducí los gastos que podés ajustar o buscá aumentar tus ingresos.", "Before taking on another payment, cut the expenses you can adjust or look for more income.")})
     if coverage_known and coverage < 1:
         alerts.append({"severity": "high", "title": tx("Tu fondo de emergencia cubre menos de un mes", "Your emergency fund covers less than a month"), "context": tx(f"Alcanza para unos {coverage:.1f} meses de tus compromisos.", f"It covers about {coverage:.1f} months of your commitments."), "action": tx("Cuando te sobre dinero, apartalo primero para tu fondo de emergencia.", "When you have money left over, set it aside for your emergency fund first.")})
-    if variability > 20:
+    # The Owner's overtime comes and goes, and there is nothing to do about it: no alert for him.
+    if variability > 20 and not owner:
         alerts.append({"severity": "medium", "title": tx("Tus ingresos cambian de un mes a otro", "Your income changes from month to month"), "context": tx(f"En los últimos meses variaron un {variability}%.", f"In recent months it varied by {variability}%."), "action": tx("Planificá con un ingreso prudente, no con tu mejor mes.", "Plan with a cautious income, not your best month.")})
     if candidates["review"]:
         alerts.append({"severity": "medium", "title": tx("Movimientos por revisar", "Transactions to review"), "context": (
@@ -291,7 +298,8 @@ def get_vip_command_center() -> dict:
         ), "action": tx("Revisalos antes de confiar en el cierre mensual.", "Review them before relying on the monthly close.")})
     increases = [row for row in detected_recurring if _money(row.get("minimum_amount")) and _money(row.get("maximum_amount")) > _money(row.get("minimum_amount")) * 1.10]
     if increases:
-        alerts.append({"severity": "medium", "title": tx("Un cobro recurrente cambió de monto", "A recurring charge changed amount"), "context": tx(f"{increases[0]['merchant']} cambió más de 10% entre cobros.", f"{increases[0]['merchant']} changed more than 10% between charges."), "action": tx("Confirmá si fue un aumento, consumo variable o cargo incorrecto.", "Confirm whether it was a price increase, variable usage, or an incorrect charge.")})
+        # A fact worth knowing, not a problem.
+        alerts.append({"severity": "info", "title": tx("Un cobro recurrente cambió de monto", "A recurring charge changed amount"), "context": tx(f"{increases[0]['merchant']} cambió más de 10% entre cobros.", f"{increases[0]['merchant']} changed more than 10% between charges."), "action": tx("Confirmá si fue un aumento, consumo variable o cargo incorrecto.", "Confirm whether it was a price increase, variable usage, or an incorrect charge.")})
 
     goal_guidance = []
     for goal in goals:
@@ -372,7 +380,7 @@ def get_vip_command_center() -> dict:
         "projection_status": {"complete": not projection_missing, "missing": projection_missing},
         "net_worth": {"assets": all_assets, "liabilities": debt_balance, "value": net_worth, "accounts": accounts},
         "recurring": {"items": recurring, "detected": detected_recurring, "monthly_expenses": recurring_expense, "annual_expenses": round(recurring_expense*12, 2)},
-        "reports": {"months": report_months, "current": report_months[-1], "previous": report_months[-2]},
+        "reports": {"months": report_months, "current": owner_cycle or report_months[-1], "previous": report_months[-2]},
         "variable_income": {"estimated": estimated_income, "conservative": conservative_income, "variability_percent": variability, "months_observed": len(positive_incomes)},
         "automation": candidates,
         "roadmap": roadmap,

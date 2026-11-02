@@ -24,6 +24,10 @@ enum class MessageKind {
          * downplayed to a suggestion, and a financial alert is never a technical error. No backend
          * severity means "opportunity" today; recommendations get that kind explicitly.
          */
-        fun financial(severity: String?): MessageKind = if (severity?.lowercase() == "success") POSITIVE else ATTENTION
+        fun financial(severity: String?): MessageKind = when (severity?.lowercase()) {
+            "success" -> POSITIVE
+            "info" -> OPPORTUNITY
+            else -> ATTENTION
+        }
     }
 }

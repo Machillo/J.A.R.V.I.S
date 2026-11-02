@@ -20,17 +20,17 @@ class MessageKindTest {
     }
 
     @Test fun aFinancialAlertIsNeverATechnicalError() {
-        for (severity in listOf("critical", "high", "medium", "low", "success", "blocking", "warning", "info", "error", "", "unexpected", null)) {
+        for (severity in listOf("critical", "high", "medium", "low", "success", "blocking", "warning", "error", "", "unexpected", null)) {
             assertNotEquals(severity.toString(), MessageKind.TECHNICAL_ERROR, MessageKind.financial(severity))
         }
     }
 
     /**
      * A problem is never downplayed to a suggestion: severities the alert screens don't receive
-     * today (`low`, `info`, data-quality `blocking`/`warning`) stay attention too.
+     * today (`low`, data-quality `blocking`/`warning`) stay attention too.
      */
     @Test fun noSeverityIsDowngradedToASuggestion() {
-        for (severity in listOf("low", "info", "blocking", "warning", "error")) {
+        for (severity in listOf("low", "blocking", "warning", "error")) {
             assertEquals(severity, MessageKind.ATTENTION, MessageKind.financial(severity))
         }
     }

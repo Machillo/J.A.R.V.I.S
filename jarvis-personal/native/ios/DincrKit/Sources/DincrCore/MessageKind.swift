@@ -15,11 +15,10 @@ public enum MessageKind: String, Sendable, CaseIterable {
     case positive
 
     /// The kind of a financial alert from the severity the backend sends to the alert screens
-    /// (`critical`, `high`, `medium`, `success`). Only `success` is progress; every other severity,
-    /// including unknown or missing ones, stays visible as `attention`: a problem is never
-    /// downplayed to a suggestion, and a financial alert is never a technical error. No backend
-    /// severity means "opportunity" today; recommendations get that kind explicitly.
+    /// (`critical`, `high`, `medium`, `success`, `info`). `success` is progress and `info` a fact worth
+    /// knowing; every other severity, including unknown or missing ones, stays visible as `attention`:
+    /// a problem is never downplayed to a suggestion, and a financial alert is never a technical error.
     public static func financial(severity: String?) -> MessageKind {
-        severity?.lowercased() == "success" ? .positive : .attention
+        severity?.lowercased() == "success" ? .positive : severity?.lowercased() == "info" ? .opportunity : .attention
     }
 }

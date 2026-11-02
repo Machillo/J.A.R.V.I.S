@@ -99,6 +99,10 @@ private struct HomeStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             BlockHeader(title: tx("Estado de hoy", "Today’s status"), ownerStyle: ownerStyle)
+            if let cycle = status.cycle {
+                Text(cycleText(cycle)).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                    .accessibilityIdentifier("\(idPrefix).status.cycle")
+            }
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 VStack(alignment: .leading, spacing: DincrSpacing.s1) {
                     Text(headline).font(DincrFont.label).foregroundStyle(DincrColor.text2)
@@ -194,7 +198,7 @@ private struct HomeStatusCard: View {
             fact(tx("Ingresos", "Income"), status.income, sign: .income, unknown: tx("Sin registrar", "Not recorded"))
             fact(tx("Gastos", "Expenses"), status.expenses, sign: .expense, unknown: tx("Sin registrar", "Not recorded"))
             if status.headline == .safeToSpend {
-                fact(tx("Resultado del mes", "Month result"), status.result, sign: .none, unknown: "—")
+                fact(status.cycle == nil ? tx("Resultado del mes", "Month result") : tx("Resultado del corte", "Statement result"), status.result, sign: .none, unknown: "—")
             }
         }
         .accessibilityIdentifier("\(idPrefix).status.facts")
@@ -210,6 +214,25 @@ private struct HomeStatusCard: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// "22 sep – 21 oct · se paga el 5 nov": the statement Ingresos, Gastos and the result belong to.
+    private func cycleText(_ cycle: HomeStatus.Cycle) -> String {
+        let period = "\(shortDay(cycle.start)) – \(shortDay(cycle.end))"
+        guard let payment = cycle.payment else { return period }
+        return tx("\(period) · se paga el \(shortDay(payment))", "\(period) · paid on \(shortDay(payment))")
+    }
+
+    private func shortDay(_ day: String) -> String {
+        let parser = DateFormatter()
+        parser.calendar = Calendar(identifier: .gregorian)
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: day) else { return day }
+        let output = DateFormatter()
+        output.locale = Locale(identifier: AppLanguage.current == .spanish ? "es_CR" : "en_US")
+        output.setLocalizedDateFormatFromTemplate("dMMM")
+        return output.string(from: date)
     }
 
     private func line(_ label: String, _ amount: Decimal, id: String) -> some View {

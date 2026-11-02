@@ -237,11 +237,20 @@ private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved
 
 // 1. Estado de hoy
 
+/** "22 sep – 21 oct · se paga el 5 nov": the statement Ingresos, Gastos and the result belong to. */
+private fun cycleText(cycle: HomeStatus.Cycle): String {
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag(tx("es-CR", "en-US")))
+    fun day(value: String) = runCatching { java.time.LocalDate.parse(value).format(formatter) }.getOrDefault(value)
+    val period = "${day(cycle.start)} – ${day(cycle.end)}"
+    return cycle.payment?.let { tx("$period · se paga el ${day(it)}", "$period · paid on ${day(it)}") } ?: period
+}
+
 @Composable
 private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) {
     var explains by remember { mutableStateOf(false) }
     Column(Modifier.testTag("home.status"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
         SectionTitle(tx("Estado de hoy", "Today’s status"))
+        status.cycle?.let { Text(cycleText(it), Modifier.testTag("home.status.cycle"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.text2) }
         DincrHeroCard {
             Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
                 Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
@@ -283,7 +292,7 @@ private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) 
                 Row(Modifier.fillMaxWidth().testTag("home.status.facts"), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
                     Fact(tx("Ingresos", "Income"), status.income, MoneyFormat.Sign.INCOME, tx("Sin registrar", "Not recorded"))
                     Fact(tx("Gastos", "Expenses"), status.expenses, MoneyFormat.Sign.EXPENSE, tx("Sin registrar", "Not recorded"))
-                    if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) Fact(tx("Resultado del mes", "Month result"), status.result, MoneyFormat.Sign.NONE, "—")
+                    if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) Fact(if (status.cycle == null) tx("Resultado del mes", "Month result") else tx("Resultado del corte", "Statement result"), status.result, MoneyFormat.Sign.NONE, "—")
                 }
                 status.debtPaid?.let { Box(Modifier.testTag("home.status.debtPaid")) { AmountLine(tx("Pagado a deudas", "Paid to debts"), it) } }
                 status.debtBalance?.let { Box(Modifier.testTag("home.status.debtBalance")) { AmountLine(tx("Deuda pendiente", "Outstanding debt"), it) } }
