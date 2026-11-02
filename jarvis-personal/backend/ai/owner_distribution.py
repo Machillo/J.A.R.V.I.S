@@ -12,6 +12,9 @@ with the mechanisms the app already uses for each one:
 - ``meta_prioritaria``: a contribution to the goal the strategy funds (``apply_goal_contribution``);
 - ``inversion`` / ``metas_o_inversion``: colones reserved to invest (an ``investment_cashflows``
   'reserve', as the Investment Center records it);
+- ``pension_complementaria``: a contribution to the voluntary complementary pension, added to the
+  balance Retiro shows (the ``retirement`` preference). Refused, nothing written, while that balance
+  is unknown: the Owner says it in Retiro first (0 for a new account), never guessed;
 - ``vida_controlada``: money to live on. It is not a movement: spending is recorded when it
   happens, so nothing is written for it.
 
@@ -47,8 +50,31 @@ from backend.finance.emergency_fund import SalvavidasDepositRefused, deposit_to_
 from backend.goals.service import apply_goal_contribution
 
 DEBT, EMERGENCY, GOAL, LIFE = "ataque_de_deuda", "fondo_de_emergencia", "meta_prioritaria", "vida_controlada"
+PENSION = "pension_complementaria"
 INVESTMENT_KEYS = ("inversion", "metas_o_inversion")
 SOURCE = "owner_distribution"
+
+
+def _contribute_to_pension(conn, workspace_id: str, amount: float) -> dict[str, Any]:
+    """Adds a contribution to the voluntary pension balance Retiro shows, inside the caller's
+    transaction. An unknown balance is refused (409), never taken as 0."""
+    from backend.user_product.retirement import PREFERENCE_KEY as RETIREMENT_KEY, normalize
+
+    row = conn.execute("SELECT preference_value FROM user_preferences WHERE workspace_id=%s AND preference_key=%s FOR UPDATE",
+                       (workspace_id, RETIREMENT_KEY)).fetchone()
+    stored = row["preference_value"] if row and isinstance(row["preference_value"], dict) else {}
+    previous = normalize(stored).get("voluntary_balance")
+    if previous is None:
+        raise HTTPException(status_code=409, detail=tx(
+            "Poné en Plan → Retiro cuánto tenés en tu pensión voluntaria (0 si es nueva); no se registró nada.",
+            "Enter your voluntary pension balance in Plan → Retirement (0 if it is new); nothing was recorded."))
+    new_balance = round(previous + float(amount), 2)
+    conn.execute(
+        """INSERT INTO user_preferences (workspace_id, preference_key, preference_value) VALUES (%s, %s, %s::jsonb)
+           ON CONFLICT (workspace_id, preference_key) DO UPDATE SET preference_value = EXCLUDED.preference_value, updated_at = NOW()""",
+        (workspace_id, RETIREMENT_KEY, json.dumps({**stored, "voluntary_balance": new_balance}, ensure_ascii=False)),
+    )
+    return {"previous_amount": previous, "new_amount": new_balance}
 
 
 def _cents(value: Any) -> int:
@@ -104,6 +130,8 @@ def confirmation_plan(strategy: dict[str, Any], debts: list[dict[str, Any]]) -> 
                 blocking.append(tx("No hay una meta activa para recibir su parte.", "There is no active goal to receive its share."))
         elif key in INVESTMENT_KEYS:
             steps.append({"key": key, "amount": amount, "action": "investment_reserve"})
+        elif key == PENSION:
+            steps.append({"key": key, "amount": amount, "action": "pension_contribution"})
         elif key == LIFE:
             steps.append({"key": key, "amount": amount, "action": "not_recorded"})
         else:
@@ -227,6 +255,9 @@ def confirm_owner_distribution(amount: Any, currency: str, confirmation_key: str
                     raise _conflict("La meta ya no existe; no se registró nada.", "The goal no longer exists; nothing was recorded.")
                 applied.append({"key": step["key"], "action": step["action"], "amount": step["amount"],
                                 "goal_id": step["goal_id"], "new_amount": float(contribution["new_amount"])})
+            elif step["action"] == "pension_contribution":
+                applied.append({"key": step["key"], "action": step["action"], "amount": step["amount"],
+                                **_contribute_to_pension(conn, workspace_id, step["amount"])})
             elif step["action"] == "investment_reserve":
                 reserve = conn.execute(
                     """INSERT INTO investment_cashflows (workspace_id, flow_date, flow_type, amount, currency, source, description)

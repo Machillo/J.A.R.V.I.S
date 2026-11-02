@@ -263,6 +263,7 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float, exact: bool
         "meta_prioritaria",
         "ataque_de_deuda",
         "fondo_de_emergencia",
+        "pension_complementaria",
         "vida_controlada",
         "inversion",
         "metas_o_inversion",
@@ -309,6 +310,15 @@ def _salvavidas_next_stage(
         f"Ya tenés {current} de Salvavidas y no te quedan deudas de {limit} o más: te recomendamos subir la meta a {next_months} meses.",
         f"You already have {current} of emergency fund and no debt at {limit} or more is left: we recommend raising the goal to {next_months} months.",
     )
+
+
+# Voluntary complementary pension (Owner's rule, 2026-11-01): it complements the state pension, so
+# it stays small. It starts once no debt costs PENSION_MAX_DEBT_APR or more a year and the
+# Salvavidas covers a month; while cheaper debt remains it takes PENSION_SHARE_WITH_DEBT of what is
+# left to split (out of the debt attack), and PENSION_SHARE once there is no debt (out of investment).
+PENSION_MAX_DEBT_APR = 20.0
+PENSION_SHARE_WITH_DEBT = 0.05
+PENSION_SHARE = 0.10
 
 
 def _build_dynamic_director_allocation(
@@ -361,6 +371,7 @@ def _build_dynamic_director_allocation(
         "meta_prioritaria": 0.0,
         "ataque_de_deuda": 0.0,
         "fondo_de_emergencia": 0.0,
+        "pension_complementaria": 0.0,
         "vida_controlada": 0.0,
         "inversion": 0.0,
         "metas_o_inversion": 0.0,
@@ -451,8 +462,26 @@ def _build_dynamic_director_allocation(
             if not investment_allowed:
                 emergency_amount += freed
 
+    # The complementary pension: only while attacking debt that is no longer expensive, or building
+    # wealth; never before a month of safety or while a dated goal is being protected.
+    pension_allowed = (
+        mode in ("debt_attack", "wealth_building")
+        and safety_gap_month <= 0.01
+        and highest_debt_apr is not None
+        and highest_debt_apr < PENSION_MAX_DEBT_APR
+    )
+    pension_amount = 0.0
+    if pension_allowed:
+        if debt_exists:
+            pension_amount = min(remaining * PENSION_SHARE_WITH_DEBT, debt_amount)
+            debt_amount -= pension_amount
+        else:
+            pension_amount = min(remaining * PENSION_SHARE, investment_amount)
+            investment_amount -= pension_amount
+
     amounts["ataque_de_deuda"] = debt_amount
     amounts["fondo_de_emergencia"] = emergency_amount
+    amounts["pension_complementaria"] = pension_amount
     amounts["vida_controlada"] = life_amount
     amounts["inversion"] = investment_amount
 
@@ -523,6 +552,17 @@ def _build_dynamic_director_allocation(
         "investment_recommended": round(investment_amount, 2),
         "investment_target": round(investment_amount, 2),
         "investment_allowed": investment_allowed,
+        "pension_allowed": pension_allowed,
+        "pension_recommended": round(pension_amount, 2),
+        "pension_blockers": [
+            reason for blocked, reason in (
+                (highest_debt_apr is None, tx("Falta la tasa de interés de una deuda.", "A debt's interest rate is missing.")),
+                (highest_debt_apr is not None and highest_debt_apr >= PENSION_MAX_DEBT_APR,
+                 tx("Todavía hay deuda con tasa anual de 20% o más: cada colón rinde más abonándole.",
+                    "There is still debt at 20% a year or more: paying it down does more.")),
+                (safety_gap_month > 0.01, tx("El Salvavidas todavía no cubre un mes.", "The emergency fund doesn’t cover one month yet.")),
+            ) if blocked
+        ],
         "goal_portfolio": goal_portfolio,
         "active_goal": active_goal,
         "investment_blockers": [

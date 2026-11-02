@@ -202,6 +202,7 @@ object Distribution {
             "vida_controlada" -> language.pick("Vida controlada", "Controlled living")
             "inversion" -> language.pick("Inversión", "Investment")
             "metas_o_inversion" -> language.pick("Metas o inversión", "Goals or investment")
+            "pension_complementaria" -> language.pick("Pensión complementaria", "Complementary pension")
             else -> item.key.orEmpty().replace('_', ' ').replaceFirstChar { it.uppercase() }
         }
         return if (item.key == "ataque_de_deuda" && !item.targetName.isNullOrBlank()) "$base · ${item.targetName}" else base

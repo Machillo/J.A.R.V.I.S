@@ -62,7 +62,9 @@ class AdvisorFoundationTests(unittest.TestCase):
             emergency_monthly_base=250_000,
         )
         self.assertTrue(result["investment_allowed"])
-        self.assertEqual(result["allocation_amounts"]["inversion"], 55_000)
+        # 55% to build wealth, of which 10% of what is split goes to the complementary pension.
+        self.assertEqual(result["allocation_amounts"]["inversion"], 45_000)
+        self.assertEqual(result["allocation_amounts"]["pension_complementaria"], 10_000)
 
     def test_goal_portfolio_funds_only_selected_trip_alternative(self):
         goals = [

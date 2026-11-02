@@ -100,7 +100,7 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         }
     }
     /// One bucket of the distribution: `meta_prioritaria`, `ataque_de_deuda`, `fondo_de_emergencia`,
-    /// `vida_controlada`, `inversion`, `metas_o_inversion`.
+    /// `vida_controlada`, `inversion`, `metas_o_inversion`, `pension_complementaria`.
     public struct AllocationItem: Decodable, Sendable, Equatable {
         public let key: String?
         public let percentage: Double?
@@ -365,6 +365,7 @@ public enum DistributionLabels {
         case "vida_controlada": return language.pick("Vida controlada", "Controlled living")
         case "inversion": return language.pick("Inversión", "Investment")
         case "metas_o_inversion": return language.pick("Metas o inversión", "Goals or investment")
+        case "pension_complementaria": return language.pick("Pensión complementaria", "Complementary pension")
         default: return key ?? "—"
         }
     }

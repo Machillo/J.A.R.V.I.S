@@ -148,6 +148,7 @@ import Testing
         #expect(DistributionLabels.bucket("vida_controlada", language: .spanish) == "Vida controlada")
         #expect(DistributionLabels.bucket("inversion", language: .spanish) == "Inversión")
         #expect(DistributionLabels.bucket("metas_o_inversion", language: .spanish) == "Metas o inversión")
+        #expect(DistributionLabels.bucket("pension_complementaria", language: .spanish) == "Pensión complementaria")
     }
 
     @Test func distributionReadsTheSameStrategyAnswer() async throws {

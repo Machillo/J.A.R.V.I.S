@@ -99,6 +99,8 @@ class PlanContractTest {
         assertEquals("Subí la meta a 3 meses.", s.emergencyFund?.recommendation)
         assertNull(s.totalDebt)
         assertEquals("Ataque de deuda · Tarjeta", Distribution.allocationLabel(s.allocationItems.single(), AppLanguage.SPANISH))
+        assertEquals("Pensión complementaria", Distribution.allocationLabel(
+            DirectorStrategy.AllocationItem("pension_complementaria", 5.0, java.math.BigDecimal(5000)), AppLanguage.SPANISH))
         // Only the keys present are listed; a null amount stays unknown, never zero.
         assertEquals(listOf("income", "recorded_spending", "surplus"), Distribution.formulaLines(s).map { it.first })
         assertNull(Distribution.formulaLines(s).first { it.first == "recorded_spending" }.second)
