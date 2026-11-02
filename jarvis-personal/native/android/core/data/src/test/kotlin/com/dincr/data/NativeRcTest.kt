@@ -280,8 +280,15 @@ class NativeRcTest {
         assertEquals("confirmed", vip.acceptCandidate(crc.candidateId!!).status)
         assertEquals(true, vip.acceptCandidate(crc.candidateId!!).alreadyReviewed)
         val usd = pending.first { it.needsRate }
-        try { vip.acceptCandidate(usd.candidateId!!); fail("a foreign notice needs the user's rate") } catch (e: ApiError) { assertEquals(422, e.status) }
+        // Dollar income still needs the rate; a dollar expense can take one, or wait for the close.
+        try { vip.correctCandidate(usd.candidateId!!, CandidateCorrection("2026-09-01", "Tienda", d("25"), "income", "Otros", null)); fail("dollar income needs the user's rate") } catch (e: ApiError) { assertEquals(422, e.status) }
         assertEquals("confirmed", vip.correctCandidate(usd.candidateId!!, CandidateCorrection("2026-09-01", "Tienda", d("25"), "expense", "Compras", d("507.5"))).status)
+        val other = fake(PlanTier.VIP)
+        val waiting = other.mailCandidates(true).first { it.waitsForClose }
+        val saved = other.acceptCandidate(waiting.candidateId!!)
+        assertEquals("confirmed", saved.status)
+        assertNull("no transaction until the close", saved.transactionId)
+        assertEquals(waiting.nativeCurrency, other.pendingConversion().items.first { it.description == waiting.description }.originalCurrency)
         // A correction can keep a movement as a transfer (neither income nor expense).
         val fresh = fake(PlanTier.VIP)
         val notice = fresh.mailCandidates(true).first { !it.needsRate }

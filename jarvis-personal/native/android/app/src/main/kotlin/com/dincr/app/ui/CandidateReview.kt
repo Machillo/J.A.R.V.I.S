@@ -144,6 +144,7 @@ fun CandidateCard(candidate: MailCandidate, busy: Boolean, message: String?, onA
             }
             when {
                 candidate.cannotConvert -> Caption(tx("Este aviso está en ${candidate.nativeCurrency}, una moneda que DINCR no convierte. Solo podés descartarlo.", "This notice is in ${candidate.nativeCurrency}, a currency DINCR doesn’t convert. You can only dismiss it."))
+                candidate.waitsForClose -> Caption(tx("Queda en ${candidate.nativeCurrency} hasta el corte de la tarjeta; ahí te pedimos el tipo de cambio.", "It stays in ${candidate.nativeCurrency} until the card’s cut; you’ll enter the rate then."))
                 candidate.needsRate -> Caption(tx("Está en ${candidate.nativeCurrency}: tocá Corregir e indicá tu tipo de cambio.", "It’s in ${candidate.nativeCurrency}: tap Correct and enter your exchange rate."))
             }
             when (candidate.resolutionNote) {
@@ -159,7 +160,7 @@ fun CandidateCard(candidate: MailCandidate, busy: Boolean, message: String?, onA
                 Modifier.padding(top = DincrSpacing.s1),
                 horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2),
             ) {
-                if (!candidate.needsRate && !candidate.cannotConvert) DincrPillButton(tx("Confirmar", "Confirm"), onAccept, enabled = !busy)
+                if ((!candidate.needsRate || candidate.waitsForClose) && !candidate.cannotConvert) DincrPillButton(tx("Confirmar", "Confirm"), onAccept, enabled = !busy)
                 if (!candidate.cannotConvert) DincrTonalButton(tx("Corregir", "Correct"), onCorrect, enabled = !busy)
                 DincrPillButton(tx("Descartar", "Dismiss"), onReject, enabled = !busy, quiet = true, destructive = true)
             }
@@ -182,7 +183,7 @@ fun CorrectionSheet(candidate: MailCandidate, saving: Boolean, onDismiss: () -> 
     FormSheet(tx("Corregir y guardar", "Correct and save"), saving, null, tx("Guardar", "Save"), onDismiss = onDismiss, onPrimary = {
         val found = mutableMapOf<String, String>()
         val amountValue = CorrectionInput.amount(amount, format.separators).also { if (it == null) found["amount"] = tx("Monto no válido.", "Not a valid amount.") }
-        val rateValue = if (candidate.needsRate) CorrectionInput.rate(rate, format.separators).also { if (it == null) found["rate"] = tx("Escribí cuántos colones vale 1 dólar.", "Enter how many colones 1 dollar is worth.") } else null
+        val rateValue = if (candidate.needsRate && !(type == "expense" && rate.isBlank())) CorrectionInput.rate(rate, format.separators).also { if (it == null) found["rate"] = tx("Escribí cuántos colones vale 1 dólar.", "Enter how many colones 1 dollar is worth.") } else null
         if (description.isBlank()) found["description"] = tx("Escribí una descripción.", "Enter a description.")
         if (category.isBlank()) found["category"] = tx("Escribí una categoría.", "Enter a category.")
         errors = found
@@ -190,7 +191,7 @@ fun CorrectionSheet(candidate: MailCandidate, saving: Boolean, onDismiss: () -> 
         onSubmit(CandidateCorrection(date.toString(), description.trim(), amountValue, type, category.trim(), rateValue))
     }) {
         MoneyField(tx("Monto (en $native)", "Amount (in $native)"), amount, { amount = it }, errors["amount"], symbol = format.copy(currency = native).symbol)
-        if (candidate.needsRate) FormField(tx("Tipo de cambio (₡ por US$1)", "Exchange rate (₡ per US$1)"), rate, { rate = it }, errors["rate"], androidx.compose.ui.text.input.KeyboardType.Decimal,
+        if (candidate.needsRate) FormField(if (type == "expense") tx("Tipo de cambio (opcional: sin él, espera al corte)", "Exchange rate (optional: without it, it waits for the cut)") else tx("Tipo de cambio (₡ por US$1)", "Exchange rate (₡ per US$1)"), rate, { rate = it }, errors["rate"], androidx.compose.ui.text.input.KeyboardType.Decimal,
             supporting = tx("El de tu banco. DINCR no lo inventa.", "Your bank’s. DINCR never makes one up."))
         FormField(tx("Descripción", "Description"), description, { description = it }, errors["description"])
         FormField(tx("Categoría", "Category"), category, { category = it }, errors["category"])

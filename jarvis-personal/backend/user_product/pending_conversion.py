@@ -12,11 +12,15 @@ apart, with their totals per currency, so colones and dollars accumulate side by
 A request asks for it explicitly (`convert_at_close`): an expense in the other currency sent without
 a rate and without the flag is still refused, as before. Until the migration is applied the state
 cannot exist: the listing says "unavailable" and only a request that asks for it answers 503.
+
+A mail or statement expense confirmed without a rate waits the same way (`candidate_waits`): it
+becomes a pending expense, with no transaction until there is a rate to give it a base amount.
 """
 from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException
@@ -26,6 +30,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.core.idempotency import mark_applied
 from backend.core.time import costa_rica_today
+from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category
 from backend.user_product import conversion_periods, expense_account
 from backend.user_product.entry_currency import (
     MAX_ORIGINAL, SUPPORTED_CURRENCIES, _finite, _within, account_base_currency, resolve_entry_amount,
@@ -76,6 +81,38 @@ def pending_values(conn, base_currency: str | None, payload) -> dict[str, Any]:
                           "An expense can't wait for the close to be converted yet."),
         })
     return {"amount": None, "original_amount": typed, "original_currency": code, "exchange_rate": None}
+
+
+def candidate_waits(conn, candidate: dict[str, Any], currency: str, transaction_type: str, exchange_rate: float | None) -> bool:
+    """A mail or statement expense in the other currency, confirmed without a rate, waits for the close.
+
+    Income and transfers have no pending state: they still need the rate. Before the migration the
+    state cannot exist, so the confirmation keeps asking for it.
+    """
+    base = str(candidate.get("account_base_currency") or "CRC").upper()
+    return (exchange_rate is None and transaction_type == "expense" and currency != base
+            and base in SUPPORTED_CURRENCIES and currency in SUPPORTED_CURRENCIES and pending_available(conn))
+
+
+def save_candidate_expense(conn, candidate: dict[str, Any], values: dict[str, Any], currency: str, *, owner: bool = False) -> int:
+    """The pending expense of a confirmed candidate, in the caller's transaction.
+
+    It is dated on the day of the purchase, not of the review, so it falls in the close the purchase
+    belongs to, and it stays linked to the card the notice named: that card's cut decides the close.
+    """
+    money = pending_values(conn, candidate.get("account_base_currency"),
+                           SimpleNamespace(currency=currency, amount=values["amount"], exchange_rate=None))
+    category = manual_expense_category(normalize_category(values["category"], "expense", owner=owner))
+    row = conn.execute(
+        """INSERT INTO expenses(category,expense_type,description,amount,original_amount,original_currency,exchange_rate,
+                                workspace_id,created_at)
+           VALUES(%s,%s,%s,NULL,%s,%s,NULL,%s,%s::date+TIME '12:00') RETURNING id""",
+        (category, expense_type_for_category(category, owner=owner), values["description"].strip(),
+         money["original_amount"], money["original_currency"], candidate["workspace_id"], str(values["transaction_date"])[:10]),
+    ).fetchone()
+    if candidate.get("financial_account_id") is not None and expense_account.paid_with_available(conn):
+        expense_account.write_link(conn, row["id"], candidate["financial_account_id"], workspace_id=candidate["workspace_id"])
+    return int(row["id"])
 
 
 def _amount(value) -> float:

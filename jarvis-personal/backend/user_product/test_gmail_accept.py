@@ -128,7 +128,8 @@ class FakeConnection:
                 and c["status"] == "duplicate" and c.get("resolution_reason") in reasons
             ], fetchone=lambda: None)
         else:
-            raise AssertionError(f"Unexpected query: {q[:80]}")
+            # The pending-conversion state is not migrated in this fake: its check finds nothing.
+            assert "pg_catalog.pg_constraint" in q, f"Unexpected query: {q[:80]}"
         return SimpleNamespace(fetchone=lambda: None, fetchall=lambda: [])
 
 

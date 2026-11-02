@@ -128,6 +128,12 @@ data class MailCandidate(
         return native != baseCurrency && native in CONVERTIBLE && baseCurrency in CONVERTIBLE
     }
 
+    /**
+     * An expense in the other currency: it can be confirmed as is, and it waits in that currency for
+     * the close of its card (backend `pending_conversion.candidate_waits`). Anything else needs the rate.
+     */
+    val waitsForClose: Boolean get() = needsRate && transactionType == "expense"
+
     /** Another currency DINCR cannot convert: the notice can only be rejected. */
     val cannotConvert: Boolean get() {
         val native = nativeCurrency ?: return false

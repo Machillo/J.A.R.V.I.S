@@ -756,8 +756,27 @@ public actor FixtureBackend: HTTPTransport {
             if !MailCandidate.convertible.contains(native) { return error(422, "Este aviso está en una moneda que DINCR no puede convertirlo.") }
             // Precomputed: the right side of || and ?? is an autoclosure, which must not capture JSON dictionaries.
             let rate = decimal(body["exchange_rate"])
-            if native != base && (method == "POST" || rate == nil) {
-                return error(422, "Este movimiento está en \(native). Tocá Corregir e indicá el tipo de cambio.")
+            let correctedType = body["transaction_type"] as? String
+            let storedType = candidate["transaction_type"] as? String
+            let reviewedType = correctedType ?? storedType ?? "expense"
+            if native != base && rate == nil {
+                guard reviewedType == "expense" else {
+                    return error(422, "Este movimiento está en \(native). Tocá Corregir e indicá el tipo de cambio.")
+                }
+                // Like `pending_conversion.candidate_waits`: no transaction, a pending expense until the close.
+                let expenseID = nextId()
+                let correctedAmount = decimal(body["amount"])
+                let nativeAmount = decimal(candidate["original_amount"])
+                let storedAmount = decimal(candidate["amount"])
+                var row: [String: Any] = ["movement_id": "expense:\(expenseID)", "source_id": expenseID, "origin": "expense",
+                                          "transaction_date": body["transaction_date"] ?? candidate["transaction_date"] ?? day(0),
+                                          "description": body["description"] ?? candidate["description"] ?? "", "transaction_type": "expense",
+                                          "category": body["category"] ?? candidate["category"] ?? "", "notes": "", "editable": true]
+                markPending(&row, typed: correctedAmount ?? nativeAmount ?? storedAmount ?? 0, currency: native)
+                row["financial_account_id"] = candidate["financial_account_id"]
+                movements.append(row)
+                candidates[index]["review_status"] = "confirmed"
+                return ok(["status": "confirmed", "candidate_id": candidateID, "transaction_id": NSNull(), "pending_expense_id": expenseID])
             }
             let transactionID = nextId()
             candidates[index]["review_status"] = "confirmed"
