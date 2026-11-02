@@ -116,7 +116,7 @@ import Testing
         let users = try Self.decode(StrategyDashboard.self, #"""
         {"status":"OK","user_role":"user","extra":{"x":1},"strategy":{"scope":"users","status":"controlled","monthly_income":"oops",
          "safe_to_spend":64000,"distributable_account_cash":null,"timeline":"not-a-list","priority":{"kind":"debt","title":"Atacar deuda"},
-         "emergency_fund":{"current":120000,"level":"one_month_building","unknown":true},
+         "emergency_fund":{"current":120000,"level":"one_month_building","unknown":true,"recommendation":"Subí la meta a 3 meses."},
          "allocation_items":[{"key":"ataque_de_deuda","percentage":50.0,"amount":216550,"target_name":"Tarjeta"}],
          "distribution_formula":{"income":865000,"recorded_spending":312000,"debt_commitment":95000,"pending_recurring":24900,"surplus":433100,"deficit":0},
          "rules":["Regla"],"new_key":[1,2,3]}}
@@ -125,6 +125,7 @@ import Testing
         #expect(!plan.isOwnerScope && plan.monthlyIncome == nil, "an odd value is unknown, not zero")
         #expect(plan.timeline == nil && plan.safeToSpend == 64000 && plan.distributableAccountCash == nil)
         #expect(plan.emergencyFund?.current == 120000 && plan.priority?.kind == "debt")
+        #expect(plan.emergencyFund?.recommendation == "Subí la meta a 3 meses.")
         #expect(plan.distributionFormula?.lines.map { $0.key } == ["income", "recorded_spending", "debt_commitment", "pending_recurring", "surplus", "deficit"])
         let owner = try Self.decode(StrategyDashboard.self, #"""
         {"status":"OK","user_role":"owner","strategy":{"scope":"owner","distributable_account_cash":310000,"current_month_extra_net":45000,

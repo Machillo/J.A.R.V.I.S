@@ -516,13 +516,16 @@ struct GoalForm: View {
                     MoneyField(label: tx("Ya ahorrado", "Already saved"), text: $current)
                 }
                 Section {
-                    Picker(tx("Prioridad", "Priority"), selection: $priority) {
-                        Text(tx("Alta", "High")).tag("high")
-                        Text(tx("Media", "Medium")).tag("medium")
-                        Text(tx("Baja", "Low")).tag("low")
+                    Picker(tx("Importancia", "Importance"), selection: $priority) {
+                        Text(tx("Imprescindible", "Essential")).tag("high")
+                        Text(tx("Importante", "Important")).tag("medium")
+                        Text(tx("Un gusto", "Nice to have")).tag("low")
                     }
                     Toggle(tx("Tiene fecha objetivo", "Has a target date"), isOn: $hasDate)
                     if hasDate { DatePicker(tx("Fecha", "Date"), selection: $date, in: Date.now..., displayedComponents: .date) }
+                } footer: {
+                    Text(tx("Imprescindible con fecha en menos de un año: recibe plata aunque tengas deudas caras. Importante: cuando no tengas deudas de 20% o más. Un gusto: cuando no tengas deudas de 10% o más.",
+                            "Essential and due within a year: gets money even with expensive debt. Important: once no debt is at 20% or more. Nice to have: once no debt is at 10% or more."))
                 }
                 if let error { Section { Text(error).foregroundStyle(DincrColor.negative) } }
             }
@@ -547,7 +550,8 @@ struct GoalForm: View {
         name = goal.name ?? ""
         target = goal.targetAmount.map(format.inputText) ?? ""
         current = goal.currentAmount.map(format.inputText) ?? ""
-        priority = GoalRequest.priorities.contains(goal.priority ?? "") ? goal.priority! : "medium"
+        // "critical" (older goals) is essential too: it reads as Imprescindible.
+        priority = goal.priority == "critical" ? "high" : GoalRequest.priorities.contains(goal.priority ?? "") ? goal.priority! : "medium"
         if let day = goal.targetDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { hasDate = true; date = parsed }
     }
 

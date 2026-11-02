@@ -89,13 +89,14 @@ class PlanContractTest {
         val raw = """{"status":"OK","user_role":"user","title":"t","content":"c","source":"live_database","has_premium_strategy":true,
             "strategy":{"scope":"users","status":"controlled","monthly_income":865000.5,"new_backend_field":{"x":1},
             "income_policy":{"policy":"income-policy-v1","source":"recorded","declared":null,"baseline":1,"recurring":2},
-            "emergency_fund":{"current":null,"monthly_base":119900},"timeline":[{"priority":1,"name":"Tarjeta","unknown":true}],
+            "emergency_fund":{"current":null,"monthly_base":119900,"recommendation":"Subí la meta a 3 meses."},"timeline":[{"priority":1,"name":"Tarjeta","unknown":true}],
             "allocation_items":[{"key":"ataque_de_deuda","percentage":45,"amount":1000.25,"target_name":"Tarjeta"}],
             "distribution_formula":{"income":865000,"recorded_spending":null,"surplus":1000.25},"distributable_account_cash":null}}"""
         val s = json.decodeFromString<StrategyDashboard>(raw).strategy!!
         assertEquals(0, BigDecimal("865000.5").compareTo(s.monthlyIncome))
         assertEquals("recorded", s.incomePolicy?.source)
         assertNull("unknown savings stay unknown", s.emergencyFund?.current)
+        assertEquals("Subí la meta a 3 meses.", s.emergencyFund?.recommendation)
         assertNull(s.totalDebt)
         assertEquals("Ataque de deuda · Tarjeta", Distribution.allocationLabel(s.allocationItems.single(), AppLanguage.SPANISH))
         // Only the keys present are listed; a null amount stays unknown, never zero.

@@ -134,6 +134,8 @@ data class DirectorStrategy(
         @SerialName("next_target") val nextTarget: Money? = null,
         @SerialName("gap_to_next_target") val gapToNextTarget: Money? = null,
         val level: String? = null,
+        /** The next Salvavidas goal DINCR recommends, with its reason (backend text); null when none. */
+        val recommendation: String? = null,
     )
 
     @Serializable

@@ -68,8 +68,10 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         public let nextTarget: Decimal?
         public let gapToNextTarget: Decimal?
         public let level: String?
+        /// The next Salvavidas goal DINCR recommends, with its reason (backend text); nil when none.
+        public let recommendation: String?
 
-        enum CodingKeys: String, CodingKey { case current, monthlyBase, nextTarget, gapToNextTarget, level }
+        enum CodingKeys: String, CodingKey { case current, monthlyBase, nextTarget, gapToNextTarget, level, recommendation }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             current = c.lenient(Decimal.self, .current)
@@ -77,6 +79,7 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
             nextTarget = c.lenient(Decimal.self, .nextTarget)
             gapToNextTarget = c.lenient(Decimal.self, .gapToNextTarget)
             level = c.lenient(String.self, .level)
+            recommendation = c.lenient(String.self, .recommendation)
         }
     }
     public struct TimelineItem: Decodable, Sendable, Equatable {

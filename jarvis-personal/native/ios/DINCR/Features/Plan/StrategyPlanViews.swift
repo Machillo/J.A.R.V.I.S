@@ -392,6 +392,10 @@ private struct DashboardPlanDetail: View {
                 if plan.emergencyKnown {
                     FigureRow(label: tx("Te falta", "Still missing"), amount: fund.gapToNextTarget)
                     if let level = StrategyText.emergencyLevel(fund.level) { InfoRow(label: tx("Nivel", "Level"), value: level) }
+                    if let recommendation = fund.recommendation {
+                        Text(recommendation).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            .accessibilityIdentifier("plan.month.salvavidas.recommendation")
+                    }
                 }
             }
             .dincrCard()
