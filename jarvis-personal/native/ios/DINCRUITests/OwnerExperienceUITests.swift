@@ -137,6 +137,19 @@ final class OwnerExperienceUITests: XCTestCase {
         reveal("owner.home.attention.all", in: app)
     }
 
+    func testANoticeSaysWhatChangedAndWhatTheSavingsDo() {
+        let app = launch()
+        XCTAssertTrue(element("owner.home.notices", in: app).waitForExistence(timeout: 10))
+        element("owner.home.notices", in: app).tap()
+        let notice = element("owner.notices.n1", in: app)
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        notice.tap()
+        XCTAssertTrue(element("owner.notice.changed", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("owner.notice.destination", in: app).exists)
+        XCTAssertTrue(text("De momento no", in: app).exists, "the automatic savings' decision, with its reason")
+        XCTAssertTrue(element("owner.notice.plan", in: app).exists)
+    }
+
     // MARK: Chat scope
 
     func testTheChatOffersOnlyItsFourQuickActionsAndNeverSendsByItself() {
