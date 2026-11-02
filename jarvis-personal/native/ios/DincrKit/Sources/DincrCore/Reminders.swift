@@ -3,7 +3,8 @@ import Foundation
 // NT-1 — reminders on the phone (local notifications, no server): what the app already knows,
 // said before it happens. The day before a debt's payment day and a fixed expense's due day, the
 // day of a Salvavidas automatic contribution, the day a locked savings block for a debt matures
-// (the Owner's, DB-1), and the first day of a month ("your month closed").
+// (the Owner's, DB-1), the day the bank says what it did with an extra payment, and the first day of
+// a month ("your month closed").
 // Only dates the user recorded (a debt without a payment day gives none); nothing is guessed. The
 // app schedules them on the phone (`ReminderScheduler`); this file only decides which and when, so
 // both apps say the same. Android twin: `Reminders.kt`.
@@ -46,7 +47,7 @@ public enum Reminders {
 
     /// Every reminder from `today` (local) to `days` ahead, earliest first, at most `limit`.
     public static func plan(today: Date, bills: [Bill], saving: SalvavidasAutoContribution?,
-                            blocks: [DebtSavingsBlocks.Block] = [], days: Int = 35,
+                            blocks: [DebtSavingsBlocks.Block] = [], waiting: [(id: Int, debt: String, day: String)] = [], days: Int = 35,
                             calendar: Calendar = Calendar(identifier: .gregorian), format: MoneyFormat,
                             language: AppLanguage = .current) -> [Reminder] {
         let start = calendar.startOfDay(for: today)
@@ -91,6 +92,14 @@ public enum Reminders {
             result.append((date, Reminder(id: "dincr.reminder.block.\(block.id).\(key(date, calendar))", date: at(date, calendar),
                                           title: language.pick("Hoy vence tu ahorro bloqueado", "Your locked saving matures today"),
                                           body: language.pick("Abonale \(total) a \(debt).", "Pay \(total) into \(debt)."))))
+        }
+
+        // The day the bank says what it did with an extra payment: complete the debt.
+        for (id, debt, text) in waiting {
+            guard let date = day(text, calendar), date >= start, date < end else { continue }
+            result.append((date, Reminder(id: "dincr.reminder.afterextra.\(id).\(key(date, calendar))", date: at(date, calendar),
+                                          title: language.pick("¿Ya te dijo el banco?", "Did the bank tell you?"),
+                                          body: language.pick("Contale a DINCR la cuota o el plazo nuevo de \(debt).", "Tell DINCR the new installment or term of \(debt)."))))
         }
 
         // The first day of each next month: the month that ended.

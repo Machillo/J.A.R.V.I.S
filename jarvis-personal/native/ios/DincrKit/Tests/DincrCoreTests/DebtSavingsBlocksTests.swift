@@ -101,4 +101,34 @@ import Testing
         let lower = try String(decoding: APIClient.encoder.encode(DebtSavingsBlockApply(amount: 351000, outcome: .reduceInstallment, newMonthlyPayment: 39000)), as: UTF8.self)
         #expect(lower.contains("\"new_monthly_payment\":39000"))
     }
+
+    @Test func aShorterTermCarriesTheInstallmentsLeft() throws {
+        let body = try String(decoding: APIClient.encoder.encode(DebtSavingsBlockApply(amount: 351000, outcome: .reduceTerm, newMonthlyPayment: nil,
+                                                                                         remainingInstallments: 12)), as: UTF8.self)
+        #expect(body.contains("\"remaining_installments\":12"))
+    }
+
+    @Test func aDebtPaymentCarriesWhatTheBankDidOnlyWhenTheUserSaidIt() throws {
+        func body(_ after: DebtAfterExtra?) throws -> String {
+            try String(decoding: APIClient.encoder.encode(DebtPaymentRequest(amount: 141500, afterExtra: after)), as: UTF8.self)
+        }
+        #expect(try body(nil) == "{\"amount\":141500}")
+        #expect(try body(.remainingInstallments(10)).contains("\"remaining_installments\":10"))
+        let lower = try body(.newMonthlyPayment(4104))
+        #expect(lower.contains("\"new_monthly_payment\":4104") && !lower.contains("remaining"))
+    }
+
+    @Test func whenTheBankTellsLaterTheDayTravelsAndThePhoneReminds() throws {
+        let payment = try String(decoding: APIClient.encoder.encode(DebtPaymentRequest(amount: 21500, afterExtra: .later("2026-11-05"))), as: UTF8.self)
+        #expect(payment.contains("\"remind_on\":\"2026-11-05\"") && !payment.contains("remaining"))
+        let answer = try String(decoding: APIClient.encoder.encode(DebtAfterExtraAnswerBody(.newMonthlyPayment(4104))), as: UTF8.self)
+        #expect(answer.contains("\"new_monthly_payment\":4104") && answer.contains("\"unchanged\":false") && !answer.contains("remind_on"))
+        let pending = try APIClient.decoder.decode(DebtAfterExtraPendingList.self, from: Data(#"{"items": {"5": {"remind_on": "2026-11-05", "since": "2026-11-01", "source": "owner_distribution"}}}"#.utf8))
+        #expect(pending.items["5"]?.remindOn == "2026-11-05")
+        let today = calendar.date(from: DateComponents(year: 2026, month: 11, day: 1))!
+        let plan = Reminders.plan(today: today, bills: [], saving: nil, waiting: [(id: 5, debt: "Minicuota de ejemplo", day: "2026-11-05")],
+                                  days: 10, format: colones, language: .spanish)
+        let reminder = try #require(plan.first { $0.id == "dincr.reminder.afterextra.5.2026-11-05" })
+        #expect(reminder.title == "¿Ya te dijo el banco?" && reminder.body == "Contale a DINCR la cuota o el plazo nuevo de Minicuota de ejemplo.")
+    }
 }

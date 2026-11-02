@@ -94,6 +94,7 @@ class FakeBackend(
     private fun snapshot() = FakePlanRoutes.Snapshot(colonesMovements, debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
     private val debtBlocks by lazy { FakeDebtBlocks(today) }
+    private val waitingForBank = mutableMapOf<String, DebtAfterExtraPending>()
     private val isInternal get() = profile.role == "owner"
     /** `/user-product/appearance`: one stored choice for the fixture account; none means the defaults. */
     private var appearance: AppearancePrefs? = null
@@ -531,6 +532,7 @@ class FakeBackend(
                     money("monthly_payment"), money("interest_rate"), int("term_months"), int("payment_day"), text("next_payment_date"))
                 debts += debt; ok(debt)
             }
+            path == "/user-product/finance/debts/after-extra" && method == "GET" -> ok(DebtAfterExtraPendingList(waitingForBank.toMap()))
             segments.take(3) == listOf("user-product", "finance", "debts") && segments.size == 4 -> {
                 needs(if (method == "PUT") PlanTier.BASIC else PlanTier.FREE)?.let { return it }
                 val index = debts.indexOfFirst { it.id == idAt(3) }
@@ -539,6 +541,19 @@ class FakeBackend(
                 debts[index] = debts[index].copy(name = text("name"), debtType = text("debt_type"), totalAmount = money("total_amount"), remainingAmount = money("remaining_amount"),
                     monthlyPayment = money("monthly_payment"), interestRate = money("interest_rate"), termMonths = int("term_months"), paymentDay = int("payment_day"), nextPaymentDate = text("next_payment_date"))
                 ok(debts[index])
+            }
+            // "El banco me avisa después": debts waiting for the bank's answer (debt_after_extra).
+            segments.take(3) == listOf("user-product", "finance", "debts") && segments.getOrNull(4) == "after-extra" -> {
+                val index = debts.indexOfFirst { it.id == idAt(3) }
+                if (index < 0) return error(404, "Deuda no encontrada.")
+                val key = debts[index].id.toString()
+                val remind = text("remind_on")
+                if (remind != null) waitingForBank[key] = DebtAfterExtraPending(remind, today.toString(), "later")
+                else {
+                    waitingForBank.remove(key)
+                    money("new_monthly_payment")?.let { debts[index] = debts[index].copy(monthlyPayment = it) }
+                }
+                ok(Acknowledgement("OK"))
             }
             segments.take(3) == listOf("user-product", "finance", "debts") && segments.getOrNull(4) == "payments" -> {
                 val index = debts.indexOfFirst { it.id == idAt(3) }
@@ -549,6 +564,7 @@ class FakeBackend(
                 debts[index] = debts[index].copy(remainingAmount = remaining - paid)
                 // As the backend: each payment leaves a record the history lists (DEB-07a).
                 debtPayments.getOrPut(debts[index].id) { mutableListOf() }.add(DebtPayment(id(), today.toString(), paid))
+                text("remind_on")?.let { waitingForBank[debts[index].id.toString()] = DebtAfterExtraPending(it, today.toString(), "payment") }
                 ok("""{"status":"OK","debt_id":${debts[index].id},"payment_amount":$paid,"new_remaining_amount":${remaining - paid}}""")
             }
 

@@ -99,5 +99,7 @@ class DebtSavingsBlockRequest(BaseModel):
 class DebtSavingsBlockApplyRequest(BaseModel):
     """What was paid into the debt when a block matured, and what the bank did (owner_debt_block_store)."""
     amount: float
-    outcome: str
+    outcome: str | None = None
     new_monthly_payment: float | None = None
+    remaining_installments: int | None = None
+    remind_on: str | None = None

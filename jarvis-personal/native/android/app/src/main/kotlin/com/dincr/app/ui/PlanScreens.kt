@@ -27,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -141,6 +142,11 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
     val flags by model.flags.collectAsStateWithLifecycle()
     val contract = StrategyContract.of(profile, flags.isEnabled(OpsFlag.VIP_INTELLIGENCE))
     var strategyDate by remember { mutableStateOf<DebtProgress.StrategyDate?>(null) }
+    // Debts waiting for the bank's answer after an extra payment: optional, never hides the list.
+    var waiting by remember { mutableStateOf<Map<String, com.dincr.data.DebtAfterExtraPending>>(emptyMap()) }
+    var answering by remember { mutableStateOf<Debt?>(null) }
+    var answered by remember { mutableIntStateOf(0) }   // an answer may leave the debts as they were: read again anyway
+    LaunchedEffect(debts.state, answered) { waiting = runCatching { model.api.debtsAfterExtraPending() }.getOrDefault(emptyMap()) }
     LaunchedEffect(contract, debts.state) {
         strategyDate = when (contract) {
             StrategyContract.OWNER -> runCatching { DebtProgress.strategyDate(model.api.ownerStrategyDashboard().strategy) }.getOrNull()
@@ -173,6 +179,7 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
                         AmountLine(tx("Cuotas del mes", "Monthly payments"), Debt.knownSum(list.map { it.monthlyPayment }))
                     }
                 }
+                WaitingForBankCard(list, waiting, model.isOn(OpsFlag.FINANCIAL_WRITES)) { answering = it }
                 DebtPayoffSummary(DebtPayoff.summary(list), DebtProgress.total(list), strategyDate)
                 list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }, onHistory = { history = debt }) }
             }
@@ -182,10 +189,10 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
         creating = false; editing = null; debts.reload(); model.showNotice(it)
     }
     history?.let { debt -> DebtPaymentsDialog(model, debt) { history = null } }
+    answering?.let { debt -> AfterExtraDialog(model, debt, onDismiss = { answering = null }) { answering = null; answered += 1; debts.reload(); model.showNotice(it) } }
     paying?.let { debt ->
-        AmountDialog(tx("Registrar pago", "Record payment"), tx("Pendiente: ${Dincr.money.format(debt.remainingAmount ?: BigDecimal.ZERO)}. Un pago mayor se ajusta al saldo.", "Outstanding: ${Dincr.money.format(debt.remainingAmount ?: BigDecimal.ZERO)}. A larger payment is capped at the balance."),
-            tx("Registrar", "Record"), onDismiss = { paying = null }) { amount, key ->
-            model.load(tx("No pudimos registrar el pago.", "We couldn’t record the payment.")) { model.api.payDebt(debt.id, amount, key) }.fold(
+        DebtPaymentDialog(debt, onDismiss = { paying = null }) { amount, key, afterExtra ->
+            model.load(tx("No pudimos registrar el pago.", "We couldn’t record the payment.")) { model.api.payDebt(debt.id, amount, key, afterExtra) }.fold(
                 { paying = null; debts.reload(); model.showNotice(tx("Pago registrado", "Payment recorded")); null },
                 { if (it is AuthException.SignedOut) null else it.message })
         }

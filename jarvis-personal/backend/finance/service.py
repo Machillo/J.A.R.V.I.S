@@ -6,9 +6,9 @@ from fastapi import HTTPException
 from backend.core.database import get_connection
 from backend.core.time import costa_rica_today
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
-from backend.finance import balance_movements, payroll_receipts, salary_projection
+from backend.finance import balance_movements, debt_after_extra, payroll_receipts, salary_projection
 from backend.finance.debt_automation import schedule_automation_enabled
-from backend.finance.debt_extra_payment import record_extra_payment
+from backend.finance.debt_extra_payment import adjust_after_extra, record_extra_payment
 from backend.finance.category_catalog import normalize_category, expense_type_for_category, owner_context
 from backend.user_product.debt_rates import rate_for_update
 
@@ -2249,9 +2249,15 @@ def apply_monthly_payment_to_debt(
     payment_date: str | None = None,
     new_remaining_amount: float | None = None,
     new_monthly_payment: float | None = None,
-    description: str = ""
+    description: str = "",
+    remaining_installments: int | None = None,
+    remind_on: date | None = None,
 ):
     """Register a real payment and calculate interest/principal automatically.
+
+    What the bank did with the part above the installment is the user's to say: the installments
+    left (``remaining_installments``) or the new installment (``new_monthly_payment``), or the day
+    the bank says it (``remind_on``: the debt waits for the answer, ``debt_after_extra``).
 
     Any amount above the scheduled monthly payment is applied entirely to principal.
     `new_remaining_amount` is kept only for backwards API compatibility and is ignored
@@ -2321,6 +2327,10 @@ def apply_monthly_payment_to_debt(
                        WHERE id = %s AND workspace_id = %s""",
                     (final_balance, final_balance, final_balance, debt_id, workspace_id),
                 )
+                adjust_after_extra(conn, workspace_id, debt_id, remaining_installments=remaining_installments,
+                                   new_monthly_payment=new_monthly_payment)
+                if remind_on is not None:
+                    debt_after_extra.mark_pending(conn, workspace_id, debt_id, remind_on=remind_on, source="payment")
                 cursor = conn.execute(
                     """
                     INSERT INTO debt_payments (
@@ -2331,7 +2341,8 @@ def apply_monthly_payment_to_debt(
                     ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra_after_auto', NOW())
                     """,
                     (workspace_id, debt_id, extra_principal, extra_principal, extra_principal, previous_balance,
-                     final_balance, scheduled, scheduled, description or "Excedente de cuota a principal",
+                     final_balance, scheduled, _as_float(new_monthly_payment) if new_monthly_payment is not None else scheduled,
+                     description or "Excedente de cuota a principal",
                      paid_on.isoformat(), int(latest_auto.get("installment_number") or 0)),
                 )
                 conn.execute(
@@ -2389,6 +2400,9 @@ def apply_monthly_payment_to_debt(
             (final_balance, final_monthly, installment_number, paid_on.isoformat(),
              next_due.isoformat() if next_due else None, bool(finished), debt_id, workspace_id),
         )
+        adjust_after_extra(conn, workspace_id, debt_id, remaining_installments=remaining_installments)
+        if remind_on is not None:
+            debt_after_extra.mark_pending(conn, workspace_id, debt_id, remind_on=remind_on, source="payment")
 
         cursor = conn.execute(
             """

@@ -40,6 +40,7 @@ enum ReminderScheduler {
         let bills: [Reminders.Bill]
         var saving: SalvavidasAutoContribution?
         var blocks: [DebtSavingsBlocks.Block] = []
+        var waiting: [(id: Int, debt: String, day: String)] = []
         do {
             let debts = try await model.service.debts()
             var fixed: [Reminders.Bill] = []
@@ -58,10 +59,15 @@ enum ReminderScheduler {
                 if Jarvis.isAvailable(to: model.profile) { blocks = (try? await model.service.debtSavingsBlocks())?.blocks ?? [] }
             }
             bills = Reminders.bills(debts: debts, fixed: fixed)
+            // The days the bank says what it did with an extra payment.
+            let pending = (try? await model.service.debtsAfterExtraPending()) ?? [:]
+            waiting = debts.compactMap { debt in
+                pending[String(debt.id)]?.remindOn.map { (id: debt.id, debt: debt.name ?? "", day: $0) }
+            }
         } catch {
             return
         }
-        let plan = Reminders.plan(today: Date(), bills: bills, saving: saving, blocks: blocks, format: model.moneyFormat, language: model.language)
+        let plan = Reminders.plan(today: Date(), bills: bills, saving: saving, blocks: blocks, waiting: waiting, format: model.moneyFormat, language: model.language)
         await clear()
         for reminder in plan {
             let content = UNMutableNotificationContent()

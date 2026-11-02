@@ -98,8 +98,12 @@ class DincrApi(private val client: ApiClient) {
     suspend fun deleteDebt(id: Long): Acknowledgement = client.send("DELETE", "/user-product/finance/debts/$id")
     /** DEB-07a — the payments recorded in DINCR for this debt, newest first (read-only). */
     suspend fun debtPayments(id: Long): List<DebtPayment> = client.get("/user-product/finance/debts/$id/payments")
-    suspend fun payDebt(id: Long, amount: java.math.BigDecimal, key: String): DebtPaymentResult =
-        client.send("POST", "/user-product/finance/debts/$id/payments", AmountRequest(amount), key)
+    suspend fun debtsAfterExtraPending(): Map<String, DebtAfterExtraPending> =
+        client.get<DebtAfterExtraPendingList>("/user-product/finance/debts/after-extra").items
+    suspend fun answerAfterExtra(id: Long, answer: DebtAfterExtraAnswer): Acknowledgement =
+        client.send("POST", "/user-product/finance/debts/$id/after-extra", answer)
+    suspend fun payDebt(id: Long, amount: java.math.BigDecimal, key: String, afterExtra: DebtAfterExtra? = null): DebtPaymentResult =
+        client.send("POST", "/user-product/finance/debts/$id/payments", DebtPaymentRequest.of(amount, afterExtra), key)
 
     // --- Goals and savings plans ----------------------------------------------------------------------
     suspend fun goals(): List<Goal> = client.get("/user-product/goals")

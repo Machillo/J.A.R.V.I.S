@@ -196,6 +196,8 @@ private struct ApplyBlockSheet: View {
     @State private var amount = ""
     @State private var outcome = DebtSavingsBlockApply.Outcome.reduceTerm
     @State private var installment = ""
+    @State private var remaining = ""
+    @State private var day = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
     @State private var error: String?
     @State private var saving = false
 
@@ -207,9 +209,17 @@ private struct ApplyBlockSheet: View {
                 Picker(tx("Qué hizo el banco", "What the bank did"), selection: $outcome) {
                     Text(tx("Bajó el plazo", "Shortened the term")).tag(DebtSavingsBlockApply.Outcome.reduceTerm)
                     Text(tx("Bajó la cuota", "Lowered the installment")).tag(DebtSavingsBlockApply.Outcome.reduceInstallment)
+                    Text(tx("Me avisa después", "Tells me later")).tag(DebtSavingsBlockApply.Outcome.later)
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("debtBlocks.outcome")
+                if outcome == .reduceTerm {
+                    TextField(tx("Cuotas que te quedan", "Installments left"), text: $remaining).keyboardType(.numberPad)
+                        .accessibilityIdentifier("debtBlocks.remaining")
+                }
+                if outcome == .later {
+                    DatePicker(tx("Recordarme el", "Remind me on"), selection: $day, in: Date()..., displayedComponents: .date)
+                }
                 if outcome == .reduceInstallment {
                     MoneyField(label: tx("Cuota nueva", "New installment"), text: $installment, identifier: "debtBlocks.newInstallment")
                     Text(tx("Lo que bajó la cuota se suma a tu siguiente ahorro.", "What the installment went down is added to your next saving."))
@@ -234,6 +244,13 @@ private struct ApplyBlockSheet: View {
         let separators = model.moneyFormat.separators
         guard let paid = AmountInput.parse(amount, separators: separators), paid > 0 else { error = model.moneyFormat.amountHint; return }
         var newInstallment: Decimal?
+        var left: Int?
+        if outcome == .reduceTerm {
+            guard let count = Int(remaining.trimmingCharacters(in: .whitespaces)), (1...600).contains(count) else {
+                error = tx("Escribí cuántas cuotas te quedan.", "Enter how many installments are left."); return
+            }
+            left = count
+        }
         if outcome == .reduceInstallment {
             guard let value = AmountInput.parse(installment, separators: separators), value > 0 else {
                 error = tx("Escribí la cuota nueva.", "Enter the new installment."); return
@@ -244,7 +261,8 @@ private struct ApplyBlockSheet: View {
         defer { saving = false }
         let epoch = model.currentEpoch
         do {
-            let answer = try await model.service.applyDebtSavingsBlock(id: block.id, DebtSavingsBlockApply(amount: paid, outcome: outcome, newMonthlyPayment: newInstallment))
+            let answer = try await model.service.applyDebtSavingsBlock(id: block.id, DebtSavingsBlockApply(amount: paid, outcome: outcome, newMonthlyPayment: newInstallment, remainingInstallments: left,
+                                                                                                         remindOn: outcome == .later ? MovementEditor.dayFormatter.string(from: day) : nil))
             done(DebtSavingsReading.appliedMessage(answer.block.applied, format: model.moneyFormat))
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))

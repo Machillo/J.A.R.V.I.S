@@ -23,6 +23,7 @@ struct DebtsView: View {
     @State private var form: DebtForm.Mode?
     @State private var deleting: Debt?
     @State private var history: Debt?
+    @State private var answering: Debt?
     @State private var notice: String?
 
     var body: some View {
@@ -31,7 +32,10 @@ struct DebtsView: View {
             if let notice { StatusBanner(tone: .info, title: notice, message: "").accessibilityIdentifier("plan.notice") }
             // The list and, for the Owner and VIP, their strategy's debt-free date: one answer, so the
             // date is never lost between two loads. The strategy is optional: its failure never hides the list.
-            AsyncContent(load: { DebtsScreenData(debts: try await model.service.debts(), strategyDate: await loadStrategyDate()) }) { data, _ in
+            AsyncContent(load: { DebtsScreenData(debts: try await model.service.debts(), strategyDate: await loadStrategyDate(),
+                                                 waiting: (try? await model.service.debtsAfterExtraPending()) ?? [:]) }) { data, _ in
+                // Debts waiting for the bank's answer after an extra payment (optional: never hides the list).
+                WaitingForBankCard(debts: data.debts, waiting: data.waiting, canWrite: model.flags.isEnabled(.financialWrites)) { answering = $0 }
                 DebtList(debts: data.debts, strategyDate: data.strategyDate, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
                          pay: { action = .payDebt($0) }, edit: { form = .edit($0) }, delete: { deleting = $0 }, history: { history = $0 })
             }
@@ -46,6 +50,7 @@ struct DebtsView: View {
         .sheet(item: $action) { action in AmountSheet(action: action) { done($0) } }
         .sheet(item: $form) { mode in DebtForm(mode: mode) { done($0) } }
         .sheet(item: $history) { debt in DebtPaymentsSheet(debt: debt) }
+        .sheet(item: $answering) { debt in AfterExtraSheet(debt: debt) { done($0) } }
         .confirmationDialog(tx("¿Eliminar «\(deleting?.name ?? "")»?", "Delete “\(deleting?.name ?? "")”?"),
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button(tx("Eliminar", "Delete"), role: .destructive) { if let debt = deleting { Task { await delete(debt) } } }
@@ -81,6 +86,7 @@ struct DebtsView: View {
 private struct DebtsScreenData: Equatable {
     let debts: [Debt]
     let strategyDate: DebtProgress.StrategyDate?
+    var waiting: [String: DebtAfterExtraPending] = [:]
 }
 
 private struct DebtList: View {

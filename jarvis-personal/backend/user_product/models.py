@@ -83,6 +83,26 @@ class UserDebtUpdateRequest(UserDebtCreateRequest):
 
 class DebtPaymentRequest(BaseModel):
     amount: float = Field(gt=0)
+    # What the bank did with an extra amount, as the user says it (one or none).
+    remaining_installments: int | None = Field(default=None, ge=1, le=600)
+    new_monthly_payment: float | None = Field(default=None, gt=0)
+    # "El banco me avisa después": the day to be reminded (debt_after_extra).
+    remind_on: date | None = None
+
+    @model_validator(mode="after")
+    def one_adjustment(self):
+        given = [self.remaining_installments is not None, self.new_monthly_payment is not None, self.remind_on is not None]
+        if sum(given) > 1:
+            raise ValueError("Indicá una sola respuesta: las cuotas que quedan, la cuota nueva o el día del recordatorio.")
+        return self
+
+
+class DebtAfterExtraRequest(BaseModel):
+    """The bank's answer after an extra payment, or a new day to be reminded (debt_after_extra)."""
+    remaining_installments: int | None = None
+    new_monthly_payment: float | None = None
+    unchanged: bool = False
+    remind_on: date | None = None
 
 
 class GoalContributionRequest(BaseModel):

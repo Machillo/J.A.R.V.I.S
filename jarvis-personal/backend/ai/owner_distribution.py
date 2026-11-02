@@ -42,6 +42,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.core.time import costa_rica_today
 from backend.finance.debt_extra_payment import record_extra_payment
+from backend.finance.debt_after_extra import mark_pending
 from backend.finance.emergency_fund import SalvavidasDepositRefused, deposit_to_owner_salvavidas
 from backend.goals.service import apply_goal_contribution
 
@@ -209,6 +210,8 @@ def confirm_owner_distribution(amount: Any, currency: str, confirmation_key: str
                     if payment is None or _cents(payment["principal_amount"]) != _cents(target["amount"]):
                         raise _conflict("Una deuda cambió mientras se confirmaba; no se registró nada.",
                                         "A debt changed while confirming; nothing was recorded.")
+                    # What the bank did with it (term or installment) is the Owner's to say later.
+                    mark_pending(conn, workspace_id, int(target["debt_id"]), remind_on=None, source=SOURCE)
                     applied.append({"key": step["key"], "action": step["action"], "debt_id": target["debt_id"],
                                     "amount": target["amount"], "payment_id": payment["payment_id"],
                                     "new_remaining_amount": payment["new_remaining_amount"]})

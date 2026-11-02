@@ -53,6 +53,73 @@ public struct AmountRequest: Encodable, Sendable, Equatable {
     public let amount: Decimal
 }
 
+/// What the bank did with a payment above the installment, as the user reads it from the bank:
+/// the installments left or the new installment. Never guessed; nil keeps both.
+public enum DebtAfterExtra: Equatable, Sendable {
+    case remainingInstallments(Int)
+    case newMonthlyPayment(Decimal)
+    /// "El banco me avisa después": the day (`YYYY-MM-DD`) to be reminded; the debt waits.
+    case later(String)
+}
+
+/// A debt waiting for the bank's answer after an extra payment (`GET /finance/debts/after-extra`).
+public struct DebtAfterExtraPending: Decodable, Sendable, Equatable {
+    public let remindOn: String?
+    public let since: String?
+    public let source: String?
+}
+
+public struct DebtAfterExtraPendingList: Decodable, Sendable, Equatable {
+    public let items: [String: DebtAfterExtraPending]
+}
+
+/// `POST /finance/debts/{id}/after-extra`: one answer.
+public enum DebtAfterExtraAnswer: Equatable, Sendable {
+    case unchanged
+    case remainingInstallments(Int)
+    case newMonthlyPayment(Decimal)
+    case remindOn(String)
+}
+
+struct DebtAfterExtraAnswerBody: Encodable, Equatable {
+    let unchanged: Bool
+    let remainingInstallments: Int?
+    let newMonthlyPayment: Decimal?
+    let remindOn: String?
+
+    init(_ answer: DebtAfterExtraAnswer) {
+        switch answer {
+        case .unchanged: self.init(unchanged: true, remainingInstallments: nil, newMonthlyPayment: nil, remindOn: nil)
+        case .remainingInstallments(let count): self.init(unchanged: false, remainingInstallments: count, newMonthlyPayment: nil, remindOn: nil)
+        case .newMonthlyPayment(let value): self.init(unchanged: false, remainingInstallments: nil, newMonthlyPayment: value, remindOn: nil)
+        case .remindOn(let day): self.init(unchanged: false, remainingInstallments: nil, newMonthlyPayment: nil, remindOn: day)
+        }
+    }
+
+    private init(unchanged: Bool, remainingInstallments: Int?, newMonthlyPayment: Decimal?, remindOn: String?) {
+        self.unchanged = unchanged; self.remainingInstallments = remainingInstallments
+        self.newMonthlyPayment = newMonthlyPayment; self.remindOn = remindOn
+    }
+}
+
+/// Body of `POST /user-product/finance/debts/{id}/payments`.
+struct DebtPaymentRequest: Encodable, Sendable, Equatable {
+    let amount: Decimal
+    var remainingInstallments: Int?
+    var newMonthlyPayment: Decimal?
+    var remindOn: String?
+
+    init(amount: Decimal, afterExtra: DebtAfterExtra?) {
+        self.amount = amount
+        switch afterExtra {
+        case .remainingInstallments(let count): remainingInstallments = count
+        case .newMonthlyPayment(let value): newMonthlyPayment = value
+        case .later(let day): remindOn = day
+        case nil: break
+        }
+    }
+}
+
 public struct DebtPaymentResult: Decodable, Sendable, Equatable {
     public let status: String?
     public let debtId: Int?

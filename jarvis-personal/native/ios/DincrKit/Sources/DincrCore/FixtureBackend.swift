@@ -74,6 +74,8 @@ public actor FixtureBackend: HTTPTransport {
     var ownerFixedExpenses: [FixtureFixedExpense] = FixtureFixedExpense.seed
     /// Plan → Ahorro para deudas (Owner): the locked savings blocks recorded (FixtureBackend+DebtBlocks.swift).
     var ownerDebtBlocks: [[String: Any]] = []
+    /// Debts waiting for the bank's answer after an extra payment, by debt id (debt_after_extra).
+    var debtsWaitingForBank: [String: [String: Any]] = [:]
     /// The block that matured yesterday was paid into its debt (FixtureBackend+DebtBlocks.swift).
     var ownerMaturedBlockPaid = false
     /// Perfil → Atajos de iPhone (FixtureBackend+Shortcuts.swift): the account's current shortcut token
@@ -368,6 +370,7 @@ public actor FixtureBackend: HTTPTransport {
         if let answer = debtBlocksRoute(method, path, body) { return answer }
         if let answer = planRoute(method, path, query, body) { return answer }
         if parts.starts(with: ["user-product", "free", "movements"]), parts.count == 4 { return editMovement(method, parts[3].removingPercentEncoding ?? parts[3], body) }
+        if method == "GET", path == "/user-product/finance/debts/after-extra" { return ok(["items": debtsWaitingForBank]) }
         if parts.starts(with: ["user-product", "finance", "debts"]), parts.count >= 4 { return debt(method, id(at: 3), parts.count == 5 ? parts[4] : nil, body) }
         if parts.starts(with: ["user-product", "goals"]), parts.count >= 3 { return goal(method, id(at: 2), parts.count == 4 ? parts[3] : nil, body) }
         if parts.starts(with: ["user-product", "savings-plans"]), parts.count >= 3 { return savingsPlan(method, id(at: 2), parts.count == 4 ? parts[3] : nil, body) }
@@ -470,9 +473,19 @@ public actor FixtureBackend: HTTPTransport {
             debts[index]["remaining_amount"] = number(remaining - paid)
             // As the backend: each payment leaves a record the history lists (DEB-07a).
             debtPayments[debtID, default: []].append(["id": nextId(), "payment_date": day(0), "amount": number(paid)])
+            // "El banco me avisa después": the debt waits for the bank's answer (debt_after_extra).
+            if let remind = body["remind_on"] as? String { debtsWaitingForBank[String(debtID)] = ["remind_on": remind, "source": "payment"] }
             return ok(["status": "OK", "debt_id": debtID, "payment_amount": number(paid), "new_remaining_amount": number(remaining - paid)])
         case ("GET", "payments"?):
             return ok(Array((debtPayments[debtID] ?? []).reversed()))
+        case ("POST", "after-extra"?):
+            if let remind = body["remind_on"] as? String {
+                debtsWaitingForBank[String(debtID)] = ["remind_on": remind, "source": "later"]
+            } else {
+                debtsWaitingForBank[String(debtID)] = nil
+                if let installment = decimal(body["new_monthly_payment"]) { debts[index]["monthly_payment"] = number(installment) }
+            }
+            return ok(["status": "OK", "debt_id": debtID])
         case ("DELETE", nil):
             debts.remove(at: index)
             return ok(["status": "ok", "id": debtID])

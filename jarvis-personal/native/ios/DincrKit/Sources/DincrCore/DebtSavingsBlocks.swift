@@ -83,16 +83,22 @@ public struct DebtSavingsBlockCreate: Encodable, Sendable, Equatable {
 }
 
 /// `POST /jarvis/premium/debt-savings-blocks/{id}/apply`: what was paid into the debt and what the bank
-/// did with it (a shorter term, or a lower installment: then the new one).
+/// did with it (a shorter term: the installments left; or a lower installment: the new one).
 public struct DebtSavingsBlockApply: Encodable, Sendable, Equatable {
-    public enum Outcome: String, Sendable, CaseIterable { case reduceTerm = "reduce_term", reduceInstallment = "reduce_installment" }
+    public enum Outcome: String, Sendable, CaseIterable { case reduceTerm = "reduce_term", reduceInstallment = "reduce_installment", later }
     public let amount: Decimal
     public let outcome: String
     public let newMonthlyPayment: Decimal?
+    /// The installments left after a shorter term, as the bank says it.
+    public let remainingInstallments: Int?
+    /// "El banco me avisa después": the day to be reminded; the debt waits for the answer.
+    public let remindOn: String?
 
-    public init(amount: Decimal, outcome: Outcome, newMonthlyPayment: Decimal?) {
+    public init(amount: Decimal, outcome: Outcome, newMonthlyPayment: Decimal?, remainingInstallments: Int? = nil, remindOn: String? = nil) {
         self.amount = amount; self.outcome = outcome.rawValue
         self.newMonthlyPayment = outcome == .reduceInstallment ? newMonthlyPayment : nil
+        self.remainingInstallments = outcome == .reduceTerm ? remainingInstallments : nil
+        self.remindOn = outcome == .later ? remindOn : nil
     }
 }
 

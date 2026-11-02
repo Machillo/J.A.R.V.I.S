@@ -3,7 +3,7 @@ from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
-    BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, DebtScenarioRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
+    BasicSimulationRequest, BudgetUpdateRequest, DebtAfterExtraRequest, DebtPaymentRequest, DebtScenarioRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, PendingCloseRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
     FinancialAccountIdentityRequest, OwnAccountDeclareRequest, StatementCutDayRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
@@ -129,7 +129,26 @@ def debts_delete(debt_id: int):
 
 @router.post("/finance/debts/{debt_id}/payments")
 def debt_payment(debt_id: int, request: DebtPaymentRequest):
-    require_feature("debts"); return pay_user_debt(debt_id, request.amount)
+    require_feature("debts")
+    return pay_user_debt(debt_id, request.amount, request.remaining_installments, request.new_monthly_payment, request.remind_on)
+
+
+@router.get("/finance/debts/after-extra")
+def debt_after_extra_pending():
+    """The debts waiting for the bank's answer after an extra payment (read-only)."""
+    require_feature("debts")
+    from backend.finance.debt_after_extra import list_pending
+
+    return list_pending()
+
+
+@router.post("/finance/debts/{debt_id}/after-extra")
+def debt_after_extra_answer(debt_id: int, request: DebtAfterExtraRequest):
+    """What the bank did with an extra payment, told later (or a new day to be reminded)."""
+    require_feature("debts")
+    from backend.finance.debt_after_extra import answer
+
+    return answer(debt_id, request.model_dump())
 
 @router.get("/finance/debts/{debt_id}/payments")
 def debt_payments_list(debt_id: int):
