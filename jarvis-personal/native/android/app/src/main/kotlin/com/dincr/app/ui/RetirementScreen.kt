@@ -15,6 +15,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.dincr.app.AppModel
 import com.dincr.app.tx
@@ -75,9 +76,9 @@ private fun RetirementContent(model: AppModel, retirement: Retirement, income: B
         MoneyField(tx("Saldo del ROP", "ROP balance"), rop, { rop = it }, modifier = Modifier.testTag("retirement.rop"))
         MoneyField(tx("Pensión voluntaria (si tenés)", "Voluntary pension (if any)"), voluntary, { voluntary = it }, modifier = Modifier.testTag("retirement.voluntary"))
         OutlinedTextField(birth, { birth = it }, label = { Text(tx("Año de nacimiento", "Year of birth")) }, singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().testTag("retirement.birth"))
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("retirement.birth"))
         OutlinedTextField(age, { age = it }, label = { Text(tx("Edad de retiro (65 si no sabés)", "Retirement age (65 if unsure)")) }, singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().testTag("retirement.age"))
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("retirement.age"))
         Caption(tx("El saldo del ROP aparece en el estado de cuenta de tu operadora de pensiones.", "Your ROP balance is on your pension fund statement."))
         error?.let { com.dincr.design.ErrorState(it) }
         DincrPrimaryButton(tx("Guardar", "Save"), loading = saving, modifier = Modifier.testTag("retirement.save"), onClick = {

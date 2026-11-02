@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.dincr.app.AppModel
 import com.dincr.app.tx
@@ -133,9 +134,9 @@ fun DebtScenarioForm(model: AppModel, choice: ScenarioChoice) {
                 supporting = tx("Sin cuota, DINCR la calcula con la tasa y el plazo.", "Without a payment, DINCR computes it from the rate and term."),
                 modifier = Modifier.testTag("scenario.new.payment"))
             OutlinedTextField(rate, { rate = it }, label = { Text(tx("Tasa anual (%)", "Annual rate (%)")) }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth().testTag("scenario.new.rate"))
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("scenario.new.rate"))
             OutlinedTextField(term, { term = it }, label = { Text(tx("Plazo (meses)", "Term (months)")) }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().testTag("scenario.new.term"))
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("scenario.new.term"))
         } else {
             when (val list = debts) {
                 null -> Caption(tx("Cargando tus deudas…", "Loading your debts…"))
@@ -151,9 +152,9 @@ fun DebtScenarioForm(model: AppModel, choice: ScenarioChoice) {
             }
             if (choice == ScenarioChoice.REFINANCE || choice == ScenarioChoice.CONSOLIDATE) {
                 OutlinedTextField(rate, { rate = it }, label = { Text(tx("Tasa anual del préstamo nuevo (%)", "New loan’s annual rate (%)")) }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth().testTag("scenario.loan.rate"))
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("scenario.loan.rate"))
                 OutlinedTextField(term, { term = it }, label = { Text(tx("Plazo (meses)", "Term (months)")) }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().testTag("scenario.loan.term"))
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("scenario.loan.term"))
                 MoneyField(tx("Comisión o gastos (opcional)", "Fee or costs (optional)"), fee, { fee = it }, modifier = Modifier.testTag("scenario.loan.fee"))
             }
             if (choice == ScenarioChoice.EXTRA_PAYMENT) {

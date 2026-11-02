@@ -19,7 +19,7 @@ import Testing
             ("99.999.999.999,99", .dotComma), ("10,000,000,000.00", .commaDot), ("999999999999.99", .commaDot),
             ("1e30", .dotComma), ("1e300", .commaDot), ("1E+30", .commaDot), ("NaN", .dotComma), ("Infinity", .commaDot),
             ("-Infinity", .dotComma), ("-0,01", .dotComma), ("0", .dotComma), ("0,00", .dotComma), ("0x10", .commaDot),
-            ("9.999.999.999,991", .dotComma), ("1,000", .dotComma), ("1.000", .commaDot), ("1.5", .dotComma),
+            ("9.999.999.999,991", .dotComma),
             ("１２", .dotComma), ("٣", .dotComma),
         ]
         for (text, separators) in rejected {

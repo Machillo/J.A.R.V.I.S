@@ -76,14 +76,6 @@ struct AutoContributionCard: View {
             }
         }
         .dincrCard()
-        // The decimal pad has no return key: "Listo" closes it so "Guardar aportes" is reachable.
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button(tx("Listo", "Done")) { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-                    .accessibilityIdentifier("salvavidas.auto.keyboardDone")
-            }
-        }
         .onAppear(perform: prefill)
         .onChange(of: fund) { prefill() }
     }

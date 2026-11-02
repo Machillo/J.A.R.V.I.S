@@ -307,7 +307,7 @@ private fun DebtForm(model: AppModel, debt: Debt?, advanced: Boolean, onDismiss:
         fun optionalMoney(field: String, value: String) = if (value.isBlank()) null else AmountInput.parseZeroOrMore(value, separators).also { if (it == null) found[field] = tx("Monto no válido.", "Not a valid amount.") }
         val totalValue = optionalMoney("total", total)
         val monthlyValue = optionalMoney("monthly", monthly)
-        val interestValue = if (!advanced || interest.isBlank()) null else InterestRateInput.parse(interest, separators).also { if (it == null) found["interest"] = tx("Tasa entre 0 y 9999,9999.", "Rate between 0 and 9999.9999.") }
+        val interestValue = if (!advanced || interest.isBlank()) null else com.dincr.data.CorrectionInput.interest(interest, separators).also { if (it == null) found["interest"] = tx("Tasa entre 0 y 9999,9999.", "Rate between 0 and 9999.9999.") }
         val termValue = if (!advanced || term.isBlank()) null else WholeNumberInput.parse(term, 1..600).also { if (it == null) found["term"] = tx("Entre 1 y 600 meses.", "1 to 600 months.") }
         val dayValue = if (!advanced || day.isBlank()) null else WholeNumberInput.parse(day, 1..31).also { if (it == null) found["day"] = tx("Entre 1 y 31.", "1 to 31.") }
         if (totalValue != null && remainingValue != null && totalValue < remainingValue) found["total"] = tx("No puede ser menor que el saldo pendiente.", "Can’t be less than the balance.")

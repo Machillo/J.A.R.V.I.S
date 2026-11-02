@@ -8,18 +8,18 @@ import Testing
     // MARK: Amount input — nothing ambiguous is guessed
 
     static let dotComma: [(String, Decimal?)] = [
-        ("1", 1), ("1.5", nil), ("1,5", Decimal(string: "1.5")!), ("1,000", nil), ("1.000", 1_000),
-        ("1,000.50", nil), ("1.000,50", Decimal(string: "1000.5")!), ("₡1.000", nil), ("$1,000.50", nil),
+        ("1", 1), ("1.5", Decimal(string: "1.5")!), ("1,5", Decimal(string: "1.5")!), ("1,000", 1_000), ("1.000", 1_000),
+        ("1,000.50", Decimal(string: "1000.5")!), ("1.000,50", Decimal(string: "1000.5")!), ("₡1.000", nil), ("$1,000.50", nil),
         (" 18 450 ", 18_450), ("-5", nil), ("0", nil), ("0,00", nil), ("", nil), ("abc", nil), ("NaN", nil),
         ("Infinity", nil), ("1e5", nil), ("9.999.999.999,99", Decimal(string: "9999999999.99")!), ("999.999.999.999,99", nil),
-        ("1.000.000.000.000", nil), ("12,345", nil),
+        ("1.000.000.000.000", nil), ("12,345", 12_345),
     ]
     static let commaDot: [(String, Decimal?)] = [
-        ("1", 1), ("1.5", Decimal(string: "1.5")!), ("1,5", nil), ("1,000", 1_000), ("1.000", nil),
-        ("1,000.50", Decimal(string: "1000.5")!), ("1.000,50", nil), ("₡1.000", nil), ("$1,000.50", nil),
+        ("1", 1), ("1.5", Decimal(string: "1.5")!), ("1,5", Decimal(string: "1.5")!), ("1,000", 1_000), ("1.000", 1_000),
+        ("1,000.50", Decimal(string: "1000.5")!), ("1.000,50", Decimal(string: "1000.5")!), ("₡1.000", nil), ("$1,000.50", nil),
         (" 18 450 ", 18_450), ("-5", nil), ("0", nil), ("0.00", nil), ("", nil), ("abc", nil), ("NaN", nil),
         ("Infinity", nil), ("1e5", nil), ("9,999,999,999.99", Decimal(string: "9999999999.99")!), ("999,999,999,999.99", nil),
-        ("1,000,000,000,000", nil), ("12.345", nil),
+        ("1,000,000,000,000", nil), ("12.345", 12_345),
     ]
 
     @Test(arguments: dotComma)

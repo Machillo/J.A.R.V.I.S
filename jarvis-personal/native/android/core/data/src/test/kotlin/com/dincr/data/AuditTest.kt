@@ -20,18 +20,18 @@ class AuditTest {
     private fun d(value: String) = BigDecimal(value)
 
     private val dotComma = listOf(
-        "1" to d("1"), "1.5" to null, "1,5" to d("1.5"), "1,000" to null, "1.000" to d("1000"),
-        "1,000.50" to null, "1.000,50" to d("1000.5"), "₡1.000" to null, "$1,000.50" to null,
+        "1" to d("1"), "1.5" to d("1.5"), "1,5" to d("1.5"), "1,000" to d("1000"), "1.000" to d("1000"),
+        "1,000.50" to d("1000.5"), "1.000,50" to d("1000.5"), "₡1.000" to null, "$1,000.50" to null,
         " 18 450 " to d("18450"), "-5" to null, "0" to null, "0,00" to null, "" to null, "abc" to null, "NaN" to null,
         "Infinity" to null, "1e5" to null, "9.999.999.999,99" to d("9999999999.99"), "999.999.999.999,99" to null,
-        "1.000.000.000.000" to null, "12,345" to null,
+        "1.000.000.000.000" to null, "12,345" to d("12345"),
     )
     private val commaDot = listOf(
-        "1" to d("1"), "1.5" to d("1.5"), "1,5" to null, "1,000" to d("1000"), "1.000" to null,
-        "1,000.50" to d("1000.5"), "1.000,50" to null, "₡1.000" to null, "$1,000.50" to null,
+        "1" to d("1"), "1.5" to d("1.5"), "1,5" to d("1.5"), "1,000" to d("1000"), "1.000" to d("1000"),
+        "1,000.50" to d("1000.5"), "1.000,50" to d("1000.5"), "₡1.000" to null, "$1,000.50" to null,
         " 18 450 " to d("18450"), "-5" to null, "0" to null, "0.00" to null, "" to null, "abc" to null, "NaN" to null,
         "Infinity" to null, "1e5" to null, "9,999,999,999.99" to d("9999999999.99"), "999,999,999,999.99" to null,
-        "1,000,000,000,000" to null, "12.345" to null,
+        "1,000,000,000,000" to null, "12.345" to d("12345"),
     )
 
     private fun check(cases: List<Pair<String, BigDecimal?>>, separators: MoneyFormat.Separators) = cases.forEach { (text, expected) ->

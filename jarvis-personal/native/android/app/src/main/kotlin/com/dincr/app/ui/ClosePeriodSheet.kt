@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -104,7 +105,7 @@ fun ClosePeriodSheet(model: AppModel, period: PendingConversion.Period, latestRa
     var saving by remember { mutableStateOf(false) }
     var submission by remember { mutableStateOf<Pair<PendingClose, String>?>(null) }
     val scope = rememberCoroutineScope()
-    val rate = ExchangeRateInput.parse(rateText, format.separators)
+    val rate = com.dincr.data.CorrectionInput.rate(rateText, format.separators)
     val preview = rate?.let { r ->
         val parts = period.totals.map { ConversionPreview.baseAmount(it.amount, it.currency, base, r) }
         if (parts.all { it != null }) parts.filterNotNull().fold(BigDecimal.ZERO, BigDecimal::add) else null
@@ -140,7 +141,7 @@ fun ClosePeriodSheet(model: AppModel, period: PendingConversion.Period, latestRa
             OutlinedTextField(rateText, { rateText = it; rateError = null }, label = { Text(tx("Tipo de cambio (₡ por US\$1)", "Exchange rate (₡ per US\$1)")) },
                 singleLine = true, isError = rateError != null,
                 supportingText = { Text(rateError ?: tx("Usá el tipo de cambio de tu estado de cuenta. DINCR no lo inventa.", "Use your statement’s rate. DINCR never makes one up.")) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth().testTag("close.rate"))
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("close.rate"))
             preview?.let {
                 Text(tx("Se registran ${format.format(it)} en total.", "${format.format(it)} are recorded in total."),
                     style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2, modifier = Modifier.testTag("close.preview"))

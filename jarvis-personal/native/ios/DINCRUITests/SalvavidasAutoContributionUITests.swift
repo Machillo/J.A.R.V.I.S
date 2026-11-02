@@ -62,7 +62,7 @@ final class SalvavidasAutoContributionUITests: XCTestCase {
         XCTAssertTrue(focused(), "\(identifier) has the keyboard")
         field.typeText(text)
         // Close the decimal pad (it has no return key) so the buttons below are reachable.
-        let done = app.buttons["salvavidas.auto.keyboardDone"]
+        let done = app.buttons["keyboard.hide"]
         if done.waitForExistence(timeout: 2) { done.tap() }
         _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
     }

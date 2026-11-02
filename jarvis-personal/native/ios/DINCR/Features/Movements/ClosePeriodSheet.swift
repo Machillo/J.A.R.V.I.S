@@ -20,7 +20,7 @@ struct ClosePeriodSheet: View {
     @State private var submission: (body: PendingClose, key: String)?
 
     private var base: String { (model.profile?.baseCurrency ?? "CRC").uppercased() }
-    private var rate: Decimal? { RateInput.parse(rateText, separators: format.separators) }
+    private var rate: Decimal? { CorrectionInput.rate(rateText, separators: format.separators) }
 
     /// The colones the close records: each currency's total at the typed rate (the server converts row by row).
     private var preview: Decimal? {
