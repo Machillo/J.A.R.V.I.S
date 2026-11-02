@@ -532,13 +532,14 @@ def test_the_cycle_report_does_not_count_a_confirmed_extra_payment_as_an_install
 
 
 def test_a_distribution_with_an_automatic_saving_can_be_confirmed(db, monkeypatch):
-    """The Salvavidas automatic contributions still to come in the cycle are taken out of the shares
-    (owner_commitments.absorb): the shares add up to the amount minus them, and CONFIRMAR accepts it
-    (it refused every exact amount while an automatic saving was on: "no suma exactamente")."""
+    """The Owner's case (₡47 000 on 1 November, ₡2 500 saved automatically on 29 October): CONFIRMAR
+    refused every exact amount while an automatic saving was on ("no suma exactamente"). The amount is
+    distributed whole, the Salvavidas share goes down by October's automatic saving and that money
+    goes to the debts; the Salvavidas deposit and the debt payments are recorded."""
     class Today(date):
         @classmethod
         def today(cls):
-            return date(2026, 11, 2)
+            return date(2026, 11, 1)
     monkeypatch.setattr(sd, "date", Today)
     monkeypatch.setattr(sd, "_safe_cycle_report", lambda: {"income": {"expected_total": 900_000, "received_from_transactions": 0},
                                                            "expenses": {"spending_only": 0}, "debts": {"payments_current_period": 0},
@@ -548,8 +549,9 @@ def test_a_distribution_with_an_automatic_saving_can_be_confirmed(db, monkeypatc
                ('{"auto_contribution": {"enabled": true, "amount": 2500, "frequency": "weekly", "start_date": "2026-10-29"}}', WS))
     preview = _preview("47000")
     strategy = preview["strategy"]
-    taken = strategy["automatic_savings"]["taken_from_distribution"]
-    assert taken == 2_500, "Thursday 5 November, inside the cycle"
-    assert sum(_cents(item["amount"]) for item in strategy["allocation_items"]) == _cents(47_000 - taken)
+    assert strategy["automatic_savings"]["amount"] == 2_500, "Thursday 29 October, the month before"
+    assert sum(_cents(item["amount"]) for item in strategy["allocation_items"]) == _cents(47_000), "the whole amount"
     result = _confirm("47000", "confirm-automatic-0001", _items(preview))
     assert result["status"] == "applied"
+    actions = {item["action"] for item in result["confirmation"]["applied"]}
+    assert "debt_extra_payment" in actions

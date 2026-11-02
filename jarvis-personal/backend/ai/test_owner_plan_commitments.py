@@ -91,12 +91,35 @@ def test_the_distribution_already_counts_the_automatic_saving(owner_inputs, monk
     assert "₡10.000" in warning["message"] and "₡2.500" in warning["message"]
 
 
-def test_the_exact_amount_also_counts_the_automatic_saving(owner_inputs, monkeypatch):
-    _today(monkeypatch, date(2026, 10, 10))
-    _cycle(monkeypatch)
+def test_the_exact_amount_is_distributed_whole_and_the_salvavidas_share_counts_last_months_automatic_saving(owner_inputs, monkeypatch):
+    """The Owner's rule (2026-11-01): the exact amount is the month before's leftover, distributed on the
+    1st, all of it. The Salvavidas already got that month's automatic contributions (Saturdays from
+    3 Oct: 3, 10, 17, 24 and 31 October = 5 × ₡2 500), so its share goes down by them and that money
+    goes to the debts, never out of the amount."""
+    _today(monkeypatch, date(2026, 11, 1))
+    _cycle(monkeypatch, end="2026-12-05")
+    without = _as("owner", sd.get_owner_exact_distribution, 250_000, "CRC")["strategy"]
     _with_plan(monkeypatch, owner_inputs)
     result = _as("owner", sd.get_owner_exact_distribution, 250_000, "CRC")["strategy"]
-    assert _total(result["allocation_items"]) == 240_000, "every cent of what is left, minus what goes by itself"
+    share = lambda r, key: next((item["amount"] for item in r["allocation_items"] if item["key"] == key), 0.0)  # noqa: E731
+    assert _total(result["allocation_items"]) == 250_000, "every cent of the amount typed"
+    assert result["automatic_savings"]["amount"] == 12_500 and result["automatic_savings"]["month"] == "2026-10"
+    moved = result["automatic_savings"]["moved_from_salvavidas"]
+    assert moved == min(12_500, share(without, "fondo_de_emergencia")) and moved > 0
+    assert share(result, "fondo_de_emergencia") == round(share(without, "fondo_de_emergencia") - moved, 2)
+    assert share(result, "ataque_de_deuda") == round(share(without, "ataque_de_deuda") + moved, 2)
+    assert result["automatic_savings"]["taken_from_distribution"] == 0
+    assert any(w["code"] == "automatic_savings_received" for w in result["distribution_warnings"])
+
+
+def test_the_month_before_counts_four_or_five_paydays():
+    weekly = {"enabled": True, "amount": 2500, "frequency": "weekly", "start_date": "2026-10-29"}
+    # Started Thursday 29 October: one contribution in October, four in November (5, 12, 19, 26).
+    assert owner_commitments.last_month_automatic_savings({"auto_contribution": weekly}, date(2026, 11, 1))["amount"] == 2_500
+    assert owner_commitments.last_month_automatic_savings({"auto_contribution": weekly}, date(2026, 12, 1))["amount"] == 10_000
+    # December has five Thursdays (3, 10, 17, 24, 31).
+    assert owner_commitments.last_month_automatic_savings({"auto_contribution": weekly}, date(2027, 1, 1))["amount"] == 12_500
+    assert owner_commitments.last_month_automatic_savings({}, date(2026, 12, 1))["amount"] == 0
 
 
 def test_expenses_recorded_by_hand_reduce_what_is_distributed(owner_inputs, monkeypatch):
