@@ -120,7 +120,9 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
             } finally { refreshing = false }
         }
     }
-    PullToRefreshBox(refreshing, onRefresh = { if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
+    // A dollar expense waiting for its close shows at once after saving or pulling, not on the next return.
+    var dollarsRefresh by remember { mutableStateOf(0) }
+    PullToRefreshBox(refreshing, onRefresh = { dollarsRefresh += 1; if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
         modifier = Modifier.fillMaxSize().padding(padding).testTag("home.refresh")) {
         ScreenColumn {
             if (owner && agenda != null) {
@@ -130,8 +132,8 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
                     color = Dincr.colors.text, modifier = Modifier.padding(top = DincrSpacing.s2).semantics { heading() })
             }
             Column(Modifier.testTag(if (owner) "owner.home" else "home.today"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
-                PendingDollarsCard(model) { nav.tab(Destination.MOVEMENTS) }
-                LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = if (owner) home.reload else { { refreshHome() } }) }
+                PendingDollarsCard(model, dollarsRefresh) { nav.tab(Destination.MOVEMENTS) }
+                LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = { dollarsRefresh += 1; if (owner) home.reload() else refreshHome() }) }
             }
         }
     }

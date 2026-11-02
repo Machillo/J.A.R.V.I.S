@@ -136,7 +136,11 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
         route?.let { if (QuickAction.fromRoute(it) == QuickAction.NEW_EXPENSE) quickExpense = true else nav.open(it); model.consumeRoute() }
     }
     if (quickExpense) {
-        MovementEditorSheet(model, EditorMode.Create, onDismiss = { quickExpense = false }, onSaved = { quickExpense = false }, onDelete = {}, initialKind = MovementKind.EXPENSE)
+        MovementEditorSheet(model, EditorMode.Create, onDismiss = { quickExpense = false }, onSaved = {
+            quickExpense = false
+            model.showNotice(tx("Gasto guardado.", "Expense saved."))
+            model.noteDataChanged()
+        }, onDelete = {}, initialKind = MovementKind.EXPENSE)
     }
     if (offerLock) AppLockOffer(model) { offerLock = false }
     BoxWithConstraints(Modifier.fillMaxSize()) {

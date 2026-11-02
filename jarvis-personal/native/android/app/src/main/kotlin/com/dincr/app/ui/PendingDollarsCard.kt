@@ -40,10 +40,10 @@ import kotlinx.coroutines.CancellationException
  * waiting; read-only. Tap: Movimientos, where each one is listed. iOS: `PendingDollarsCard`.
  */
 @Composable
-fun PendingDollarsCard(model: AppModel, onOpen: () -> Unit) {
+fun PendingDollarsCard(model: AppModel, refreshKey: Int = 0, onOpen: () -> Unit) {
     var pending by remember { mutableStateOf(PendingConversion.UNAVAILABLE) }
     val generation by model.dataGeneration.collectAsStateWithLifecycle()
-    LaunchedEffect(generation) {
+    LaunchedEffect(generation, refreshKey) {
         // Optional: Hoy never fails because of it; on error it simply stays out.
         pending = try { model.api.pendingConversion() } catch (e: CancellationException) { throw e } catch (_: Exception) { pending }
     }

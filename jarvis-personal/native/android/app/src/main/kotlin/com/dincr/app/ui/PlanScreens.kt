@@ -108,8 +108,8 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
                     tx("Tu ROP y pensión voluntaria", "Your ROP and voluntary pension"), nav, "retirement")
                 // WE-1: Proyecciones and Escenarios moved here from Patrimonio (VIP, paused with vip_intelligence).
                 if (plan.allows(Feature.STRATEGY_VIP) && !vipOn) {
-                    NavRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), tx("En pausa por mantenimiento", "Paused for maintenance")) {}
-                    NavRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), tx("En pausa por mantenimiento", "Paused for maintenance")) {}
+                    NavRow(Icons.Rounded.Timeline, tx("Proyecciones", "Projections"), tx("En pausa por mantenimiento", "Paused for maintenance")) { model.showNotice(tx("Proyecciones está en pausa por mantenimiento.", "Projections is paused for maintenance.")) }
+                    NavRow(Icons.Rounded.Science, tx("Escenarios", "Scenarios"), tx("En pausa por mantenimiento", "Paused for maintenance")) { model.showNotice(tx("Escenarios está en pausa por mantenimiento.", "Scenarios is paused for maintenance.")) }
                 } else {
                     PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Timeline, tx("Proyecciones", "Projections"),
                         tx("Cómo se ven tus finanzas en 1 a 12 meses", "Your finances in 1 to 12 months"), nav, "projections")

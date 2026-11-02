@@ -13,10 +13,13 @@ import java.time.LocalDate
 object MonthReview {
     data class Card(val title: String, val lines: List<String>)
 
-    /** What was left: income minus spending and debt payments; null while income or spending is unknown. */
+    /**
+     * What was left: income minus spending and debt payments. The summary answers 0 for what was never
+     * registered, so a 0 is unknown here (as on Hoy): no movements don't prove there was no income or spending.
+     */
     fun left(summary: MonthlySummary): BigDecimal? {
-        val income = summary.income ?: return null
-        val expenses = summary.expenses ?: return null
+        val income = HomeToday.registered(summary.income) ?: return null
+        val expenses = HomeToday.registered(summary.expenses) ?: return null
         return income - expenses - (summary.debtPaid ?: BigDecimal.ZERO)
     }
 
