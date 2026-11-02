@@ -42,7 +42,7 @@ from backend.user_product.capture_dedupe import apply_capture_resolution
 from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.mail_sync_analytics import observe_mail_sync
 from backend.user_product.legacy_owner_mail import legacy_transaction_for_message, mark_legacy_duplicate
-from backend.user_product import mail_oauth, owner_mail_automation
+from backend.user_product import mail_oauth, owner_mail_automation, pending_conversion
 from backend.user_product.mail_copy import localized_parse_reason
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
@@ -664,6 +664,8 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             "category": candidate["category"],
         }
         values.update(corrections)
+        if pending_conversion.candidate_waits(conn, candidate, native_currency, values["transaction_type"], exchange_rate):
+            return _confirm_waiting_for_close(conn, candidate, values, native_currency, corrections)
         # First: an invalid amount or rate is a 422 here, before anything else reads it.
         money = transaction_amounts(native_currency, values["amount"], candidate.get("account_base_currency"), exchange_rate)
         original = {**candidate, "amount": native_amount}
@@ -693,6 +695,29 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
         conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
         conn.commit()
     return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
+
+
+def _confirm_waiting_for_close(conn, candidate: dict[str, Any], values: dict[str, Any], native_currency: str, corrections: dict[str, Any]) -> dict[str, Any]:
+    """Confirm an expense in the other currency without a rate: no transaction yet, it waits for the close."""
+    owner = owner_account_context(conn, candidate["account_id"], candidate["workspace_id"])
+    expense_id = pending_conversion.save_candidate_expense(conn, candidate, values, native_currency, owner=owner)
+    original = {**candidate, "amount": native_money(candidate)[1]}
+    corrected_fields = sorted(key for key, value in corrections.items() if _corrected(key, value, original.get(key)))
+    # The candidate keeps its row for cross-source matching: a statement of the same purchase is a duplicate of it.
+    from_original = native_currency != str(candidate.get("currency") or "CRC").upper()
+    conn.execute(
+        """UPDATE finva_email_candidates
+           SET transaction_date=%s,description=%s,amount=%s,original_amount=%s,transaction_type=%s,category=%s,
+               status='confirmed',reviewed_at=NOW(),corrected_fields=%s,updated_at=NOW(),
+               raw_payload=COALESCE(raw_payload,'{}'::jsonb)||jsonb_build_object('pending_expense_id',%s::bigint)
+           WHERE id=%s""",
+        (values["transaction_date"], values["description"].strip(), candidate["amount"] if from_original else values["amount"],
+         values["amount"] if from_original else candidate.get("original_amount"), values["transaction_type"],
+         normalize_category(values["category"], values["transaction_type"], owner=owner), corrected_fields, expense_id, candidate["id"]),
+    )
+    conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+    conn.commit()
+    return {"status": "confirmed", "candidate_id": candidate["id"], "transaction_id": None, "pending_expense_id": expense_id}
 
 
 def _google_subject(access_token: str | None, client_id: str) -> str | None:

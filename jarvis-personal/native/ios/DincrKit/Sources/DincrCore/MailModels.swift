@@ -238,6 +238,10 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
         return native != base && Self.convertible.contains(native) && Self.convertible.contains(base)
     }
 
+    /// An expense in the other currency: it can be confirmed as is, and it waits in that currency
+    /// for the close of its card (backend `pending_conversion.candidate_waits`). Anything else needs the rate.
+    public var waitsForClose: Bool { needsRate && transactionType == "expense" }
+
     /// The bank when it can be identified (its name, else the sender); nil otherwise (no invented logo).
     public var identifiedBank: BankBrand? { BankBrand.identify(bank) ?? BankBrand.identify(inText: sender) }
 

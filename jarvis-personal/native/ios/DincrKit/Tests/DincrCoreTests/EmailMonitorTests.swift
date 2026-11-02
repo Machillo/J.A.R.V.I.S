@@ -148,6 +148,10 @@ import Testing
     @Test func noticeMoneyUsesTheOriginalPairAndTheBackendDefaultBase() throws {
         let converted = try APIClient.decoder.decode(MailCandidate.self, from: Data(#"{"candidate_id":1,"amount":12700,"currency":"CRC","original_amount":25,"original_currency":"USD","account_base_currency":"CRC"}"#.utf8))
         #expect(converted.nativeCurrency == "USD" && converted.nativeAmount == 25 && converted.needsRate)
+        // A dollar expense waits for the close; dollar income still needs the rate.
+        let expense = try APIClient.decoder.decode(MailCandidate.self, from: Data(#"{"candidate_id":5,"amount":25,"currency":"USD","transaction_type":"expense"}"#.utf8))
+        let income = try APIClient.decoder.decode(MailCandidate.self, from: Data(#"{"candidate_id":6,"amount":25,"currency":"USD","transaction_type":"income"}"#.utf8))
+        #expect(expense.waitsForClose && !income.waitsForClose && income.needsRate)
         let noBase = try APIClient.decoder.decode(MailCandidate.self, from: Data(#"{"candidate_id":2,"amount":25,"currency":"USD"}"#.utf8))
         #expect(noBase.needsRate, "a missing base is CRC, like candidate_currency.py")
         let euro = try APIClient.decoder.decode(MailCandidate.self, from: Data(#"{"candidate_id":3,"amount":12,"currency":"EUR","account_base_currency":"CRC"}"#.utf8))
@@ -210,10 +214,18 @@ import Testing
         #expect(try await service.acceptCandidate(id: foreign.candidateId!).alreadyReviewed == true, "a rejected notice cannot become a transaction")
     }
 
-    @Test func aDollarNoticeNeedsTheUsersRate() async throws {
+    @Test func aDollarExpenseWaitsForTheCloseAndDollarIncomeNeedsTheRate() async throws {
+        let waiting = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero))
+        let notice = try #require(try await waiting.mailCandidates(pendingOnly: true).first { $0.waitsForClose })
+        let accepted = try await waiting.acceptCandidate(id: notice.candidateId!)
+        #expect(accepted.status == "confirmed" && accepted.transactionId == nil, "no transaction until the close")
+
         let service = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero))
         let dollar = try #require(try await service.mailCandidates(pendingOnly: true).first { $0.needsRate })
-        await #expect(throws: APIError.self) { _ = try await service.acceptCandidate(id: dollar.candidateId!) }
+        await #expect(throws: APIError.self) {
+            _ = try await service.correctCandidate(id: dollar.candidateId!, CandidateCorrection(transactionDate: "2026-09-01", description: "Tienda", amount: 25,
+                                                                                               transactionType: "income", category: "Otros", exchangeRate: nil))
+        }
         let saved = try await service.correctCandidate(id: dollar.candidateId!, CandidateCorrection(transactionDate: "2026-09-01", description: "Tienda", amount: 25,
                                                                                                   transactionType: "expense", category: "Compras", exchangeRate: Decimal(string: "507.5")!))
         #expect(saved.status == "confirmed")

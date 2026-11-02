@@ -441,6 +441,10 @@ struct CandidateCard: View {
                     Text(tx("Está en \(candidate.nativeCurrency ?? "otra moneda"), que DINCR no puede convertir. Solo podés descartarlo.",
                             "It’s in \(candidate.nativeCurrency ?? "another currency"), which DINCR can’t convert. You can only dismiss it."))
                         .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
+                } else if candidate.waitsForClose {
+                    Text(tx("Queda en \(candidate.nativeCurrency ?? "") hasta el corte de la tarjeta; ahí te pedimos el tipo de cambio.",
+                            "It stays in \(candidate.nativeCurrency ?? "") until the card’s cut; you’ll enter the rate then."))
+                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                 } else if candidate.needsRate {
                     Text(tx("Está en \(candidate.nativeCurrency ?? ""). Tocá Corregir e indicá tu tipo de cambio.", "It’s in \(candidate.nativeCurrency ?? ""). Tap Correct and enter your exchange rate."))
                         .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
@@ -450,7 +454,7 @@ struct CandidateCard: View {
                         .accessibilityIdentifier("candidate.note.\(candidate.candidateId ?? 0)")
                 }
                 HStack(spacing: DincrSpacing.s2) {
-                    if !candidate.needsRate && !candidate.cannotConvert {
+                    if (!candidate.needsRate || candidate.waitsForClose) && !candidate.cannotConvert {
                         Button(tx("Confirmar", "Confirm"), action: confirm).buttonStyle(.dincrPrimary(loading: busy))
                             .accessibilityIdentifier("mail.accept.\(candidate.candidateId ?? 0)")
                     }
@@ -495,7 +499,8 @@ struct CorrectionSheet: View {
                 }
                 if candidate.needsRate {
                     VStack(alignment: .leading) {
-                        Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label)
+                        Text(type == "expense" ? tx("Tipo de cambio (opcional: sin él, espera al corte)", "Exchange rate (optional: without it, it waits for the cut)")
+                                               : tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label)
                         TextField(tx("Tipo de cambio", "Exchange rate"), text: $rate, prompt: Text(model.moneyFormat.inputText(Decimal(string: "507.5")!)))
                             .keyboardType(.decimalPad).accessibilityIdentifier("correct.rate")
                     }
@@ -538,7 +543,8 @@ struct CorrectionSheet: View {
         guard !text.isEmpty else { error = tx("Escribí una descripción.", "Enter a description."); return }
         guard let value = CorrectionInput.amount(amount, separators: separators) else { error = model.moneyFormat.amountHint; return }
         var exchangeRate: Decimal?
-        if candidate.needsRate {
+        // Empty on an expense: it stays in dollars until the close.
+        if candidate.needsRate, !(type == "expense" && rate.trimmingCharacters(in: .whitespaces).isEmpty) {
             guard let parsed = CorrectionInput.rate(rate, separators: separators) else {
                 error = tx("Escribí cuántos colones vale 1 dólar.", "Enter how many colones 1 dollar is worth."); return
             }

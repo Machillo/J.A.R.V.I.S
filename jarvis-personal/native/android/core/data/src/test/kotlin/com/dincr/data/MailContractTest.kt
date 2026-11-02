@@ -83,6 +83,9 @@ class MailContractTest {
         val usd = MailCandidate(candidateId = 1, amount = BigDecimal("25"), currency = "USD", accountBaseCurrency = null, reviewStatus = "pending")
         assertTrue(usd.needsRate)
         assertFalse(usd.cannotConvert)
+        // A dollar expense waits for the close; dollar income still needs the rate.
+        assertTrue(usd.copy(transactionType = "expense").waitsForClose)
+        assertFalse(usd.copy(transactionType = "income").waitsForClose)
         val crc = MailCandidate(candidateId = 2, amount = BigDecimal("100"), currency = "CRC", accountBaseCurrency = null, reviewStatus = "pending")
         assertFalse(crc.needsRate)
         assertFalse(crc.cannotConvert)

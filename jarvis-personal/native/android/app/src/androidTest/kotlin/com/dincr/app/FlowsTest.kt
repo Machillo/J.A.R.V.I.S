@@ -323,8 +323,8 @@ class FlowsTest {
         assertTrue(compose.onAllNodes(hasText(tx("Buscar avisos nuevos", "Check for new notices")), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
         click(tx("Confirmar", "Confirm"))
         waitForText(tx("Movimiento guardado.", "Transaction saved."))
-        // The dollar notice cannot be confirmed as is: it needs the user's rate.
-        waitForText(tx("tocá Corregir e indicá tu tipo de cambio", "tap Correct and enter your exchange rate"), substring = true)
+        // The dollar expense is confirmed as it is: it waits in dollars for the card's cut.
+        waitForText(tx("hasta el corte de la tarjeta", "until the card’s cut"), substring = true)
     }
 
     @Test fun theOwnerReadsMailFromPerfil() {

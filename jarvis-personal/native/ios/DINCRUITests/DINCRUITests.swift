@@ -285,8 +285,8 @@ final class DINCRUITests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(app.descendants(matching: .any)["mail.notice"].waitForExistence(timeout: 10))
         XCTAssertTrue(confirm.waitForNonExistence(timeout: 10), "a reviewed notice leaves the pending list")
-        // A dollar notice cannot be confirmed as detected: it asks for the user's rate.
-        XCTAssertFalse(app.buttons["mail.accept.22"].exists)
+        // A dollar expense is confirmed as it is: it waits in dollars for the card's cut.
+        XCTAssertTrue(app.buttons["mail.accept.22"].exists)
         XCTAssertTrue(app.buttons["mail.correct.22"].exists)
     }
 }

@@ -803,6 +803,16 @@ class FakeBackend(
                 val action = segments.getOrNull(5)
                 when {
                     action == "reject" -> { candidates[index] = candidate.copy(reviewStatus = "rejected"); ok(CandidateReviewResult("rejected", id)) }
+                    // Like `pending_conversion.candidate_waits`: no transaction, a pending expense until the close.
+                    action == "accept" && candidate.needsRate && text("exchange_rate") == null && (text("transaction_type") ?: candidate.transactionType) == "expense" -> {
+                        candidates[index] = candidate.copy(reviewStatus = "confirmed")
+                        val sid = id()
+                        val typed = text("amount")?.let(::BigDecimal) ?: candidate.nativeAmount ?: BigDecimal.ZERO
+                        movements += Movement("expense:$sid", sid, "expense", text("transaction_date") ?: candidate.transactionDate ?: today.toString(), text("description") ?: candidate.description,
+                            typed, "expense", text("category") ?: candidate.category, "", true, originalAmount = typed, originalCurrency = candidate.nativeCurrency,
+                            financialAccountId = candidate.financialAccountId)
+                        ok(CandidateReviewResult("confirmed", id, null))
+                    }
                     action == "accept" && method == "POST" && candidate.needsRate -> error(422, "Este aviso está en otra moneda. Tocá Corregir e indicá el tipo de cambio.")
                     action == "accept" -> {
                         if (method == "PUT" && candidate.needsRate && text("exchange_rate") == null) return error(422, "Indicá el tipo de cambio.")
