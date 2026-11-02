@@ -11,6 +11,10 @@ first (the "universe": everything recorded feeds the plan):
   Salvavidas by itself, so the distribution tells the Owner only what to move on top of it. It
   comes out of the Salvavidas share first, then out of free spending, investment and the extra
   for debt; an urgent goal keeps its share;
+- the exact amount (what the Owner has left, distributed on the 1st with the month before's leftover)
+  is distributed whole: the Salvavidas already got that month's automatic contributions (4 or 5
+  paydays), so they come out of the Salvavidas share only and go to the debt attack
+  (``last_month_automatic_savings``, ``move_share``), never out of the amount;
 - the locked savings blocks' contributions still to come in the cycle (``owner_debt_block_store``):
   that money is the debt attack, paid into the debt when the block matures, so it comes out of the
   extra for debt first, then out of the other shares; an urgent goal keeps its share.
@@ -78,6 +82,29 @@ def automatic_savings(salvavidas: dict[str, Any], cycle_report: dict[str, Any], 
     dates = salvavidas_plan.scheduled_dates(plan, today - timedelta(days=1), end)
     return {"amount": round(len(dates) * plan["amount"], 2), "count": len(dates),
             "per_contribution": plan["amount"], "frequency": plan["frequency"]}
+
+
+def last_month_automatic_savings(salvavidas: dict[str, Any], today: date) -> dict[str, Any]:
+    """The Salvavidas automatic contributions made in the calendar month before ``today``'s: the month
+    whose leftover the Owner distributes on the 1st (4 or 5 paydays)."""
+    plan = salvavidas_plan.normalize_plan(salvavidas.get("auto_contribution"))
+    first = today.replace(day=1)
+    last_day = first - timedelta(days=1)
+    month_start = last_day.replace(day=1)
+    if not plan or not plan["enabled"]:
+        return {"amount": 0.0, "count": 0, "per_contribution": 0.0, "frequency": None, "month": month_start.strftime("%Y-%m")}
+    dates = salvavidas_plan.scheduled_dates(plan, month_start - timedelta(days=1), last_day)
+    return {"amount": round(len(dates) * plan["amount"], 2), "count": len(dates), "per_contribution": plan["amount"],
+            "frequency": plan["frequency"], "month": month_start.strftime("%Y-%m")}
+
+
+def move_share(amounts: dict[str, float], amount: float, source: str, target: str) -> tuple[dict[str, float], float]:
+    """Moves up to ``amount`` from one share to another; the total stays the same."""
+    result = dict(amounts)
+    moved = round(min(max(_f(amount), 0.0), max(_f(result.get(source)), 0.0)), 2)
+    result[source] = round(_f(result.get(source)) - moved, 2)
+    result[target] = round(_f(result.get(target)) + moved, 2)
+    return result, moved
 
 
 def block_savings(blocks: list[dict[str, Any]], cycle_report: dict[str, Any], today: date) -> dict[str, Any]:

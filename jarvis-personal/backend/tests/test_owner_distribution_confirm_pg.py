@@ -543,3 +543,28 @@ def test_a_confirmed_extra_payment_waits_for_what_the_bank_did(db):
     assert set(waiting) == {str(target["debt_id"]) for target in targets}
     assert all(item["source"] == "owner_distribution" and item["remind_on"] is None for item in waiting.values())
     assert _as("owner", debt_after_extra.list_pending, ws=OTHER)["items"] == {}
+
+def test_a_distribution_with_an_automatic_saving_can_be_confirmed(db, monkeypatch):
+    """The Owner's case (₡47 000 on 1 November, ₡2 500 saved automatically on 29 October): CONFIRMAR
+    refused every exact amount while an automatic saving was on ("no suma exactamente"). The amount is
+    distributed whole, the Salvavidas share goes down by October's automatic saving and that money
+    goes to the debts; the Salvavidas deposit and the debt payments are recorded."""
+    class Today(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 11, 1)
+    monkeypatch.setattr(sd, "date", Today)
+    monkeypatch.setattr(sd, "_safe_cycle_report", lambda: {"income": {"expected_total": 900_000, "received_from_transactions": 0},
+                                                           "expenses": {"spending_only": 0}, "debts": {"payments_current_period": 0},
+                                                           "cycle": {"start": "2026-10-28", "end": "2026-11-10"}})
+    db.execute("""UPDATE user_preferences SET preference_value = preference_value || %s::jsonb
+                  WHERE workspace_id=%s AND preference_key='salvavidas'""",
+               ('{"auto_contribution": {"enabled": true, "amount": 2500, "frequency": "weekly", "start_date": "2026-10-29"}}', WS))
+    preview = _preview("47000")
+    strategy = preview["strategy"]
+    assert strategy["automatic_savings"]["amount"] == 2_500, "Thursday 29 October, the month before"
+    assert sum(_cents(item["amount"]) for item in strategy["allocation_items"]) == _cents(47_000), "the whole amount"
+    result = _confirm("47000", "confirm-automatic-0001", _items(preview))
+    assert result["status"] == "applied"
+    actions = {item["action"] for item in result["confirmation"]["applied"]}
+    assert "debt_extra_payment" in actions
