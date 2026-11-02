@@ -1058,6 +1058,18 @@ def _automatic_savings_warnings(automatic: dict[str, Any], taken: float) -> list
         f"{amount} of this cycle already go to your emergency fund by themselves (automatic saving of {each}); they are already taken out of this distribution.")}]
 
 
+def _automatic_moved_warnings(automatic: dict[str, Any], moved: float) -> list[dict[str, str]]:
+    """Says that the Salvavidas share of an exact amount went down by the month's automatic savings."""
+    if moved <= 0:
+        return []
+    amount, count = owner_commitments.colones(automatic.get("amount")), int(_f(automatic.get("count")))
+    return [{"code": "automatic_savings_received", "message": tx(
+        f"Tu Salvavidas ya recibió {amount} solos el mes pasado ({count} aporte{'s' if count != 1 else ''} automático{'s' if count != 1 else ''}); "
+        f"{owner_commitments.colones(moved)} de su parte van a tus deudas.",
+        f"Your emergency fund already got {amount} by itself last month ({count} automatic contribution{'s' if count != 1 else ''}); "
+        f"{owner_commitments.colones(moved)} of its share go to your debts.")}]
+
+
 def _block_savings_warnings(taken: float) -> list[dict[str, str]]:
     """Says that the locked savings blocks' contributions are already out of the distribution."""
     if taken <= 0:
@@ -1075,6 +1087,22 @@ def _stored_debt_blocks() -> list[dict[str, Any]]:
     except Exception:
         logger.warning("debt_savings_blocks_unavailable")
         return []
+
+
+def _move_automatic(director: dict[str, Any], amount: float, target: str) -> tuple[dict[str, Any], float]:
+    """The exact distribution after the automatic Salvavidas money already received is moved from its
+    share to ``target``; the base and the total stay the amount typed."""
+    if amount <= 0:
+        return director, 0.0
+    amounts, moved = owner_commitments.move_share(director.get("allocation_amounts") or {}, amount, "fondo_de_emergencia", target)
+    if moved <= 0:
+        return director, 0.0
+    base = _f(director.get("allocation_base_amount"))
+    percentages, items = _allocation_from_amounts(amounts, base, exact=True)
+    shown = {key: next((item["amount"] for item in items if item["key"] == key), 0.0) for key in amounts}
+    return {**director, "allocation_amounts": shown, "allocation": percentages, "allocation_items": items,
+            "safe_to_spend": shown.get("vida_controlada", 0.0), "investment_recommended": shown.get("inversion", 0.0),
+            "investment_target": shown.get("inversion", 0.0)}, moved
 
 
 def _absorb_automatic(director: dict[str, Any], amount: float, order: tuple[str, ...], *, exact: bool) -> tuple[dict[str, Any], float]:
@@ -1210,12 +1238,21 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
     # The Salvavidas automatic contributions and the locked savings blocks' contributions still to
     # come go by themselves: the distribution says only what to move on top of them
     # (owner_commitments.absorb).
-    automatic = owner_commitments.automatic_savings(salvavidas, cycle_report, date.today())
-    director, automatic_taken = _absorb_automatic(director, automatic["amount"], owner_commitments.ABSORB_ORDER,
-                                                  exact=manual_available is not None)
-    blocks = owner_commitments.block_savings(_stored_debt_blocks(), cycle_report, date.today())
-    director, blocks_taken = _absorb_automatic(director, blocks["amount"], owner_commitments.BLOCK_ABSORB_ORDER,
-                                               exact=manual_available is not None)
+    if manual_available is None:
+        automatic = owner_commitments.automatic_savings(salvavidas, cycle_report, date.today())
+        director, automatic_taken = _absorb_automatic(director, automatic["amount"], owner_commitments.ABSORB_ORDER, exact=False)
+        blocks = owner_commitments.block_savings(_stored_debt_blocks(), cycle_report, date.today())
+        director, blocks_taken = _absorb_automatic(director, blocks["amount"], owner_commitments.BLOCK_ABSORB_ORDER, exact=False)
+        automatic_moved = 0.0
+    else:
+        # The exact amount is distributed whole (the leftover of the month before, on the 1st): the
+        # Salvavidas already got that month's automatic contributions, so its share goes down by them
+        # and that money goes to the debt attack (to free money when there is no debt).
+        automatic = owner_commitments.last_month_automatic_savings(salvavidas, date.today())
+        target = "ataque_de_deuda" if debts else "vida_controlada"
+        director, automatic_moved = _move_automatic(director, automatic["amount"], target)
+        automatic_taken, blocks_taken = 0.0, 0.0
+        blocks = {"amount": 0.0, "count": 0, "blocks": []}
     allocation = director.get("allocation") or {}
     allocation_amounts = director.get("allocation_amounts") or {}
     allocation_items = director.get("allocation_items") or []
@@ -1376,8 +1413,10 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
         "distribution_source": "manual_amount" if manual_available is not None else "estimate",
         "distribution_warnings": _distribution_warnings(cycle_report, salvavidas, manual=manual_available is not None)
-        + _automatic_savings_warnings(automatic, automatic_taken) + _block_savings_warnings(blocks_taken),
-        "automatic_savings": {**automatic, "taken_from_distribution": round(automatic_taken, 2)},
+        + _automatic_savings_warnings(automatic, automatic_taken) + _block_savings_warnings(blocks_taken)
+        + _automatic_moved_warnings(automatic, automatic_moved),
+        "automatic_savings": {**automatic, "taken_from_distribution": round(automatic_taken, 2),
+                              "moved_from_salvavidas": round(automatic_moved, 2)},
         "debt_savings_blocks": {**blocks, "taken_from_distribution": round(blocks_taken, 2)},
         "manual_expenses": manual,
         # The exact amount is the base as typed (no deduction lines); the estimate keeps its formula.
