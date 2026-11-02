@@ -188,6 +188,8 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let exchangeRate: Decimal?
     /// The own account or card a manual expense says paid it; nil = not told (never inferred).
     public let financialAccountId: Int?
+    /// The Owner's list only: what the row counts as in his ledger (`owner_ledger.classify_movement`).
+    public var countsIn: String? = nil
 
     public var id: String { movementId }
     /// `YYYY-MM-DD` or nil when the backend has no usable date.

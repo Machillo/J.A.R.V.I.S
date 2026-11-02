@@ -64,7 +64,11 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
+import com.dincr.data.MoneyFormat
 import com.dincr.data.MovementMonth
+import com.dincr.design.DincrCard
+import java.math.BigDecimal
+import com.dincr.data.MovementTotals
 import com.dincr.data.SearchText
 import com.dincr.data.Movement
 import com.dincr.data.PendingConversion
@@ -84,6 +88,29 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 enum class MovementFilter { ALL, INCOME, EXPENSE, DEBT }
+
+/** What the rows on screen add up to: both sides and the result, or the one the filter asks for. */
+@Composable
+private fun MovementTotalsCard(totals: MovementTotals, filter: MovementFilter, waiting: Boolean) {
+    val income = filter == MovementFilter.INCOME
+    val all = filter == MovementFilter.ALL
+    DincrCard(Modifier.testTag("movements.totals")) {
+        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+            if (all || income) TotalLine(tx("Ingresos registrados", "Recorded income"), totals.income, "income", MoneyFormat.Sign.INCOME)
+            if (!income) TotalLine(tx("Gastos registrados", "Recorded expenses"), totals.expenses, "expenses", MoneyFormat.Sign.EXPENSE)
+            if (!income) totals.debtPaid?.let { TotalLine(tx("Pagado a deudas", "Paid to debts"), it, "debtPaid", MoneyFormat.Sign.EXPENSE) }
+            if (all) totals.result?.let { TotalLine(tx("Resultado", "Result"), it, "result") }
+            if (!income && waiting) Caption(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
+        }
+    }
+}
+
+@Composable
+private fun TotalLine(label: String, amount: BigDecimal?, id: String, sign: MoneyFormat.Sign = MoneyFormat.Sign.NONE) {
+    androidx.compose.foundation.layout.Box(Modifier.testTag("movements.totals.$id")) {
+        if (amount != null) AmountLine(label, amount, sign = sign) else InfoLine(label, tx("Sin registrar", "Not recorded"))
+    }
+}
 
 /** Debt-related rows, the same rule as the Capacitor filter (`movementPreview.js`). */
 private val DEBT_WORDS = Regex("deud|debt|pr[eé]stamo|loan|cuota", RegexOption.IGNORE_CASE)
@@ -186,6 +213,11 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                 MovementFilter.DEBT -> DEBT_WORDS.containsMatchIn("${it.category.orEmpty()} ${it.description.orEmpty()}")
                             }
                             kindMatches && SearchText.matches(query, listOf(it.description, it.category))
+                        }
+                        if (visible.isNotEmpty()) item {
+                            Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s3)) {
+                                MovementTotalsCard(MovementTotals.of(visible), filter, pending.items.isNotEmpty())
+                            }
                         }
                         if (visible.isEmpty()) item {
                             Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) {
