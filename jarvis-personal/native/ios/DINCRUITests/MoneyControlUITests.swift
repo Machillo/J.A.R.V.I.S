@@ -30,7 +30,8 @@ final class MoneyControlUITests: XCTestCase {
     }
 
     private func openMoneyControl(_ app: XCUIApplication) {
-        tap("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        tap("owner.home.jarvis", in: app)
         tap("jarvis.section.money_control", in: app)
         XCTAssertTrue(element("money.summary", in: app).waitForExistence(timeout: 10))
     }

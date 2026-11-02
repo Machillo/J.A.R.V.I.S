@@ -35,7 +35,7 @@ final class PrivacyCover {
         var body: some View {
             ZStack {
                 DincrColor.bg.ignoresSafeArea()
-                Image(systemName: "lock.fill").font(.system(size: 40)).foregroundStyle(DincrColor.tint)
+                Image(systemName: "lock.fill").font(.system(size: 40)).foregroundStyle(.dincrTint)
             }
             .accessibilityHidden(true)
         }

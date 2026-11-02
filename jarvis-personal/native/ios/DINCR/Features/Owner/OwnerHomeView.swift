@@ -4,8 +4,7 @@ import SwiftUI
 
 /// The Owner's "Hoy" (DINCR Owner; UX-6). The Owner is Kenneth's identity, not a plan: JARVIS comes
 /// first, as it historically did, and the financial blocks follow.
-/// 0. JARVIS — who and when (greeting), the JARVIS mark, Chat / Agenda / Todo JARVIS and the next
-///    agenda events;
+/// 0. JARVIS — who and when (greeting), the one entry to JARVIS and the next agenda events;
 /// 1–4. the same four blocks as the public Hoy (Estado de hoy, Para atender, Qué sigue, Accesos
 ///    rápidos), from the command center while `vip_intelligence` is on (Basic's sources otherwise).
 /// Read-only: opening it never writes. The money and the agenda load on their own, so a failing
@@ -61,14 +60,6 @@ struct OwnerHomeView: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("owner.home.greeting")
-            Spacer(minLength: DincrSpacing.s2)
-            NavigationLink(value: ProfileRoute.jarvisSection(.chat)) {
-                JarvisMark(size: 52)
-            }
-            .buttonStyle(.plain)
-            .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel(tx("Abrir JARVIS", "Open JARVIS"))
-            .accessibilityIdentifier("owner.home.jarvis.mark")
         }
         .padding(.top, DincrSpacing.s2)
     }
@@ -121,37 +112,23 @@ struct OwnerHomeView: View {
                     .accessibilityIdentifier("owner.home.agenda.empty")
                 }
                 ForEach(Array(next.enumerated()), id: \.element.id) { index, event in
-                    if index > 0 { OwnerDivider() }
+                    if index > 0 { OwnerDivider(inset: 0) }
                     OwnerAgendaRow(event: event)
                 }
             }
         }
     }
 
-    // MARK: 0. JARVIS — chat, agenda, everything
+    // MARK: 0. JARVIS — the one way in
 
-    @ViewBuilder
     private var jarvisSection: some View {
-        OwnerSectionHeader("JARVIS")
         OwnerGroup {
-            NavigationLink(value: ProfileRoute.jarvisSection(.chat)) {
-                OwnerRow(symbol: "bubble.left.and.text.bubble.right", title: tx("Chat", "Chat"),
-                         detail: tx("Horas extra, VGH, feriados, bonos y tu agenda", "Overtime, VGH, holidays, bonuses and your calendar"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.jarvis.chat")
-            OwnerDivider()
-            NavigationLink(value: ProfileRoute.jarvisSection(.calendar)) {
-                OwnerRow(symbol: "calendar", title: tx("Agenda", "Calendar"), detail: tx("Tus eventos y recordatorios", "Your events and reminders"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.jarvis.agenda")
-            OwnerDivider()
             NavigationLink(value: ProfileRoute.jarvis) {
-                OwnerRow(symbol: "square.grid.2x2", title: tx("Todo JARVIS", "All of JARVIS"), detail: tx("Tu espacio personal", "Your personal space"))
+                OwnerRow(symbol: "sparkles", title: "JARVIS",
+                         detail: tx("Chat, agenda, estrategia, mi dinero y todo lo demás", "Chat, calendar, strategy, my money and everything else"))
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.jarvis.hub")
+            .accessibilityIdentifier("owner.home.jarvis")
         }
     }
 
@@ -186,22 +163,17 @@ struct OwnerHomeView: View {
     }
 }
 
-/// One agenda event: its day ("Hoy", "Mañana" or the date) with the time when it has one, and its title.
+/// One agenda event: its title, and its day ("Hoy", "Mañana" or the date) with the time when it has one.
 struct OwnerAgendaRow: View {
     let event: JarvisEvent
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DincrSpacing.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(JarvisAgendaLabel.day(event)).font(DincrFont.caption).foregroundStyle(OwnerColor.textMuted)
-                Text(event.time ?? tx("Todo el día", "All day"))
-                    .font(DincrFont.bodySmall.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(event.time == nil ? OwnerColor.text2 : OwnerColor.accent)
-            }
-            .frame(minWidth: 72, alignment: .leading)
+        VStack(alignment: .leading, spacing: 2) {
             Text(event.title).font(DincrFont.body).foregroundStyle(OwnerColor.text)
-            Spacer(minLength: 0)
+            Text("\(JarvisAgendaLabel.day(event)) · \(event.time ?? tx("Todo el día", "All day"))")
+                .font(DincrFont.bodySmall).foregroundStyle(OwnerColor.text2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, DincrSpacing.s3)
         .frame(minHeight: 44)
         .accessibilityElement(children: .combine)

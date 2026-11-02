@@ -15,18 +15,18 @@ struct LoginView: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s6) {
                 HStack(spacing: DincrSpacing.s3) {
                     BrandMark(size: 44)
-                    Text("DINCR").font(DincrFont.title2).tracking(2).foregroundStyle(DincrColor.text)
+                    Text("DINCR").font(DincrFont.title2).tracking(2).foregroundStyle(.dincrText)
                 }
                 .padding(.top, DincrSpacing.s8)
 
                 VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                     Text(tx("Tu dinero, con propósito", "Your money, with purpose"))
                         .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(DincrColor.text)
+                        .foregroundStyle(.dincrText)
                         .accessibilityAddTraits(.isHeader)
                     Text(tx("Ordená tus ingresos, gastos, deudas y metas, y sabé qué sigue.", "Organize your income, expenses, debts and goals, and know what comes next."))
                         .font(DincrFont.body)
-                        .foregroundStyle(DincrColor.text2)
+                        .foregroundStyle(.dincrText2)
                 }
 
                 VStack(spacing: DincrSpacing.s3) {
@@ -45,7 +45,7 @@ struct LoginView: View {
                     Image(systemName: "lock.shield")
                 }
                 .font(DincrFont.bodySmall)
-                .foregroundStyle(DincrColor.textMuted)
+                .foregroundStyle(.dincrTextMuted)
 
                 if model.environment.isFixtures {
                     StatusBanner(tone: .info, title: tx("Modo de demostración", "Demo mode"), message: tx("Datos de ejemplo. No se conecta a ninguna cuenta real.", "Sample data. Not connected to any real account."))

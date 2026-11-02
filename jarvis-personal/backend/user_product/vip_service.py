@@ -203,7 +203,7 @@ def get_vip_command_center() -> dict:
         # The Owner's month is his card statement (owner_ledger): his salary is known before it
         # arrives, and what he spends is on the statement, not in a declared estimate.
         monthly_income = owner_cycle["income"]
-        known_commitments = owner_cycle["expenses"] + debt_minimums
+        known_commitments = owner_cycle["expenses"] + owner_ledger.payments_outside_the_card(debts)
     margin = round(monthly_income - known_commitments, 2)
     emergency_gap = max(emergency_target - savings, 0)
     all_assets = round(sum(_money(row["current_balance"]) for row in accounts if row.get("include_in_net_worth") and row.get("currency") == "CRC"), 2)

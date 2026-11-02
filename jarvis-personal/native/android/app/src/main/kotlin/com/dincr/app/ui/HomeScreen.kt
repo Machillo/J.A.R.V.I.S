@@ -19,8 +19,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.Forum
-import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.SouthWest
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -174,18 +173,9 @@ private fun OwnerJarvisSpace(name: String, agenda: LoadHandle<List<JarvisEvent>>
         Text(greeting, style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text2)
         if (name.isNotEmpty()) Text("$name.", style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
     }
-    SectionTitle("JARVIS")
     DincrCard {
-        Column {
-            Box(Modifier.testTag("owner.home.jarvis.chat")) {
-                NavRow(Icons.Rounded.Forum, tx("Chat", "Chat"), tx("Horas extra, VGH, feriados, bonos y tu agenda", "Overtime, VGH, holidays, bonuses and your calendar")) { nav.push("jarvis/chat") }
-            }
-            Box(Modifier.testTag("owner.home.jarvis.agenda")) {
-                NavRow(Icons.Rounded.CalendarMonth, tx("Agenda", "Calendar"), tx("Tus eventos y recordatorios", "Your events and reminders")) { nav.push("jarvis/calendar") }
-            }
-            Box(Modifier.testTag("owner.home.jarvis.hub")) {
-                NavRow(Icons.Rounded.GridView, tx("Todo JARVIS", "All of JARVIS"), tx("Tu espacio personal", "Your personal space")) { nav.open("jarvis") }
-            }
+        Box(Modifier.testTag("owner.home.jarvis")) {
+            NavRow(Icons.Rounded.AutoAwesome, "JARVIS", tx("Chat, agenda, estrategia, mi dinero y todo lo demás", "Chat, calendar, strategy, my money and everything else")) { nav.open("jarvis") }
         }
     }
     SectionTitle(tx("Próximos", "Coming up"))

@@ -123,27 +123,26 @@ class HomeTodayUiTest {
     @Test fun ownerHasJarvisFirstThenTheFinancialBlocks() {
         launch("free", role = "owner")
         waitForTag("owner.home.greeting")
-        waitForTag("owner.home.jarvis.chat")
+        waitForTag("owner.home.jarvis")
         waitForTag("home.status")
-        val jarvis = tags("owner.home.jarvis.chat").first().positionInRoot.y
+        val jarvis = tags("owner.home.jarvis").first().positionInRoot.y
         val status = tags("home.status").first().positionInRoot.y
         assertTrue("JARVIS comes first", jarvis < status)
-        waitForTag("owner.home.jarvis.agenda")
-        waitForTag("owner.home.jarvis.hub")
+        assertTrue("one way into JARVIS", tags("owner.home.jarvis.chat").isEmpty())
         waitForTag("owner.home")
         assertFalse("the Owner never gets the public Hoy", tags("home.today").isNotEmpty())
         assertQuickAccess()
         // The JARVIS row inside the tagged container is what takes the tap.
-        compose.onAllNodes(hasAnyAncestor(hasTestTag("owner.home.jarvis.chat")) and hasClickAction()).onFirst()
+        compose.onAllNodes(hasAnyAncestor(hasTestTag("owner.home.jarvis")) and hasClickAction()).onFirst()
             .performSemanticsAction(SemanticsActions.OnClick)
-        waitForTag("jarvis.chat.input")
+        waitForText(tx("Chat", "Chat"))
     }
 
     @Test fun otherAccountsNeverSeeTheOwnersJarvisSpace() {
         for (plan in listOf("free", "basic", "vip")) {
             launch(plan)
             waitForTag("home.status")
-            assertTrue(plan, tags("owner.home.greeting").isEmpty() && tags("owner.home.jarvis.chat").isEmpty() && tags("owner.home").isEmpty())
+            assertTrue(plan, tags("owner.home.greeting").isEmpty() && tags("owner.home.jarvis").isEmpty() && tags("owner.home").isEmpty())
         }
     }
 }

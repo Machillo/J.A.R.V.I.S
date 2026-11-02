@@ -3,48 +3,65 @@ import SwiftUI
 /// DINCR Owner identity (the single Owner account and its personal layer, JARVIS).
 ///
 /// The Owner is not a plan: DESIGN.md's "plans don't repaint the app" still holds for Free, Basic and
-/// VIP. The Owner's screens keep DINCR's structure, type and components and change only the scene:
-/// a deep petrol background, blue-tinted surfaces with a hairline border, and a cyan accent (DESIGN.md
-/// → Owner identity). Light and dark both exist, because DINCR follows the system appearance; the
-/// light values are derived from the dark design and keep WCAG AA (≥ 4.5:1) for text on every
-/// Owner surface.
+/// VIP. The Owner's screens keep DINCR's structure, type and components and change only the scene: the
+/// platform's own look, a flat grouped background, plain surfaces without borders and one blue accent
+/// (DESIGN.md → Owner identity). Light and dark both exist, because DINCR follows the system
+/// appearance, and keep WCAG AA (≥ 4.5:1) for text on every Owner surface.
 ///
 /// Screens never read these directly to decide *whether* they are the Owner's: the root sets
 /// `dincrOwnerAppearance` from the server role, and the shared modifiers and components read it.
 public enum OwnerColor {
-    /// Background gradient stops: petrol at the top centre, almost black at the edges (dark).
-    public static let backgroundCenter = Color(light: 0xF6FAFD, dark: 0x041C30)
-    public static let backgroundMiddle = Color(light: 0xF0F6FA, dark: 0x021221)
-    public static let backgroundEdge = Color(light: 0xEAF1F7, dark: 0x000306)
-    /// Cards and grouped rows (the design's rgba(9,23,38,0.96), opaque for legibility).
-    public static let surface = Color(light: 0xFFFFFF, dark: 0x091726)
+    /// The screen background: one flat color (the stops stay so both apps read the same tokens).
+    public static let backgroundCenter = Color(light: 0xF2F2F7, dark: 0x000000)
+    public static let backgroundMiddle = Color(light: 0xF2F2F7, dark: 0x000000)
+    public static let backgroundEdge = Color(light: 0xF2F2F7, dark: 0x000000)
+    /// Cards and grouped rows.
+    public static let surface = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
     /// Nested regions inside a surface: icon wells, fields.
-    public static let surface2 = Color(light: 0xEAF2F8, dark: 0x0D2135)
+    public static let surface2 = Color(light: 0xEFEFF4, dark: 0x2C2C2E)
     /// Hairline around Owner surfaces (decorative only; never the only boundary of a control).
-    public static let border = Color(light: 0xD3E2EE, dark: 0x123858)
+    public static let border = Color(light: 0xD1D1D6, dark: 0x38383A)
     /// The Owner accent: actions, links, selection, JARVIS.
-    public static let accent = Color(light: 0x0068A3, dark: 0x1FB8FF)
+    public static let accent = Color(light: 0x0066CC, dark: 0x2997FF)
     /// Pressed / active state of the accent.
-    public static let accentActive = Color(light: 0x00598C, dark: 0x1AD9FF)
-    public static let onAccent = Color(light: 0xFFFFFF, dark: 0x021221)
+    public static let accentActive = Color(light: 0x0055AA, dark: 0x64B0FF)
+    public static let onAccent = Color(light: 0xFFFFFF, dark: 0x000000)
     /// Tonal container of the accent: secondary buttons, quick actions, icon wells.
-    public static let accentContainer = Color(light: 0xDDF0FB, dark: 0x0D344D)
-    public static let onAccentContainer = Color(light: 0x00405F, dark: 0xBDEBFF)
-    public static let positive = Color(light: 0x08734F, dark: 0x1FEBAB)
-    public static let text = Color(light: 0x0B1526, dark: 0xF2FAFF)
-    public static let text2 = Color(light: 0x3F5368, dark: 0x87A6BF)
-    public static let textMuted = Color(light: 0x52677D, dark: 0x7A9CB5)
+    public static let accentContainer = Color(light: 0xE3EFFC, dark: 0x0B2A4A)
+    public static let onAccentContainer = Color(light: 0x003D7A, dark: 0xBFDFFF)
+    public static let positive = Color(light: 0x08734F, dark: 0x30D158)
+    public static let text = Color(light: 0x1C1C1E, dark: 0xF5F5F7)
+    public static let text2 = Color(light: 0x4F4F55, dark: 0xAEAEB2)
+    public static let textMuted = Color(light: 0x636366, dark: 0xA1A1A6)
     /// Chart series beyond income/expense. Color always repeats a meaning that is also in text.
-    public static let chartCyan = Color(light: 0x0068A3, dark: 0x1FB8FF)
-    public static let chartGreen = Color(light: 0x08734F, dark: 0x1FEBAB)
+    public static let chartCyan = Color(light: 0x0066CC, dark: 0x2997FF)
+    public static let chartGreen = Color(light: 0x08734F, dark: 0x30D158)
     public static let chartOrange = Color(light: 0xB4501F, dark: 0xFF855C)
     public static let chartPurple = Color(light: 0x7A45C2, dark: 0xB078F2)
 }
 
-/// Owner shapes: one card radius, one control radius (the design's 22 / 18).
+/// A role of the shared screens that follows the root's appearance: the Owner's scene below the Owner
+/// root, DINCR's own colors everywhere else, so a shared screen needs no Owner branch of its own.
+public struct DincrRoleStyle: ShapeStyle {
+    let regular: Color
+    let owner: Color
+
+    public func resolve(in environment: EnvironmentValues) -> Color.Resolved {
+        (environment.dincrOwnerAppearance ? owner : regular).resolve(in: environment)
+    }
+}
+
+public extension ShapeStyle where Self == DincrRoleStyle {
+    static var dincrText: DincrRoleStyle { DincrRoleStyle(regular: DincrColor.text, owner: OwnerColor.text) }
+    static var dincrText2: DincrRoleStyle { DincrRoleStyle(regular: DincrColor.text2, owner: OwnerColor.text2) }
+    static var dincrTextMuted: DincrRoleStyle { DincrRoleStyle(regular: DincrColor.textMuted, owner: OwnerColor.textMuted) }
+    static var dincrTint: DincrRoleStyle { DincrRoleStyle(regular: DincrColor.tint, owner: OwnerColor.accent) }
+}
+
+/// Owner shapes: one card radius, one control radius.
 public enum OwnerRadius {
-    public static let card: CGFloat = 22
-    public static let control: CGFloat = 18
+    public static let card: CGFloat = 16
+    public static let control: CGFloat = 12
 }
 
 private struct OwnerAppearanceKey: EnvironmentKey {
@@ -60,22 +77,12 @@ public extension EnvironmentValues {
     }
 }
 
-/// The Owner's screen background: a quiet radial from petrol to near black (dark) or from white to a
-/// pale blue (light). With Increase Contrast it is a single flat color.
+/// The Owner's screen background: one flat color, in both schemes.
 public struct OwnerBackground: View {
-    @Environment(\.colorSchemeContrast) private var contrast
-
     public init() {}
 
     public var body: some View {
-        if contrast == .increased {
-            OwnerColor.backgroundMiddle
-        } else {
-            RadialGradient(
-                colors: [OwnerColor.backgroundCenter, OwnerColor.backgroundMiddle, OwnerColor.backgroundEdge],
-                center: UnitPoint(x: 0.5, y: 0), startRadius: 0, endRadius: 900
-            )
-        }
+        OwnerColor.backgroundMiddle
     }
 }
 
@@ -123,19 +130,27 @@ public struct OwnerGroup<Content: View>: View {
             .padding(.vertical, DincrSpacing.s1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(OwnerColor.surface, in: RoundedRectangle(cornerRadius: OwnerRadius.card, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: OwnerRadius.card, style: .continuous).strokeBorder(OwnerColor.border, lineWidth: 1))
     }
 }
 
-/// The separator between rows of an `OwnerGroup`.
+/// The separator between rows of an `OwnerGroup`: a hairline that starts at the row's text.
 public struct OwnerDivider: View {
-    public init() {}
+    @Environment(\.displayScale) private var scale
+    let inset: CGFloat
+
+    /// `inset`: where the row's text starts (40 after a symbol, 0 in rows without one).
+    public init(inset: CGFloat = 40) {
+        self.inset = inset
+    }
+
     public var body: some View {
-        Rectangle().fill(OwnerColor.border).frame(height: 1).accessibilityHidden(true)
+        Rectangle().fill(OwnerColor.border).frame(height: 1 / max(scale, 1))
+            .padding(.leading, inset)
+            .accessibilityHidden(true)
     }
 }
 
-/// One row of an Owner group: a symbol in a tonal well, a title, an optional detail, an optional
+/// One row of an Owner group: a symbol, a title, an optional detail, an optional
 /// trailing value and a chevron when it navigates. At least 44 pt tall; text wraps at large sizes.
 public struct OwnerRow<Trailing: View>: View {
     let symbol: String
@@ -156,13 +171,12 @@ public struct OwnerRow<Trailing: View>: View {
     public var body: some View {
         HStack(spacing: DincrSpacing.s3) {
             Image(systemName: symbol)
-                .font(.body.weight(.medium))
+                .font(.body)
                 .foregroundStyle(iconColor)
-                .frame(width: 36, height: 36)
-                .background(wellColor, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+                .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(OwnerColor.text)
+                Text(title).font(DincrFont.body).foregroundStyle(OwnerColor.text)
                 if let detail, !detail.isEmpty {
                     Text(detail).font(DincrFont.caption).foregroundStyle(OwnerColor.text2)
                 }
@@ -188,15 +202,6 @@ public struct OwnerRow<Trailing: View>: View {
         case .neutral: OwnerColor.text2
         }
     }
-
-    private var wellColor: Color {
-        switch tone {
-        case .accent: OwnerColor.accentContainer
-        case .warning: DincrColor.warningContainer
-        case .negative: DincrColor.negativeContainer
-        case .neutral: OwnerColor.surface2
-        }
-    }
 }
 
 public extension OwnerRow where Trailing == EmptyView {
@@ -216,7 +221,7 @@ public struct OwnerSectionHeader<Accessory: View>: View {
 
     public var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title).font(DincrFont.title2).foregroundStyle(OwnerColor.text).accessibilityAddTraits(.isHeader)
+            Text(title).font(.title3.weight(.semibold)).foregroundStyle(OwnerColor.text).accessibilityAddTraits(.isHeader)
             Spacer(minLength: DincrSpacing.s2)
             accessory.font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(OwnerColor.accent)
         }

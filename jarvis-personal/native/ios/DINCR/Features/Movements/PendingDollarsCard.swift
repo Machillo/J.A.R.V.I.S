@@ -27,15 +27,15 @@ struct PendingDollarsCard: View {
     private var content: some View {
         HStack(alignment: .center, spacing: DincrSpacing.s3) {
             Image(systemName: "dollarsign.circle")
-                .font(.title2).foregroundStyle(DincrColor.tint).accessibilityHidden(true)
+                .font(.title2).foregroundStyle(.dincrTint).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(tx("Por convertir al cierre", "To convert at the close")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text(tx("Por convertir al cierre", "To convert at the close")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 ForEach(pending.totals) { total in
-                    Text(summary(total)).font(DincrFont.bodySmall.weight(.semibold).monospacedDigit()).foregroundStyle(DincrColor.text)
+                    Text(summary(total)).font(DincrFont.bodySmall.weight(.semibold).monospacedDigit()).foregroundStyle(.dincrText)
                 }
             }
             Spacer(minLength: 0)
-            if openMovements != nil { Image(systemName: "chevron.right").foregroundStyle(DincrColor.textMuted).accessibilityHidden(true) }
+            if openMovements != nil { Image(systemName: "chevron.right").foregroundStyle(.dincrTextMuted).accessibilityHidden(true) }
         }
         .dincrCard()
         .accessibilityElement(children: .combine)

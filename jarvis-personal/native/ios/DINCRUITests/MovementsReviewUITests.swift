@@ -66,6 +66,6 @@ final class MovementsReviewUITests: XCTestCase {
         XCTAssertTrue(element("mail.accept.21", in: app).waitForExistence(timeout: 10))
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.tabBars.buttons["Perfil"].tap()
-        XCTAssertTrue(element("profile.jarvis", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("profile.mail", in: app).waitForExistence(timeout: 10))
     }
 }

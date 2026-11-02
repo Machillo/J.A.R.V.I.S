@@ -472,12 +472,14 @@ The single Owner account is not a plan, so "plans don't repaint the app" does no
 Owner keeps DINCR's structure, navigation (the same five tabs), system type, components and voice,
 and changes only the scene, below a root that reads the server role (`dincrOwnerAppearance`):
 
-- A deep petrol background (a quiet radial to near black in dark; white to pale blue in light; one
-  flat color with Increase Contrast), blue-tinted surfaces with a hairline border (decorative only),
-  and one cyan accent instead of the teal tint. Owner tokens: `OwnerColor` in DincrDesign
-  (`Owner/OwnerTheme.swift`), light and dark, text ≥ 4.5:1 on every Owner surface.
-- JARVIS has one quiet mark (a static cyan orb), never animated, glowing or game-like.
-- Cards: radius 22; controls and quick actions: 18. Lists of records stay native lists or one
+- The platform's own look, as if the system had drawn it: one flat grouped background (near white in
+  light, black in dark), plain surfaces without borders, hairlines only between rows, and one blue
+  accent instead of the teal tint. Owner tokens: `OwnerColor` in DincrDesign (`Owner/OwnerTheme.swift`),
+  light and dark, text ≥ 4.5:1 on every Owner surface.
+- Color is for meaning. Icons are plain symbols without wells. A message is a plain row: its icon's
+  color says what it means, with no filled background or accent bar, so a fact never reads as a failure.
+- JARVIS has one way in, on Hoy, and no mark competing with the greeting.
+- Cards: radius 16; controls and quick actions: 12. Lists of records stay native lists or one
   grouped surface with separated rows — never one card per record.
 - Everything else in this file still applies: no eyebrows, no stat-tile grids, money signed with
   `+` / `−` and never by color alone, unknown values "—", system materials only for blur.
@@ -494,20 +496,20 @@ that breaks the rules of this file.
 | Option | Values (default for the Owner first) | Classic |
 |--------|----------------------------------------|---------|
 | Theme | Automático, Claro, Oscuro | the device setting |
-| Palette (neutrals) | Océano, Clásico, Arena, Grafito | Clásico |
-| Accent (the one tint) | Cian, Verde azulado, Ciruela, Tinta | Verde azulado |
+| Palette (neutrals) | Sistema, Clásico, Arena, Grafito | Clásico |
+| Accent (the one tint) | Azul, Verde azulado, Ciruela, Tinta | Verde azulado |
 | Text size (× the system scale) | Estándar 100 %, Pequeño 90 %, Grande 115 %, Muy grande 130 % | Estándar |
 | Typeface | Sistema, Editorial (serif screen and section titles) | Sistema |
 | Density | Cómoda, Compacta (12 gaps, 48 rows) | Cómoda |
 | Surfaces | Con contorno (hairline, cards 22 / controls 16), Tonal | Tonal |
 
-- **Océano + Cian + Con contorno is the Owner identity** (above), so the Owner's default is the
+- **Sistema + Azul is the Owner identity** (above), so the Owner's default is the
   same scene on iOS and Android; the generator test holds the tokens equal to `OwnerColor`.
 - Every palette × accent × scheme keeps text ≥ 4.5:1 on `bg`, `surface` and `surface-2`, control
   boundaries and focus ≥ 3:1, labels on filled and tonal accents ≥ 4.5:1, status colors ≥ 4.5:1 and
   chart series ≥ 3:1 (`contrastFailures`, generate.test.mjs).
 - Status, message and chart colors never change with the appearance: positive, negative, warning,
-  info and VIP keep their meaning (Océano only uses the Owner identity's brighter positive in dark).
+  info and VIP keep their meaning (Sistema only uses the Owner identity's own positive).
 - The text size multiplies the platform scale (Dynamic Type / font scale); it never replaces it,
   and compact density never takes touch targets below 48.
 - No new accent may collide with a status or chart meaning (no green, red, amber or indigo tint).

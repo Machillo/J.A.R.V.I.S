@@ -28,8 +28,8 @@ object DincrAppearanceTokens {
             dark = AppearanceNeutrals(bg = Color(0xFF070E1A), surface = Color(0xFF0F1A2B), surface2 = Color(0xFF172539), line = Color(0xFF22324A), lineStrong = Color(0xFF33445F), fieldBorder = Color(0xFF6A7A94), text = Color(0xFFEDF2F9), text2 = Color(0xFFB3C0D2), textMuted = Color(0xFF94A3B9), positive = null, glow = null),
         ),
         "oceano" to AppearancePair(
-            light = AppearanceNeutrals(bg = Color(0xFFF0F6FA), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEAF2F8), line = Color(0xFFD3E2EE), lineStrong = Color(0xFFB6CCDD), fieldBorder = Color(0xFF6A8197), text = Color(0xFF0B1526), text2 = Color(0xFF3F5368), textMuted = Color(0xFF52677D), positive = Color(0xFF08734F), glow = Color(0xFFF6FAFD)),
-            dark = AppearanceNeutrals(bg = Color(0xFF021221), surface = Color(0xFF091726), surface2 = Color(0xFF0D2135), line = Color(0xFF123858), lineStrong = Color(0xFF1D4B70), fieldBorder = Color(0xFF5F84A3), text = Color(0xFFF2FAFF), text2 = Color(0xFF87A6BF), textMuted = Color(0xFF7A9CB5), positive = Color(0xFF1FEBAB), glow = Color(0xFF041C30)),
+            light = AppearanceNeutrals(bg = Color(0xFFF2F2F7), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEFEFF4), line = Color(0xFFD1D1D6), lineStrong = Color(0xFFC7C7CC), fieldBorder = Color(0xFF86868B), text = Color(0xFF1C1C1E), text2 = Color(0xFF4F4F55), textMuted = Color(0xFF636366), positive = Color(0xFF08734F), glow = Color(0xFFF2F2F7)),
+            dark = AppearanceNeutrals(bg = Color(0xFF000000), surface = Color(0xFF1C1C1E), surface2 = Color(0xFF2C2C2E), line = Color(0xFF38383A), lineStrong = Color(0xFF48484A), fieldBorder = Color(0xFF8E8E93), text = Color(0xFFF5F5F7), text2 = Color(0xFFAEAEB2), textMuted = Color(0xFFA1A1A6), positive = Color(0xFF30D158), glow = Color(0xFF000000)),
         ),
         "arena" to AppearancePair(
             light = AppearanceNeutrals(bg = Color(0xFFF6F3EE), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEEE9E1), line = Color(0xFFE2DBD0), lineStrong = Color(0xFFCBC1B2), fieldBorder = Color(0xFF7F7567), text = Color(0xFF1C1813), text2 = Color(0xFF4D453A), textMuted = Color(0xFF62594D), positive = null, glow = null),
@@ -47,8 +47,8 @@ object DincrAppearanceTokens {
             dark = AppearanceAccent(tint = Color(0xFF45D3BC), tintPressed = Color(0xFF33B9A4), tintContainer = Color(0xFF0C3A34), onTint = Color(0xFF03201B), onTintContainer = Color(0xFFC0F2E8), focusRing = Color(0xFF45D3BC)),
         ),
         "cian" to AppearancePair(
-            light = AppearanceAccent(tint = Color(0xFF0068A3), tintPressed = Color(0xFF00598C), tintContainer = Color(0xFFDDF0FB), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF00405F), focusRing = Color(0xFF0068A3)),
-            dark = AppearanceAccent(tint = Color(0xFF1FB8FF), tintPressed = Color(0xFF1AD9FF), tintContainer = Color(0xFF0D344D), onTint = Color(0xFF021221), onTintContainer = Color(0xFFBDEBFF), focusRing = Color(0xFF1FB8FF)),
+            light = AppearanceAccent(tint = Color(0xFF0066CC), tintPressed = Color(0xFF0055AA), tintContainer = Color(0xFFE3EFFC), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF003D7A), focusRing = Color(0xFF0066CC)),
+            dark = AppearanceAccent(tint = Color(0xFF2997FF), tintPressed = Color(0xFF64B0FF), tintContainer = Color(0xFF0B2A4A), onTint = Color(0xFF000000), onTintContainer = Color(0xFFBFDFFF), focusRing = Color(0xFF2997FF)),
         ),
         "ciruela" to AppearancePair(
             light = AppearanceAccent(tint = Color(0xFF7A3E9D), tintPressed = Color(0xFF64317F), tintContainer = Color(0xFFF1E4F8), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF3A1650), focusRing = Color(0xFF7A3E9D)),
@@ -61,7 +61,7 @@ object DincrAppearanceTokens {
     )
 
     val shapes: Map<String, AppearanceShape> = linkedMapOf(
-        "outlined" to AppearanceShape(card = 22.dp, control = 16.dp),
+        "outlined" to AppearanceShape(card = 16.dp, control = 12.dp),
         "tonal" to AppearanceShape(card = 20.dp, control = 14.dp),
     )
 

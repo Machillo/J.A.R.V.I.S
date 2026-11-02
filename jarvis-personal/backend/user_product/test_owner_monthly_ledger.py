@@ -308,3 +308,9 @@ def test_analisis_financiero_uses_the_ledger_for_the_owner(monkeypatch):
     # Gross payroll is reported apart and the month says it is not complete.
     assert october["payroll_accrued"]["overtime_gross"] == 7.0
     assert october["complete"] is False and october["incomplete_reasons"] == ["pending_mail_review"]
+
+
+def test_card_installments_are_not_counted_on_top_of_the_statement():
+    debts = [{"monthly_payment": 100, "debt_type": "loan"}, {"monthly_payment": 20, "debt_type": "tasa_cero"},
+             {"monthly_payment": 5, "debt_type": "minicuotas"}, {"monthly_payment": 1, "debt_type": None}]
+    assert owner_ledger.payments_outside_the_card(debts) == 101

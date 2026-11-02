@@ -110,9 +110,9 @@ struct GateMessageView: View {
     var body: some View {
         VStack(spacing: DincrSpacing.s4) {
             Spacer()
-            Image(systemName: symbol).font(.system(size: 40)).foregroundStyle(DincrColor.tint).accessibilityHidden(true)
-            Text(title).font(DincrFont.title1).foregroundStyle(DincrColor.text).multilineTextAlignment(.center)
-            Text(message).font(DincrFont.body).foregroundStyle(DincrColor.text2).multilineTextAlignment(.center)
+            Image(systemName: symbol).font(.system(size: 40)).foregroundStyle(.dincrTint).accessibilityHidden(true)
+            Text(title).font(DincrFont.title1).foregroundStyle(.dincrText).multilineTextAlignment(.center)
+            Text(message).font(DincrFont.body).foregroundStyle(.dincrText2).multilineTextAlignment(.center)
             Spacer()
             if let primary {
                 Button(primary.0, action: primary.1).buttonStyle(.dincrPrimary)
@@ -120,7 +120,7 @@ struct GateMessageView: View {
             if showsSignOut {
                 Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }
                     .font(DincrFont.title2)
-                    .foregroundStyle(DincrColor.tint)
+                    .foregroundStyle(.dincrTint)
                     .frame(minHeight: 44)
             }
         }

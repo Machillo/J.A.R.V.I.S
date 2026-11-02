@@ -77,7 +77,7 @@ class LockedRowsUiTest {
             listOf(budget, calendar, mail, accounts, tx("Movimientos recurrentes", "Recurring transactions")).forEach { assertFalse("$plan/$role: $it", present(it)) }
             // NT-1: every plan can turn the reminders on the phone on or off.
             assertTrue("$plan/$role: Recordatorios", present(tx("Recordatorios", "Reminders")))
-            assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
+            assertFalse("$role: JARVIS opens from Hoy", present("JARVIS"))
         }
     }
 }

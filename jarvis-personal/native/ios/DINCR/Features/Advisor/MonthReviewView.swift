@@ -19,7 +19,7 @@ struct MonthReviewView: View {
             }) { cards, _ in
                 ForEach(Array(cards.enumerated()), id: \.offset) { index, card in
                     VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                        Text(card.title).font(DincrFont.label).foregroundStyle(DincrColor.text2).accessibilityAddTraits(.isHeader)
+                        Text(card.title).font(DincrFont.label).foregroundStyle(.dincrText2).accessibilityAddTraits(.isHeader)
                         ForEach(Array(card.lines.enumerated()), id: \.offset) { line, text in
                             Text(text).font(line == 0 ? DincrFont.title2 : DincrFont.bodySmall)
                                 .foregroundStyle(line == 0 ? DincrColor.text : DincrColor.text2)

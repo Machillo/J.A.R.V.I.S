@@ -117,7 +117,7 @@ private struct OwnerFixedExpenseRow: View {
                     Text(item.name ?? tx("Gasto", "Expense")).font(DincrFont.body.weight(.semibold))
                     Text([OwnerFixedExpense.intervalLabel(item.intervalMonths), item.dueDay.map { tx("día \($0)", "day \($0)") }, item.category]
                         .compactMap { $0 }.joined(separator: " · "))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 Spacer()
                 MoneyText(item.expectedAmount, currency: item.currency)

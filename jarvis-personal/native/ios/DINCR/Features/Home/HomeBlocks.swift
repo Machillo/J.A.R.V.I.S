@@ -100,12 +100,12 @@ private struct HomeStatusCard: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             BlockHeader(title: tx("Estado de hoy", "Today’s status"), ownerStyle: ownerStyle)
             if let cycle = status.cycle {
-                Text(cycleText(cycle)).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                Text(cycleText(cycle)).font(DincrFont.caption).foregroundStyle(.dincrText2)
                     .accessibilityIdentifier("\(idPrefix).status.cycle")
             }
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 VStack(alignment: .leading, spacing: DincrSpacing.s1) {
-                    Text(headline).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                    Text(headline).font(DincrFont.label).foregroundStyle(.dincrText2)
                     if let amount = status.amount {
                         MoneyText(amount, font: DincrFont.displayAmount)
                             .accessibilityIdentifier("\(idPrefix).status.amount")
@@ -121,7 +121,7 @@ private struct HomeStatusCard: View {
                                 Text("—")
                             }
                         }
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         .accessibilityElement(children: .combine)
                     }
                     if let lowest = status.lowestBalance {
@@ -129,7 +129,7 @@ private struct HomeStatusCard: View {
                             Text(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"))
                             MoneyText(lowest, font: DincrFont.caption.weight(.semibold).monospacedDigit())
                         }
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         .accessibilityElement(children: .combine)
                     }
                 }
@@ -139,7 +139,7 @@ private struct HomeStatusCard: View {
                 if let budget = status.budget {
                     VStack(alignment: .leading, spacing: DincrSpacing.s1) {
                         HStack {
-                            Text(tx("Presupuesto restante", "Budget left")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            Text(tx("Presupuesto restante", "Budget left")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                             Spacer()
                             MoneyText(budget.remaining, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
                         }
@@ -150,9 +150,9 @@ private struct HomeStatusCard: View {
                 }
                 if let pending = status.pending {
                     HStack {
-                        Text(tx("Próximos pagos conocidos este mes", "Known upcoming payments this month")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        Text(tx("Próximos pagos conocidos este mes", "Known upcoming payments this month")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                         Spacer()
-                        Text(pendingText(pending)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text)
+                        Text(pendingText(pending)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("\(idPrefix).status.pending")
@@ -175,11 +175,11 @@ private struct HomeStatusCard: View {
     private var unknown: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             HStack(alignment: .center, spacing: DincrSpacing.s2) {
-                Text("—").font(DincrFont.displayAmount).foregroundStyle(DincrColor.text2).accessibilityHidden(true)
-                Text(tx("Aún no puedo calcularlo", "I can’t calculate this yet")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                Text("—").font(DincrFont.displayAmount).foregroundStyle(.dincrText2).accessibilityHidden(true)
+                Text(tx("Aún no puedo calcularlo", "I can’t calculate this yet")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 Spacer(minLength: 0)
                 Button { explains.toggle() } label: {
-                    Image(systemName: "questionmark.circle").font(.title3).foregroundStyle(DincrColor.tint).frame(minWidth: 44, minHeight: 44)
+                    Image(systemName: "questionmark.circle").font(.title3).foregroundStyle(.dincrTint).frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel(tx("Qué necesita DINCR", "What DINCR needs"))
                 .accessibilityIdentifier("\(idPrefix).status.help")
@@ -206,11 +206,11 @@ private struct HomeStatusCard: View {
 
     private func fact(_ label: String, _ amount: Decimal?, sign: MoneyFormat.Sign, unknown: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            Text(label).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             if let amount {
                 MoneyText(amount, sign: sign, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
             } else {
-                Text(unknown).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text2)
+                Text(unknown).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText2)
             }
         }
         .accessibilityElement(children: .combine)
@@ -237,7 +237,7 @@ private struct HomeStatusCard: View {
 
     private func line(_ label: String, _ amount: Decimal, id: String) -> some View {
         HStack {
-            Text(label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             Spacer()
             MoneyText(amount, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
         }
@@ -264,13 +264,13 @@ private struct MissingInputs: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             if missing.isEmpty {
                 Text(tx("Aún no tengo suficiente información para calcular esto.", "I don’t have enough information to calculate this yet."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             }
             ForEach(missing, id: \.self) { input in
                 VStack(alignment: .leading, spacing: DincrSpacing.s1) {
-                    Text(input.explanation).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    Text(input.explanation).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     HomeLink(destination: input.destination, links: links) {
-                        Text(input.actionTitle).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.tint).frame(minHeight: 44)
+                        Text(input.actionTitle).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint).frame(minHeight: 44)
                     }
                     .accessibilityIdentifier("\(idPrefix).missing.\(input.rawValue)")
                 }
@@ -318,17 +318,17 @@ private struct HomeNextCard: View {
             BlockHeader(title: tx("Qué sigue", "What’s next"), ownerStyle: ownerStyle)
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack(alignment: .top, spacing: DincrSpacing.s3) {
-                    Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(DincrColor.tint)
+                    Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
                         .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(DincrColor.text)
-                        if let detail { Text(detail).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) }
+                        Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
+                        if let detail { Text(detail).font(DincrFont.bodySmall).foregroundStyle(.dincrText2) }
                         if next.kind == .commitment {
                             if let amount = next.amount {
                                 MoneyText(amount, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
                             } else {
-                                Text(tx("Monto por confirmar", "Amount to confirm")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                                Text(tx("Monto por confirmar", "Amount to confirm")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                             }
                         }
                     }
@@ -343,7 +343,7 @@ private struct HomeNextCard: View {
                             Text(actionTitle)
                             Image(systemName: "chevron.right").font(DincrFont.caption).accessibilityHidden(true)
                         }
-                        .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.tint).frame(minHeight: 44)
+                        .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint).frame(minHeight: 44)
                     }
                     .accessibilityIdentifier("\(idPrefix).next.action")
                 }
@@ -436,10 +436,10 @@ private struct HomeShortcuts: View {
 
     private func tile(_ shortcut: HomeShortcut) -> some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Image(systemName: symbol(shortcut)).font(.system(size: 18, weight: .medium)).foregroundStyle(DincrColor.tint)
+            Image(systemName: symbol(shortcut)).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
                 .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                 .accessibilityHidden(true)
-            Text(title(shortcut)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text)
+            Text(title(shortcut)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
                 .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading)

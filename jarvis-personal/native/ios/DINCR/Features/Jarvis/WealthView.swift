@@ -45,9 +45,9 @@ struct WealthView: View {
             }
             NavigationLink(value: ProfileRoute.jarvisSection(.analysis)) {
                 HStack {
-                    Text(tx("Ver patrimonio neto", "See net worth")).font(DincrFont.body.weight(.semibold)).foregroundStyle(DincrColor.tint)
+                    Text(tx("Ver patrimonio neto", "See net worth")).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrTint)
                     Spacer()
-                    Image(systemName: "chevron.right").foregroundStyle(DincrColor.textMuted).accessibilityHidden(true)
+                    Image(systemName: "chevron.right").foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
                 }
                 .dincrCard()
             }
@@ -131,18 +131,18 @@ private struct InvestmentsContent: View {
 
         if !center.positions.isEmpty {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                Text(tx("Posiciones", "Positions")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                Text(tx("Posiciones", "Positions")).font(DincrFont.label).foregroundStyle(.dincrText2)
                 ForEach(center.positions) { position in
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(position.symbol ?? tx("Posición", "Position")).font(DincrFont.bodySmall.weight(.semibold))
                             if let quantity = position.quantity {
                                 Text(tx("Cantidad: \(Self.quantity(quantity))", "Quantity: \(Self.quantity(quantity))"))
-                                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                             }
                             if let pnl = position.unrealizedPnl {
                                 HStack(spacing: 4) {
-                                    Text(tx("Ganancia no realizada:", "Unrealized gain:")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                    Text(tx("Ganancia no realizada:", "Unrealized gain:")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                                     MoneyText(pnl, currency: position.currency, font: DincrFont.caption)
                                 }
                             }
@@ -206,21 +206,21 @@ private struct BusinessesContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 Text(business.name ?? tx("Negocio", "Business")).font(DincrFont.body.weight(.semibold))
                 if let description = business.description, !description.isEmpty {
-                    Text(description).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(description).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 if let ownership = business.ownershipPct {
                     InfoRow(label: tx("Participación", "Ownership"), value: percentLabel(ownership))
                 }
                 let movements = center.movements(of: business)
                 if movements.isEmpty {
-                    Text(tx("Sin movimientos todavía", "No movements yet")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(tx("Sin movimientos todavía", "No movements yet")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 ForEach(movements) { movement in
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(movement.description ?? Self.typeLabel(movement.movementType)).font(DincrFont.bodySmall)
                             Text([Self.typeLabel(movement.movementType), movement.movementDate.map { Day.label($0) }].compactMap { $0 }.joined(separator: " · "))
-                                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         }
                         Spacer()
                         MoneyText(movement.amount.map { movement.movementType == "expense" ? -$0 : $0 })
@@ -328,7 +328,7 @@ private struct BusinessMovementSheet: View {
                     TextField(tx("Fecha (AAAA-MM-DD)", "Date (YYYY-MM-DD)"), text: $date).keyboardType(.numbersAndPunctuation).accessibilityIdentifier("wealth.movement.date")
                     if type != "capital" {
                         Text(tx("También se registra en tus movimientos.", "It’s also recorded in your transactions."))
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                            .font(DincrFont.caption).foregroundStyle(.dincrText2)
                             .accessibilityIdentifier("wealth.movement.ledgerNote")
                     }
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }

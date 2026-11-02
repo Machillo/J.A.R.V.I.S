@@ -76,7 +76,7 @@ final class WealthUITests: XCTestCase {
         XCTAssertTrue(element("accounts.bank.bac", in: app).waitForExistence(timeout: 10))
         back(app)
         app.tabBars.buttons["Perfil"].tap()
-        XCTAssertTrue(element("profile.jarvis", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("profile.mail", in: app).waitForExistence(timeout: 10))
         element("profile.mail", in: app).tap()
         XCTAssertTrue(element("mail.status.connected", in: app).waitForExistence(timeout: 10))
     }

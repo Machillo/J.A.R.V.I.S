@@ -35,17 +35,17 @@ public enum DincrAppearanceTokens {
             glow: nil
         ),
         "oceano": AppearanceNeutrals(
-            bg: Color(light: 0xF0F6FA, dark: 0x021221),
-            surface: Color(light: 0xFFFFFF, dark: 0x091726),
-            surface2: Color(light: 0xEAF2F8, dark: 0x0D2135),
-            line: Color(light: 0xD3E2EE, dark: 0x123858),
-            lineStrong: Color(light: 0xB6CCDD, dark: 0x1D4B70),
-            fieldBorder: Color(light: 0x6A8197, dark: 0x5F84A3),
-            text: Color(light: 0x0B1526, dark: 0xF2FAFF),
-            text2: Color(light: 0x3F5368, dark: 0x87A6BF),
-            textMuted: Color(light: 0x52677D, dark: 0x7A9CB5),
-            positive: Color(light: 0x08734F, dark: 0x1FEBAB),
-            glow: Color(light: 0xF6FAFD, dark: 0x041C30)
+            bg: Color(light: 0xF2F2F7, dark: 0x000000),
+            surface: Color(light: 0xFFFFFF, dark: 0x1C1C1E),
+            surface2: Color(light: 0xEFEFF4, dark: 0x2C2C2E),
+            line: Color(light: 0xD1D1D6, dark: 0x38383A),
+            lineStrong: Color(light: 0xC7C7CC, dark: 0x48484A),
+            fieldBorder: Color(light: 0x86868B, dark: 0x8E8E93),
+            text: Color(light: 0x1C1C1E, dark: 0xF5F5F7),
+            text2: Color(light: 0x4F4F55, dark: 0xAEAEB2),
+            textMuted: Color(light: 0x636366, dark: 0xA1A1A6),
+            positive: Color(light: 0x08734F, dark: 0x30D158),
+            glow: Color(light: 0xF2F2F7, dark: 0x000000)
         ),
         "arena": AppearanceNeutrals(
             bg: Color(light: 0xF6F3EE, dark: 0x12100D),
@@ -85,12 +85,12 @@ public enum DincrAppearanceTokens {
             focusRing: Color(light: 0x0A6B5C, dark: 0x45D3BC)
         ),
         "cian": AppearanceAccent(
-            tint: Color(light: 0x0068A3, dark: 0x1FB8FF),
-            tintPressed: Color(light: 0x00598C, dark: 0x1AD9FF),
-            tintContainer: Color(light: 0xDDF0FB, dark: 0x0D344D),
-            onTint: Color(light: 0xFFFFFF, dark: 0x021221),
-            onTintContainer: Color(light: 0x00405F, dark: 0xBDEBFF),
-            focusRing: Color(light: 0x0068A3, dark: 0x1FB8FF)
+            tint: Color(light: 0x0066CC, dark: 0x2997FF),
+            tintPressed: Color(light: 0x0055AA, dark: 0x64B0FF),
+            tintContainer: Color(light: 0xE3EFFC, dark: 0x0B2A4A),
+            onTint: Color(light: 0xFFFFFF, dark: 0x000000),
+            onTintContainer: Color(light: 0x003D7A, dark: 0xBFDFFF),
+            focusRing: Color(light: 0x0066CC, dark: 0x2997FF)
         ),
         "ciruela": AppearanceAccent(
             tint: Color(light: 0x7A3E9D, dark: 0xD3A6F0),
@@ -111,7 +111,7 @@ public enum DincrAppearanceTokens {
     ]
 
     public static let shapes: [String: AppearanceShape] = [
-        "outlined": AppearanceShape(card: 22, control: 16),
+        "outlined": AppearanceShape(card: 16, control: 12),
         "tonal": AppearanceShape(card: 20, control: 14),
     ]
 

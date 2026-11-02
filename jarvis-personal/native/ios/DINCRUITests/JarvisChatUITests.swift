@@ -19,7 +19,8 @@ final class JarvisChatUITests: XCTestCase {
     }
 
     private func openChat(_ app: XCUIApplication) {
-        let entry = element("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        let entry = element("owner.home.jarvis", in: app)
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         entry.tap()
         let chat = element("jarvis.section.chat", in: app)

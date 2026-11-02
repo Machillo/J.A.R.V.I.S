@@ -66,7 +66,7 @@ struct ScreenScroll<Content: View>: View {
 struct SectionHeader: View {
     let title: String
     var body: some View {
-        Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+        Text(title).font(DincrFont.title2).foregroundStyle(.dincrText)
             .accessibilityAddTraits(.isHeader)
             .padding(.top, DincrSpacing.s2)
     }
@@ -81,7 +81,7 @@ struct FigureRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             Spacer(minLength: DincrSpacing.s3)
             MoneyText(amount, sign: sign, currency: currency, font: DincrFont.amount)
         }
@@ -94,9 +94,9 @@ struct InfoRow: View {
     let value: String
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             Spacer(minLength: DincrSpacing.s3)
-            Text(value).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text).multilineTextAlignment(.trailing)
+            Text(value).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText).multilineTextAlignment(.trailing)
         }
         .accessibilityElement(children: .combine)
     }
@@ -111,16 +111,16 @@ struct HubRow: View {
 
     var body: some View {
         HStack(spacing: DincrSpacing.s3) {
-            Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(DincrColor.tint)
+            Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
                 .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(DincrColor.text)
-                Text(subtitle).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
+                Text(subtitle).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             Spacer(minLength: 0)
             if let locked { PlanBadge(plan: locked.rawValue) }
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(DincrColor.textMuted).accessibilityHidden(true)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
         }
         .padding(.vertical, DincrSpacing.s1)
         .contentShape(Rectangle())
@@ -156,7 +156,7 @@ struct FinancialDisclaimer: View {
     var body: some View {
         Text(tx("DINCR te orienta con tus propios datos. No es asesoría financiera, legal ni tributaria profesional.",
                 "DINCR guides you with your own data. It is not professional financial, legal or tax advice."))
-            .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             .padding(.top, DincrSpacing.s2)
     }
 }
@@ -170,14 +170,14 @@ struct MonthPicker: View {
             Button { period = Period.shift(period, by: -1) } label: { Image(systemName: "chevron.left") }
                 .accessibilityLabel(tx("Mes anterior", "Previous month"))
             Spacer()
-            Text(Period.title(period)).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+            Text(Period.title(period)).font(DincrFont.title2).foregroundStyle(.dincrText)
             Spacer()
             Button { period = Period.shift(period, by: 1) } label: { Image(systemName: "chevron.right") }
                 .accessibilityLabel(tx("Mes siguiente", "Next month"))
                 .disabled(period >= Period.current)
         }
         .frame(minHeight: 44)
-        .foregroundStyle(DincrColor.tint)
+        .foregroundStyle(.dincrTint)
     }
 }
 
@@ -192,14 +192,14 @@ struct YearPicker: View {
             Button { year = String(value - 1) } label: { Image(systemName: "chevron.left") }
                 .accessibilityLabel(tx("Año anterior", "Previous year"))
             Spacer()
-            Text(year).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+            Text(year).font(DincrFont.title2).foregroundStyle(.dincrText)
             Spacer()
             Button { year = String(value + 1) } label: { Image(systemName: "chevron.right") }
                 .accessibilityLabel(tx("Año siguiente", "Next year"))
                 .disabled(value >= current)
         }
         .frame(minHeight: 44)
-        .foregroundStyle(DincrColor.tint)
+        .foregroundStyle(.dincrTint)
     }
 }
 
@@ -254,9 +254,9 @@ struct MoneyField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s1) {
-            Text(label).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(label).font(DincrFont.label).foregroundStyle(.dincrText2)
             HStack(spacing: DincrSpacing.s2) {
-                Text(format.symbol).foregroundStyle(DincrColor.textMuted).accessibilityHidden(true)
+                Text(format.symbol).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
                 TextField(label, text: $text, prompt: Text(format.inputText(18_450)))
                     .keyboardType(.decimalPad)
                     .font(DincrFont.body.monospacedDigit())

@@ -93,6 +93,7 @@ class MoneyUiTest {
     private fun openMoney() {
         waitUntil("home") { present(tx("Hoy", "Today")) }
         compose.onAllNodesWithText(tx("Perfil", "Profile")).onFirst().performClick()
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         click(tx("Mi dinero", "My money"))
         waitForTag("money.cycle")

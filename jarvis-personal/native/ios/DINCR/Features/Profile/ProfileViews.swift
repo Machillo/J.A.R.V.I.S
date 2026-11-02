@@ -18,7 +18,7 @@ struct LockedListRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
                         Text(tx("Disponible desde \(PlanLabel.name(tier.rawValue))", "Available from \(PlanLabel.name(tier.rawValue))"))
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                            .font(DincrFont.caption).foregroundStyle(.dincrText2)
                     }
                 } icon: { Image(systemName: symbol) }
                 Spacer(minLength: 0)
@@ -48,21 +48,6 @@ struct ProfileHubView: View {
     var body: some View {
         List {
             Section { header }.dincrRowBackground()
-            if Jarvis.isAvailable(to: model.profile) {
-                // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
-                Section {
-                    NavigationLink(value: ProfileRoute.jarvis) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("JARVIS")
-                                Text(tx("Tu espacio personal", "Your personal space")).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
-                            }
-                        } icon: { Image(systemName: "person.badge.key") }
-                    }
-                    .accessibilityIdentifier("profile.jarvis")
-                }
-                .dincrRowBackground()
-            }
             // UX-7: the declared situation lives in Plan → Ingresos y base and Tu plan del mes → Ajustes.
             // Cuentas live in Patrimonio and the mail review in Movimientos → Por revisar; the mail
             // connections (connect, permissions, check for notices) are set up here, in Perfil.
@@ -93,7 +78,7 @@ struct ProfileHubView: View {
                             Text(tx("Recordatorios", "Reminders"))
                             Text(remindersDenied ? tx("Permitilas en Ajustes › DINCR › Notificaciones.", "Allow them in Settings › DINCR › Notifications.")
                                                  : tx("Cuotas, gastos fijos, Salvavidas y fin de mes", "Payments, fixed expenses, emergency fund and month end"))
-                                .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                                .font(DincrFont.caption).foregroundStyle(.dincrText2)
                         }
                     } icon: { Image(systemName: "bell") }
                 }
@@ -158,7 +143,7 @@ struct ProfileHubView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.profile?.displayName ?? tx("Tu cuenta", "Your account")).font(DincrFont.title2)
-                Text(model.profile?.email ?? "").font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text(model.profile?.email ?? "").font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             Spacer()
             if model.profile?.isOwner == true {
@@ -240,7 +225,7 @@ private struct OwnerAccessCard: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             InfoRow(label: tx("Acceso", "Access"), value: "DINCR Owner")
             Text(tx("Acceso interno de DINCR: no es una suscripción y no se compra ni se cambia aquí.", "DINCR internal access: it isn’t a subscription and isn’t bought or changed here."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                .font(DincrFont.caption).foregroundStyle(.dincrText2)
         }
         .dincrCard()
         .accessibilityElement(children: .combine)
@@ -264,7 +249,7 @@ private struct SubscriptionChoice: View {
                         InfoRow(label: tx("Cambio programado", "Scheduled change"), value: "\(PlanLabel.name(pending)) · \(Day.label(subscription.pendingEffectiveAt))")
                     }
                     if let notice = subscription.accessNotice, let message = notice.message {
-                        Text(message).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                        Text(message).font(DincrFont.caption).foregroundStyle(.dincrText2)
                     }
                 }
                 .dincrCard()
@@ -303,21 +288,21 @@ private struct StoreSubscriptionPanel: View {
             if !model.flags.isEnabled(.storeBilling) {
                 Text(model.flags.message(.storeBilling, language: model.language)
                      ?? tx("Las compras en App Store estarán disponibles pronto.", "App Store purchases will be available soon."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     .accessibilityIdentifier("store.paused")
             } else {
                 AsyncContent(load: { try await model.storeBilling.offers() }) { offers, _ in
                     let sellable = offers.filter { $0.product != nil }
                     if sellable.isEmpty {
-                        Text(StoreMessages.unavailable()).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        Text(StoreMessages.unavailable()).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                             .accessibilityIdentifier("store.unavailable")
                     }
                     ForEach(sellable) { offer in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(PlanLabel.name(offer.offer.plan)) · \(offer.offer.period == .monthly ? tx("mensual", "monthly") : tx("anual", "yearly"))")
-                                    .font(DincrFont.body).foregroundStyle(DincrColor.text)
-                                if let price = offer.price { Text(price).font(DincrFont.caption).foregroundStyle(DincrColor.text2) }
+                                    .font(DincrFont.body).foregroundStyle(.dincrText)
+                                if let price = offer.price { Text(price).font(DincrFont.caption).foregroundStyle(.dincrText2) }
                             }
                             Spacer()
                             Button(tx("Suscribirme", "Subscribe")) { Task { await buy(offer) } }
@@ -329,7 +314,7 @@ private struct StoreSubscriptionPanel: View {
                     }
                 }
                 if let message {
-                    Text(message).font(DincrFont.caption).foregroundStyle(DincrColor.text2).accessibilityIdentifier("store.message")
+                    Text(message).font(DincrFont.caption).foregroundStyle(.dincrText2).accessibilityIdentifier("store.message")
                 }
                 HStack {
                     Button(tx("Restaurar compras", "Restore purchases")) { Task { await restore() } }
@@ -340,7 +325,7 @@ private struct StoreSubscriptionPanel: View {
                         .frame(minHeight: 44)
                 }
                 .font(DincrFont.bodySmall.weight(.semibold))
-                .foregroundStyle(DincrColor.tint)
+                .foregroundStyle(.dincrTint)
             }
         }
         .dincrCard()
@@ -391,7 +376,7 @@ struct SecurityView: View {
             Section {
                 switch lock.availability {
                 case .unavailable:
-                    Text(tx("Configurá un código en tu iPhone para poder bloquear DINCR.", "Set up a passcode on your iPhone to lock DINCR.")).foregroundStyle(DincrColor.text2)
+                    Text(tx("Configurá un código en tu iPhone para poder bloquear DINCR.", "Set up a passcode on your iPhone to lock DINCR.")).foregroundStyle(.dincrText2)
                 case .biometrics(let name):
                     toggle(tx("Bloquear con \(name)", "Lock with \(name)"))
                 case .passcodeOnly:
@@ -444,7 +429,7 @@ struct SupportView: View {
                 TextField(tx("Asunto", "Subject"), text: $subject).textFieldStyle(.roundedBorder)
                 TextField(tx("Detalle", "Details"), text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
                 Text(tx("No incluyas contraseñas, códigos ni números completos de tarjeta.", "Don’t include passwords, codes or full card numbers."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 if let sent { Label(sent, systemImage: "checkmark.circle").foregroundStyle(DincrColor.positive) }
                 Button(tx("Enviar", "Send")) { Task { await send() } }.buttonStyle(.dincrPrimary(loading: sending)).disabled(sending)
@@ -494,13 +479,13 @@ private struct TicketList: View {
 
     var body: some View {
         if tickets.isEmpty {
-            Text(tx("Todavía no enviaste reportes.", "You haven’t sent any reports yet.")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(tx("Todavía no enviaste reportes.", "You haven’t sent any reports yet.")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
         }
         ForEach(tickets) { ticket in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 Text(ticket.subject ?? "").font(DincrFont.body.weight(.semibold))
                 Text([ticket.publicId, Day.label(ticket.createdAt), ticket.status].compactMap { $0 }.joined(separator: " · "))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 if ticket.status == "resolved" && ticket.userResolution == nil {
                     HStack {
                         Button(tx("Se resolvió", "It’s solved")) { resolve(ticket, true) }.buttonStyle(.dincrSecondary)

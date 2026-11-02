@@ -66,7 +66,8 @@
   "NT-1",
   "RV-1",
   "RT-1",
-  "DB-1"
+  "DB-1",
+  "OW-1"
  ],
  "fixtures": {
   "ios": {
@@ -290,7 +291,7 @@
   },
   {
    "id": "owner.home",
-   "name": "Hoy del Owner (JARVIS primero: saludo, Chat/Agenda/Todo JARVIS, próximos eventos; luego los cuatro bloques)",
+   "name": "Hoy del Owner (saludo, JARVIS, próximos eventos; luego los cuatro bloques)",
    "decision": "baseline-81fd2cc4",
    "plans": {
     "free": "OWNER_ONLY",
@@ -1563,9 +1564,9 @@
    "security_note": "The Owner account is never deletable from the app (canDeleteAccountInApp = !isOwner)"
   },
   {
-   "id": "profile.jarvis",
-   "name": "Perfil → JARVIS",
-   "decision": "baseline-81fd2cc4",
+   "id": "owner.jarvis",
+   "name": "Hoy → JARVIS (la única entrada al espacio del Owner)",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1574,14 +1575,14 @@
    },
    "backend": [],
    "ios": {
-    "tab": "profile",
-    "id": "profile.jarvis"
+    "tab": "home",
+    "id": "owner.home.jarvis"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "text": "JARVIS",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "JARVIS"
     }
    }
@@ -1631,7 +1632,7 @@
   {
    "id": "jarvis.chat",
    "name": "JARVIS → Chat",
-   "decision": "baseline-81fd2cc4",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1647,20 +1648,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.chat"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Chat",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "Chat",
      "via": [
       "JARVIS"
@@ -1671,7 +1672,7 @@
   {
    "id": "jarvis.calendar",
    "name": "JARVIS → Agenda",
-   "decision": "baseline-81fd2cc4",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1687,20 +1688,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.calendar"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Agenda",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "Calendar",
      "via": [
       "JARVIS"
@@ -1711,7 +1712,7 @@
   {
    "id": "jarvis.analysis",
    "name": "JARVIS → Análisis financiero",
-   "decision": "baseline-81fd2cc4",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1739,20 +1740,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.analysis"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Análisis financiero",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "Financial analysis",
      "via": [
       "JARVIS"
@@ -1763,7 +1764,7 @@
   {
    "id": "jarvis.strategy",
    "name": "JARVIS → Estrategia personal",
-   "decision": "J-STR",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1791,20 +1792,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.strategy"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Estrategia personal",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "Personal strategy",
      "via": [
       "JARVIS"
@@ -1815,7 +1816,7 @@
   {
    "id": "jarvis.money",
    "name": "JARVIS → Mi dinero",
-   "decision": "J-MON",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1849,20 +1850,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.money"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Mi dinero",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "My money",
      "via": [
       "JARVIS"
@@ -1873,7 +1874,7 @@
   {
    "id": "jarvis.money_control",
    "name": "JARVIS → Control de dinero",
-   "decision": "J-MC",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1919,20 +1920,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.money_control"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Control de dinero",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "Money control",
      "via": [
       "JARVIS"
@@ -1943,7 +1944,7 @@
   {
    "id": "jarvis.wealth",
    "name": "JARVIS → Patrimonio",
-   "decision": "J-WEA",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -1983,20 +1984,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.wealth"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Patrimonio",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "Wealth",
      "via": [
       "JARVIS"
@@ -2007,7 +2008,7 @@
   {
    "id": "jarvis.records",
    "name": "JARVIS → Registros",
-   "decision": "J-REC",
+   "decision": "OW-1",
    "plans": {
     "free": "OWNER_ONLY",
     "basic": "OWNER_ONLY",
@@ -2035,20 +2036,20 @@
     }
    ],
    "ios": {
-    "tab": "profile",
+    "tab": "home",
     "via": [
-     "profile.jarvis"
+     "owner.home.jarvis"
     ],
     "id": "jarvis.section.records"
    },
    "android": {
-    "tab": "Perfil",
+    "tab": "Hoy",
     "via": [
      "JARVIS"
     ],
     "text": "Registros",
     "en": {
-     "tab": "Profile",
+     "tab": "Today",
      "text": "Records",
      "via": [
       "JARVIS"

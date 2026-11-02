@@ -67,11 +67,12 @@ class JarvisAccessUiTest {
     @Test fun ownerGetsJarvisWithTheFiveFinalTabs() {
         launch(role = "owner")
         openProfile()
-        // UX-13: the Owner has the five final tabs (no DINCR tab) and JARVIS in Perfil; the financial emails live in
+        // UX-13: the Owner has the five final tabs (no DINCR tab) and JARVIS in Hoy; the financial emails live in
         // Patrimonio since §15 PR 10 (WealthUiTest checks the Owner opens them).
         listOf(tx("Hoy", "Today"), tx("Movimientos", "Transactions"), "Plan", tx("Patrimonio", "Wealth"), tx("Perfil", "Profile")).forEach { assertTrue(it, present(it)) }
         assertTrue("no DINCR tab", !present("DINCR"))
         assertTrue("no mail row in Perfil", !present(tx("Correos financieros", "Financial emails")))
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         assertTrue(present(tx("Chat", "Chat")))
         // Memoria was removed (it fed the retired AI chat): the hub no longer lists it, not even at the bottom of the
@@ -85,6 +86,7 @@ class JarvisAccessUiTest {
     @Test fun theOwnersPersonalStrategyOpensHisPlanForTheMonth() {
         launch(role = "owner")
         openProfile()
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         click(tx("Estrategia personal", "Personal strategy"))
         // The same screen as Plan → Tu plan del mes, with the Owner's strategy; never "being restored".
@@ -110,8 +112,9 @@ class JarvisAccessUiTest {
     @Test fun theRoleIsReadFromTheServerOnEveryLaunch() {
         // Nothing about the Owner survives on the device: the next session's /auth/me decides.
         launch(role = "owner")
+        waitForText("JARVIS")
         openProfile()
-        assertTrue(present("JARVIS"))
+        assertTrue("JARVIS opens from Hoy", !present("JARVIS"))
         launch(plan = "vip")
         openProfile()
         assertTrue(!present("JARVIS"))

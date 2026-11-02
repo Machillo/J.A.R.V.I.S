@@ -57,6 +57,8 @@ SALARY_ESTIMATED = "salary_estimated"
 SALARY_CATEGORY = "Salario"
 OWNER_CUT_DAY = 21
 OWNER_PAYMENT_DAY = 5
+# Zero-rate and mini installments are charged on the card: they are already the statement's expenses.
+CARD_INSTALLMENT_TYPES = {"tasa_cero", "minicuotas"}
 NOT_COUNTED = "not_counted"
 UNCLASSIFIED = "unclassified"
 
@@ -267,6 +269,12 @@ def owner_cycle_totals(conn, workspace_id: str, today: date) -> dict:
     totals = owner_month_totals(conn, workspace_id, start, end, salary=salary)
     return {**totals, "month": start.strftime("%Y-%m"), "period_start": start.isoformat(), "period_end": (end - timedelta(days=1)).isoformat(),
             "payment_date": payment.isoformat()}
+
+
+def payments_outside_the_card(debts: list[dict]) -> float:
+    """What the Owner's debts ask for every month beyond what his statement already holds."""
+    return round(sum(_money(debt.get("monthly_payment")) for debt in debts
+                     if str(debt.get("debt_type") or "").lower() not in CARD_INSTALLMENT_TYPES), 2)
 
 
 def _salary_inputs(conn, workspace_id: str, tables: set[str]) -> dict:

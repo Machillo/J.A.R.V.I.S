@@ -411,6 +411,7 @@ class PlanRecoveryUiTest {
         launch(role = "owner")
         home()
         click(tx("Perfil", "Profile"))
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         click(tx("Análisis financiero", "Financial analysis"))
         waitForTag("analysis.networth")
