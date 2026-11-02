@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
+from backend.core.time import costa_rica_today
 from backend.core.database import get_connection
 from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category, owner_account_context
 from backend.user_product import expense_account, owner_ledger, pending_conversion, summary_breakdown
@@ -63,7 +64,7 @@ def _categories(conn, workspace_id: str, start: date, end: date) -> list[dict]:
 
 def get_free_dashboard() -> dict:
     workspace_id = get_current_workspace_id()
-    current = date.today().replace(day=1)
+    current = costa_rica_today().replace(day=1)
     with get_connection() as conn:
         history = []
         for offset in range(-5, 1):

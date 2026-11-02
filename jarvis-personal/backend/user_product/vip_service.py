@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
+from backend.core.time import costa_rica_today
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.user_product.debt_payments import with_known_payments
@@ -110,7 +111,7 @@ def _owner_report_months(conn, workspace_id: str, months: list[dict]) -> list[di
 
 def get_vip_command_center() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
-    today = date.today()
+    today = costa_rica_today()
     current = today.replace(day=1)
     with get_connection() as conn:
         recurring_ready = _basic_tables_ready(conn, "finva_recurring_items")
