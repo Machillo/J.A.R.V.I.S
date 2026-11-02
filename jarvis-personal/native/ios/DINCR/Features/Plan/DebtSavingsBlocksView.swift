@@ -197,6 +197,7 @@ private struct ApplyBlockSheet: View {
     @State private var outcome = DebtSavingsBlockApply.Outcome.reduceTerm
     @State private var installment = ""
     @State private var remaining = ""
+    @State private var day = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
     @State private var error: String?
     @State private var saving = false
 
@@ -208,12 +209,16 @@ private struct ApplyBlockSheet: View {
                 Picker(tx("Qué hizo el banco", "What the bank did"), selection: $outcome) {
                     Text(tx("Bajó el plazo", "Shortened the term")).tag(DebtSavingsBlockApply.Outcome.reduceTerm)
                     Text(tx("Bajó la cuota", "Lowered the installment")).tag(DebtSavingsBlockApply.Outcome.reduceInstallment)
+                    Text(tx("Me avisa después", "Tells me later")).tag(DebtSavingsBlockApply.Outcome.later)
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("debtBlocks.outcome")
                 if outcome == .reduceTerm {
                     TextField(tx("Cuotas que te quedan", "Installments left"), text: $remaining).keyboardType(.numberPad)
                         .accessibilityIdentifier("debtBlocks.remaining")
+                }
+                if outcome == .later {
+                    DatePicker(tx("Recordarme el", "Remind me on"), selection: $day, in: Date()..., displayedComponents: .date)
                 }
                 if outcome == .reduceInstallment {
                     MoneyField(label: tx("Cuota nueva", "New installment"), text: $installment, identifier: "debtBlocks.newInstallment")
@@ -256,7 +261,8 @@ private struct ApplyBlockSheet: View {
         defer { saving = false }
         let epoch = model.currentEpoch
         do {
-            let answer = try await model.service.applyDebtSavingsBlock(id: block.id, DebtSavingsBlockApply(amount: paid, outcome: outcome, newMonthlyPayment: newInstallment, remainingInstallments: left))
+            let answer = try await model.service.applyDebtSavingsBlock(id: block.id, DebtSavingsBlockApply(amount: paid, outcome: outcome, newMonthlyPayment: newInstallment, remainingInstallments: left,
+                                                                                                         remindOn: outcome == .later ? MovementEditor.dayFormatter.string(from: day) : nil))
             done(DebtSavingsReading.appliedMessage(answer.block.applied, format: model.moneyFormat))
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))

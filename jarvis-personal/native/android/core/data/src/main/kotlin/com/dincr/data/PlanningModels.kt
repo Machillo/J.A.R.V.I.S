@@ -89,6 +89,8 @@ data class AmountRequest(val amount: Money)
 sealed interface DebtAfterExtra {
     data class RemainingInstallments(val count: Int) : DebtAfterExtra
     data class NewMonthlyPayment(val amount: java.math.BigDecimal) : DebtAfterExtra
+    /** "El banco me avisa después": the day (`YYYY-MM-DD`) to be reminded; the debt waits. */
+    data class Later(val day: String) : DebtAfterExtra
 }
 
 /** Body of `POST /user-product/finance/debts/{id}/payments`. */
@@ -97,12 +99,30 @@ data class DebtPaymentRequest(
     val amount: Money,
     @SerialName("remaining_installments") val remainingInstallments: Int? = null,
     @SerialName("new_monthly_payment") val newMonthlyPayment: Money? = null,
+    @SerialName("remind_on") val remindOn: String? = null,
 ) {
     companion object {
         fun of(amount: java.math.BigDecimal, after: DebtAfterExtra?) = DebtPaymentRequest(amount,
-            (after as? DebtAfterExtra.RemainingInstallments)?.count, (after as? DebtAfterExtra.NewMonthlyPayment)?.amount)
+            (after as? DebtAfterExtra.RemainingInstallments)?.count, (after as? DebtAfterExtra.NewMonthlyPayment)?.amount,
+            (after as? DebtAfterExtra.Later)?.day)
     }
 }
+
+/** A debt waiting for the bank's answer after an extra payment (`GET /finance/debts/after-extra`). */
+@Serializable
+data class DebtAfterExtraPending(@SerialName("remind_on") val remindOn: String? = null, val since: String? = null, val source: String? = null)
+
+@Serializable
+data class DebtAfterExtraPendingList(val items: Map<String, DebtAfterExtraPending> = emptyMap())
+
+/** `POST /finance/debts/{id}/after-extra`: one answer (nothing changed, installments left, new installment, or another day). */
+@Serializable
+data class DebtAfterExtraAnswer(
+    val unchanged: Boolean = false,
+    @SerialName("remaining_installments") val remainingInstallments: Int? = null,
+    @SerialName("new_monthly_payment") val newMonthlyPayment: Money? = null,
+    @SerialName("remind_on") val remindOn: String? = null,
+)
 
 /**
  * DEB-07a — one payment recorded in DINCR for a debt (`GET /finance/debts/{id}/payments`), newest

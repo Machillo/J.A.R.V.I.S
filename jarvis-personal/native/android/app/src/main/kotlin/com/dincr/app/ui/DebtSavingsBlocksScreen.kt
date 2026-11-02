@@ -166,12 +166,15 @@ private fun ApplyBlockForm(model: AppModel, block: DebtSavingsBlocks.Block, onCa
     var outcome by remember(block.id) { mutableStateOf(DebtSavingsBlockApply.REDUCE_TERM) }
     var installment by remember(block.id) { mutableStateOf("") }
     var remaining by remember(block.id) { mutableStateOf("") }
+    var day by remember(block.id) { mutableStateOf(LocalDate.now().plusDays(3)) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     MoneyField(tx("Cuánto abonaste", "How much you paid"), amount, { amount = it }, modifier = Modifier.testTag("debtBlocks.applyAmount"))
     ChoiceChips(listOf(DebtSavingsBlockApply.REDUCE_TERM to tx("Bajó el plazo", "Shortened the term"),
-        DebtSavingsBlockApply.REDUCE_INSTALLMENT to tx("Bajó la cuota", "Lowered the installment")), outcome, { outcome = it }, tx("Qué hizo el banco", "What the bank did"))
+        DebtSavingsBlockApply.REDUCE_INSTALLMENT to tx("Bajó la cuota", "Lowered the installment"),
+        DebtSavingsBlockApply.LATER to tx("Me avisa después", "Tells me later")), outcome, { outcome = it }, tx("Qué hizo el banco", "What the bank did"))
+    if (outcome == DebtSavingsBlockApply.LATER) DateField(tx("Recordarme el", "Remind me on"), day, { picked -> picked?.let { day = it } })
     if (outcome == DebtSavingsBlockApply.REDUCE_TERM) {
         FormField(tx("Cuotas que te quedan", "Installments left"), remaining, { remaining = it }, keyboard = KeyboardType.Number,
             modifier = Modifier.testTag("debtBlocks.remaining"))
@@ -195,7 +198,7 @@ private fun ApplyBlockForm(model: AppModel, block: DebtSavingsBlocks.Block, onCa
         saving = true; error = null
         scope.launch {
             model.load(tx("No pudimos guardar.", "We couldn’t save.")) {
-                model.api.applyDebtSavingsBlock(block.id, DebtSavingsBlockApply.of(paid, outcome, newInstallment, left))
+                model.api.applyDebtSavingsBlock(block.id, DebtSavingsBlockApply.of(paid, outcome, newInstallment, left, day.toString()))
             }
                 .onSuccess { onPaid(DebtSavingsReading.appliedMessage(it.block.applied, format)) }
                 .onFailure { if (it !is AuthException.SignedOut) error = it.message }

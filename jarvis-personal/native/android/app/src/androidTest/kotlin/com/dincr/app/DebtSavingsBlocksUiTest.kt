@@ -79,6 +79,23 @@ class DebtSavingsBlocksUiTest {
         waitUntil("the abono") { tagged("debtBlocks.notice") && present(tx("Listo", "Done")) && !tagged("debtBlocks.block.fixture-matured-1") }
     }
 
+    @Test fun anExtraPaymentWaitsForTheBankAndIsAnsweredLater() {
+        launch("vip")
+        click(tx("Plan", "Plan"), selectable = true)
+        click(tx("Deudas", "Debts"))
+        click(tx("Registrar pago", "Record payment"))
+        waitUntil("the amount") { tagged("amount.field") }
+        compose.onAllNodes(hasTestTag("amount.field")).onFirst().performTextInput("100000")   // above the installment
+        click(tx("Me avisa después", "Tells me later"))
+        clickTag("amount.save")
+        waitUntil("waiting for the bank") { tagged("debts.waitingForBank") }
+        clickTag("debts.afterExtra.1")
+        waitUntil("the installments field") { tagged("debts.afterExtra.remaining") }
+        compose.onAllNodes(hasTestTag("debts.afterExtra.remaining")).onFirst().performTextInput("6")
+        clickTag("debts.afterExtra.save")
+        waitUntil("answered") { !tagged("debts.waitingForBank") }
+    }
+
     @Test fun noPlanSeesTheRow() {
         for (plan in listOf("free", "basic", "vip")) {
             launch(plan)

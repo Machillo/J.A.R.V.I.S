@@ -161,6 +161,16 @@ public struct DincrService: Sendable {
         try await client.get("/user-product/finance/debts/\(id)/payments")
     }
 
+    /// The debts waiting for the bank's answer after an extra payment, by debt id.
+    public func debtsAfterExtraPending() async throws -> [String: DebtAfterExtraPending] {
+        let list: DebtAfterExtraPendingList = try await client.get("/user-product/finance/debts/after-extra")
+        return list.items
+    }
+
+    public func answerAfterExtra(debtID: Int, _ answer: DebtAfterExtraAnswer) async throws {
+        let _: Acknowledgement = try await client.send("POST", "/user-product/finance/debts/\(debtID)/after-extra", body: DebtAfterExtraAnswerBody(answer))
+    }
+
     public func payDebt(id: Int, amount: Decimal, idempotencyKey: String, afterExtra: DebtAfterExtra? = nil) async throws -> DebtPaymentResult {
         try WriteContract.checkAmount(amount)
         return try await client.send("POST", "/user-product/finance/debts/\(id)/payments",

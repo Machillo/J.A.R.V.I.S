@@ -59,6 +59,32 @@ final class DebtSavingsBlocksUITests: XCTestCase {
         XCTAssertFalse(element("debtBlocks.block.fixture-matured-1", in: app).exists)
     }
 
+    func testAnExtraPaymentWaitsForTheBankAndIsAnsweredLater() {
+        let app = launch(plan: "vip")
+        reveal("plan.debts", in: app).tap()
+        let pay = element("debt.pay.31", in: app)
+        XCTAssertTrue(pay.waitForExistence(timeout: 10))
+        pay.tap()
+        let field = element("amount.field", in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("100000")                     // above the ₡45.000 installment
+        element("amount.bank", in: app).tap()
+        let later = app.buttons["El banco me avisa después"].firstMatch
+        XCTAssertTrue(later.waitForExistence(timeout: 5))
+        later.tap()
+        app.buttons["amount.save"].tap()
+        XCTAssertTrue(element("debts.waitingForBank", in: app).waitForExistence(timeout: 10), "the debt waits for the bank")
+        reveal("debts.afterExtra.31", in: app).tap()
+        let remaining = element("debts.afterExtra.remaining", in: app)
+        XCTAssertTrue(remaining.waitForExistence(timeout: 10))
+        remaining.tap()
+        remaining.typeText("6")
+        element("debts.afterExtra.save", in: app).tap()
+        XCTAssertTrue(element("plan.notice", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("debts.waitingForBank", in: app).exists, "answered: nothing is waiting")
+    }
+
     func testNoPlanSeesTheRow() {
         for plan in [nil, "basic", "vip"] as [String?] {
             let app = launch(plan: plan)

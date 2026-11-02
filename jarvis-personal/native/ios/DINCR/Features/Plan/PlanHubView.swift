@@ -177,8 +177,9 @@ struct AmountSheet: View {
     @State private var submission = AmountSubmission()
     @State private var bank = BankChoice.unchanged
     @State private var bankFigure = ""
+    @State private var bankDay = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
 
-    enum BankChoice: Hashable { case unchanged, shorterTerm, lowerInstallment }
+    enum BankChoice: Hashable { case unchanged, shorterTerm, lowerInstallment, later }
 
     var body: some View {
         NavigationStack {
@@ -198,6 +199,7 @@ struct AmountSheet: View {
                             Text(tx("Nada cambió", "Nothing changed")).tag(BankChoice.unchanged)
                             Text(tx("Bajó el plazo", "Shortened the term")).tag(BankChoice.shorterTerm)
                             Text(tx("Bajó la cuota", "Lowered the installment")).tag(BankChoice.lowerInstallment)
+                            Text(tx("El banco me avisa después", "The bank tells me later")).tag(BankChoice.later)
                         }
                         .accessibilityIdentifier("amount.bank")
                         if bank == .shorterTerm {
@@ -206,6 +208,8 @@ struct AmountSheet: View {
                         } else if bank == .lowerInstallment {
                             TextField(tx("Cuota nueva", "New installment"), text: $bankFigure).keyboardType(.decimalPad)
                                 .accessibilityIdentifier("amount.newInstallment")
+                        } else if bank == .later {
+                            DatePicker(tx("Recordarme el", "Remind me on"), selection: $bankDay, in: Date()..., displayedComponents: .date)
                         }
                     }
                 }
@@ -292,6 +296,8 @@ struct AmountSheet: View {
                             error = tx("Escribí la cuota nueva.", "Enter the new installment."); return
                         }
                         afterExtra = .newMonthlyPayment(value)
+                    case .later:
+                        afterExtra = .later(MovementEditor.dayFormatter.string(from: bankDay))
                     }
                 }
                 _ = try await model.service.payDebt(id: debt.id, amount: amount, idempotencyKey: key, afterExtra: afterExtra)

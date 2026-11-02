@@ -8,7 +8,8 @@ import java.time.LocalDateTime
  * NT-1 — reminders on the phone (local notifications, no server): what the app already knows, said
  * before it happens. The day before a debt's payment day and a fixed expense's due day, the day of a
  * Salvavidas automatic contribution, the day a locked savings block for a debt matures (the Owner's,
- * DB-1), and the first day of a month ("your month closed"). Only dates
+ * DB-1), the day the bank says what it did with an extra payment, and the first day of a month ("your
+ * month closed"). Only dates
  * the user recorded (a debt without a payment day gives none); nothing is guessed. The app schedules
  * them on the phone (`ReminderScheduler`); this file only decides which and when, so both apps say
  * the same. iOS twin: `Reminders.swift`.
@@ -36,7 +37,8 @@ object Reminders {
     /** Every reminder from [today] to [days] ahead, earliest first, at most [LIMIT]. */
     fun plan(today: LocalDate, bills: List<Bill>, saving: Salvavidas.AutoContribution?, format: MoneyFormat,
              days: Int = 35, language: AppLanguage = AppLanguage.current(),
-             blocks: List<DebtSavingsBlocks.Block> = emptyList()): List<Reminder> {
+             blocks: List<DebtSavingsBlocks.Block> = emptyList(),
+             waiting: List<Triple<Long, String, String>> = emptyList()): List<Reminder> {
         val end = today.plusDays(days.toLong())
         val result = mutableListOf<Reminder>()
 
@@ -85,6 +87,15 @@ object Reminders {
             result += Reminder("dincr.reminder.block.${block.id}.$date", date.atTime(MORNING_HOUR, 0),
                 language.pick("Hoy vence tu ahorro bloqueado", "Your locked saving matures today"),
                 language.pick("Abonale $total a $debt.", "Pay $total into $debt."))
+        }
+
+        // The day the bank says what it did with an extra payment: complete the debt.
+        for ((id, debt, text) in waiting) {
+            val date = runCatching { LocalDate.parse(text.take(10)) }.getOrNull() ?: continue
+            if (date < today || !date.isBefore(end)) continue
+            result += Reminder("dincr.reminder.afterextra.$id.$date", date.atTime(MORNING_HOUR, 0),
+                language.pick("¿Ya te dijo el banco?", "Did the bank tell you?"),
+                language.pick("Contale a DINCR la cuota o el plazo nuevo de $debt.", "Tell DINCR the new installment or term of $debt."))
         }
 
         // The first day of each next month: the month that ended.

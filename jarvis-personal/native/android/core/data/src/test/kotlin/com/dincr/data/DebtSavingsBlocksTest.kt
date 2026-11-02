@@ -116,4 +116,19 @@ class DebtSavingsBlocksTest {
             DebtSavingsBlockApply.of(BigDecimal(351000), DebtSavingsBlockApply.REDUCE_TERM, null, 12))
         assertTrue(block, block.contains("\"remaining_installments\":12"))
     }
+
+    @Test fun whenTheBankTellsLaterTheDayTravelsAndThePhoneReminds() {
+        val encoder = Json { explicitNulls = false }
+        val payment = encoder.encodeToString(DebtPaymentRequest.serializer(), DebtPaymentRequest.of(BigDecimal(21500), DebtAfterExtra.Later("2026-11-05")))
+        assertTrue(payment, payment.contains("\"remind_on\":\"2026-11-05\"") && !payment.contains("remaining"))
+        val answer = encoder.encodeToString(DebtAfterExtraAnswer.serializer(), DebtAfterExtraAnswer(newMonthlyPayment = BigDecimal(4104)))
+        assertTrue(answer, answer.contains("\"new_monthly_payment\":4104") && !answer.contains("remind_on"))
+        val pending = json.decodeFromString(DebtAfterExtraPendingList.serializer(), """{"items": {"5": {"remind_on": "2026-11-05", "since": "2026-11-01", "source": "owner_distribution"}}}""")
+        assertEquals("2026-11-05", pending.items["5"]?.remindOn)
+        val plan = Reminders.plan(LocalDate.of(2026, 11, 1), emptyList(), null, colones, days = 10, language = es,
+            waiting = listOf(Triple(5L, "Minicuota de ejemplo", "2026-11-05")))
+        val reminder = plan.first { it.id == "dincr.reminder.afterextra.5.2026-11-05" }
+        assertEquals("¿Ya te dijo el banco?", reminder.title)
+        assertEquals("Contale a DINCR la cuota o el plazo nuevo de Minicuota de ejemplo.", reminder.body)
+    }
 }

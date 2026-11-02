@@ -37,6 +37,7 @@ fun DebtPaymentDialog(debt: Debt, onDismiss: () -> Unit, submit: suspend (BigDec
     var text by remember { mutableStateOf("") }
     var bank by remember { mutableStateOf(UNCHANGED) }
     var figure by remember { mutableStateOf("") }
+    var day by remember { mutableStateOf(java.time.LocalDate.now().plusDays(3)) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -52,10 +53,12 @@ fun DebtPaymentDialog(debt: Debt, onDismiss: () -> Unit, submit: suspend (BigDec
                 MoneyField(tx("Monto", "Amount"), text, { text = it; error = null }, error, modifier = Modifier.testTag("amount.field"))
                 if (extra) {
                     ChoiceChips(listOf(UNCHANGED to tx("Nada cambió", "Nothing changed"), SHORTER to tx("Bajó el plazo", "Shortened the term"),
-                        LOWER to tx("Bajó la cuota", "Lowered the installment")), bank, { bank = it; figure = "" }, tx("¿Qué hizo el banco con lo extra?", "What did the bank do with the extra?"))
+                        LOWER to tx("Bajó la cuota", "Lowered the installment"), LATER to tx("Me avisa después", "Tells me later")),
+                        bank, { bank = it; figure = "" }, tx("¿Qué hizo el banco con lo extra?", "What did the bank do with the extra?"))
                     if (bank == SHORTER) FormField(tx("Cuotas que te quedan", "Installments left"), figure, { figure = it }, keyboard = KeyboardType.Number,
                         modifier = Modifier.testTag("amount.remainingInstallments"))
                     if (bank == LOWER) MoneyField(tx("Cuota nueva", "New installment"), figure, { figure = it }, modifier = Modifier.testTag("amount.newInstallment"))
+                    if (bank == LATER) DateField(tx("Recordarme el", "Remind me on"), day, { picked -> picked?.let { day = it } })
                 }
             }
         },
@@ -65,6 +68,7 @@ fun DebtPaymentDialog(debt: Debt, onDismiss: () -> Unit, submit: suspend (BigDec
                     ?: run { error = tx("Escribí un monto mayor que cero.", "Enter an amount above zero."); return@onClick }
                 val after: DebtAfterExtra? = when {
                     !extra || bank == UNCHANGED -> null
+                    bank == LATER -> DebtAfterExtra.Later(day.toString())
                     bank == SHORTER -> DebtAfterExtra.RemainingInstallments(figure.trim().toIntOrNull()?.takeIf { it in 1..600 }
                         ?: run { error = tx("Escribí cuántas cuotas te quedan.", "Enter how many installments are left."); return@onClick })
                     else -> DebtAfterExtra.NewMonthlyPayment(AmountInput.parse(figure, separators)?.takeIf { it.signum() > 0 }
@@ -82,3 +86,4 @@ fun DebtPaymentDialog(debt: Debt, onDismiss: () -> Unit, submit: suspend (BigDec
 private const val UNCHANGED = "unchanged"
 private const val SHORTER = "shorter_term"
 private const val LOWER = "lower_installment"
+private const val LATER = "later"
