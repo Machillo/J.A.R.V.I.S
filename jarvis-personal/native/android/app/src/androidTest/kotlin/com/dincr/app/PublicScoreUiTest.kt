@@ -56,6 +56,7 @@ class PublicScoreUiTest {
     @Test fun theOwnerKeepsTheScoreInJarvis() {
         launch(role = "owner")
         tab(tx("Perfil", "Profile"))
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         click(tx("Análisis financiero", "Financial analysis"))
         waitUntil("health") { present(tx("Salud financiera", "Financial health")) }

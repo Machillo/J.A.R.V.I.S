@@ -56,14 +56,14 @@ struct DebtScenarioForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-            Text(intro).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(intro).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             if choice == .newDebt {
                 TextField(tx("Nombre (opcional)", "Name (optional)"), text: $name)
                     .textFieldStyle(.roundedBorder).accessibilityIdentifier("scenario.new.name")
                 MoneyField(label: tx("Monto de la deuda", "Debt amount"), text: $amount, identifier: "scenario.amount")
                 MoneyField(label: tx("Cuota mensual (si la sabés)", "Monthly payment (if you know it)"), text: $payment, identifier: "scenario.new.payment")
                 Text(tx("Sin cuota, DINCR la calcula con la tasa y el plazo.", "Without a payment, DINCR computes it from the rate and term."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 TextField(tx("Tasa anual (%)", "Annual rate (%)"), text: $rate)
                     .keyboardType(.decimalPad).textFieldStyle(.roundedBorder).accessibilityIdentifier("scenario.new.rate")
                 TextField(tx("Plazo (meses)", "Term (months)"), text: $term)
@@ -243,8 +243,8 @@ private struct DebtScenarioResultView: View {
                 FigureRow(label: tx("Cuota de la deuda nueva", "New debt’s payment"), amount: result.debt?.monthlyPayment)
                 if let interest = result.payoff?.interest { FigureRow(label: tx("Intereses en total", "Total interest"), amount: interest) }
             }
-            if let explanation = result.explanation { Text(explanation).font(DincrFont.caption).foregroundStyle(DincrColor.text2) }
-            ForEach(result.warnings ?? [], id: \.self) { Text($0).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+            if let explanation = result.explanation { Text(explanation).font(DincrFont.caption).foregroundStyle(.dincrText2) }
+            ForEach(result.warnings ?? [], id: \.self) { Text($0).font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
         }
         .dincrCard()
     }

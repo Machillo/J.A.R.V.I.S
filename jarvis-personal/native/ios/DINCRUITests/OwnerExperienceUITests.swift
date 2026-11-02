@@ -47,6 +47,12 @@ final class OwnerExperienceUITests: XCTestCase {
         return target
     }
 
+    /// Hoy has one way into JARVIS; the chat is one of its sections.
+    private func openChat(_ app: XCUIApplication) {
+        reveal("owner.home.jarvis", in: app).tap()
+        reveal("jarvis.section.chat", in: app).tap()
+    }
+
     // MARK: Today
 
     func testOwnerTodayAnswersMoneyAttentionAgendaAndJarvis() {
@@ -54,7 +60,7 @@ final class OwnerExperienceUITests: XCTestCase {
         XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(element("owner.home.status", in: app).waitForExistence(timeout: 10), "the backend's key figure")
         XCTAssertTrue((element("owner.home.greeting", in: app).label).contains("Ana."), "the greeting uses the profile's first name")
-        XCTAssertTrue(element("owner.home.jarvis.mark", in: app).exists)
+        XCTAssertTrue(element("owner.home.jarvis", in: app).exists)
         // Para atender (UX-5): the command center's alerts in the backend's words, high first, and
         // "Ver todas" because there are more than three.
         reveal("owner.home.attention.item.center", in: app)
@@ -64,18 +70,18 @@ final class OwnerExperienceUITests: XCTestCase {
         // Next: the JARVIS agenda, next event first.
         reveal("owner.home.agenda.event", in: app)
         XCTAssertTrue(text("Reunión con el contador", in: app).exists)
-        reveal("owner.home.jarvis.chat", in: app)
-        XCTAssertTrue(element("owner.home.jarvis.agenda", in: app).exists)
+        XCTAssertFalse(element("owner.home.jarvis.chat", in: app).exists, "one way into JARVIS")
     }
 
     func testOwnerTodayOpensTheChatTheAgendaAndTheMailReview() {
         let app = launch()
-        reveal("owner.home.jarvis.chat", in: app).tap()
+        openChat(app)
         XCTAssertTrue(element("jarvis.chat.input", in: app).waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        reveal("owner.home.jarvis.agenda", in: app).tap()
+        reveal("jarvis.section.calendar", in: app).tap()
         XCTAssertTrue(text("Cita médica", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(element("jarvis.agenda.schedule", in: app).exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         // The mail notices are the fourth item: "Ver todas" → their link opens the Email Monitor.
         reveal("owner.home.attention.all", in: app).tap()
@@ -113,7 +119,7 @@ final class OwnerExperienceUITests: XCTestCase {
             let shown = element("home.status", in: app)
             XCTAssertTrue(shown.waitForExistence(timeout: 10), plan ?? "free")
             XCTAssertFalse(element("owner.home", in: app).exists, plan ?? "free")
-            XCTAssertFalse(element("owner.home.jarvis.mark", in: app).exists, plan ?? "free")
+            XCTAssertFalse(element("owner.home.jarvis", in: app).exists, plan ?? "free")
             app.terminate()
         }
     }
@@ -122,10 +128,11 @@ final class OwnerExperienceUITests: XCTestCase {
         let app = launch(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         XCTAssertTrue(element("owner.home.status", in: app).waitForExistence(timeout: 10))
         // JARVIS comes first on the Owner's Hoy (UX-6); the financial blocks follow.
-        reveal("owner.home.jarvis.chat", in: app).tap()
+        openChat(app)
         XCTAssertTrue(element("jarvis.chat.input", in: app).waitForExistence(timeout: 5))
         // The quick actions wrap instead of disappearing.
         reveal("jarvis.chat.quick.overtime", in: app)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         reveal("owner.home.attention.all", in: app)
     }
@@ -134,7 +141,7 @@ final class OwnerExperienceUITests: XCTestCase {
 
     func testTheChatOffersOnlyItsFourQuickActionsAndNeverSendsByItself() {
         let app = launch()
-        reveal("owner.home.jarvis.chat", in: app).tap()
+        openChat(app)
         XCTAssertTrue(element("jarvis.chat.empty", in: app).waitForExistence(timeout: 5))
         for action in ["overtime", "bonus", "schedule", "agenda"] {
             XCTAssertTrue(element("jarvis.chat.quick.\(action)", in: app).exists, action)
@@ -168,7 +175,7 @@ final class OwnerExperienceUITests: XCTestCase {
             try shot("01-today")
             app.swipeUp()
             try shot("02-today-scrolled")
-            reveal("owner.home.jarvis.chat", in: app).tap()
+            openChat(app)
             XCTAssertTrue(element("jarvis.chat.empty", in: app).waitForExistence(timeout: 5))
             try shot("03-chat-empty")
             let input = element("jarvis.chat.input", in: app)
@@ -179,15 +186,14 @@ final class OwnerExperienceUITests: XCTestCase {
             try shot("04-chat-confirm")
             app.terminate()
 
-            app = launch(tab: "profile", appearance: appearance)
-            reveal("profile.jarvis", in: app).tap()
+            app = launch(appearance: appearance)
+            reveal("owner.home.jarvis", in: app).tap()
             XCTAssertTrue(element("jarvis.section.calendar", in: app).waitForExistence(timeout: 5))
             try shot("05-jarvis-hub")
             element("jarvis.section.calendar", in: app).tap()
             XCTAssertTrue(text("Reunión con el contador", in: app).waitForExistence(timeout: 10))
             try shot("06-agenda")
-            app.navigationBars.buttons.element(boundBy: 0).tap()
-            app.navigationBars.buttons.element(boundBy: 0).tap()
+            app.tabBars.buttons["Perfil"].tap()
             XCTAssertTrue(element("profile.subscription", in: app).waitForExistence(timeout: 5))
             try shot("07-profile")
             app.tabBars.buttons["Movimientos"].tap()
@@ -199,7 +205,8 @@ final class OwnerExperienceUITests: XCTestCase {
             app.terminate()
 
             app = launch(scenario: "empty", tab: "profile", appearance: appearance)
-            reveal("profile.jarvis", in: app).tap()
+            app.tabBars.buttons.element(boundBy: 0).tap()
+            reveal("owner.home.jarvis", in: app).tap()
             element("jarvis.section.calendar", in: app).tap()
             XCTAssertTrue(element("jarvis.agenda.empty", in: app).waitForExistence(timeout: 10))
             try shot("10-agenda-empty")

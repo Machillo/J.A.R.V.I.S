@@ -117,7 +117,7 @@ class WealthUiTest {
         waitUntil("the banks") { present("BAC") }
         back()
         tab(tx("Perfil", "Profile"))
-        waitUntil("JARVIS") { present("JARVIS") }
+        waitUntil("Perfil") { present(tx("Suscripción", "Subscription")) }
     }
 
     /** WE-2: VIP and the Owner see what they have minus what they owe, on top of Patrimonio. */

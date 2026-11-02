@@ -76,7 +76,8 @@ final class OwnerAnalysisPlacementUITests: XCTestCase {
 
     func testJarvisKeepsTheFullAnalysis() {
         let app = launch(plan: "vip", role: "owner", tab: "profile")
-        open("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        open("owner.home.jarvis", in: app)
         open("jarvis.section.analysis", in: app)
         XCTAssertTrue(element("jarvis.analysis.health", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(contains("/100", in: app))

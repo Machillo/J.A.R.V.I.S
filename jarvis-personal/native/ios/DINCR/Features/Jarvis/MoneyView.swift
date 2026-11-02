@@ -81,14 +81,14 @@ private struct CycleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Tu ciclo", "Your cycle")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(tx("Tu ciclo", "Your cycle")).font(DincrFont.label).foregroundStyle(.dincrText2)
             if let start = report.cycle?.start, let end = report.cycle?.end {
                 Text(tx("Ciclo: \(Day.label(start)) – \(Day.label(end))", "Cycle: \(Day.label(start)) – \(Day.label(end))"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             if let start = report.expenseCycle?.start, let end = report.expenseCycle?.end {
                 Text(tx("Estado de cuenta: \(Day.label(start)) – \(Day.label(end))", "Statement: \(Day.label(start)) – \(Day.label(end))"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             FigureRow(label: tx("Ingresos esperados", "Expected income"), amount: report.income?.expectedTotal)
             FigureRow(label: tx("Ingresos recibidos", "Income received"), amount: report.income?.receivedFromTransactions)
@@ -116,7 +116,7 @@ private struct AccountsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Tus cuentas", "Your accounts")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(tx("Tus cuentas", "Your accounts")).font(DincrFont.label).foregroundStyle(.dincrText2)
             FigureRow(label: tx("Total", "Total"), amount: balances.totalRealBalance, currency: balances.currency)
         }
         .dincrCard()
@@ -145,7 +145,7 @@ private struct AccountRow: View {
                     Text([account.accountName ?? tx("Cuenta", "Account"), account.accountLast4.map { "••\($0)" }].compactMap { $0 }.joined(separator: " "))
                         .font(DincrFont.body.weight(.semibold))
                     if let bank = account.bankName, !bank.isEmpty {
-                        Text(bank).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        Text(bank).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                 }
                 Spacer()
@@ -153,10 +153,10 @@ private struct AccountRow: View {
             }
             .accessibilityElement(children: .combine)
             if let asOf = account.balanceAsOf {
-                Text(tx("Al \(Day.label(asOf))", "As of \(Day.label(asOf))")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text(tx("Al \(Day.label(asOf))", "As of \(Day.label(asOf))")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             if !account.includeInNetWorth {
-                Text(tx("No suma a tu patrimonio", "Doesn’t count toward your net worth")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text(tx("No suma a tu patrimonio", "Doesn’t count toward your net worth")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             if account.isEditable {
                 HStack(spacing: DincrSpacing.s2) {
@@ -218,7 +218,7 @@ private struct AccountForm: View {
                     if let shown = existing?.balance {
                         Text(tx("Saldo que DINCR muestra: \(model.moneyFormat.string(shown, currency: existing?.currency))",
                                 "Balance DINCR shows: \(model.moneyFormat.string(shown, currency: existing?.currency))"))
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                     Picker(tx("Moneda", "Currency"), selection: $currency) {
                         ForEach(AccountBalanceRequest.currencies, id: \.self) { Text($0).tag($0) }

@@ -133,6 +133,10 @@ data class MonthTotals(
     val expenses: Money,
     @SerialName("debt_paid") val debtPaid: Money? = null,
     val balance: Money? = null,
+    /** The Owner's card statement (`owner_ledger.owner_cycle_totals`): first and last day, and when it is paid. */
+    @SerialName("period_start") val periodStart: String? = null,
+    @SerialName("period_end") val periodEnd: String? = null,
+    @SerialName("payment_date") val paymentDate: String? = null,
 )
 
 @Serializable

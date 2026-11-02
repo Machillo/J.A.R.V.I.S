@@ -204,3 +204,25 @@ def test_owner_strategy_keeps_its_own_income_inputs(ledger, monkeypatch):
     result = _strategy(monkeypatch, ledger, role="owner",
                        calculate_monthly_salary_projection=lambda: {"results": {"base_net": 900000}})
     assert result["recurring_monthly_income"] == 900000 and result["income_policy"] is None
+
+
+MINIMUMS = 50000  # the one debt of LedgerDB
+
+
+def _owner_center(ledger, monkeypatch, cycle):
+    from backend.user_product import owner_ledger, vip_service
+    monkeypatch.setattr(vip_service, "owner_account_context", lambda *_: True)
+    monkeypatch.setattr(owner_ledger, "owner_month_totals", lambda *_a, **_k: {"income": 0, "expenses": 0, "debt_paid": 0, "balance": 0})
+    monkeypatch.setattr(owner_ledger, "owner_cycle_totals", lambda *_a: cycle)
+
+
+def test_the_owner_margin_is_his_statement_not_an_average_of_months_without_deposits(ledger, monkeypatch):
+    """Months with no salary deposit recorded made the Owner read a false "commitments exceed income"."""
+    cycle = {"month": "2026-09", "income": 450000, "expenses": 300000, "debt_paid": 20000, "balance": 130000,
+             "period_start": "2026-09-22", "period_end": "2026-10-21", "payment_date": "2026-11-05"}
+    _owner_center(ledger, monkeypatch, cycle)
+    center = _home()
+    assert center["safe_to_spend"]["monthly_margin"] == 450000 - 300000 - MINIMUMS
+    assert center["reports"]["current"] == cycle
+    titles = [alert["title"] for alert in center["alerts"]]
+    assert not any("cambian de un mes a otro" in title for title in titles), "nothing to do about overtime"

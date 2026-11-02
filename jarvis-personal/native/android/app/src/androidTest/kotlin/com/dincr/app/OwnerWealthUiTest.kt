@@ -93,6 +93,7 @@ class OwnerWealthUiTest {
     private fun openWealth() {
         waitUntil("home") { present(tx("Hoy", "Today")) }
         compose.onAllNodesWithText(tx("Perfil", "Profile")).onFirst().performClick()
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         click(tx("Patrimonio, inversiones y negocios", "Net worth, investments and businesses"))
         waitForTag("wealth.investments")

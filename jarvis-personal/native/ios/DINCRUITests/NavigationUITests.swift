@@ -83,7 +83,8 @@ final class NavigationUITests: XCTestCase {
         let app = launch(role: "owner", tab: "profile")
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
         XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map { $0.label }, Self.tabs)
-        open("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        open("owner.home.jarvis", in: app)
         XCTAssertTrue(element("jarvis.section.chat", in: app).waitForExistence(timeout: 10))
     }
 }

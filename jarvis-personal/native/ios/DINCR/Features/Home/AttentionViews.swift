@@ -52,7 +52,7 @@ struct AttentionRow: View {
             DincrMessage(item.kind, title: item.title, message: item.message)
             if item.isChange {
                 Text(tx("Cambio desde la última observación", "Change since the last check"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     .padding(.horizontal, DincrSpacing.s4)
             }
             if let destination = item.destination {
@@ -62,7 +62,7 @@ struct AttentionRow: View {
                         Image(systemName: "chevron.right").font(DincrFont.caption).accessibilityHidden(true)
                     }
                     .font(DincrFont.bodySmall.weight(.semibold))
-                    .foregroundStyle(DincrColor.tint)
+                    .foregroundStyle(.dincrTint)
                     .frame(minHeight: 44)
                     .padding(.horizontal, DincrSpacing.s4)
                 }
@@ -112,7 +112,7 @@ struct AttentionListView: View {
                     // Both sources answered: only now is "nothing" a fact.
                     if items.isEmpty {
                         Text(tx("No hay nada para atender en este momento.", "There’s nothing that needs attention right now."))
-                            .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                             .accessibilityIdentifier("attention.none")
                     }
                 }

@@ -100,14 +100,14 @@ public struct ErrorStateView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             Label {
-                Text(message).font(DincrFont.body).foregroundStyle(DincrColor.text)
+                Text(message).font(DincrFont.body).foregroundStyle(.dincrText)
             } icon: {
                 Image(systemName: "xmark.octagon").foregroundStyle(DincrColor.negative)
             }
             if let retry {
                 Button(AppLanguage.current.pick("Reintentar", "Try again"), action: retry)
                     .font(DincrFont.title2)
-                    .foregroundStyle(DincrColor.tint)
+                    .foregroundStyle(.dincrTint)
                     .frame(minHeight: 44)
             }
         }
@@ -138,8 +138,8 @@ public struct StatusBanner: View {
         HStack(alignment: .top, spacing: DincrSpacing.s3) {
             Image(systemName: symbol).foregroundStyle(color).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text)
-                Text(message).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                Text(title).font(DincrFont.title2).foregroundStyle(.dincrText)
+                Text(message).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             }
             Spacer(minLength: 0)
         }
@@ -180,14 +180,14 @@ public struct DincrProgressBar: View {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(onHero ? DincrColor.onHero.opacity(0.16) : DincrColor.surface2)
-                    Capsule().fill(isOver ? overColor : DincrColor.tint)
+                    Capsule().fill(isOver ? AnyShapeStyle(overColor) : AnyShapeStyle(.dincrTint))
                         .frame(width: max(proxy.size.width * fraction, fraction > 0 ? 6 : 0))
                 }
             }
             .frame(height: 8)
             .accessibilityHidden(true)
         } else {
-            Text(VisualText.noData().capitalizedFirst).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            Text(VisualText.noData().capitalizedFirst).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
         }
     }
 }

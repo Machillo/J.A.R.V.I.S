@@ -68,7 +68,7 @@ final class PullToRefreshUITests: XCTestCase {
 
             app.tabBars.buttons["Perfil"].tap()
             pullKeeping(["profile.subscription", "profile.security"], in: app, "\(context) Perfil")
-            XCTAssertEqual(element("profile.jarvis", in: app).exists, role == "owner", "\(context): JARVIS only for the Owner")
+            XCTAssertFalse(element("profile.jarvis", in: app).exists, "JARVIS opens from Hoy")
             app.terminate()
         }
     }

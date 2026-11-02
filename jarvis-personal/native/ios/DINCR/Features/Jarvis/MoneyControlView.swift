@@ -50,16 +50,16 @@ private struct MoneyControlContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Te deben", "Owed to you")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(tx("Te deben", "Owed to you")).font(DincrFont.label).foregroundStyle(.dincrText2)
             MoneyText(report.summary?.totalPending, font: DincrFont.displayAmount)
             if let open = report.summary?.countOpen {
                 Text(open == 1 ? tx("1 persona con saldo pendiente", "1 person with an amount due")
                                : tx("\(open) personas con saldo pendiente", "\(open) people with an amount due"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             if let start = report.cycle?.start, let end = report.cycle?.end {
                 Text(tx("Ciclo de tarjeta: \(Day.label(start)) – \(Day.label(end))", "Card cycle: \(Day.label(start)) – \(Day.label(end))"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
         }
         .dincrCard()
@@ -88,7 +88,7 @@ private struct ReceivableCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(receivable.personName ?? tx("Persona", "Person")).font(DincrFont.body.weight(.semibold))
                     Text(statusLabel + (receivable.isAuto ? tx(" · Tarjeta adicional", " · Additional card") : ""))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 Spacer()
                 MoneyText(receivable.currentAmountDue)
@@ -105,7 +105,7 @@ private struct ReceivableCard: View {
                 }
                 if !receivable.history.isEmpty {
                     Button(showsHistory ? tx("Ocultar movimientos", "Hide entries") : tx("Ver movimientos", "Show entries")) { showsHistory.toggle() }
-                        .font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                        .font(DincrFont.label).foregroundStyle(.dincrTint)
                         .accessibilityIdentifier("money.history.\(receivable.id)")
                 }
             }
@@ -115,7 +115,7 @@ private struct ReceivableCard: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.isPayment ? tx("Pago", "Payment") : tx("Cargo", "Charge")).font(DincrFont.bodySmall)
                             Text([entry.entryDate.map { Day.label($0) }, entry.description].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         }
                         Spacer()
                         MoneyText(entry.amount.map { entry.isPayment ? -$0 : $0 })
@@ -156,7 +156,7 @@ private struct ReceivablePaymentSheet: View {
             Form {
                 Section {
                     Text(tx("Debe: \(model.moneyFormat.string(receivable.currentAmountDue ?? 0)).", "Owes: \(model.moneyFormat.string(receivable.currentAmountDue ?? 0))."))
-                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     TextField(tx("Monto", "Amount"), text: $text).keyboardType(.decimalPad).accessibilityIdentifier("money.payment.amount")
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }

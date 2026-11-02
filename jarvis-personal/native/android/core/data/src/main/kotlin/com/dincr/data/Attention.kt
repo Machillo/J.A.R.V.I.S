@@ -61,7 +61,7 @@ object AttentionList {
     fun rank(severity: String?): Int = when (severity?.lowercase()) {
         "critical" -> 0
         "high" -> 1
-        "success" -> 3
+        "success", "info" -> 3
         else -> 2
     }
 

@@ -408,7 +408,8 @@ final class PlanAccountsUITests: XCTestCase {
 
     func testOnlyTheOwnerGetsTheFinancialAnalysis() {
         let owner = launch(role: "owner", tab: "profile")
-        open("profile.jarvis", in: owner)
+        owner.tabBars.buttons.element(boundBy: 0).tap()
+        open("owner.home.jarvis", in: owner)
         open("jarvis.section.analysis", in: owner)
         XCTAssertTrue(element("jarvis.analysis.health", in: owner).waitForExistence(timeout: 10))
         XCTAssertTrue(element("jarvis.analysis.networth", in: owner).exists)

@@ -150,7 +150,7 @@ private struct PlanPreferencesForm: View {
             if !incomeDeclared {
                 Section {
                     Text(tx("Primero declará tu ingreso: tus ajustes se guardan junto con él.", "Declare your income first: your settings are saved with it."))
-                        .foregroundStyle(DincrColor.text2)
+                        .foregroundStyle(.dincrText2)
                     NavigationLink { IncomeBaseView() } label: { Text(tx("Completar ingresos y base", "Complete income and base")) }
                         .accessibilityIdentifier("planPreferences.declareIncome")
                 }
@@ -213,7 +213,7 @@ private struct DeclaredSavingsForm: View {
             if !incomeDeclared {
                 Section {
                     Text(tx("Primero declará tu ingreso: tus ahorros se guardan junto con él.", "Declare your income first: your savings are saved with it."))
-                        .foregroundStyle(DincrColor.text2)
+                        .foregroundStyle(.dincrText2)
                     NavigationLink { IncomeBaseView() } label: { Text(tx("Completar ingresos y base", "Complete income and base")) }
                         .accessibilityIdentifier("declaredSavings.declareIncome")
                 }

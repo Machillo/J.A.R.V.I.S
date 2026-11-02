@@ -55,9 +55,9 @@ struct DebtSavingsBlocksView: View {
                 Text(DebtSavingsReading.headline(proposal, format: format)).font(DincrFont.title2)
                     .accessibilityIdentifier("debtBlocks.headline")
                 ForEach(Array(DebtSavingsReading.lines(state, format: format).enumerated()), id: \.offset) { _, line in
-                    Text(line).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2).fixedSize(horizontal: false, vertical: true)
+                    Text(line).font(DincrFont.bodySmall).foregroundStyle(.dincrText2).fixedSize(horizontal: false, vertical: true)
                 }
-                Text(DebtSavingsReading.recommendation(proposal)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text(DebtSavingsReading.recommendation(proposal)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 if model.flags.isEnabled(.financialWrites) {
                     Button(tx("Ya lo creé en el banco", "I created it at the bank")) { creating = proposal }
@@ -75,7 +75,7 @@ struct DebtSavingsBlocksView: View {
                 .accessibilityIdentifier("debtBlocks.status")
         }
         ForEach(DebtSavingsReading.warnings(state), id: \.self) { warning in
-            Text(warning).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted).frame(maxWidth: .infinity, alignment: .leading)
+            Text(warning).font(DincrFont.caption).foregroundStyle(.dincrTextMuted).frame(maxWidth: .infinity, alignment: .leading)
         }
         if let blocks = state.blocks, !blocks.isEmpty {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
@@ -84,7 +84,7 @@ struct DebtSavingsBlocksView: View {
                     VStack(alignment: .leading, spacing: DincrSpacing.s1) {
                         Text(block.debtName ?? tx("Deuda", "Debt")).font(DincrFont.title2)
                         ForEach(Array(DebtSavingsReading.blockLines(block, format: format).enumerated()), id: \.offset) { _, line in
-                            Text(line).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2).fixedSize(horizontal: false, vertical: true)
+                            Text(line).font(DincrFont.bodySmall).foregroundStyle(.dincrText2).fixedSize(horizontal: false, vertical: true)
                         }
                         if model.flags.isEnabled(.financialWrites) && block.matured == true {
                             Button(tx("Ya lo aboné", "I paid it")) { paying = block }
@@ -223,7 +223,7 @@ private struct ApplyBlockSheet: View {
                 if outcome == .reduceInstallment {
                     MoneyField(label: tx("Cuota nueva", "New installment"), text: $installment, identifier: "debtBlocks.newInstallment")
                     Text(tx("Lo que bajó la cuota se suma a tu siguiente ahorro.", "What the installment went down is added to your next saving."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }

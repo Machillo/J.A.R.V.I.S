@@ -20,24 +20,24 @@ struct AdditionalCardsSection: View {
                 Text(tx("Tarjetas adicionales", "Additional cards")).font(DincrFont.body.weight(.semibold))
                 Spacer()
                 Button(tx("Agregar", "Add")) { adding = true }
-                    .font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                    .font(DincrFont.label).foregroundStyle(.dincrTint)
                     .accessibilityIdentifier("money.cards.add")
             }
             Text(tx("Lo que se compre con estas tarjetas se le cobra a esa persona y no cuenta como gasto tuyo.",
                     "Purchases with these cards are charged to that person and don’t count as your spending."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             AsyncContent(fallback: tx("No pudimos cargar tus tarjetas adicionales.", "We couldn’t load your additional cards."),
                          load: { try await model.service.additionalCards() }) { list, _ in
                 if list.items.isEmpty {
                     Text(tx("Todavía no marcaste ninguna.", "You haven’t marked any yet."))
-                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                         .accessibilityIdentifier("money.cards.empty")
                 }
                 ForEach(list.items) { card in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("•••• \(card.cardLast4)").font(DincrFont.bodySmall)
-                            Text(card.personName ?? tx("Persona", "Person")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                            Text(card.personName ?? tx("Persona", "Person")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         }
                         .accessibilityElement(children: .combine)
                         Spacer()

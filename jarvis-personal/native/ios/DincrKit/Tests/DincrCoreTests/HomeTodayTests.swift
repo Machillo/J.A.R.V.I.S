@@ -199,4 +199,23 @@ import Testing
                      HomeToday.vip(try center(knownCenter), budget: nil, calendar: nil, debts: [], today: today).shortcuts]
         #expect(tiers.allSatisfy { $0 == [.registerMovement, .movements, .debts, .goals] })
     }
+
+    @Test func theOwnersHoyReadsItsCardStatementAndAFactIsNotAProblem() throws {
+        let json = #"""
+        {"safe_to_spend":{"amount":0,"monthly_margin":-20000},
+         "alerts":[{"severity":"info","title":"Un cobro recurrente cambió de monto"},{"severity":"medium","title":"Otro aviso"}],
+         "reports":{"current":{"month":"2026-09","income":450000,"expenses":300000,"debt_paid":20000,"balance":130000,
+                               "period_start":"2026-09-22","period_end":"2026-10-21","payment_date":"2026-11-05"}}}
+        """#
+        let center = try APIClient.decoder.decode(CommandCenter.self, from: Data(json.utf8))
+        let home = HomeToday.vip(center, budget: nil, calendar: nil, debts: nil)
+        #expect(home.status.income == 450000 && home.status.expenses == 300000)
+        #expect(home.status.cycle?.start == "2026-09-22" && home.status.cycle?.end == "2026-10-21" && home.status.cycle?.payment == "2026-11-05")
+        let items = try #require(home.attention?.visible)
+        #expect(items.map(\.title) == ["Otro aviso", "Un cobro recurrente cambió de monto"], "a fact goes after what needs attention")
+        #expect(items.last?.kind == .opportunity)
+        // A public plan's month has no statement.
+        let month = try APIClient.decoder.decode(CommandCenter.self, from: Data(#"{"reports":{"current":{"month":"2026-11","income":1,"expenses":1}}}"#.utf8))
+        #expect(HomeToday.vip(month, budget: nil, calendar: nil, debts: nil).status.cycle == nil)
+    }
 }

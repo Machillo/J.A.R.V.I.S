@@ -67,7 +67,7 @@ private struct RetirementContent: View {
             TextField(tx("Edad de retiro (65 si no sabés)", "Retirement age (65 if unsure)"), text: $age).keyboardType(.numberPad).textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("retirement.age")
             Text(tx("El saldo del ROP aparece en el estado de cuenta de tu operadora de pensiones.", "Your ROP balance is on your pension fund statement."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
             Button(tx("Guardar", "Save")) { Task { await save() } }
                 .buttonStyle(.dincrPrimary(loading: saving)).disabled(saving)
