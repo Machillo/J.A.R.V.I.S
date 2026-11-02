@@ -58,6 +58,7 @@ const allocationLabels = {
   fondo_de_emergencia: tr("strategy.lifebuoy"),
   emergency_buffer: tr("strategy.lifebuoy"),
   metas_o_inversion: tx("Metas / patrimonio", "Goals / wealth"),
+  pension_complementaria: tx("Pensión complementaria", "Complementary pension"),
   goals_or_investment: tx("Metas / patrimonio", "Goals / wealth"),
   meta_prioritaria: tx("Meta prioritaria", "Priority goal"),
   inversion: tx("Inversión", "Investment"),

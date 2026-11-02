@@ -31,7 +31,7 @@ SPANISH = re.compile(r"[áéíóúñ¿¡]|\b(de|del|la|las|los|tu|tus|con|para|p
 TEXT_KEYS = {
     "recommendation", "warnings", "label", "director_note", "message", "title", "detail", "explanation",
     "headline", "summary", "rationale", "mode_reason", "mode_label", "why", "context", "action", "note",
-    "name", "tagline", "features", "reason", "investment_blockers", "rule", "blocked_by",
+    "name", "tagline", "features", "reason", "investment_blockers", "pension_blockers", "rule", "blocked_by",
 }
 
 

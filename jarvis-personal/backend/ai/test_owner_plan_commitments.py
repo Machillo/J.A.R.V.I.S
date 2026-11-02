@@ -55,7 +55,7 @@ def test_when_the_automatic_part_is_bigger_free_money_pays_for_it_and_the_goal_k
         {"meta_prioritaria": 5_000, "fondo_de_emergencia": 4_000, "vida_controlada": 3_000, "inversion": 0, "ataque_de_deuda": 20_000}, 10_000)
     assert taken == 10_000
     assert amounts == {"meta_prioritaria": 5_000, "fondo_de_emergencia": 0, "vida_controlada": 0, "inversion": 0,
-                       "metas_o_inversion": 0, "ataque_de_deuda": 17_000}
+                       "metas_o_inversion": 0, "pension_complementaria": 0, "ataque_de_deuda": 17_000}
 
 
 def test_nothing_to_take_from_is_never_negative():
