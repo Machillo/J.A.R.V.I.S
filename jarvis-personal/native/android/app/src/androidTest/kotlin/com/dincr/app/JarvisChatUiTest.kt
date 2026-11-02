@@ -155,12 +155,13 @@ class JarvisChatUiTest {
         openChat()
         send("hola")
         waitUntil("the answer") { present("Señor, esto es una respuesta de ejemplo.") }
-        // Back to the Profile hub (chat → JARVIS → Profile), sign out and in again: the chat starts empty.
+        // Back to Hoy (chat → JARVIS → Hoy), then Perfil, sign out and in again: the chat starts empty.
         repeat(2) {
             waitUntil("the back button") { compose.onAllNodesWithContentDescription(tx("Volver", "Back")).fetchSemanticsNodes().isNotEmpty() }
             compose.onAllNodesWithContentDescription(tx("Volver", "Back")).onFirst().performClick()
             compose.mainClock.advanceTimeBy(500)
         }
+        click(tx("Perfil", "Profile"))
         click(tx("Cerrar sesión", "Sign out"))
         waitUntil("the sign-out dialog") { compose.onAllNodesWithText(tx("Cerrar sesión", "Sign out")).fetchSemanticsNodes().size > 1 }
         compose.onAllNodesWithText(tx("Cerrar sesión", "Sign out"))[1].performClick()
