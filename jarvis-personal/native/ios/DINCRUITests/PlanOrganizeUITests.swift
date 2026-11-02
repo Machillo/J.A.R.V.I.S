@@ -113,7 +113,7 @@ final class PlanOrganizeUITests: XCTestCase {
             XCTAssertTrue(reveal("incomeBase.recurring", in: app).exists, role ?? "vip")
             back(app)
             app.tabBars.buttons["Perfil"].tap()
-            XCTAssertEqual(element("profile.jarvis", in: app).waitForExistence(timeout: 5), role == "owner")
+            XCTAssertFalse(element("profile.jarvis", in: app).exists, "JARVIS opens from Hoy")
             app.terminate()
         }
     }
@@ -124,7 +124,7 @@ final class PlanOrganizeUITests: XCTestCase {
             let app = launch(plan: plan, role: role, tab: "profile")
             XCTAssertTrue(element("profile.subscription", in: app).waitForExistence(timeout: 10))
             for id in ["profile.budget", "profile.calendar", "profile.recurring"] { XCTAssertFalse(element(id, in: app).exists, "\(role ?? plan ?? "free"): \(id)") }
-            XCTAssertEqual(element("profile.jarvis", in: app).exists, role == "owner")
+            XCTAssertFalse(element("profile.jarvis", in: app).exists, "JARVIS opens from Hoy")
             XCTAssertEqual(app.tabBars.buttons.count, 5)
             app.terminate()
         }

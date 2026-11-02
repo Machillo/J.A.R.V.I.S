@@ -102,6 +102,7 @@ class OwnerAnalysisPlacementUiTest {
     @Test fun jarvisKeepsTheFullAnalysis() {
         launch("vip", role = "owner")
         tab(tx("Perfil", "Profile"))
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         click(financialAnalysis)
         waitUntil("net worth") { tagged("analysis.networth") }

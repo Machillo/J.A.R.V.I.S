@@ -20,16 +20,16 @@ struct DebtPayoffSummary: View {
                 if let total {
                     Text(tx("Pagado \(format.string(total.paid)) de \(format.string(total.original))",
                             "Paid \(format.string(total.paid)) of \(format.string(total.original))"))
-                        .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text)
+                        .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
                     if let fraction = total.progress.fraction { DincrProgressBar(fraction: fraction) }
                     Text(tx("Te falta el \(Self.percent(total.remainingFraction)) de tus deudas.",
                             "\(Self.percent(total.remainingFraction)) of your debts left."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         .accessibilityIdentifier("debts.progress.total")
                 } else {
                     Text(tx("No podemos sumar cuánto llevás pagado: falta el monto original de alguna deuda.",
                             "We can’t add up what you’ve paid: some debt is missing its original amount."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 if let strategy { strategyLine(strategy) }
                 if let date = summary.debtFreeDate {
@@ -37,7 +37,7 @@ struct DebtPayoffSummary: View {
                             value: DebtPayoff.monthLabel(date))
                     if strategy == nil {
                         Text(tx("Si seguís pagando la cuota de cada deuda.", "If you keep paying each debt’s instalment."))
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                 } else {
                     Text(summary.unestimated == 1
@@ -45,7 +45,7 @@ struct DebtPayoffSummary: View {
                               "1 debt without a date: the interest rate is missing or the instalment doesn’t cover the interest.")
                          : tx("\(summary.unestimated) deudas sin fecha: falta la tasa de interés o la cuota no alcanza para los intereses.",
                               "\(summary.unestimated) debts without a date: the interest rate is missing or the instalment doesn’t cover the interest."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
             }
             .dincrCard()
@@ -61,7 +61,7 @@ struct DebtPayoffSummary: View {
             if let saved = strategy.monthsSaved, saved > 0 {
                 Text(saved == 1 ? tx("1 mes antes que pagando solo las cuotas.", "1 month earlier than paying only the instalments.")
                                 : tx("\(saved) meses antes que pagando solo las cuotas.", "\(saved) months earlier than paying only the instalments."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
         } else {
             Text(strategy.needsRates
@@ -69,7 +69,7 @@ struct DebtPayoffSummary: View {
                       "Your strategy can’t estimate the date yet: some debt is missing its interest rate.")
                  : tx("Tu estrategia todavía no estima la fecha: lo que destinás a deudas no alcanza para cubrir los intereses.",
                       "Your strategy can’t estimate the date yet: what goes to debts doesn’t cover the interest."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 .accessibilityIdentifier("debts.strategy.unknown")
         }
     }
@@ -90,7 +90,7 @@ struct DebtPayoffLine: View {
                 } else {
                     Text(tx("Sin fecha estimada: falta la tasa de interés o la cuota no alcanza para los intereses.",
                             "No estimated date: the interest rate is missing or the instalment doesn’t cover the interest."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
             }
             .accessibilityIdentifier("debt.payoff.\(debt.id)")

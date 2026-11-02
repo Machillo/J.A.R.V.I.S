@@ -201,4 +201,16 @@ class HomeTodayTest {
         assertEquals(mapOf("MOVEMENTS" to "movements", "DEBTS" to "debts", "GOALS" to "goals", "INCOME_BASE" to "incomeBase", "MONTH_PLAN" to "strategy"),
             HomeDestination.entries.filter { it.route != null }.associate { it.name to it.route })
     }
+
+    @Test fun theOwnersHoyReadsItsCardStatementAndAFactIsNotAProblem() {
+        val center = CommandCenter(
+            alerts = listOf(CommandCenter.Alert(severity = "info", title = "Un cobro recurrente cambió de monto"), CommandCenter.Alert(severity = "medium", title = "Otro aviso")),
+            reports = CommandCenter.Reports(MonthTotals("2026-09", BigDecimal(450000), BigDecimal(300000), BigDecimal(20000), BigDecimal(130000), "2026-09-22", "2026-10-21", "2026-11-05")),
+        )
+        val status = HomeToday.vip(center, null, null, null).status
+        assertEquals(HomeStatus.Cycle("2026-09-22", "2026-10-21", "2026-11-05"), status.cycle)
+        val items = AttentionList.items(center, null)
+        assertEquals(listOf("Otro aviso", "Un cobro recurrente cambió de monto"), items.map { it.title })
+        assertEquals(MessageKind.OPPORTUNITY, items.last().kind)
+    }
 }

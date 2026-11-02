@@ -23,7 +23,7 @@ object AppearanceCatalog {
         AppearanceOption(
             key = "palette", default = "oceano", classic = "clasico",
             values = listOf(
-                AppearanceOptionValue("oceano", "Océano", "Ocean"),
+                AppearanceOptionValue("oceano", "Sistema", "System"),
                 AppearanceOptionValue("clasico", "Clásico", "Classic"),
                 AppearanceOptionValue("arena", "Arena", "Sand"),
                 AppearanceOptionValue("grafito", "Grafito", "Graphite"),
@@ -32,7 +32,7 @@ object AppearanceCatalog {
         AppearanceOption(
             key = "accent", default = "cian", classic = "teal",
             values = listOf(
-                AppearanceOptionValue("cian", "Cian", "Cyan"),
+                AppearanceOptionValue("cian", "Azul", "Blue"),
                 AppearanceOptionValue("teal", "Verde azulado", "Teal"),
                 AppearanceOptionValue("ciruela", "Ciruela", "Plum"),
                 AppearanceOptionValue("tinta", "Tinta", "Ink"),

@@ -84,7 +84,7 @@ struct ProfileSetupView: View {
             Text(step == totalSteps - 1
                  ? tx("Estas preferencias quedarán guardadas en tu cuenta.", "These preferences will be saved to your account.")
                  : tx("Guardamos todo al terminar los cuatro pasos.", "We save everything when you finish the four steps."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
         }
         .padding(.horizontal, DincrSpacing.s4)
         .padding(.vertical, DincrSpacing.s3)
@@ -95,8 +95,8 @@ struct ProfileSetupView: View {
 
     private func header(_ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(title).font(DincrFont.title1).foregroundStyle(DincrColor.text).accessibilityAddTraits(.isHeader)
-            Text(detail).font(DincrFont.body).foregroundStyle(DincrColor.text2)
+            Text(title).font(DincrFont.title1).foregroundStyle(.dincrText).accessibilityAddTraits(.isHeader)
+            Text(detail).font(DincrFont.body).foregroundStyle(.dincrText2)
         }
     }
 
@@ -125,8 +125,8 @@ struct ProfileSetupView: View {
                 ForEach(goals, id: \.0) { id, symbol, label in
                     Button { goal = id } label: {
                         HStack(spacing: DincrSpacing.s3) {
-                            Image(systemName: symbol).frame(width: 28).foregroundStyle(DincrColor.tint)
-                            Text(label).font(DincrFont.body).foregroundStyle(DincrColor.text).multilineTextAlignment(.leading)
+                            Image(systemName: symbol).frame(width: 28).foregroundStyle(.dincrTint)
+                            Text(label).font(DincrFont.body).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
                             Spacer()
                             Image(systemName: goal == id ? "checkmark.circle.fill" : "circle")
                                 .foregroundStyle(goal == id ? DincrColor.tint : DincrColor.fieldBorder)
@@ -163,7 +163,7 @@ struct ProfileSetupView: View {
                 }
                 .tint(DincrColor.tint)
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                    Text(tx("Formato de números", "Number format")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                    Text(tx("Formato de números", "Number format")).font(DincrFont.label).foregroundStyle(.dincrText2)
                     Picker(tx("Formato de números", "Number format"), selection: $separators) {
                         Text("123.456,78").tag(MoneyFormat.Separators.dotComma)
                         Text("123,456.78").tag(MoneyFormat.Separators.commaDot)
@@ -171,7 +171,7 @@ struct ProfileSetupView: View {
                     .pickerStyle(.segmented)
                 }
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                    Text(tx("Posición del símbolo", "Symbol position")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                    Text(tx("Posición del símbolo", "Symbol position")).font(DincrFont.label).foregroundStyle(.dincrText2)
                     Picker(tx("Posición del símbolo", "Symbol position"), selection: $placement) {
                         Text(tx("Antes", "Before")).tag(MoneyFormat.Placement.before)
                         Text(tx("Después", "After")).tag(MoneyFormat.Placement.after)
@@ -179,9 +179,9 @@ struct ProfileSetupView: View {
                     .pickerStyle(.segmented)
                 }
                 HStack {
-                    Text(tx("Así se verá", "Preview")).font(DincrFont.label).foregroundStyle(DincrColor.textMuted)
+                    Text(tx("Así se verá", "Preview")).font(DincrFont.label).foregroundStyle(.dincrTextMuted)
                     Spacer()
-                    Text(preview.string(123_456.78)).font(DincrFont.title2.monospacedDigit()).foregroundStyle(DincrColor.text)
+                    Text(preview.string(123_456.78)).font(DincrFont.title2.monospacedDigit()).foregroundStyle(.dincrText)
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -200,11 +200,11 @@ struct ProfileSetupView: View {
                       "Select the institutions you use. This selection does not connect your accounts; you can separately authorize reading compatible financial emails."))
             Label {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(tx("Tu seguridad primero", "Your security comes first")).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text)
+                    Text(tx("Tu seguridad primero", "Your security comes first")).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
                     Text(tx("DINCR nunca te pedirá la contraseña de tu banco.", "DINCR will never ask for your bank password."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                        .font(DincrFont.caption).foregroundStyle(.dincrText2)
                 }
-            } icon: { Image(systemName: "checkmark.shield").foregroundStyle(DincrColor.tint) }
+            } icon: { Image(systemName: "checkmark.shield").foregroundStyle(.dincrTint) }
             LazyVGrid(columns: columns, spacing: DincrSpacing.s2) {
                 ForEach(BankBrand.onboardingChoices, id: \.id) { choice in
                     bankCard(id: choice.id, mailSupported: choice.mailSupported)
@@ -213,7 +213,7 @@ struct ProfileSetupView: View {
             .sensoryFeedback(.selection, trigger: institutions)
             Text(tx("Esto no conecta ninguna cuenta ni comparte contraseñas. Solo personaliza DINCR y prepara la automatización que vos autoricés después.",
                     "This does not connect any account or share passwords. It only personalizes DINCR and prepares automation you authorize later."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 .accessibilityIdentifier("setup.banks.note")
         }
     }
@@ -234,11 +234,11 @@ struct ProfileSetupView: View {
                         .foregroundStyle(selected ? DincrColor.tint : DincrColor.fieldBorder)
                         .accessibilityHidden(true)
                 }
-                Text(name).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text)
+                Text(name).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
                     .multilineTextAlignment(.leading).lineLimit(2)
                 Text(mailSupported ? tx("Disponible para la suscripción VIP", "Available with the VIP subscription")
                                    : tx("Solo para personalizar tu perfil", "Only to personalize your profile"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     .multilineTextAlignment(.leading).lineLimit(2)
             }
             .padding(DincrSpacing.s3)
@@ -291,10 +291,10 @@ struct DincrTextField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(label).font(DincrFont.label).foregroundStyle(DincrColor.text2)
-            TextField(label, text: $text, prompt: Text(prompt).foregroundStyle(DincrColor.textMuted))
+            Text(label).font(DincrFont.label).foregroundStyle(.dincrText2)
+            TextField(label, text: $text, prompt: Text(prompt).foregroundStyle(.dincrTextMuted))
                 .font(DincrFont.body)
-                .foregroundStyle(DincrColor.text)
+                .foregroundStyle(.dincrText)
                 .focused($focused)
                 .padding(.horizontal, DincrSpacing.s4)
                 .frame(minHeight: 52)

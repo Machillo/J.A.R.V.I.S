@@ -130,7 +130,7 @@ class PullToRefreshUiTest {
 
             tab(profileTab)
             pullKeeping(listOf(tx("Suscripción", "Subscription"), tx("Seguridad", "Security")), locks, "$context Perfil")
-            assertEquals("$context: JARVIS only for the Owner", role == "owner", present("JARVIS"))
+            assertFalse("$context: JARVIS opens from Hoy", present("JARVIS"))
         }
     }
 

@@ -40,7 +40,7 @@ server-authenticated role. Free, Basic and VIP keep their current totals. Readin
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable
 
@@ -55,6 +55,10 @@ OTHER_INFLOWS = "other_inflows"
 PAYROLL_ACCRUED = "payroll_accrued"
 SALARY_ESTIMATED = "salary_estimated"
 SALARY_CATEGORY = "Salario"
+OWNER_CUT_DAY = 21
+OWNER_PAYMENT_DAY = 5
+# Zero-rate and mini installments are charged on the card: they are already the statement's expenses.
+CARD_INSTALLMENT_TYPES = {"tasa_cero", "minicuotas"}
 NOT_COUNTED = "not_counted"
 UNCLASSIFIED = "unclassified"
 
@@ -194,9 +198,10 @@ def _existing_tables(conn) -> set[str]:
     return {row["name"] for row in rows}
 
 
-def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
+def owner_month_totals(conn, workspace_id: str, start: date, end: date, *, salary: dict | None = None) -> dict:
     """The month ``[start, end)`` of one workspace by the rules above. SELECT only. A table that does
-    not exist holds no rows (as ``basic_service._basic_tables_ready``)."""
+    not exist holds no rows (as ``basic_service._basic_tables_ready``). ``salary``: the salary of a
+    period that is not made of calendar months (``owner_cycle_totals``)."""
     transaction_date = _transaction_date_sql()
     groups = conn.execute(
         f"""SELECT LOWER(BTRIM(COALESCE(transaction_type,''))) AS ledger_type, COALESCE(SUM(amount),0) AS total, COUNT(*) AS count
@@ -215,7 +220,7 @@ def owner_month_totals(conn, workspace_id: str, start: date, end: date) -> dict:
             "AND NOT COALESCE(is_internal_transfer,FALSE) AND transaction_date >= %s AND transaction_date < %s",
             (workspace_id, start, end),
         ).fetchone()["count"]
-    salary = owner_salary(conn, workspace_id, start, end, tables)
+    salary = salary or owner_salary(conn, workspace_id, start, end, tables)
     # The rule's salary replaces what was received in its months (salaries table and "Salario" deposits).
     record["salaries"] = _decimal(record["salaries"]) + salary["salary"] - salary["received"]
     totals = month_totals([(row["ledger_type"], row["total"], row["count"]) for row in groups], pending_mail=pending, **record)
@@ -241,13 +246,38 @@ def _rows(conn, sql: str, params: tuple) -> list[dict]:
     return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
 
-def owner_salary(conn, workspace_id: str, start: date, end: date, tables: set[str] | None = None) -> dict:
-    """The salary of ``[start, end)`` by the salary rule, month by month: ``salary`` (what counts),
-    ``received`` (deposits and ``salaries`` rows it replaces), ``estimated`` (any month projected)
-    and ``closed_estimated`` (a closed month projected). SELECT only."""
-    tables = _existing_tables(conn) if tables is None else tables
-    transaction_date = _transaction_date_sql()
-    current = costa_rica_today().replace(day=1)
+def owner_cycle_window(today: date) -> tuple[date, date, date]:
+    """The card statement Hoy shows: ``(start, end_exclusive, payment_date)``.
+
+    The cut is on the 21st, included in its statement, and it is paid on the 5th of the next month.
+    A statement stays on screen until it is paid: the next one takes over on the 6th. On 2 Nov that
+    is 22 Sep to 21 Oct (paid on 5 Nov); from 6 Nov, 22 Oct to 21 Nov (paid on 5 Dec).
+    """
+    anchor = today.replace(day=1)
+    if today.day <= OWNER_PAYMENT_DAY:
+        anchor = (anchor - timedelta(days=1)).replace(day=1)
+    previous = (anchor - timedelta(days=1)).replace(day=1)
+    return (previous.replace(day=OWNER_CUT_DAY + 1), anchor.replace(day=OWNER_CUT_DAY + 1),
+            _next_month(anchor).replace(day=OWNER_PAYMENT_DAY))
+
+
+def owner_cycle_totals(conn, workspace_id: str, today: date) -> dict:
+    """The statement of ``owner_cycle_window`` by the ledger's rules, with one month of salary. SELECT only."""
+    start, end, payment = owner_cycle_window(today)
+    tables = _existing_tables(conn)
+    salary = _period_salary(conn, workspace_id, start, end, _salary_inputs(conn, workspace_id, tables), tables, is_open=end > today)
+    totals = owner_month_totals(conn, workspace_id, start, end, salary=salary)
+    return {**totals, "month": start.strftime("%Y-%m"), "period_start": start.isoformat(), "period_end": (end - timedelta(days=1)).isoformat(),
+            "payment_date": payment.isoformat()}
+
+
+def payments_outside_the_card(debts: list[dict]) -> float:
+    """What the Owner's debts ask for every month beyond what his statement already holds."""
+    return round(sum(_money(debt.get("monthly_payment")) for debt in debts
+                     if str(debt.get("debt_type") or "").lower() not in CARD_INSTALLMENT_TYPES), 2)
+
+
+def _salary_inputs(conn, workspace_id: str, tables: set[str]) -> dict:
     profile = (conn.execute(
         "SELECT hourly_rate, regular_hours_per_week FROM employment_profile WHERE workspace_id=%s ORDER BY id DESC LIMIT 1",
         (workspace_id,)).fetchone() if "employment_profile" in tables else None)
@@ -258,30 +288,49 @@ def owner_salary(conn, workspace_id: str, start: date, end: date, tables: set[st
            ORDER BY CASE WHEN LOWER(source) LIKE '%%base%%' THEN 0 WHEN LOWER(source) LIKE '%%mensual%%' THEN 1 ELSE 2 END, id DESC
            LIMIT 1""", (workspace_id,)).fetchone() if "salaries" in tables else None)
     base_net = salary_projection.as_float(base["amount"] if base else 0)
-    projectable = bool(profile) or base_net > 0
+    return {"profile": profile, "deductions": deductions, "base_net": base_net}
+
+
+def _period_salary(conn, workspace_id: str, start: date, end: date, inputs: dict, tables: set[str], *, is_open: bool) -> dict:
+    """One month of salary earned in ``[start, end)``: projected while the period is open, and once
+    closed if none was received; otherwise what was received. The salary rule for one period."""
+    transaction_date = _transaction_date_sql()
+    deposits = conn.execute(
+        f"""SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE workspace_id=%s
+            AND LOWER(BTRIM(COALESCE(transaction_type,'')))='income' AND LOWER(BTRIM(COALESCE(category,'')))='salario'
+            AND {transaction_date} >= %s AND {transaction_date} < %s""", (workspace_id, start, end)).fetchone()["total"]
+    declared = conn.execute(RECORD_SUMS["salaries"][1], (workspace_id, start, end)).fetchone()["total"] if "salaries" in tables else 0
+    received = _decimal(deposits) + _decimal(declared)
+    if not (inputs["profile"] or inputs["base_net"] > 0) or (not is_open and received > 0):
+        return {"salary": received, "received": received, "estimated": False, "closed_estimated": False}
+    events = (_rows(conn, """SELECT amount FROM payroll_events WHERE workspace_id=%s
+                AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s""",
+                    (workspace_id, start, end)) if "payroll_events" in tables else [])
+    bonuses = (_rows(conn, """SELECT amount FROM bonuses WHERE workspace_id=%s
+                AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s""",
+                     (workspace_id, start, end)) if "bonuses" in tables else [])
+    projected = salary_projection.project(dict(inputs["profile"]) if inputs["profile"] else None, inputs["deductions"], events, bonuses, inputs["base_net"])
+    return {"salary": _decimal(projected["results"]["projected_net"]), "received": received, "estimated": True, "closed_estimated": not is_open}
+
+
+def owner_salary(conn, workspace_id: str, start: date, end: date, tables: set[str] | None = None) -> dict:
+    """The salary of ``[start, end)`` by the salary rule, month by month: ``salary`` (what counts),
+    ``received`` (deposits and ``salaries`` rows it replaces), ``estimated`` (any month projected)
+    and ``closed_estimated`` (a closed month projected). SELECT only."""
+    tables = _existing_tables(conn) if tables is None else tables
+    current = costa_rica_today().replace(day=1)
+    inputs = _salary_inputs(conn, workspace_id, tables)
     result = {"salary": Decimal("0"), "received": Decimal("0"), "estimated": False, "closed_estimated": False}
     for month in _months(start, end):
-        month_end = _next_month(month)
-        deposits = conn.execute(
-            f"""SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE workspace_id=%s
-                AND LOWER(BTRIM(COALESCE(transaction_type,'')))='income' AND LOWER(BTRIM(COALESCE(category,'')))='salario'
-                AND {transaction_date} >= %s AND {transaction_date} < %s""", (workspace_id, month, month_end)).fetchone()["total"]
-        declared = conn.execute(RECORD_SUMS["salaries"][1], (workspace_id, month, month_end)).fetchone()["total"] if "salaries" in tables else 0
-        received = _decimal(deposits) + _decimal(declared)
-        result["received"] += received
-        if month > current or not projectable or (month < current and received > 0):
-            result["salary"] += received
-            continue
-        events = (_rows(conn, """SELECT amount FROM payroll_events WHERE workspace_id=%s
-                    AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s""",
-                        (workspace_id, month, month_end)) if "payroll_events" in tables else [])
-        bonuses = (_rows(conn, """SELECT amount FROM bonuses WHERE workspace_id=%s
-                    AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s""",
-                         (workspace_id, month, month_end)) if "bonuses" in tables else [])
-        projected = salary_projection.project(dict(profile) if profile else None, deductions, events, bonuses, base_net)
-        result["salary"] += _decimal(projected["results"]["projected_net"])
-        result["estimated"] = True
-        result["closed_estimated"] = result["closed_estimated"] or month < current
+        if month > current:
+            # A future month holds what was already received, never a projection.
+            month_salary = _period_salary(conn, workspace_id, month, _next_month(month), {**inputs, "profile": None, "base_net": 0}, tables, is_open=False)
+        else:
+            month_salary = _period_salary(conn, workspace_id, month, _next_month(month), inputs, tables, is_open=month == current)
+        result["salary"] += month_salary["salary"]
+        result["received"] += month_salary["received"]
+        result["estimated"] = result["estimated"] or month_salary["estimated"]
+        result["closed_estimated"] = result["closed_estimated"] or month_salary["closed_estimated"]
     return result
 
 

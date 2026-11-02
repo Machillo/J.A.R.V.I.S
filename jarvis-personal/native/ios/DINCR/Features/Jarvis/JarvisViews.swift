@@ -2,8 +2,7 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// JARVIS: the Owner's personal space inside DINCR, opened from the Owner's Today and the Profile
-/// hub. Only the server's role opens it (`Jarvis.isAvailable`), and the backend still decides every
+/// JARVIS: the Owner's personal space inside DINCR, opened from the Owner's Today. Only the server's role opens it (`Jarvis.isAvailable`), and the backend still decides every
 /// JARVIS request. A native grouped list: what works today first (chat, agenda), then what is still
 /// being restored, which says so instead of showing sample content (Android: `JarvisScreens.kt`).
 struct JarvisHubView: View {
@@ -93,7 +92,7 @@ struct JarvisSectionView: View {
     }
 }
 
-/// Renders JARVIS only for the Owner. The routes are reachable only from the Owner's Profile hub;
+/// Renders JARVIS only for the Owner. The routes are reachable only from the Owner's Today;
 /// this also closes a screen left on the stack if the identity stops being the Owner.
 private struct OwnerOnly<Content: View>: View {
     @Environment(AppModel.self) private var model

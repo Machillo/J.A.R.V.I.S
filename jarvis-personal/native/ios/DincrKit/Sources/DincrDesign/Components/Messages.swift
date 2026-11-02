@@ -7,14 +7,43 @@ public struct DincrMessage: View {
     let kind: MessageKind
     let title: String
     let message: String
+    @Environment(\.dincrOwnerAppearance) private var owner
 
     public init(_ kind: MessageKind, title: String, message: String = "") {
         self.kind = kind; self.title = title; self.message = message
     }
 
     public var body: some View {
+        if owner { ownerBody } else { regularBody }
+    }
+
+    /// The Owner's message: a plain row on its surface. The icon's color says what it means, so a
+    /// fact never looks like a failure. VoiceOver still reads the kind first.
+    private var ownerBody: some View {
         let style = DincrMessageStyle(kind)
-        HStack(alignment: .top, spacing: DincrSpacing.s3) {
+        return HStack(alignment: .top, spacing: DincrSpacing.s3) {
+            Image(systemName: style.symbol)
+                .font(.body)
+                .foregroundStyle(kind == .opportunity ? OwnerColor.accent : style.color)
+                .frame(width: 28)
+                .accessibilityLabel(style.spokenKind)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(DincrFont.body).foregroundStyle(OwnerColor.text)
+                if !message.isEmpty {
+                    Text(message).font(DincrFont.bodySmall).foregroundStyle(OwnerColor.text2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DincrSpacing.s4)
+        .padding(.vertical, DincrSpacing.s3)
+        .background(OwnerColor.surface, in: RoundedRectangle(cornerRadius: OwnerRadius.card, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var regularBody: some View {
+        let style = DincrMessageStyle(kind)
+        return HStack(alignment: .top, spacing: DincrSpacing.s3) {
             // The icon carries the spoken kind, so VoiceOver reads it before the title.
             Image(systemName: style.symbol)
                 .font(.system(size: DincrIconSize.md, weight: .medium))
@@ -23,9 +52,9 @@ public struct DincrMessage: View {
                 .background(DincrColor.surface, in: Circle())
                 .accessibilityLabel(style.spokenKind)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+                Text(title).font(DincrFont.title2).foregroundStyle(.dincrText)
                 if !message.isEmpty {
-                    Text(message).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    Text(message).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 }
             }
             Spacer(minLength: 0)

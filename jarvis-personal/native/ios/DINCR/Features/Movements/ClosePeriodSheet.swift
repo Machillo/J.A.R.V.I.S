@@ -43,7 +43,7 @@ struct ClosePeriodSheet: View {
                 }
                 Section {
                     VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                        Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                        Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label).foregroundStyle(.dincrText2)
                         TextField(tx("Tipo de cambio", "Exchange rate"), text: $rateText, prompt: Text(format.inputText(Decimal(string: "507.5")!)))
                             .keyboardType(.decimalPad)
                             .accessibilityIdentifier("close.rate")
@@ -51,7 +51,7 @@ struct ClosePeriodSheet: View {
                         if let preview {
                             Text(tx("Se registran \(format.string(preview)) en total. Usá el tipo de cambio de tu estado de cuenta; DINCR no consulta tasas.",
                                     "\(format.string(preview)) are recorded in total. Use your statement’s rate; DINCR doesn’t look rates up."))
-                                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                                 .accessibilityIdentifier("close.preview")
                         }
                     }

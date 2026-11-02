@@ -131,6 +131,10 @@ public struct MonthTotals: Decodable, Sendable, Equatable, Identifiable {
     public let expenses: Decimal
     public let debtPaid: Decimal?
     public let balance: Decimal?
+    /// The Owner's card statement (`owner_ledger.owner_cycle_totals`): first and last day, and when it is paid.
+    public var periodStart: String? = nil
+    public var periodEnd: String? = nil
+    public var paymentDate: String? = nil
     public var id: String { month }
 
     public init(month: String, income: Decimal, expenses: Decimal, debtPaid: Decimal? = nil, balance: Decimal? = nil) {

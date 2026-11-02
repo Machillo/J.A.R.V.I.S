@@ -81,13 +81,13 @@ public struct CompositionDonut: View {
     @ViewBuilder private var center: some View {
         if let segment = composition.segment(id: selectedID) {
             VStack(spacing: 2) {
-                Text(segment.label).font(DincrFont.caption).foregroundStyle(DincrColor.text2).lineLimit(2).multilineTextAlignment(.center)
+                Text(segment.label).font(DincrFont.caption).foregroundStyle(.dincrText2).lineLimit(2).multilineTextAlignment(.center)
                 MoneyText(segment.value, currency: composition.currency, font: DincrFont.title2.monospacedDigit())
-                if let share = segment.share { Text(VisualText.percent(share)).font(DincrFont.caption).foregroundStyle(DincrColor.text2) }
+                if let share = segment.share { Text(VisualText.percent(share)).font(DincrFont.caption).foregroundStyle(.dincrText2) }
             }
         } else if showsTotal, let total = composition.total {
             VStack(spacing: 2) {
-                Text(AppLanguage.current.pick("Total", "Total")).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                Text(AppLanguage.current.pick("Total", "Total")).font(DincrFont.caption).foregroundStyle(.dincrText2)
                 MoneyText(total, currency: composition.currency, font: DincrFont.title2.monospacedDigit())
             }
         }
@@ -100,12 +100,12 @@ public struct CompositionDonut: View {
                     if composition.isDrawable {
                         Circle().fill(shade(for: segment.id)).frame(width: 10, height: 10).accessibilityHidden(true)
                     }
-                    Text(segment.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text).multilineTextAlignment(.leading)
+                    Text(segment.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
                     Spacer(minLength: DincrSpacing.s2)
                     VStack(alignment: .trailing, spacing: 0) {
                         MoneyText(segment.value, currency: composition.currency, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
                         if let share = segment.share {
-                            Text(VisualText.percent(share)).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                            Text(VisualText.percent(share)).font(DincrFont.caption).foregroundStyle(.dincrText2)
                         }
                     }
                 }
@@ -127,9 +127,9 @@ public struct CompositionDonut: View {
             }
             ForEach(composition.unknown) { item in
                 HStack {
-                    Text(item.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text)
+                    Text(item.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText)
                     Spacer()
-                    Text(VisualText.noData().capitalizedFirst).font(DincrFont.bodySmall).foregroundStyle(DincrColor.textMuted)
+                    Text(VisualText.noData().capitalizedFirst).font(DincrFont.bodySmall).foregroundStyle(.dincrTextMuted)
                 }
                 .frame(minHeight: 44)
                 .accessibilityElement(children: .combine)
@@ -186,12 +186,12 @@ public struct TrendLineChart: View {
                 chart
                 if let point = selectedPoint {
                     HStack {
-                        Text(point.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        Text(point.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                         Spacer()
                         if let value = point.value {
                             MoneyText(value, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
                         } else {
-                            Text(VisualText.noData().capitalizedFirst).font(DincrFont.bodySmall).foregroundStyle(DincrColor.textMuted)
+                            Text(VisualText.noData().capitalizedFirst).font(DincrFont.bodySmall).foregroundStyle(.dincrTextMuted)
                         }
                     }
                     .accessibilityElement(children: .combine)
@@ -201,7 +201,7 @@ public struct TrendLineChart: View {
                 VisualNotice(text: notice).accessibilityLabel("\(title). \(notice)")
                 if let only = series.knownPoints.first, let value = only.value {
                     HStack {
-                        Text(only.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        Text(only.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                         Spacer()
                         MoneyText(value, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
                     }
@@ -256,7 +256,7 @@ public struct TrendLineChart: View {
                 AxisValueLabel {
                     if let period = value.as(String.self) {
                         Text(series.points.first { $0.period == period }?.label ?? period)
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                 }
             }
@@ -266,7 +266,7 @@ public struct TrendLineChart: View {
                 AxisGridLine().foregroundStyle(DincrColor.line)
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
-                        Text(VisualAxis.compact(number)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        Text(VisualAxis.compact(number)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                 }
             }
@@ -349,7 +349,7 @@ public struct Sparkline: View {
                 .frame(height: 32)
             } else {
                 Text(AppLanguage.current.pick("Sin tendencia todavía", "No trend yet"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -418,9 +418,9 @@ struct VisualNotice: View {
 
     var body: some View {
         Label {
-            Text(text).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(text).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
         } icon: {
-            Image(systemName: "chart.pie").foregroundStyle(DincrColor.textMuted)
+            Image(systemName: "chart.pie").foregroundStyle(.dincrTextMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DincrSpacing.s3)

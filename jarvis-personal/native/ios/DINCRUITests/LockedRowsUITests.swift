@@ -55,7 +55,7 @@ final class LockedRowsUITests: XCTestCase {
             }
             // WE-1: the mail connections are back in Perfil, the Owner's alone (never shown locked).
             XCTAssertEqual(app.descendants(matching: .any)["profile.mail"].exists, role == "owner", "\(role ?? plan ?? "free"): profile.mail")
-            XCTAssertEqual(row("profile.jarvis", in: app).exists, role == "owner")
+            XCTAssertFalse(row("profile.jarvis", in: app).exists, "JARVIS opens from Hoy")
             // NT-1: every plan can turn the reminders on the phone on or off.
             XCTAssertTrue(app.descendants(matching: .any)["profile.reminders"].exists, "\(role ?? plan ?? "free"): Recordatorios")
             app.terminate()

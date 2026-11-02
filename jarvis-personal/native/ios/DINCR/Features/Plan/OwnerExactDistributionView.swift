@@ -46,7 +46,7 @@ struct OwnerDistributionModes: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 Text(tx("Indicá cuánto dinero te sobra después de pagar tus gastos, tarjetas y cuotas. DINCR reparte ese monto completo con tu estrategia actual, sin volver a descontar esos pagos. Calcular no registra nada: solo CONFIRMAR registra los movimientos.",
                         "Enter how much money you have left after paying your expenses, cards and instalments. DINCR splits that whole amount with your current strategy, without deducting those payments again. Calculating records nothing: only CONFIRM records the movements."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 MoneyField(label: tx("Monto que te sobra, en colones", "Amount you have left, in colones"), text: Binding(get: { form.amountText }, set: { form.edit($0) }),
                            error: form.error, identifier: "distribution.exact.amount")
                 Button {

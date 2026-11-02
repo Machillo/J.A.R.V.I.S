@@ -86,15 +86,15 @@ private struct NetWorthCard: View {
         AsyncContent(fallback: tx("No pudimos calcular tu patrimonio.", "We couldn’t work out your net worth."),
                      load: { try await model.service.wealth() }) { wealth, _ in
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-                Text(tx("Patrimonio neto", "Net worth")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                Text(tx("Patrimonio neto", "Net worth")).font(DincrFont.label).foregroundStyle(.dincrText2)
                 if let net = wealth.netWorth {
                     MoneyText(net, font: DincrFont.displayAmount)
                         .accessibilityIdentifier("wealth.netWorth.amount")
                     Text(net < 0 ? tx("Hoy debés más de lo que tenés.", "Today you owe more than you have.")
                                  : tx("Es lo que te quedaría si vendieras todo y pagaras todas tus deudas.", "It is what you would keep if you sold everything and paid every debt."))
-                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 } else if let notice = wealth.missingNotice() {
-                    Text(notice).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    Text(notice).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                         .accessibilityIdentifier("wealth.netWorth.missing")
                 }
                 WealthGroup(title: tx("Lo que tenés", "What you have"), total: wealth.assets?.total, items: wealth.owned, id: "wealth.assets")
@@ -118,7 +118,7 @@ private struct WealthGroup: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             FigureRow(label: title, amount: total).font(DincrFont.body.weight(.semibold))
             if items.isEmpty {
-                Text(tx("Nada registrado.", "Nothing recorded.")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text(tx("Nada registrado.", "Nothing recorded.")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 FigureRow(label: item.name ?? tx("Sin nombre", "Unnamed"), amount: item.amount).font(DincrFont.bodySmall)
@@ -146,7 +146,7 @@ private struct WealthDebtsCard: View {
                 let composition = DebtComposition.of(debts)
                 if composition.status == .empty {
                     Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."))
-                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                         .accessibilityIdentifier("wealth.debts.none")
                 } else {
                     CompositionDonut(title: tx("Lo que debés, por deuda", "What you owe, by debt"), composition: composition)
@@ -155,7 +155,7 @@ private struct WealthDebtsCard: View {
             }
             NavigationLink { DebtsView() } label: {
                 Text(tx("Administrar en Plan › Deudas", "Manage in Plan › Debts")).font(DincrFont.bodySmall.weight(.semibold))
-                    .foregroundStyle(DincrColor.tint).frame(minHeight: 44)
+                    .foregroundStyle(.dincrTint).frame(minHeight: 44)
             }
             .accessibilityIdentifier("wealth.debts.manage")
         }
@@ -245,7 +245,7 @@ private struct SummaryContent: View {
                 SavedBreakdown(saved: saved)
             }
             if let notice = SummaryVisuals.flowNotice(SummaryVisuals.flow(summary)) {
-                Text(notice).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                Text(notice).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     .accessibilityIdentifier("summary.flow.notice")
             }
         }
@@ -281,7 +281,7 @@ private struct SavedBreakdown: View {
             (saved.goals ?? 0) > 0 ? tx("A metas \(format.string(saved.goals ?? 0))", "To goals \(format.string(saved.goals ?? 0))") : nil,
             (saved.salvavidas ?? 0) > 0 ? tx("Al Salvavidas \(format.string(saved.salvavidas ?? 0))", "To your emergency fund \(format.string(saved.salvavidas ?? 0))") : nil,
         ].compactMap { $0 }
-        Text(parts.joined(separator: " · ")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+        Text(parts.joined(separator: " · ")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             .accessibilityIdentifier("summary.saved.breakdown")
     }
 }
@@ -303,7 +303,7 @@ private struct OwnerLedgerDetail: View {
             DisclosureGroup(isExpanded: $expanded) {
                 OwnerMonthSummary(summary: summary).padding(.top, DincrSpacing.s2)
             } label: {
-                Text(tx("Ver el detalle", "See the detail")).font(DincrFont.label).foregroundStyle(DincrColor.text)
+                Text(tx("Ver el detalle", "See the detail")).font(DincrFont.label).foregroundStyle(.dincrText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("summary.owner.detail")
             }
@@ -326,7 +326,7 @@ struct StrategyContent: View {
         if showsRecommendation, let recommendation = strategy.recommendation ?? strategy.directorNote {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Recomendación", "Recommendation"))
-                Text(recommendation).font(DincrFont.body).foregroundStyle(DincrColor.text)
+                Text(recommendation).font(DincrFont.body).foregroundStyle(.dincrText)
             }
             .dincrCard()
         }
@@ -388,7 +388,7 @@ struct ScenariosView: View {
     @ViewBuilder private var general: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             Text(tx("Probá cambios sin guardar nada: DINCR calcula cuánto te quedaría libre cada mes. Usá − para una baja.", "Try changes without saving anything: DINCR shows how much you’d have left each month. Use − for a decrease."))
-                .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             MoneyField(label: tx("Cambio mensual de ingresos", "Monthly income change"), text: $income)
             MoneyField(label: tx("Cambio mensual de gastos", "Monthly expense change"), text: $expenses)
             MoneyField(label: tx("Dinero extra único", "One-off extra money"), text: $extra)

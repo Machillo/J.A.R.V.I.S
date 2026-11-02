@@ -122,6 +122,6 @@ class MovementsReviewUiTest {
         waitUntil("the notice") { present("Compra en supermercado") }
         back()
         tab(tx("Perfil", "Profile"))
-        waitUntil("JARVIS") { present("JARVIS") }
+        waitUntil("Perfil") { present(tx("Suscripción", "Subscription")) }
     }
 }

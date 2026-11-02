@@ -91,6 +91,7 @@ class MoneyControlUiTest {
     private fun openMoneyControl() {
         waitUntil("home") { present(tx("Hoy", "Today")) }
         compose.onAllNodesWithText(tx("Perfil", "Profile")).onFirst().performClick()
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         click(tx("Control de dinero", "Money control"))
         waitForTag("money.summary")

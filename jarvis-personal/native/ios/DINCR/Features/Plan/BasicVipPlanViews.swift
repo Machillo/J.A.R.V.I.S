@@ -52,7 +52,7 @@ private struct BudgetContent: View {
                     Text(CategoryStyle.label(item.category)).font(DincrFont.body.weight(.semibold))
                     Spacer()
                     MoneyText(item.spent, font: DincrFont.bodySmall.monospacedDigit())
-                    Text("/").foregroundStyle(DincrColor.textMuted)
+                    Text("/").foregroundStyle(.dincrTextMuted)
                     MoneyText(item.monthlyLimit, font: DincrFont.bodySmall.monospacedDigit())
                 }
                 .accessibilityElement(children: .combine)
@@ -184,7 +184,7 @@ private struct CalendarContent: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.name ?? "").font(DincrFont.body.weight(.semibold))
-                    Text(Day.label(event.date)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(Day.label(event.date)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 Spacer()
                 MoneyText(event.amount, sign: event.kind == "income" ? .income : .expense)
@@ -281,7 +281,7 @@ private struct RecurringContent: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name ?? "").font(DincrFont.body.weight(.semibold))
                         Text([RecurringForm.label(item.frequency), item.dueDay.map { tx("día \($0)", "day \($0)") }].compactMap { $0 }.joined(separator: " · "))
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                     Spacer()
                     MoneyText(item.amount, sign: item.itemType == "income" ? .income : .expense)
@@ -425,7 +425,7 @@ struct AguinaldoView: View {
                     .accessibilityIdentifier("aguinaldo.sync")
             }
             Text(tx("Estimación según la ley costarricense; confirmala con tu patrono.", "Estimate under Costa Rican law; confirm it with your employer."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             FinancialDisclaimer()
         }
     }
@@ -454,11 +454,11 @@ private struct AguinaldoPlanCard: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Text(tx("¿En qué usarlo?", "What to use it for?")).font(DincrFont.title2).accessibilityAddTraits(.isHeader)
             Text(tx("Una forma simple de repartirlo antes de que llegue.", "A simple way to split it before it arrives."))
-                .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: 2) {
                     FigureRow(label: item.label ?? "", amount: item.amount, currency: "CRC")
-                    if let reason = item.reason { Text(reason).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+                    if let reason = item.reason { Text(reason).font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
                 }
             }
             if let unknown = plan.unknownRates, !unknown.isEmpty {
@@ -480,7 +480,7 @@ private struct AguinaldoContent: View {
     var body: some View {
         if let aguinaldo {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                Text(tx("Aguinaldo acumulado", "Accrued aguinaldo")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                Text(tx("Aguinaldo acumulado", "Accrued aguinaldo")).font(DincrFont.label).foregroundStyle(.dincrText2)
                 MoneyText(aguinaldo.accruedAguinaldo, currency: "CRC", font: DincrFont.displayAmount)
                 FigureRow(label: tx("Salarios del periodo", "Salaries in the period"), amount: aguinaldo.earnedSalaryTotal, currency: "CRC")
                 if let period = aguinaldo.period {

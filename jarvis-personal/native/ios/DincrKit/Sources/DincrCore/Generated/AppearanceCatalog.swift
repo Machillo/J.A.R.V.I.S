@@ -37,7 +37,7 @@ public enum AppearanceCatalog {
         AppearanceOption(
             key: "palette", defaultValue: "oceano", classic: "clasico",
             values: [
-                AppearanceOptionValue(id: "oceano", es: "Océano", en: "Ocean"),
+                AppearanceOptionValue(id: "oceano", es: "Sistema", en: "System"),
                 AppearanceOptionValue(id: "clasico", es: "Clásico", en: "Classic"),
                 AppearanceOptionValue(id: "arena", es: "Arena", en: "Sand"),
                 AppearanceOptionValue(id: "grafito", es: "Grafito", en: "Graphite"),
@@ -46,7 +46,7 @@ public enum AppearanceCatalog {
         AppearanceOption(
             key: "accent", defaultValue: "cian", classic: "teal",
             values: [
-                AppearanceOptionValue(id: "cian", es: "Cian", en: "Cyan"),
+                AppearanceOptionValue(id: "cian", es: "Azul", en: "Blue"),
                 AppearanceOptionValue(id: "teal", es: "Verde azulado", en: "Teal"),
                 AppearanceOptionValue(id: "ciruela", es: "Ciruela", en: "Plum"),
                 AppearanceOptionValue(id: "tinta", es: "Tinta", en: "Ink"),

@@ -459,3 +459,41 @@ def test_jarvis_projection_and_the_ledger_share_one_formula():
     result = salary_projection.project(profile, deductions, [{"amount": 100}, {"amount": -20}], [{"amount": 50}], 0)
     assert result["results"]["base_net"] == 150988.0           # 173 320 − 17 332 − 5 000
     assert result["results"]["projected_net"] == 150988.0 + 90 - 20 + 45
+
+
+def _cycle(today):
+    from backend.core.database import get_connection
+    from backend.user_product.owner_ledger import owner_cycle_totals
+    with get_connection() as conn:
+        return owner_cycle_totals(conn, WS_A, today)
+
+
+@pytest.mark.parametrize(("today", "expected"), [
+    (date(2026, 11, 2), (date(2026, 9, 22), date(2026, 10, 22), date(2026, 11, 5))),    # unpaid until the 5th
+    (date(2026, 11, 5), (date(2026, 9, 22), date(2026, 10, 22), date(2026, 11, 5))),
+    (date(2026, 11, 6), (date(2026, 10, 22), date(2026, 11, 22), date(2026, 12, 5))),   # the next one takes over
+    (date(2026, 11, 21), (date(2026, 10, 22), date(2026, 11, 22), date(2026, 12, 5))),
+    (date(2026, 11, 22), (date(2026, 10, 22), date(2026, 11, 22), date(2026, 12, 5))),  # closed, still to pay
+    (date(2026, 1, 3), (date(2025, 11, 22), date(2025, 12, 22), date(2026, 1, 5))),     # across the year
+])
+def test_the_statement_on_screen_stays_until_it_is_paid(today, expected):
+    from backend.user_product.owner_ledger import owner_cycle_window
+    assert owner_cycle_window(today) == expected
+
+
+def test_a_statement_counts_its_own_days_and_the_cut_day_once(db):
+    from backend.core.database import get_connection
+    with get_connection() as conn:
+        conn.execute("DELETE FROM transactions WHERE workspace_id=%s", (WS_A,))
+        for day, amount in (("2026-09-21", 1), ("2026-09-22", 10), ("2026-10-21", 100), ("2026-10-22", 1000)):
+            conn.execute("INSERT INTO transactions (workspace_id, transaction_date, amount, transaction_type) VALUES (%s,%s,%s,'expense')",
+                         (WS_A, day, amount))
+        conn.commit()
+    first, second = _cycle(date(2026, 11, 2)), _cycle(date(2026, 11, 6))
+    assert (first["period_start"], first["period_end"], first["payment_date"]) == ("2026-09-22", "2026-10-21", "2026-11-05")
+    assert first["month"] == "2026-09"
+    # 22 Sep and the cut of 21 Oct are in; 21 Sep and 22 Oct are not. The 85 are the seeded expense rows.
+    assert first["gross_expenses"] == 10 + 100 + 85
+    assert second["gross_expenses"] == 1000
+    # One statement holds one month of salary, however many calendar months it touches.
+    assert first["salary_estimated"] is True and first["income"] < 2 * 2000

@@ -100,7 +100,7 @@ private struct TargetPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Meta de cobertura", "Coverage goal")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(tx("Meta de cobertura", "Coverage goal")).font(DincrFont.label).foregroundStyle(.dincrText2)
             Picker(tx("Meta de cobertura", "Coverage goal"), selection: Binding(get: { fund.targetMonths ?? 6 }, set: { months in
                 if months != fund.targetMonths { setTarget(months) }
             })) {
@@ -121,8 +121,8 @@ private struct CoverageCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Tu Salvavidas cubre", "Your emergency fund covers")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
-            Text(fund.coverageLabel()).font(DincrFont.displayAmount).foregroundStyle(DincrColor.text)
+            Text(tx("Tu Salvavidas cubre", "Your emergency fund covers")).font(DincrFont.label).foregroundStyle(.dincrText2)
+            Text(fund.coverageLabel()).font(DincrFont.displayAmount).foregroundStyle(.dincrText)
                 .accessibilityIdentifier("salvavidas.coverage")
             if fund.savingsKnown {
                 // With automatic contributions on, the balance is an estimate following the plan.
@@ -171,7 +171,7 @@ private struct UsersSalvavidasContent: View {
                 if !fund.savingsKnown {
                     Text(tx("Declará tus ahorros en Metas y ahorro → Tus ahorros para medir cuántos meses te cubren.",
                             "Declare your savings in Goals and savings → Your savings to measure how many months they cover."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                        .font(DincrFont.caption).foregroundStyle(.dincrText2)
                     NavigationLink { DeclaredSavingsView() } label: { Text(tx("Completar tus ahorros", "Complete your savings")) }
                         .buttonStyle(.dincrPrimary)
                         .accessibilityIdentifier("salvavidas.completeSavings")
@@ -211,7 +211,7 @@ private struct OwnerSalvavidasContent: View {
         SalvavidasDetails {
             let available = fund.availableExpenses ?? []
             if !available.isEmpty {
-                Text(tx("Gastos que querés proteger", "Expenses you want to protect")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                Text(tx("Gastos que querés proteger", "Expenses you want to protect")).font(DincrFont.label).foregroundStyle(.dincrText2)
                 ForEach(available) { expense in
                     Toggle(isOn: Binding(get: { expense.selected == true }, set: { on in
                         guard let id = expense.lineId else { return }
@@ -245,7 +245,7 @@ private struct SalvavidasDetails<Content: View>: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) { content() }
                 .padding(.top, DincrSpacing.s2)
         } label: {
-            Text(tx("Qué cubre tu Salvavidas", "What your emergency fund covers")).font(DincrFont.label).foregroundStyle(DincrColor.text)
+            Text(tx("Qué cubre tu Salvavidas", "What your emergency fund covers")).font(DincrFont.label).foregroundStyle(.dincrText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("salvavidas.details")
         }
@@ -263,7 +263,7 @@ private struct ObligationLines: View {
         Lines(title: tx("Pagos recurrentes", "Recurring payments"), lines: fund.obligations ?? [])
         let milestones = fund.milestones ?? []
         if !milestones.isEmpty {
-            Text(tx("Hitos", "Milestones")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(tx("Hitos", "Milestones")).font(DincrFont.label).foregroundStyle(.dincrText2)
             ForEach(Array(milestones.enumerated()), id: \.offset) { _, milestone in
                 HStack {
                     Image(systemName: milestone.reached == true ? "checkmark.circle.fill" : "circle")
@@ -287,7 +287,7 @@ private struct Lines: View {
 
     var body: some View {
         if !lines.isEmpty {
-            Text(title).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(title).font(DincrFont.label).foregroundStyle(.dincrText2)
             ForEach(lines) { line in
                 FigureRow(label: line.name ?? "—", amount: line.monthlyAmount)
             }

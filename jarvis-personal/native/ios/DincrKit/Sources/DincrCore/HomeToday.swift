@@ -62,7 +62,8 @@ public struct HomeToday: Sendable, Equatable {
                                 income: income, expenses: registered(month?.expenses), debtPaid: registered(month?.debtPaid),
                                 result: income == nil ? nil : month?.balance, debtBalance: debtBalance(debts, fallback: nil),
                                 margin: spend?.monthlyMargin, lowestBalance: spend?.next45DaysMinimum,
-                                budget: budgetLeft(budget), pending: pending(calendar, today: today))
+                                budget: budgetLeft(budget), pending: pending(calendar, today: today),
+                                cycle: month.flatMap(HomeStatus.Cycle.init))
         let next: HomeNext
         let director = center.director
         // The director needs inputs before recommending: priority `incomplete` (#326), or a known
@@ -197,6 +198,19 @@ public struct HomeStatus: Sendable, Equatable {
     public let lowestBalance: Decimal?
     public let budget: BudgetLeft?
     public let pending: Pending?
+    /// The Owner only: income, expenses and result are this card statement's, not the calendar month's.
+    public var cycle: Cycle? = nil
+
+    public struct Cycle: Sendable, Equatable {
+        public let start: String
+        public let end: String
+        public let payment: String?
+
+        init?(_ totals: MonthTotals) {
+            guard let start = totals.periodStart, let end = totals.periodEnd else { return nil }
+            self.start = start; self.end = end; payment = totals.paymentDate
+        }
+    }
 }
 
 /// Qué sigue: exactly one thing. The detailed plan lives in Plan → Tu plan del mes.

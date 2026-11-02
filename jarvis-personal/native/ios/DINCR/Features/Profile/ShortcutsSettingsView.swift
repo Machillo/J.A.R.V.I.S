@@ -99,7 +99,7 @@ struct ShortcutsSettingsView: View {
     private func steps(_ items: [String]) -> some View {
         ForEach(Array(items.enumerated()), id: \.offset) { index, item in
             HStack(alignment: .firstTextBaseline, spacing: DincrSpacing.s3) {
-                Text("\(index + 1).").font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.textMuted)
+                Text("\(index + 1).").font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTextMuted)
                 Text(item).font(DincrFont.bodySmall)
             }
             .accessibilityElement(children: .combine)

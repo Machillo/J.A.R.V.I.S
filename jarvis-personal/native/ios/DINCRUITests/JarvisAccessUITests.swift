@@ -21,13 +21,17 @@ final class JarvisAccessUITests: XCTestCase {
 
     func testOwnerGetsJarvisWithTheFiveFinalTabs() {
         let app = launch(role: "owner")
-        let entry = element("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        let entry = element("owner.home.jarvis", in: app)
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         // UX-13: the Owner has the five final tabs (no DINCR tab), the mail connections (Perfil, WE-1) and
-        // JARVIS in Perfil.
+        // JARVIS in Hoy, not in Perfil.
         for tab in ["Hoy", "Movimientos", "Plan", "Patrimonio", "Perfil"] { XCTAssertTrue(app.tabBars.buttons[tab].exists, tab) }
         XCTAssertFalse(app.tabBars.buttons["DINCR"].exists)
-        XCTAssertTrue(element("profile.mail", in: app).exists)
+        app.tabBars.buttons["Perfil"].tap()
+        XCTAssertTrue(element("profile.mail", in: app).waitForExistence(timeout: 5))
+        app.tabBars.buttons["Hoy"].tap()
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
         entry.tap()
         XCTAssertTrue(element("jarvis.section.chat", in: app).waitForExistence(timeout: 5))
         // Memoria was removed (it fed the retired AI chat): the hub no longer lists it, not even at the
@@ -40,7 +44,8 @@ final class JarvisAccessUITests: XCTestCase {
 
     func testTheOwnersPersonalStrategyOpensHisPlanForTheMonth() {
         let app = launch(role: "owner")
-        let entry = element("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        let entry = element("owner.home.jarvis", in: app)
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         entry.tap()
         let strategy = element("jarvis.section.strategy", in: app)
@@ -70,7 +75,8 @@ final class JarvisAccessUITests: XCTestCase {
     func testTheRoleIsReadFromTheServerOnEveryLaunch() {
         // Nothing about the Owner survives on the device: the next session's /auth/me decides.
         let owner = launch(role: "owner")
-        XCTAssertTrue(element("profile.jarvis", in: owner).waitForExistence(timeout: 5))
+        owner.tabBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(element("owner.home.jarvis", in: owner).waitForExistence(timeout: 5))
         owner.terminate()
         let user = launch(plan: "vip")
         XCTAssertTrue(element("profile.subscription", in: user).waitForExistence(timeout: 5))

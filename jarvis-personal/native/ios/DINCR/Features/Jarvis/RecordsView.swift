@@ -56,7 +56,7 @@ private struct TimelineContent: View {
             FigureRow(label: tx("Disponible hoy", "Available today"), amount: timeline.openingAvailable)
             FigureRow(label: tx("Al final del período", "At the end of the period"), amount: timeline.endingAvailable)
             if let start = timeline.startDate, let end = timeline.endDate {
-                Text("\(Day.label(start)) – \(Day.label(end))").font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                Text("\(Day.label(start)) – \(Day.label(end))").font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
         }
         .dincrCard()
@@ -69,16 +69,16 @@ private struct TimelineContent: View {
         }
         ForEach(timeline.days, id: \.date) { day in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                Text(day.date.isEmpty ? tx("Sin fecha", "No date") : Day.label(day.date)).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                Text(day.date.isEmpty ? tx("Sin fecha", "No date") : Day.label(day.date)).font(DincrFont.label).foregroundStyle(.dincrText2)
                 ForEach(day.events) { event in
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(event.name ?? tx("Movimiento", "Movement")).font(DincrFont.bodySmall)
                             if let balance = event.projectedBalance {
                                 Text(tx("Queda: \(format.string(balance))", "Left: \(format.string(balance))"))
-                                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                             }
-                            if let note = event.note { Text(note).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+                            if let note = event.note { Text(note).font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
                         }
                         Spacer()
                         MoneyText(event.kind == "goal" ? event.amount : event.impact)
@@ -89,7 +89,7 @@ private struct TimelineContent: View {
             .dincrCard()
         }
         ForEach(timeline.assumptions, id: \.self) { note in
-            Text(note).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            Text(note).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
         }
     }
 }
@@ -107,16 +107,16 @@ private struct ReconciliationContent: View {
                         .font(DincrFont.bodySmall.weight(.semibold))
                 }
                 if let unlinked = summary.unlinked, unlinked > 0 {
-                    Text(tx("\(unlinked) movimientos sin cuenta asignada", "\(unlinked) movements without an account")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(tx("\(unlinked) movimientos sin cuenta asignada", "\(unlinked) movements without an account")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 if let duplicates = summary.possibleDuplicates, duplicates > 0 {
-                    Text(tx("\(duplicates) posibles duplicados para revisar en Movimientos", "\(duplicates) possible duplicates to review in Transactions")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(tx("\(duplicates) posibles duplicados para revisar en Movimientos", "\(duplicates) possible duplicates to review in Transactions")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 if let untracked = summary.untrackedAccounts, untracked > 0 {
                     Text(tx("\(untracked) cuentas sin saldo registrado no se comparan.", "\(untracked) accounts without a recorded balance aren’t compared."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
-                if let note = report.note { Text(note).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+                if let note = report.note { Text(note).font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
             }
             .dincrCard()
             .accessibilityElement(children: .contain)
@@ -166,7 +166,7 @@ private struct ConfirmBalanceSheet: View {
                 Section {
                     Text(tx("Escribí el saldo que ves hoy en el banco para «\(account.accountName ?? "")» (\(account.currency ?? "CRC")).",
                             "Enter today’s balance you see in the bank for “\(account.accountName ?? "")” (\(account.currency ?? "CRC"))."))
-                        .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     TextField(tx("Saldo real", "Real balance"), text: $text).keyboardType(.decimalPad).accessibilityIdentifier("records.confirm.amount")
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }

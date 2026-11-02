@@ -19,14 +19,14 @@ struct WaitingForBankCard: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Esperando al banco", "Waiting for the bank"))
                 Text(tx("Abonaste extra: contanos si el banco bajó el plazo o la cuota.", "You paid extra: tell us whether the bank shortened the term or lowered the installment."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 ForEach(rows) { debt in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(debt.name ?? "").font(DincrFont.title2)
                             if let day = waiting[String(debt.id)]?.remindOn {
                                 Text(tx("Te avisamos el \(DebtSavingsReading.dayLabel(day))", "We remind you on \(DebtSavingsReading.dayLabel(day))"))
-                                    .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                                    .font(DincrFont.caption).foregroundStyle(.dincrText2)
                             }
                         }
                         Spacer()

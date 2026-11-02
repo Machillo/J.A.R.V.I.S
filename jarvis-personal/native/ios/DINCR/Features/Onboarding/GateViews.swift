@@ -23,10 +23,10 @@ struct LegalConsentView: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s4) {
                 BrandMark(size: 48)
                 Text(tx("Actualizamos nuestros términos", "We updated our terms"))
-                    .font(DincrFont.title1).foregroundStyle(DincrColor.text)
+                    .font(DincrFont.title1).foregroundStyle(.dincrText)
                     .accessibilityAddTraits(.isHeader)
                 Text(tx("Para seguir usando DINCR, leé y aceptá los documentos vigentes.", "To keep using DINCR, read and accept the current documents."))
-                    .font(DincrFont.body).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.body).foregroundStyle(.dincrText2)
                 consentRow(tx("Acepto los Términos y Condiciones", "I accept the Terms and Conditions"), version: model.profile?.legal?.termsVersion, isOn: $terms, link: LegalLinks.terms, id: "legal.terms")
                 consentRow(tx("Acepto la Política de Privacidad", "I accept the Privacy Policy"), version: model.profile?.legal?.privacyVersion, isOn: $privacy, link: LegalLinks.privacy, id: "legal.privacy")
                 if let error { ErrorStateView(message: error) }
@@ -38,7 +38,7 @@ struct LegalConsentView: View {
                 .disabled(!(terms && privacy) || saving)
                 .accessibilityIdentifier("legal.accept")
                 Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }
-                    .font(DincrFont.title2).foregroundStyle(DincrColor.tint)
+                    .font(DincrFont.title2).foregroundStyle(.dincrTint)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .padding(DincrSpacing.s6)
@@ -52,16 +52,16 @@ struct LegalConsentView: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Toggle(isOn: isOn) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(label).font(DincrFont.body).foregroundStyle(DincrColor.text)
+                    Text(label).font(DincrFont.body).foregroundStyle(.dincrText)
                     if let version {
-                        Text(tx("Versión \(version)", "Version \(version)")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        Text(tx("Versión \(version)", "Version \(version)")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                 }
             }
             .tint(DincrColor.tint)
             .accessibilityIdentifier(id)
             Link(tx("Leer documento", "Read document"), destination: link)
-                .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.tint)
+                .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint)
                 .frame(minHeight: 44)
         }
         .dincrCard()
@@ -86,7 +86,7 @@ struct PlanChooserView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DincrSpacing.s4) {
                 Text(tx("Elegí tu suscripción", "Choose your subscription"))
-                    .font(DincrFont.title1).foregroundStyle(DincrColor.text)
+                    .font(DincrFont.title1).foregroundStyle(.dincrText)
                     .accessibilityAddTraits(.isHeader)
                 switch state {
                 case .loading:
@@ -108,7 +108,7 @@ struct PlanChooserView: View {
                 }
                 if let error { ErrorStateView(message: error) }
                 Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }
-                    .font(DincrFont.title2).foregroundStyle(DincrColor.tint)
+                    .font(DincrFont.title2).foregroundStyle(.dincrTint)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .padding(DincrSpacing.s6)
@@ -149,9 +149,9 @@ struct PlanCardView: View {
         let paid = option.code != PlanTier.free.rawValue
         let price = catalog?.plans?.first { $0.code == option.code }?.regularPriceCrc ?? option.regularPriceCrc
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(option.name ?? option.code.uppercased()).font(DincrFont.title1).foregroundStyle(DincrColor.text)
+            Text(option.name ?? option.code.uppercased()).font(DincrFont.title1).foregroundStyle(.dincrText)
             if let tagline = option.tagline {
-                Text(tagline).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                Text(tagline).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             }
             if !paid {
                 Text(tx("Gratis", "Free")).font(DincrFont.title2)
@@ -159,7 +159,7 @@ struct PlanCardView: View {
                 Text(MoneyFormat(currency: "CRC").string(Decimal(price)) + tx(" al mes", " per month")).font(DincrFont.title2)
             }
             ForEach(option.features ?? [], id: \.self) { feature in
-                Label(feature, systemImage: "checkmark").font(DincrFont.bodySmall).foregroundStyle(DincrColor.text)
+                Label(feature, systemImage: "checkmark").font(DincrFont.bodySmall).foregroundStyle(.dincrText)
             }
             if canChoose {
                 Button(tx("Elegir \(option.name ?? option.code)", "Choose \(option.name ?? option.code)"), action: choose)
@@ -168,7 +168,7 @@ struct PlanCardView: View {
                     .padding(.top, DincrSpacing.s2)
             } else {
                 Text(tx("Próximamente en las tiendas", "Coming soon to the stores"))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrTextMuted)
             }
         }
         .dincrCard()
