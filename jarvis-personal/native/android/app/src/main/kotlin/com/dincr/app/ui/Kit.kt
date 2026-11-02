@@ -66,6 +66,7 @@ import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
@@ -298,7 +299,7 @@ fun FormField(label: String, value: String, onChange: (String) -> Unit, error: S
         prefix = prefix?.let { { Text(it) } },
         isError = error != null,
         supportingText = (error ?: supporting)?.let { { Text(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = if (singleLine) ImeAction.Done else ImeAction.Default),
         shape = RoundedCornerShape(Dincr.look.controlRadius),
         colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Dincr.colors.fieldBorder, focusedBorderColor = Dincr.colors.tint),
         modifier = modifier.fillMaxWidth().semantics { if (error != null) error(error) },

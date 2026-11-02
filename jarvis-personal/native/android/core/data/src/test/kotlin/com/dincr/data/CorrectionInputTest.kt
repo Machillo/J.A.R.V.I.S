@@ -38,14 +38,29 @@ class CorrectionInputTest {
         listOf("1.234,5,6", "1,2,3", "12,34,567", "0,0000001", "0", "", "-1", "1e3", "abc").forEach { bad ->
             formats.forEach { f -> assertNull("$bad $f", CorrectionInput.rate(bad, f)) }
         }
-        assertNull(CorrectionInput.amount("1.234,56", MoneyFormat.Separators.COMMA_DOT))
-        assertNull(CorrectionInput.amount("1,234.56", MoneyFormat.Separators.DOT_COMMA))
+        // With at most 2 decimals, the last separator of a mixed amount can only be the decimal.
+        same("1234.56", CorrectionInput.amount("1.234,56", MoneyFormat.Separators.COMMA_DOT), "mixed comma_dot")
+        same("1234.56", CorrectionInput.amount("1,234.56", MoneyFormat.Separators.DOT_COMMA), "mixed dot_comma")
     }
 
-    @Test fun theStrictParsersOfOtherFieldsAreUnchanged() {
-        // The reported failure, kept on purpose for every field outside the correction sheet.
+    @Test fun everyAmountReadsEitherSeparatorInAnyProfile() {
+        // The new installment and every other money field: "." or ",", in any profile, one meaning.
+        val cases = listOf(
+            "47500,50" to "47500.5", "47500.50" to "47500.5", "1,5" to "1.5", "1.5" to "1.5",
+            "18.450" to "18450", "18,450" to "18450", "1.000.000" to "1000000", "1,000,000" to "1000000",
+            "18.450,75" to "18450.75", "18,450.75" to "18450.75",
+        )
+        formats.forEach { f ->
+            cases.forEach { (text, expected) ->
+                same(expected, AmountInput.parse(text, f), "$text $f")
+                same(expected, AmountInput.parseZeroOrMore(text, f), "$text $f")
+            }
+            listOf("1,234,56", "1.5.2", "1,2.3", "1.234,567", "12,345.6.7").forEach { assertNull("$it $f", AmountInput.parse(it, f)) }
+            same("12.5", CorrectionInput.interest("12,5", f), "interest $f")
+            same("12.5", CorrectionInput.interest("12.5", f), "interest $f")
+        }
+        // `ExchangeRateInput` alone stays strict; the fields read rates through `CorrectionInput.rate`.
         assertNull(ExchangeRateInput.parse("453,84", MoneyFormat.Separators.COMMA_DOT))
-        assertNull(AmountInput.parse("9,99", MoneyFormat.Separators.COMMA_DOT))
     }
 
     /** Plan → Ingresos y base: "2390,79" typed on a comma_dot profile is 2390.79, never refused. */
@@ -54,7 +69,7 @@ class CorrectionInputTest {
         assertEquals(0, BigDecimal("2390.79").compareTo(CorrectionInput.amountZeroOrMore("2390,79", cd)))
         assertEquals(0, BigDecimal("18450").compareTo(CorrectionInput.amountZeroOrMore("18,450", cd)))
         assertEquals(0, BigDecimal.ZERO.compareTo(CorrectionInput.amountZeroOrMore("0", cd)))
-        assertNull(CorrectionInput.amountZeroOrMore("1.234,5", cd))
+        assertEquals(0, BigDecimal("1234.5").compareTo(CorrectionInput.amountZeroOrMore("1.234,5", cd)))
         assertNull(CorrectionInput.amountZeroOrMore("12,3456", cd))
     }
 }

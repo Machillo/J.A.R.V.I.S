@@ -126,8 +126,7 @@ public struct MoneyFormat: Sendable, Equatable {
 /// Returns nil for anything that is not an unambiguous positive amount: a wrong value is worse
 /// than asking again, so nothing is guessed.
 public enum AmountInput {
-    /// Money never has more than two decimals. It also makes "1.000" (comma_dot) and "1,000"
-    /// (dot_comma) invalid instead of silently meaning one.
+    /// Money never has more than two decimals, so "1.000" and "1,000" can only mean a thousand.
     public static let maxFractionDigits = 2
     /// The largest amount any write of this app may send. Every field the input feeds is stored
     /// as NUMERIC(12,2): `salaries.amount` / `expenses.amount` (the backend refuses more,
@@ -141,7 +140,16 @@ public enum AmountInput {
     /// Like `parse`, but zero is a valid answer (an optional balance or an amount already saved).
     public static func parseZeroOrMore(_ text: String, separators: MoneyFormat.Separators) -> Decimal? { parse(text, separators: separators, allowZero: true) }
 
+    /// Reads an amount typed with "." or ",", whatever the profile's format and the keyboard offer
+    /// (a Spanish iPhone's decimal pad only has ","). The profile's format goes first, then the other
+    /// one. Never ambiguous: with at most 2 decimals and thousands groups of exactly 3 digits, no text
+    /// is valid in both formats unless it has no separator at all.
     static func parse(_ text: String, separators: MoneyFormat.Separators, allowZero: Bool) -> Decimal? {
+        strict(text, separators: separators, allowZero: allowZero)
+            ?? strict(text, separators: separators == .dotComma ? .commaDot : .dotComma, allowZero: allowZero)
+    }
+
+    private static func strict(_ text: String, separators: MoneyFormat.Separators, allowZero: Bool) -> Decimal? {
         let trimmed = text.replacingOccurrences(of: " ", with: "")
         guard !trimmed.isEmpty else { return nil }
         let grouping: Character = separators == .dotComma ? "." : ","
@@ -193,14 +201,12 @@ public enum RateInput {
     }
 }
 
-/// Amount and exchange rate of the mail notice correction ("Corregir aviso"). Its decimal keyboard
-/// follows the device language (a Spanish iPhone only offers ","), while the parsers follow the
-/// profile's number format, so "453,84" was refused for a comma_dot profile. Here the user's own
-/// format is tried first (identical results); only when it fails is the OTHER separator read as
-/// the decimal mark, and only when it is the single separator in the text and is not followed by
-/// exactly 3 digits (that would be a thousands group: "453,840" is refused, never guessed).
-/// Mixed separators keep failing. Used by this sheet and the declared-profile forms (Ingresos y
-/// base, Tus ahorros, Ajustes del plan); other money fields are unchanged.
+/// Exchange rates typed with "." or ",". The decimal keyboard follows the device language (a Spanish
+/// iPhone only offers ","), while the parser follows the profile's number format. The user's own
+/// format is tried first; only when it fails is the OTHER separator read as the decimal mark, and
+/// only when it is the single separator in the text and is not followed by exactly 3 digits: a rate
+/// has up to 6 decimals, so "453,840" is really ambiguous and is refused, never guessed. Amounts go
+/// through `AmountInput`, which accepts both separators itself.
 public enum CorrectionInput {
     public static func amount(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
         parse(text, separators: separators, maxFraction: AmountInput.maxFractionDigits) { AmountInput.parse($0, separators: $1) }

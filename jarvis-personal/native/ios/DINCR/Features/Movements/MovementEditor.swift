@@ -134,7 +134,7 @@ struct MovementEditor: View {
                                 .accessibilityIdentifier("editor.rate")
                             if let error = fieldErrors[.rate] { fieldError(error) }
                             if let preview = ConversionPreview.baseAmount(typed: AmountInput.parse(amountText, separators: format.separators), currency: currency, base: base,
-                                                                          rate: RateInput.parse(rateText, separators: format.separators)) {
+                                                                          rate: CorrectionInput.rate(rateText, separators: format.separators)) {
                                 Text(tx("Se guardará como \(format.string(preview)). DINCR usa tu tipo de cambio; no consulta tasas.", "Saved as \(format.string(preview)). DINCR uses your rate; it doesn’t look rates up."))
                                     .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                                     .accessibilityIdentifier("editor.preview")
@@ -186,10 +186,6 @@ struct MovementEditor: View {
                             .fontWeight(.semibold)
                             .accessibilityIdentifier("editor.save")
                     }
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button(tx("Listo", "Done")) { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
                 }
             }
             .interactiveDismissDisabled(saving || hasChanges)
@@ -318,7 +314,7 @@ struct MovementEditor: View {
             if case .edit(let movement) = mode, storedForeign, rateText == prefilledRateText {
                 rate = movement.exchangeRate // untouched stored rate
             } else {
-                rate = RateInput.parse(rateText, separators: format.separators)
+                rate = CorrectionInput.rate(rateText, separators: format.separators)
             }
             if rate == nil {
                 errors[.rate] = tx("Escribí cuántos colones vale 1 dólar, por ejemplo \(format.inputText(Decimal(string: "507.5")!)).",

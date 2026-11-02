@@ -12,6 +12,7 @@ struct DINCRApp: App {
 
     init() {
         if animationsDisabled { UIView.setAnimationsEnabled(false) }
+        KeyboardHideBar.shared.install()
     }
 
     var body: some Scene {

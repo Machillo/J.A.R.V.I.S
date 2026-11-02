@@ -41,7 +41,24 @@ import Testing
         #expect(AmountInput.parse(text, separators: separators) == expected)
     }
 
-    @Test(arguments: ["", "0", "-5", "abc", "1,2,3", "12e3", "1,5", "12,34,567", "1.5.2", "1,234,56"])
+    /// The new installment and every other money field: "." or ",", in any profile, one meaning.
+    @Test(arguments: [MoneyFormat.Separators.dotComma, .commaDot])
+    func readsEitherSeparatorInAnyProfile(separators: MoneyFormat.Separators) {
+        let cases: [(String, Decimal)] = [
+            ("47500,50", Decimal(string: "47500.5")!), ("47500.50", Decimal(string: "47500.5")!), ("1,5", Decimal(string: "1.5")!), ("1.5", Decimal(string: "1.5")!),
+            ("18.450", 18_450), ("18,450", 18_450), ("1.000.000", 1_000_000), ("1,000,000", 1_000_000),
+            ("18.450,75", Decimal(string: "18450.75")!), ("18,450.75", Decimal(string: "18450.75")!),
+        ]
+        for (text, expected) in cases {
+            #expect(AmountInput.parse(text, separators: separators) == expected, "\(text)")
+            #expect(AmountInput.parseZeroOrMore(text, separators: separators) == expected, "\(text)")
+        }
+        for bad in ["1,234,56", "1.5.2", "1,2.3", "1.234,567", "12,345.6.7"] {
+            #expect(AmountInput.parse(bad, separators: separators) == nil, "\(bad)")
+        }
+    }
+
+    @Test(arguments: ["", "0", "-5", "abc", "1,2,3", "12e3", "12,34,567", "1.5.2", "1,234,56"])
     func rejectsInvalidInput(text: String) {
         #expect(AmountInput.parse(text, separators: .commaDot) == nil)
     }
@@ -54,7 +71,7 @@ import Testing
         #expect(CorrectionInput.amountZeroOrMore("18,450", separators: .commaDot) == 18_450)
         #expect(CorrectionInput.amountZeroOrMore("0", separators: .commaDot) == 0)
         #expect(CorrectionInput.amountZeroOrMore("2390.79", separators: .dotComma) == Decimal(string: "2390.79"))
-        #expect(CorrectionInput.amountZeroOrMore("1.234,5", separators: .commaDot) == nil)
+        #expect(CorrectionInput.amountZeroOrMore("1.234,5", separators: .commaDot) == Decimal(string: "1234.5"))
         #expect(CorrectionInput.amountZeroOrMore("12,3456", separators: .commaDot) == nil)
     }
 }

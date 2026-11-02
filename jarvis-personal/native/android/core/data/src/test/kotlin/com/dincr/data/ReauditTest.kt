@@ -38,7 +38,7 @@ class ReauditTest {
             "99.999.999.999,99" to dotComma, "10,000,000,000.00" to commaDot, "999999999999.99" to commaDot,
             "1e30" to dotComma, "1e300" to commaDot, "1E+30" to commaDot, "NaN" to dotComma, "Infinity" to commaDot,
             "-Infinity" to dotComma, "-0,01" to dotComma, "0" to dotComma, "0,00" to dotComma, "0x10" to commaDot,
-            "9.999.999.999,991" to dotComma, "1,000" to dotComma, "1.000" to commaDot, "1.5" to dotComma,
+            "9.999.999.999,991" to dotComma,
             "１２" to dotComma, "٣" to dotComma,
         )) assertNull("\"$text\" must be rejected", AmountInput.parse(text, separators))
     }

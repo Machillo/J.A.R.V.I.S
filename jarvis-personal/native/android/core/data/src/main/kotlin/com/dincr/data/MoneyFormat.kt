@@ -94,12 +94,13 @@ data class MoneyFormat(
 }
 
 /**
- * Parses typed amounts. Returns null for anything that is not an unambiguous positive amount;
- * nothing is guessed. Grouping must be real thousands groups ("18.450"); a mistyped decimal
- * ("1,5" in comma_dot) is rejected instead of silently becoming 15. Same rules as iOS.
+ * Parses typed amounts, with "." or ",", whatever the profile's format and the keyboard offer. The
+ * profile's format goes first, then the other one. Never ambiguous: with at most 2 decimals and
+ * thousands groups of exactly 3 digits, no text is valid in both formats unless it has no separator
+ * at all ("1,5" is 1.5 and "1.000" is 1000 in any profile). Same rules as iOS.
  */
 object AmountInput {
-    /** Money never has more than two decimals; this also rejects "1.000" in comma_dot. */
+    /** Money never has more than two decimals, so "1.000" and "1,000" can only mean a thousand. */
     const val MAX_FRACTION_DIGITS = 2
     /**
      * The largest amount any write of this app may send. Every field the input feeds is stored as
@@ -111,15 +112,19 @@ object AmountInput {
     const val MAX_INTEGER_DIGITS = 10
 
     /** A positive amount for a money write (income, expense, debt, goal, budget, …). */
-    fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? =
-        parseDecimal(text, separators, MAX_FRACTION_DIGITS, MAX_AMOUNT, allowZero = false)
+    fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? = eitherFormat(text, separators, allowZero = false)
 
     /**
      * A money value where zero is meaningful (saved so far, liquid savings, a budget limit of 0).
      * Same bound as [parse]; an empty field is null (unknown), never zero.
      */
-    fun parseZeroOrMore(text: String, separators: MoneyFormat.Separators): BigDecimal? =
-        parseDecimal(text, separators, MAX_FRACTION_DIGITS, MAX_AMOUNT, allowZero = true)
+    fun parseZeroOrMore(text: String, separators: MoneyFormat.Separators): BigDecimal? = eitherFormat(text, separators, allowZero = true)
+
+    private fun eitherFormat(text: String, separators: MoneyFormat.Separators, allowZero: Boolean): BigDecimal? {
+        val other = if (separators == MoneyFormat.Separators.DOT_COMMA) MoneyFormat.Separators.COMMA_DOT else MoneyFormat.Separators.DOT_COMMA
+        return parseDecimal(text, separators, MAX_FRACTION_DIGITS, MAX_AMOUNT, allowZero)
+            ?: parseDecimal(text, other, MAX_FRACTION_DIGITS, MAX_AMOUNT, allowZero)
+    }
 
     /**
      * The shared strict parser: the user's separators, real thousands groups only, at most
@@ -160,13 +165,12 @@ object ExchangeRateInput {
 }
 
 /**
- * Amount and exchange rate of the mail notice correction ("Corregir aviso"). The decimal keyboard
- * follows the device language (a Spanish keyboard may only offer ","), while the parsers follow the
- * profile's number format, so "453,84" was refused for a comma_dot profile. The user's own format is
- * tried first (identical results); only when it fails is the OTHER separator read as the decimal
- * mark, and only when it is the single separator in the text and is not followed by exactly 3
- * digits (that would be a thousands group: "453,840" is refused, never guessed). Mixed separators
- * keep failing. Scoped to that sheet; other money fields are unchanged. iOS: `CorrectionInput`.
+ * Exchange rates and interest rates typed with "." or ",". The decimal keyboard follows the device
+ * language (a Spanish keyboard may only offer ","), while the parser follows the profile's number
+ * format. The user's own format is tried first; only when it fails is the OTHER separator read as the
+ * decimal mark, and only when it is the single separator in the text and is not followed by exactly 3
+ * digits: these allow more than 2 decimals, so "453,840" is really ambiguous and is refused, never
+ * guessed. Amounts go through [AmountInput], which accepts both separators itself. iOS: `CorrectionInput`.
  */
 object CorrectionInput {
     fun amount(text: String, separators: MoneyFormat.Separators): BigDecimal? =
@@ -178,6 +182,10 @@ object CorrectionInput {
 
     fun rate(text: String, separators: MoneyFormat.Separators): BigDecimal? =
         parse(text, separators, ExchangeRateInput.FRACTION_DIGITS) { t, s -> ExchangeRateInput.parse(t, s) }
+
+    /** A debt's annual interest percent, up to 4 decimals; zero is valid. */
+    fun interest(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        parse(text, separators, InterestRateInput.FRACTION_DIGITS) { t, s -> InterestRateInput.parse(t, s) }
 
     private fun parse(text: String, separators: MoneyFormat.Separators, maxFraction: Int,
                       strict: (String, MoneyFormat.Separators) -> BigDecimal?): BigDecimal? {
@@ -197,9 +205,10 @@ object CorrectionInput {
 /** Annual interest percent of a debt: `debts.interest_rate` NUMERIC(8,4), so `[0, 9999.9999]`. */
 object InterestRateInput {
     val MAX_RATE = BigDecimal("9999.9999")
+    const val FRACTION_DIGITS = 4
 
     fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? =
-        AmountInput.parseDecimal(text, separators, 4, MAX_RATE, allowZero = true)
+        AmountInput.parseDecimal(text, separators, FRACTION_DIGITS, MAX_RATE, allowZero = true)
 }
 
 /** Whole numbers typed in forms (term in months, day of month): ASCII digits within a range. */

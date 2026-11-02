@@ -101,7 +101,7 @@ class MoneyFormatTest {
     }
 
     @Test fun rejectsAmbiguousOrInvalidInput() {
-        listOf("", "0", "-5", "abc", "1,2,3", "12e3", "1,5", "12,34,567", "1.5.2", "1,234,56").forEach {
+        listOf("", "0", "-5", "abc", "1,2,3", "12e3", "12,34,567", "1.5.2", "1,234,56").forEach {
             assertNull("\"$it\" must be rejected", AmountInput.parse(it, MoneyFormat.Separators.COMMA_DOT))
         }
     }

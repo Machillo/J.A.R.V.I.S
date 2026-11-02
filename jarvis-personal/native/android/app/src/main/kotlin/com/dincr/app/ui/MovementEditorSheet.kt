@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
@@ -163,7 +164,7 @@ fun MovementEditorSheet(
         val rate = when {
             !foreign || waits -> null
             storedForeign != null && rateText == prefilledRate && storedForeign.exchangeRate != null -> storedForeign.exchangeRate
-            else -> ExchangeRateInput.parse(rateText, format.separators)
+            else -> com.dincr.data.CorrectionInput.rate(rateText, format.separators)
         }
         val example = format.format(BigDecimal(18450)).removePrefix(format.symbol).trim()
         amountError = if (amount == null) tx("Escribí un monto mayor que cero, por ejemplo $example.", "Enter an amount above zero, for example $example.") else null
@@ -235,7 +236,7 @@ fun MovementEditorSheet(
             val symbol = if (currency == base) format.symbol else format.copy(currency = currency).symbol
             OutlinedTextField(amountText, { amountText = it; amountError = null }, label = { Text(tx("Monto", "Amount")) }, prefix = { Text(symbol) },
                 textStyle = MaterialTheme.typography.headlineSmall.merge(TabularNums), singleLine = true, isError = amountError != null,
-                supportingText = amountError?.let { { Text(it) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                supportingText = amountError?.let { { Text(it) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().testTag("editor.amount"))
             if (offersWaitForClose) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -253,9 +254,9 @@ fun MovementEditorSheet(
                 OutlinedTextField(rateText, { rateText = it; rateError = null }, label = { Text(tx("Tipo de cambio (₡ por US\$1)", "Exchange rate (₡ per US\$1)")) },
                     singleLine = true, isError = rateError != null,
                     supportingText = { Text(rateError ?: tx("Usá el tipo de cambio de tu banco. DINCR no lo inventa.", "Use your bank’s rate. DINCR never makes one up.")) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth().testTag("editor.rate"))
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("editor.rate"))
                 val typed = AmountInput.parse(amountText, format.separators)
-                val typedRate = ExchangeRateInput.parse(rateText, format.separators)
+                val typedRate = com.dincr.data.CorrectionInput.rate(rateText, format.separators)
                 ConversionPreview.baseAmount(typed, currency, base, typedRate)?.let { converted ->
                     Text(tx("Se registra como ${format.format(converted)}", "Recorded as ${format.format(converted)}"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
                 }
