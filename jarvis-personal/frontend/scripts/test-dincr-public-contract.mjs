@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const out = new URL('../landing-dist/', import.meta.url);
-const routes = ['', 'precios', 'seguridad', 'privacidad', 'terminos', 'soporte', 'eliminar-cuenta', 'bancos-compatibles', 'descargar'];
+const routes = ['', 'precios', 'seguridad', 'privacidad', 'terminos', 'soporte', 'eliminar-cuenta', 'descargar'];
 for (const route of routes) {
   const html = await readFile(new URL(`${route ? route + '/' : ''}index.html`, out), 'utf8');
   // Spanish and English at the same URL (test:landing-i18n checks the language switch).
@@ -114,7 +114,11 @@ assert.doesNotMatch(marketing, /con IA\b|impulsad[oa] por (la )?IA|inteligencia 
 assert.doesNotMatch(marketing, /\b\d[\d.,]*\s*(\+\s*)?(usuarios|clientes|descargas)\b|\d(\.\d)?\s*estrellas|testimonio|hac[eé]te rico|garantizad|sin riesgo|banco oficial|aliado oficial/i, 'no invented or misleading claims');
 assert.match(marketing, /no es un banco/i, 'DINCR is not a bank');
 assert.match(marketing, /no usa inteligencia artificial generativa/i, 'privacy: no generative AI');
-assert.match(marketing, /no envía, modifica ni borra correos/i, 'privacy: read-only mail');
+// Mail reading is paused outside the Owner: the public site doesn't sell it. The legal pages keep the disclosure.
+for (const [file, html] of Object.entries(pagesHtml)) {
+  if (/^(privacidad|terminos)\//.test(file)) continue;
+  assert.doesNotMatch(text(html), /gmail|outlook|avisos? banc|correo conectado|tu correo|bancos compatibles|bank notification|supported banks|your email|CCSS/i, `${file}: no paused mail feature`);
+}
 assert.match(marketing, /no se venden ni se usan para publicidad/i, 'privacy: no sale, no ads');
 assert.match(home, /id="como-funciona"/);
 assert.match(home, /Lanzamiento próximo en Android y iPhone/, 'pre-launch state is explicit while there are no store URLs');

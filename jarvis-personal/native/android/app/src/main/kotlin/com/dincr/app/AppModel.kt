@@ -21,6 +21,7 @@ import com.dincr.data.Jarvis
 import com.dincr.data.JarvisChatSession
 import com.dincr.data.LaunchPolicy
 import com.dincr.data.MailReturn
+import com.dincr.data.MailStatus
 import com.dincr.data.MoneyFormat
 import com.dincr.data.OAuthProvider
 import com.dincr.data.OpsFlag
@@ -62,6 +63,8 @@ sealed interface AppEnvironment {
         val role: FakeBackend.Role = FakeBackend.Role.USER,
         /** `dincrRefreshFails`: a pull to refresh finds the server unreachable (B17 UI tests). */
         val identityRefreshFails: Boolean = false,
+        /** `dincrMailLeftovers`: a VIP who connected a mailbox before mail was paused (L-1). */
+        val mailLeftovers: Boolean = false,
     ) : AppEnvironment
     data class Unconfigured(val reason: LaunchPolicy.Reason) : AppEnvironment
 
@@ -87,6 +90,7 @@ sealed interface AppEnvironment {
                     intent?.getLongExtra("dincrLatencyMs", 350) ?: 350,
                     FakeBackend.Role.entries.firstOrNull { it.wire == intent?.getStringExtra("dincrRole") } ?: FakeBackend.Role.USER,
                     intent?.getBooleanExtra("dincrRefreshFails", false) ?: false,
+                    intent?.getBooleanExtra("dincrMailLeftovers", false) ?: false,
                 )
             }
         }
@@ -229,7 +233,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             is AppEnvironment.Fixtures -> {
                 sessions = SessionManager(null, InMemorySessionStore(if (environment.skipLogin) FIXTURE_SESSION else null))
                 val backend = FakeBackend(environment.scenario, environment.plan, environment.latencyMs, role = environment.role,
-                    identityRefreshFails = environment.identityRefreshFails)
+                    identityRefreshFails = environment.identityRefreshFails, mailLeftovers = environment.mailLeftovers)
                 fixtureBackend = backend
                 api = DincrApi(ApiClient("https://fixtures.invalid", sessions, backend))
             }
@@ -457,6 +461,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         // their loop and on a pull to refresh, so an identity read again does not read them twice.
         if (_phase.value is Phase.Ready) viewModelScope.launch {
             if (!wasReady) refreshFlags()
+            refreshMailLeftovers()
             reconcileStore()
             if (!wasReady) syncOnReturn()
             if (!wasReady) ReminderScheduler.refresh(getApplication(), this@AppModel)
@@ -520,6 +525,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         appLock.detach()
         jarvisChat.reset()
         appearance.clear()
+        _mailLeftovers.value = false
         _profile.value = null
         _flags.value = FeatureFlags()
         _notice.value = null
@@ -530,6 +536,22 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     // --- Mail connection return ------------------------------------------------------------------------
 
+    private val _mailLeftovers = MutableStateFlow(false)
+    /** A VIP's mailbox or notices from before the pause: the only way mail shows outside the Owner. */
+    val mailLeftovers: StateFlow<Boolean> = _mailLeftovers.asStateFlow()
+
+    /** Read for VIP only (the route is VIP's). A failed read keeps what is known. */
+    suspend fun refreshMailLeftovers() {
+        val profile = _profile.value
+        if (profile == null || profile.canReadMail || profile.planTier != PlanTier.VIP) { _mailLeftovers.value = false; return }
+        runCatching { api.mailStatus() }.onSuccess { _mailLeftovers.value = it.hasLeftovers }
+    }
+
+    /** What the mail screen just read: reviewing the last notice or disconnecting ends the leftovers. */
+    fun noteMailStatus(status: MailStatus) {
+        if (_profile.value?.canReadMail != true) _mailLeftovers.value = status.hasLeftovers
+    }
+
     /**
      * A mail connection came back from the browser. Parsed strictly, redeemed once (a handled
      * ledger survives restarts) and only with the current session; the backend refuses a flow
@@ -538,6 +560,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     fun handleMailReturn(url: String) {
         val mail = MailReturn.parse(url, AppEnvironment.MAIL_SCHEMES) ?: return
         if (handledMail.contains(mail.key)) return
+        // Mail is paused outside the Owner (L-1): a stray link opens nothing and says nothing.
+        val profile = _profile.value
+        if (profile != null && !profile.canReadMail) { markHandled(mail.key); return }
         _pendingRoute.value = "mail"
         if (!mail.isAuthorized) {
             markHandled(mail.key)

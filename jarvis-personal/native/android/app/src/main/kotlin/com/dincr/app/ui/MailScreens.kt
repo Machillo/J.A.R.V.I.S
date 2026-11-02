@@ -62,8 +62,12 @@ private data class MailData(val status: MailStatus, val candidates: List<MailCan
 @Composable
 fun MailScreen(model: AppModel, nav: Navigator) {
     val canRead = model.profile.collectAsStateWithLifecycle().value?.canReadMail == true
+    // Reaches here only with leftovers from before the pause; when they are gone the screen closes.
+    val leftovers by model.mailLeftovers.collectAsStateWithLifecycle()
+    LaunchedEffect(canRead, leftovers) { if (!canRead && !leftovers) nav.back() }
     val data = rememberLoad(model) {
         val status = model.api.mailStatus()
+        model.noteMailStatus(status)
         // Without mail reading, what was already imported stays reviewable even with no mailbox left.
         val review = status.connected || model.profile.value?.canReadMail != true
         MailData(status, if (review) model.api.mailCandidates(pendingOnly = true) else emptyList(),
@@ -85,7 +89,7 @@ fun MailScreen(model: AppModel, nav: Navigator) {
             if (!canRead) MailReadingUnavailable(status.connected)
             if (!status.connected && canRead) ConnectMail(model, status) else {
                 if (status.needsReauthorization) DincrMessage(MessageKind.TECHNICAL_ERROR, tx("Volvé a conectar tu correo", "Reconnect your mail"), tx("El permiso venció o fue revocado.", "The permission expired or was revoked."))
-                DincrCard {
+                if (canRead || status.visibleConnections.isNotEmpty()) DincrCard {
                     Column {
                         status.visibleConnections.forEach { c ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -117,7 +121,7 @@ fun MailScreen(model: AppModel, nav: Navigator) {
                 transfers.items.takeIf { it.isNotEmpty() }?.let { OwnTransfers(model, it) { data.reload() } }
                 SectionTitle(tx("Por revisar", "To review"))
                 val visible = candidates.filter { it.isPending }.let { list -> list.filter { c -> c.relatedCandidateId == null || list.none { it.candidateId == c.relatedCandidateId && (it.candidateId ?: 0) < (c.candidateId ?: 0) } } }
-                if (visible.isEmpty()) EmptyState(Icons.Rounded.MarkEmailRead, tx("Todo revisado", "All reviewed"), tx("Cuando llegue un aviso de tu banco aparecerá acá para que lo confirmés.", "When a bank notice arrives it will appear here for you to confirm."))
+                if (visible.isEmpty()) EmptyState(Icons.Rounded.MarkEmailRead, tx("Todo revisado", "All reviewed"), if (!canRead) tx("No quedan avisos por revisar.", "No notices left to review.") else tx("Cuando llegue un aviso de tu banco aparecerá acá para que lo confirmés.", "When a bank notice arrives it will appear here for you to confirm."))
                 visible.forEach { candidate -> CandidateRow(candidate, reviewer) }
             }
         }

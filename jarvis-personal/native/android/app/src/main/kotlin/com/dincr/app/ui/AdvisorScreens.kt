@@ -107,7 +107,7 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
                 if (plan != PlanTier.VIP) {
                     LockedRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), PlanTier.VIP, nav)
                 } else {
-                    NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices")) { nav.open("accounts") }
+                    NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Tus cuentas propias y días de corte", "Your own accounts and cut days")) { nav.open("accounts") }
                 }
             }
         }

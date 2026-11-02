@@ -90,8 +90,10 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
     var declaring by remember { mutableStateOf(false) }
     DetailScaffold(tx("Cuentas", "Accounts"), nav::back) {
         if (accountsPaused(model)) return@DetailScaffold
-        Caption(tx("Tus bancos según los avisos que DINCR leyó. DINCR no muestra saldos ni números de cuenta completos.",
-            "Your banks from the notices DINCR read. DINCR shows no balances or full account numbers."))
+        Caption(if (model.profile.value?.canReadMail == true) tx("Tus bancos según los avisos que DINCR leyó. DINCR no muestra saldos ni números de cuenta completos.",
+            "Your banks from the notices DINCR read. DINCR shows no balances or full account numbers.")
+        else tx("Tus cuentas propias, para reconocer transferencias entre ellas. DINCR no muestra saldos ni números de cuenta completos.",
+            "Your own accounts, to recognize transfers between them. DINCR shows no balances or full account numbers."))
         // An own account no notice came from (the other bank of a transfer): marking it lets DINCR
         // recognise transfers between your accounts instead of offering them as spending.
         TextButton({ declaring = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.declare")) {
@@ -99,8 +101,9 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
         }
         LoadContent(data) { d ->
             val groups = d.groups
-            if (groups.isEmpty()) EmptyState(Icons.Rounded.AccountBalance, tx("Sin cuentas detectadas", "No accounts detected"),
-                tx("Las cuentas aparecen cuando DINCR procesa avisos de tu banco.", "Accounts appear when DINCR processes notices from your bank."))
+            if (groups.isEmpty()) EmptyState(Icons.Rounded.AccountBalance, tx("Sin cuentas todavía", "No accounts yet"),
+                if (model.profile.value?.canReadMail == true) tx("Las cuentas aparecen cuando DINCR procesa avisos de tu banco.", "Accounts appear when DINCR processes notices from your bank.")
+                else tx("Agregá las cuentas que son tuyas para reconocer transferencias entre ellas.", "Add the accounts that are yours to recognize transfers between them."))
             groups.forEach { group ->
                 DincrCard {
                     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { nav.push("accounts/bank/${group.key}") }.semantics(mergeDescendants = true) {},
@@ -292,6 +295,6 @@ private fun CutDayControl(account: FinancialIdentity.Account, busy: Boolean, onC
 @Composable
 private fun MovementList(movements: List<MailCandidate>, reviewer: CandidateReviewer) {
     if (movements.isEmpty()) EmptyState(Icons.Rounded.MarkEmailRead, tx("Sin movimientos", "No transactions"),
-        tx("Los avisos de este banco aparecen acá y en Correos financieros.", "This bank’s notices appear here and in Financial emails."))
+        tx("Todavía no hay movimientos de este banco.", "No transactions from this bank yet."))
     movements.forEach { candidate -> CandidateRow(candidate, reviewer) }
 }

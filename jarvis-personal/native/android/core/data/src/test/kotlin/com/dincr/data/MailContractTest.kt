@@ -116,7 +116,7 @@ class MailContractTest {
 
     /** The fake answers with the server's shapes, so the app's own flows exercise the real decoders. */
     @Test fun fakeBackendAnswersWithTheServerShapes() = runTest {
-        val api = DincrApi(ApiClient("https://fixtures.invalid", { "t" }, FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP), AppLanguage.SPANISH, backoff = {}))
+        val api = DincrApi(ApiClient("https://fixtures.invalid", { "t" }, FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP, mailLeftovers = true), AppLanguage.SPANISH, backoff = {}))
         assertTrue(api.mailCandidates(pendingOnly = true).isNotEmpty())
         assertTrue(api.syncMail().failedConnections.isEmpty())
         val status = api.mailStatus()

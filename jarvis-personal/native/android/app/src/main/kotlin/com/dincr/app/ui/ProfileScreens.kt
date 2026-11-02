@@ -82,6 +82,7 @@ fun planName(plan: String?): String = when (plan ?: "free") {
 @Composable
 fun ProfileHubScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
+    val mailLeftovers by model.mailLeftovers.collectAsStateWithLifecycle()
     var confirming by remember { mutableStateOf(false) }
     RefreshableTab(model, tx("Perfil", "Profile")) {
         com.dincr.design.DincrHeroCard {
@@ -113,6 +114,9 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
                 // connections are set up here (WE-1). Reading mail is the Owner's alone during the launch.
                 if (profile?.canReadMail == true) {
                     NavRow(Icons.Rounded.Email, tx("Conexiones de correo", "Mail connections"), tx("Correo conectado, permisos y buscar avisos", "Connected mail, permissions and checking for notices")) { nav.open("mail") }
+                } else if (mailLeftovers) {
+                    // A mailbox from before the pause: it can always be reviewed and disconnected.
+                    NavRow(Icons.Rounded.Email, tx("Correo conectado anteriormente", "Previously connected mail"), tx("Revisá lo importado o desconectalo", "Review what was imported or disconnect it")) { nav.open("mail") }
                 }
                 // NT-1: reminders on the phone.
                 RemindersRow(model)
@@ -179,7 +183,7 @@ fun SettingsScreen(model: AppModel, nav: Navigator, appearance: Appearance, onAp
         }
         error?.let { ErrorState(it) }
         if (profile?.canDeleteAccountInApp == true) Section(tx("Eliminar cuenta", "Delete account")) {
-            Text(tx("Se borran tus datos financieros y se revoca el acceso a tu correo conectado. No se puede deshacer.", "Your financial data is deleted and access to your connected mail is revoked. This can’t be undone."),
+            Text(tx("Se borran tus datos financieros y se revoca cualquier acceso que hayás autorizado. No se puede deshacer.", "Your financial data is deleted and any access you authorized is revoked. This can’t be undone."),
                 style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
             TextButton({ deleting = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Eliminar mi cuenta", "Delete my account"), color = Dincr.colors.negative) }
         }

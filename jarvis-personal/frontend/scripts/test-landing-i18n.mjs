@@ -139,7 +139,7 @@ for (const path of ['/', '/privacidad/', '/terminos/']) {
 // Proper nouns, Costa Rican institutions and the Spanish terms the translation keeps on purpose.
 const keptSpanish = ['Kenneth Andrés Alvarado Obando', 'Costa Rica', 'Banco Popular', 'BAC Credomatic', 'órdenes patronales', 'aguinaldo', 'Español'];
 const spanishWords = /\b(el|la|los|las|de|del|que|para|con|por|una|tu|tus|sus|podés|querés|cuenta|correo|datos|política|términos|privacidad|eliminar|seguridad|soporte|planes|gratis|mes|año|también|según|más|está|son|sin|cuando|desde|hasta)\b/i;
-const allPages = ['', 'precios/', 'seguridad/', 'privacidad/', 'terminos/', 'soporte/', 'eliminar-cuenta/', 'bancos-compatibles/', 'descargar/'];
+const allPages = ['', 'precios/', 'seguridad/', 'privacidad/', 'terminos/', 'soporte/', 'eliminar-cuenta/', 'descargar/'];
 for (const path of allPages) {
   const html = await page(path);
   let english = visibleText(block(html, 'en'));

@@ -187,8 +187,8 @@ private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect:
 private fun InstitutionsStep(selected: Set<String>, onChange: (Set<String>) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
         Header(tx("Tus bancos en un solo lugar", "Your banks in one place"),
-            tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas; podrás autorizar por separado la lectura de correos financieros compatibles.",
-                "Select the institutions you use. This selection does not connect your accounts; you can separately authorize reading compatible financial emails."))
+            tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas.",
+                "Select the institutions you use. This selection does not connect your accounts."))
         val list = BankBranding.onboardingInstitutions(AppLanguage.current())
         list.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
