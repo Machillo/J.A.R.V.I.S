@@ -251,6 +251,7 @@ private fun DirectorMonthPlan(s: DirectorStrategy, plan: MonthPlan, nav: Navigat
                 if (s.emergencyKnown) {
                     AmountLine(tx("Te falta", "Still to go"), e.gapToNextTarget)
                     emergencyLevel(e.level)?.let { InfoLine(tx("Etapa", "Stage"), it) }
+                    e.recommendation?.let { Caption(it) }
                 }
                 LinkButton(tx("Ver Salvavidas", "See emergency fund")) { nav.open("salvavidas") }
             }

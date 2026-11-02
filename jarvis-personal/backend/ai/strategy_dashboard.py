@@ -282,6 +282,36 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float, exact: bool
     return percentages, items
 
 
+# Salvavidas stages: from 1 to 3 months once no debt is at 20% a year or more, and from 3 to 6
+# once none is at 10% or more. Each stage needs the current one reached.
+SALVAVIDAS_STAGES = {1: (3, 20.0), 3: (6, 10.0)}
+
+
+def _salvavidas_next_stage(
+    target_months: int | None,
+    savings_total: float,
+    monthly_base: float,
+    highest_debt_apr: float | None,
+) -> tuple[int | None, str | None]:
+    """The next Salvavidas goal to recommend, with its reason, or (None, None).
+
+    Nothing is recommended without a known goal, a monthly base, the current goal reached, or a
+    known highest debt rate (an unknown rate is never read as cheap debt).
+    """
+    stage = SALVAVIDAS_STAGES.get(int(target_months or 0))
+    if not stage or monthly_base <= 0 or highest_debt_apr is None:
+        return None, None
+    next_months, debt_limit = stage
+    if savings_total + 0.01 < monthly_base * int(target_months) or highest_debt_apr >= debt_limit:
+        return None, None
+    limit = f"{debt_limit:.0f}%"
+    current = tx("1 mes", "1 month") if target_months == 1 else tx(f"{target_months} meses", f"{target_months} months")
+    return next_months, tx(
+        f"Ya tenés {current} de Salvavidas y no te quedan deudas de {limit} o más: te recomendamos subir la meta a {next_months} meses.",
+        f"You already have {current} of emergency fund and no debt at {limit} or more is left: we recommend raising the goal to {next_months} months.",
+    )
+
+
 # Voluntary complementary pension (Owner's rule, 2026-11-01): it complements the state pension, so
 # it stays small. It starts once no debt costs PENSION_MAX_DEBT_APR or more a year and the
 # Salvavidas covers a month; while cheaper debt remains it takes PENSION_SHARE_WITH_DEBT of what is
@@ -300,8 +330,13 @@ def _build_dynamic_director_allocation(
     emergency_monthly_base: float,
     rates_known: bool = True,
     split_every_cent: bool = False,
+    salvavidas_target_months: int | None = None,
 ) -> dict[str, Any]:
     """Motor de prioridades dinámicas del Director Financiero.
+
+    `salvavidas_target_months`: the Salvavidas goal the person set (1, 3 or 6 months). Once it is
+    reached and the debts allow it, the answer recommends the next stage (`_salvavidas_next_stage`);
+    it is only a recommendation, the goal is never changed here.
 
     `split_every_cent` (the Owner's exact amount only): a single cent is still split and no
     fraction of a cent is left unassigned, so the items add up to the typed amount exactly.
@@ -485,6 +520,10 @@ def _build_dynamic_director_allocation(
         emergency_level = "strong"
         emergency_next_target = six_month_target
 
+    recommended_months, recommendation = _salvavidas_next_stage(
+        salvavidas_target_months, savings_total, monthly_base, highest_debt_apr,
+    )
+
     return {
         "mode": mode,
         "mode_label": mode_label,
@@ -504,6 +543,9 @@ def _build_dynamic_director_allocation(
             "next_target": round(emergency_next_target, 2),
             "gap_to_next_target": round(max(emergency_next_target - savings_total, 0.0), 2),
             "level": emergency_level,
+            "target_months": salvavidas_target_months,
+            "recommended_target_months": recommended_months,
+            "recommendation": recommendation,
         },
         "urgent_goals": urgent_goals,
         "urgent_goal_reserved": round(goal_now, 2),
@@ -1274,6 +1316,7 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
         split_every_cent=manual_available is not None,
+        salvavidas_target_months=int(_f(salvavidas.get("target_months"))) or None,
     )
     # The Salvavidas automatic contributions and the locked savings blocks' contributions still to
     # come go by themselves: the distribution says only what to move on top of them
@@ -1596,11 +1639,12 @@ def _users_blueprint_from_inputs(
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
         rates_known=not missing_rates,
+        salvavidas_target_months=int(_f(salvavidas.get("target_months"))) or None,
     )
     emergency = dict(director.get("emergency") or {})
     emergency["current_known"] = savings_known
     if not savings_known:
-        emergency.update(current=None, gap_to_next_target=None, level="unknown")
+        emergency.update(current=None, gap_to_next_target=None, level="unknown", recommended_target_months=None, recommendation=None)
     allocation_amounts = director.get("allocation_amounts") or {}
     allocation_items = director.get("allocation_items") or []
     allocation_base_amount = _f(director.get("allocation_base_amount"))

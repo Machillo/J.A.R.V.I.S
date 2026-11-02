@@ -174,11 +174,11 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
     }
 }
 
+// The goal's importance decides how much debt it waits behind (backend goals/strategy.py).
 fun priorityLabel(priority: String?) = when (priority) {
-    "critical" -> tx("Prioridad crítica", "Critical priority")
-    "high" -> tx("Prioridad alta", "High priority")
-    "low" -> tx("Prioridad baja", "Low priority")
-    else -> tx("Prioridad media", "Medium priority")
+    "critical", "high" -> tx("Imprescindible", "Essential")
+    "low" -> tx("Un gusto", "Nice to have")
+    else -> tx("Importante", "Important")
 }
 
 fun statusLabel(status: String?) = when (status) {
@@ -194,7 +194,8 @@ private fun GoalForm(model: AppModel, goal: Goal?, onDismiss: () -> Unit, onSave
     var target by remember { mutableStateOf(goal?.targetAmount?.let(format::inputText).orEmpty()) }
     var current by remember { mutableStateOf(goal?.currentAmount?.let(format::inputText) ?: "") }
     var date by remember { mutableStateOf(goal?.targetDate?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }) }
-    var priority by remember { mutableStateOf(goal?.priority?.takeIf { it in com.dincr.data.GOAL_PRIORITIES } ?: "medium") }
+    // "critical" (older goals) is essential too: it reads as Imprescindible.
+    var priority by remember { mutableStateOf(goal?.priority?.let { if (it == "critical") "high" else it }?.takeIf { it in com.dincr.data.GOAL_PRIORITIES } ?: "medium") }
     var status by remember { mutableStateOf(goal?.status ?: "active") }
     var errors by remember { mutableStateOf(mapOf<String, String>()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -222,7 +223,9 @@ private fun GoalForm(model: AppModel, goal: Goal?, onDismiss: () -> Unit, onSave
         MoneyField(tx("Monto objetivo", "Target amount"), target, { target = it }, errors["target"])
         MoneyField(tx("Ya ahorrado", "Already saved"), current, { current = it }, errors["current"])
         DateField(tx("Fecha objetivo (opcional)", "Target date (optional)"), date, { date = it }, allowClear = true)
-        ChoiceChips(listOf("low" to tx("Baja", "Low"), "medium" to tx("Media", "Medium"), "high" to tx("Alta", "High"), "critical" to tx("Crítica", "Critical")), priority, { priority = it }, tx("Prioridad", "Priority"))
+        ChoiceChips(listOf("low" to tx("Un gusto", "Nice to have"), "medium" to tx("Importante", "Important"), "high" to tx("Imprescindible", "Essential")), priority, { priority = it }, tx("Importancia", "Importance"))
+        Caption(tx("Imprescindible con fecha en menos de un año: recibe plata aunque tengas deudas caras. Importante: cuando no tengas deudas de 20% o más. Un gusto: cuando no tengas deudas de 10% o más.",
+            "Essential and due within a year: gets money even with expensive debt. Important: once no debt is at 20% or more. Nice to have: once no debt is at 10% or more."))
         if (goal != null) ChoiceChips(listOf("active" to tx("Activa", "Active"), "paused" to tx("En pausa", "Paused"), "completed" to tx("Completada", "Completed")), status, { status = it }, tx("Estado", "Status"))
     }
 }

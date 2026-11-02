@@ -1,7 +1,7 @@
 {
  "_about": "Responses of the P0.2 read surfaces BEFORE P0.2 (main 49d5da5b) on the synthetic inputs of backend/tests/p02_parity_harness.py; wall-clock fields removed.",
  "advisor_strategy": {
-  "__strategy_hash": "e8f83c2318bad8ff76387ea1833b94b5e7ea9f24d7f3e6a7d2afcd391f034042",
+  "__strategy_hash": "af55d60d95fb69d35b47509c91b2f3f37f50df2a0a0f5580507f42d5c9abd10f",
   "action_plan": [
    {
     "amount": 0,
@@ -60,6 +60,7 @@
     "blocked_by": "riesgo de liquidez en los próximos 45 días",
     "current_amount": 100000,
     "id": 7,
+    "importance": "important",
     "monthly_needed": 50000,
     "monthly_required": 0.0,
     "name": "Meta sintética",
@@ -77,6 +78,7 @@
      "blocked_by": "riesgo de liquidez en los próximos 45 días",
      "current_amount": 100000,
      "id": 7,
+     "importance": "important",
      "monthly_needed": 50000,
      "monthly_required": 0.0,
      "name": "Meta sintética",
@@ -86,7 +88,7 @@
      "target_date": "2027-03-01"
     }
    ],
-   "rule": "Una alternativa por grupo; metas solo después de liquidez, un mes de Salvavidas y deuda cara.",
+   "rule": "Una alternativa por grupo; metas después de liquidez y un mes de Salvavidas. Imprescindible con fecha en 12 meses: aunque haya deuda cara; importante: sin deudas de 20% o más; un gusto: sin deudas de 10% o más.",
    "selected_alternatives": {}
   },
   "health": {
@@ -470,6 +472,7 @@
      "blocked_by": "riesgo de liquidez en los próximos 45 días",
      "current_amount": 100000,
      "id": 7,
+     "importance": "important",
      "monthly_needed": 50000,
      "monthly_required": 0.0,
      "name": "Meta sintética",
