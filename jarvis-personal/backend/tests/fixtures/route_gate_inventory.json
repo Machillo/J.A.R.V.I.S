@@ -1773,6 +1773,14 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/user-product/finance/debts/after-extra",
+  "gates": [
+   "feature:debts"
+  ],
+  "user_get": "allowed"
+ },
+ {
   "method": "DELETE",
   "path": "/user-product/finance/debts/{debt_id}",
   "gates": [
@@ -1784,6 +1792,13 @@
   "path": "/user-product/finance/debts/{debt_id}",
   "gates": [
    "feature:strategy_basic"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/debts/{debt_id}/after-extra",
+  "gates": [
+   "feature:debts"
   ]
  },
  {

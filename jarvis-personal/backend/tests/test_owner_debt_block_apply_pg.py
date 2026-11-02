@@ -170,3 +170,18 @@ def test_more_than_the_debt_owes_pays_it_off_and_says_what_was_left(db):
     applied = _apply({"amount": 1_050_000, "outcome": "reduce_term", "remaining_installments": 1})["block"]["applied"]
     assert (applied["principal_amount"], applied["new_remaining_amount"], applied["left_over"]) == (1000000, 0, 50000)
     assert float(_debt(db)["remaining_amount"]) == 0
+
+
+def test_the_bank_says_it_later_the_abono_is_recorded_and_the_debt_waits(db, monkeypatch):
+    from backend.finance import debt_after_extra
+
+    monkeypatch.setattr(debt_after_extra, "costa_rica_today", lambda: TODAY)
+    applied = _apply({"amount": 351000, "remind_on": "2027-05-10"})["block"]["applied"]
+    assert (applied["outcome"], applied["remind_on"]) == ("later", "2027-05-10")
+    assert float(_debt(db)["remaining_amount"]) == 649000 and _written(db) == (1, 1)
+    token = set_current_user({"id": 7, "account_id": "acc-synthetic", "workspace_id": WS, "role": "owner"})
+    try:
+        waiting = debt_after_extra.list_pending()["items"]
+    finally:
+        reset_current_user(token)
+    assert waiting[str(_debt(db)["id"])]["remind_on"] == "2027-05-10"

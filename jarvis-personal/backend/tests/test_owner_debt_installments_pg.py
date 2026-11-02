@@ -299,6 +299,61 @@ def test_a_users_extra_payment_takes_what_the_bank_did_too(pg):
     assert _plan(pg, debt_id)[0] == 80
 
 
+def _preferences(conn):
+    _q(conn, """CREATE TABLE IF NOT EXISTS user_preferences (id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL,
+                  preference_key TEXT NOT NULL, preference_value JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(),
+                  updated_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE (workspace_id, preference_key))""")
+
+
+def test_the_bank_says_it_later_the_debt_waits_and_the_answer_is_applied(pg, monkeypatch):
+    """The Owner's case: the new installment is known only days later. "El banco me avisa después"
+    keeps the payment, marks the debt pending with the day to be reminded, and the answer applies it."""
+    from backend.finance import debt_after_extra
+    from backend.user_product import service
+
+    _preferences(pg)
+    today = date(2026, 11, 1)
+    monkeypatch.setattr(service, "costa_rica_today", lambda: today)
+    monkeypatch.setattr(debt_after_extra, "costa_rica_today", lambda: today)
+    debt_id = _debt(pg)
+    _owner(service.pay_user_debt, debt_id, 500, remind_on="2026-11-05")
+    waiting = _owner(debt_after_extra.list_pending)["items"]
+    assert waiting[str(debt_id)]["remind_on"] == "2026-11-05" and _plan(pg, debt_id) == (110, 11)
+    assert _vip(debt_after_extra.list_pending)["items"] == {}, "another workspace never sees it"
+
+    _owner(debt_after_extra.answer, debt_id, {"remind_on": "2026-11-06"})
+    assert _owner(debt_after_extra.list_pending)["items"][str(debt_id)]["remind_on"] == "2026-11-06"
+    _owner(debt_after_extra.answer, debt_id, {"new_monthly_payment": 70})
+    assert _plan(pg, debt_id)[0] == 70 and _owner(debt_after_extra.list_pending)["items"] == {}
+
+
+@pytest.mark.parametrize("payload", [{}, {"unchanged": True, "remaining_installments": 3}, {"remind_on": "2026-10-01"},
+                                     {"remaining_installments": 0}, {"new_monthly_payment": 0}])
+def test_an_unclear_answer_changes_nothing(pg, monkeypatch, payload):
+    from fastapi import HTTPException
+
+    from backend.finance import debt_after_extra
+
+    _preferences(pg)
+    monkeypatch.setattr(debt_after_extra, "costa_rica_today", lambda: date(2026, 11, 1))
+    debt_id = _debt(pg)
+    with pytest.raises(HTTPException) as error:
+        _owner(debt_after_extra.answer, debt_id, payload)
+    assert error.value.status_code == 422 and _plan(pg, debt_id) == (110, 12)
+
+
+def test_another_workspaces_debt_is_not_found(pg):
+    from fastapi import HTTPException
+
+    from backend.finance import debt_after_extra
+
+    _preferences(pg)
+    debt_id = _debt(pg, VIP)
+    with pytest.raises(HTTPException) as error:
+        _owner(debt_after_extra.answer, debt_id, {"unchanged": True})
+    assert error.value.status_code == 404
+
+
 # --- Owner only ---------------------------------------------------------------------------
 
 def test_a_user_cannot_apply_installments(pg):

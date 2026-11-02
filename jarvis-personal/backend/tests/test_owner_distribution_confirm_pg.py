@@ -529,3 +529,17 @@ def test_the_cycle_report_does_not_count_a_confirmed_extra_payment_as_an_install
     source = inspect.getsource(service.get_financial_cycle_report)
     query = source[source.index("debt_payments = [dict(row)"):source.index("income_transactions =")]
     assert "source IS DISTINCT FROM 'owner_distribution'" in query
+
+
+def test_a_confirmed_extra_payment_waits_for_what_the_bank_did(db):
+    """The distribution pays extra into debts; what the bank did with it (term or installment) is the
+    Owner's to say, so each debt it paid into is marked pending (no day)."""
+    from backend.finance import debt_after_extra
+
+    preview = _preview("254698")
+    _confirm("254698", "confirm-pending-0001", _items(preview))
+    targets = next(s for s in preview["confirmation_plan"]["steps"] if s["key"] == "ataque_de_deuda")["targets"]
+    waiting = _as("owner", debt_after_extra.list_pending)["items"]
+    assert set(waiting) == {str(target["debt_id"]) for target in targets}
+    assert all(item["source"] == "owner_distribution" and item["remind_on"] is None for item in waiting.values())
+    assert _as("owner", debt_after_extra.list_pending, ws=OTHER)["items"] == {}

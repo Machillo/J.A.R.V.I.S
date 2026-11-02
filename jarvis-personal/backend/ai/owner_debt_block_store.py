@@ -166,11 +166,16 @@ def apply_block(block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     outcome = payload.get("outcome")
     new_installment = payload.get("new_monthly_payment")
     remaining = payload.get("remaining_installments")
+    from backend.finance.debt_after_extra import mark_pending, remind_day
+    remind_on = remind_day(payload.get("remind_on"))
     if amount is None:
         raise HTTPException(status_code=422, detail=tx("Indicá cuánto abonaste.", "Say how much you paid."))
-    if outcome not in OUTCOMES:
+    if remind_on is not None:
+        # The bank says it later: the payment is recorded now, the debt waits for the answer.
+        outcome, new_installment, remaining = "later", None, None
+    elif outcome not in OUTCOMES:
         raise HTTPException(status_code=422, detail=tx("Indicá qué hizo el banco con el abono.", "Say what the bank did with the payment."))
-    if outcome == "reduce_installment":
+    elif outcome == "reduce_installment":
         new_installment = _amount(new_installment)
         if new_installment is None:
             raise HTTPException(status_code=422, detail=tx("Indicá la cuota nueva.", "Enter the new installment."))
@@ -202,9 +207,12 @@ def apply_block(block_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         )
         if payment is None:   # the debt is gone or is not this workspace's: nothing is written
             raise HTTPException(status_code=404, detail=tx("No encontramos esa deuda.", "We couldn't find that debt."))
+        if remind_on is not None:
+            mark_pending(conn, workspace_id, int(block["debt_id"]), remind_on=remind_on, source=SOURCE)
         applied = {"applied_at": today.isoformat(), "amount": amount, "outcome": outcome,
                    "principal_amount": payment["principal_amount"], "new_remaining_amount": payment["new_remaining_amount"],
-                   "new_monthly_payment": new_installment, "remaining_installments": remaining, "payment_id": payment["payment_id"],
+                   "new_monthly_payment": new_installment, "remaining_installments": remaining,
+                   "remind_on": remind_on.isoformat() if remind_on else None, "payment_id": payment["payment_id"],
                    "left_over": round(max(amount - float(payment["principal_amount"]), 0.0), 2)}
         block = {**block, "applied": applied}
         stored = [block if item["id"] == block_id else item for item in blocks]
