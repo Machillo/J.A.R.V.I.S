@@ -36,8 +36,12 @@ private struct BankListView: View {
 
     var body: some View {
         ScreenScroll(title: tx("Cuentas", "Accounts")) {
-            Text(tx("Las cuentas que DINCR detectó en tus avisos bancarios. DINCR no ve saldos ni números completos.",
-                    "The accounts DINCR detected in your bank notices. DINCR doesn’t see balances or full numbers."))
+            // Mail is paused outside the Owner (L-2): no word about notices for anyone else.
+            Text(model.canReadMail
+                 ? tx("Las cuentas que DINCR detectó en tus avisos bancarios. DINCR no ve saldos ni números completos.",
+                      "The accounts DINCR detected in your bank notices. DINCR doesn’t see balances or full numbers.")
+                 : tx("Tus cuentas propias, para reconocer transferencias entre ellas. DINCR no ve saldos ni números completos.",
+                      "Your own accounts, to recognize transfers between them. DINCR doesn’t see balances or full numbers."))
                 .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             // An own account no notice came from (the other bank of a transfer): marking it lets
             // DINCR recognise transfers between your accounts instead of offering them as spending.
@@ -62,8 +66,11 @@ private struct BankListView: View {
             }) { snapshot, _ in
                 if snapshot.groups.isEmpty {
                     EmptyStateView(symbol: "building.columns", title: tx("Sin cuentas todavía", "No accounts yet"),
-                                   message: tx("Cuando DINCR lea avisos de tus bancos, verás acá las cuentas que mencionan.",
-                                               "When DINCR reads your bank notices, you’ll see the accounts they mention here.")) { EmptyView() }
+                                   message: model.canReadMail
+                                       ? tx("Cuando DINCR lea avisos de tus bancos, verás acá las cuentas que mencionan.",
+                                            "When DINCR reads your bank notices, you’ll see the accounts they mention here.")
+                                       : tx("Agregá las cuentas que son tuyas para reconocer transferencias entre ellas.",
+                                            "Add the accounts that are yours to recognize transfers between them.")) { EmptyView() }
                 }
                 ForEach(snapshot.groups) { group in
                     NavigationLink { BankDetailView(group: group) } label: { BankRow(group: group) }

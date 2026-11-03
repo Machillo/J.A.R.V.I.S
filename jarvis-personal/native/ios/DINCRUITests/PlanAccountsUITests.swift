@@ -279,6 +279,14 @@ final class PlanAccountsUITests: XCTestCase {
 
     // MARK: Cuentas ↔ Correos (one review system; §15 PR 10: both in Patrimonio)
 
+    /// L-2: mail is paused outside the Owner, so Cuentas says nothing about notices to anyone else.
+    func testCuentasSaysNothingAboutNoticesOutsideTheOwner() {
+        let app = launch(plan: "vip", tab: "wealth")
+        open("wealth.accounts", in: app)
+        XCTAssertTrue(text("Tus cuentas propias", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(text("tus avisos bancarios", in: app).exists)
+    }
+
     func testAcceptingInCuentasShowsInTheEmailMonitor() {
         let app = launch(plan: "vip", tab: "wealth")
         open("wealth.accounts", in: app)
