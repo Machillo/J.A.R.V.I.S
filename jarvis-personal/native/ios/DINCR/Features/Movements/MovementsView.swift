@@ -275,28 +275,31 @@ struct MovementsView: View {
         }
     }
 
-    /// What the rows on screen add up to: both sides and the result, or the one the filter asks for.
+    /// What the rows on screen add up to, on one line so the list stays on screen: both sides and the
+    /// result, or the one the filter asks for.
     private func totalsSection(_ totals: MovementTotals) -> some View {
         Section {
-            if filter != .expense { totalRow(tx("Ingresos registrados", "Recorded income"), totals.income, sign: .income, id: "income") }
-            if filter != .income { totalRow(tx("Gastos registrados", "Recorded expenses"), totals.expenses, sign: .expense, id: "expenses") }
-            if filter != .income, let paid = totals.debtPaid { totalRow(tx("Pagado a deudas", "Paid to debts"), paid, sign: .expense, id: "debtPaid") }
-            if filter == .all, let result = totals.result { totalRow(tx("Resultado", "Result"), result, sign: .none, id: "result") }
+            HStack(alignment: .top, spacing: DincrSpacing.s4) {
+                if filter != .expense { totalFact(tx("Ingresos", "Income"), totals.income, sign: .income, id: "income") }
+                if filter != .income { totalFact(tx("Gastos", "Expenses"), totals.expenses, sign: .expense, id: "expenses") }
+                if filter != .income, let paid = totals.debtPaid { totalFact(tx("A deudas", "To debts"), paid, sign: .expense, id: "debtPaid") }
+                if filter == .all, let result = totals.result { totalFact(tx("Resultado", "Result"), result, sign: .none, id: "result") }
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("movements.totals")
         } footer: {
             if filter != .income, !pending.items.isEmpty {
                 Text(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("movements.totals")
     }
 
-    private func totalRow(_ label: String, _ amount: Decimal?, sign: MoneyFormat.Sign, id: String) -> some View {
-        HStack {
-            Text(label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
-            Spacer()
+    private func totalFact(_ label: String, _ amount: Decimal?, sign: MoneyFormat.Sign, id: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             if let amount {
-                MoneyText(amount, sign: sign, font: DincrFont.body.weight(.semibold).monospacedDigit())
+                MoneyText(amount, sign: sign, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
             } else {
                 Text(tx("Sin registrar", "Not recorded")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             }

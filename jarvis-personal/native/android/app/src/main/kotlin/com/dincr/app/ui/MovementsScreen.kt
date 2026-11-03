@@ -65,8 +65,8 @@ import com.dincr.app.tx
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.MoneyFormat
+import com.dincr.design.MoneyText
 import com.dincr.data.MovementMonth
-import com.dincr.design.DincrCard
 import java.math.BigDecimal
 import com.dincr.data.MovementTotals
 import com.dincr.data.SearchText
@@ -89,26 +89,29 @@ import kotlinx.coroutines.launch
 
 enum class MovementFilter { ALL, INCOME, EXPENSE, DEBT }
 
-/** What the rows on screen add up to: both sides and the result, or the one the filter asks for. */
+/** What the rows on screen add up to, on one line so the list stays on screen: both sides and the result, or the one the filter asks for. */
 @Composable
-private fun MovementTotalsCard(totals: MovementTotals, filter: MovementFilter, waiting: Boolean) {
+private fun MovementTotalsRow(totals: MovementTotals, filter: MovementFilter, waiting: Boolean) {
     val income = filter == MovementFilter.INCOME
     val all = filter == MovementFilter.ALL
-    DincrCard(Modifier.testTag("movements.totals")) {
-        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
-            if (all || income) TotalLine(tx("Ingresos registrados", "Recorded income"), totals.income, "income", MoneyFormat.Sign.INCOME)
-            if (!income) TotalLine(tx("Gastos registrados", "Recorded expenses"), totals.expenses, "expenses", MoneyFormat.Sign.EXPENSE)
-            if (!income) totals.debtPaid?.let { TotalLine(tx("Pagado a deudas", "Paid to debts"), it, "debtPaid", MoneyFormat.Sign.EXPENSE) }
-            if (all) totals.result?.let { TotalLine(tx("Resultado", "Result"), it, "result") }
-            if (!income && waiting) Caption(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
+    Column(Modifier.fillMaxWidth().testTag("movements.totals"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+        // Wraps instead of squeezing a figure on a narrow screen or at a large text size.
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+            if (all || income) TotalFact(tx("Ingresos", "Income"), totals.income, "income", MoneyFormat.Sign.INCOME)
+            if (!income) TotalFact(tx("Gastos", "Expenses"), totals.expenses, "expenses", MoneyFormat.Sign.EXPENSE)
+            if (!income) totals.debtPaid?.let { TotalFact(tx("A deudas", "To debts"), it, "debtPaid", MoneyFormat.Sign.EXPENSE) }
+            if (all) totals.result?.let { TotalFact(tx("Resultado", "Result"), it, "result", MoneyFormat.Sign.NONE) }
         }
+        if (!income && waiting) Caption(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
     }
 }
 
 @Composable
-private fun TotalLine(label: String, amount: BigDecimal?, id: String, sign: MoneyFormat.Sign = MoneyFormat.Sign.NONE) {
-    androidx.compose.foundation.layout.Box(Modifier.testTag("movements.totals.$id")) {
-        if (amount != null) AmountLine(label, amount, sign = sign) else InfoLine(label, tx("Sin registrar", "Not recorded"))
+private fun TotalFact(label: String, amount: BigDecimal?, id: String, sign: MoneyFormat.Sign) {
+    Column(Modifier.testTag("movements.totals.$id").semantics(mergeDescendants = true) {}) {
+        Caption(label)
+        if (amount != null) MoneyText(amount, sign = sign, style = MaterialTheme.typography.bodyMedium)
+        else Text(tx("Sin registrar", "Not recorded"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
     }
 }
 
@@ -215,8 +218,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                             kindMatches && SearchText.matches(query, listOf(it.description, it.category))
                         }
                         if (visible.isNotEmpty()) item {
-                            Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s3)) {
-                                MovementTotalsCard(MovementTotals.of(visible), filter, pending.items.isNotEmpty())
+                            Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s2)) {
+                                MovementTotalsRow(MovementTotals.of(visible), filter, pending.items.isNotEmpty())
                             }
                         }
                         if (visible.isEmpty()) item {
