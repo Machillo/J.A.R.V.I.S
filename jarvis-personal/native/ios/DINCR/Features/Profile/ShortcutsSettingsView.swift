@@ -20,7 +20,7 @@ struct ShortcutsSettingsView: View {
                     Spacer()
                     if let state {
                         Text(statusText(state))
-                            .foregroundStyle(state == .linked ? DincrColor.positive : DincrColor.textMuted)
+                            .foregroundStyle(state == .linked ? DincrColor.positive : OwnerColor.textMuted)
                             .accessibilityIdentifier("shortcuts.status")
                     } else {
                         ProgressView()

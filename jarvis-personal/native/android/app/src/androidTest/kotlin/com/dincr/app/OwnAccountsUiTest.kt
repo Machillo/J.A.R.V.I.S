@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertFalse
@@ -58,9 +59,10 @@ class OwnAccountsUiTest {
         waitUntil(tag) { tagged(tag) }
         compose.onAllNodes(hasTestTag(tag), useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnClick)
     }
-    private fun openAccounts() {
+    private fun openAccounts(role: String? = null) {
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
             .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", "vip")
+        role?.let { intent.putExtra("dincrRole", it) }
         scenario = ActivityScenario.launch(intent)
         val wealth = tx("Patrimonio", "Wealth")
         waitUntil("tab") { compose.onAllNodes(hasText(wealth) and isSelectable()).fetchSemanticsNodes().isNotEmpty() }
@@ -92,5 +94,29 @@ class OwnAccountsUiTest {
         clickTag("accounts.pending.1")
         waitUntil("the answer") { present(tx("No la reconocés", "You don’t recognise it")) }
         assertFalse("answered: no longer offered", tagged("accounts.pending.1"))
+    }
+
+    private fun clickInside(tag: String) {
+        waitUntil(tag) { tagged(tag) }
+        compose.onAllNodes(hasAnyAncestor(hasTestTag(tag)) and hasClickAction(), useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnClick)
+    }
+
+    /** The Owner adds a bank: pick it, confirm what the mail showed, see it listed. Only the Owner has the flow. */
+    @Test fun theOwnerAddsABankThroughTheGuidedFlow() {
+        openAccounts("owner")
+        clickInside("accounts.addBank")
+        clickTag("addBank.bank.bac")
+        waitUntil("the review") { tagged("addBank.add") }
+        clickInside("addBank.add")
+        waitUntil("the result") { tagged("addBank.done") }
+        clickInside("addBank.another")
+        clickTag("addBank.bank.bn")
+        waitUntil("nothing in the mail") { tagged("addBank.none") && tagged("addBank.review.manual") }
+    }
+
+    @Test fun aVipKeepsTheOwnAccountFormAndNoGuidedFlow() {
+        openAccounts()
+        waitUntil("the form's entry") { tagged("accounts.declare") }
+        assertFalse(tagged("accounts.addBank"))
     }
 }

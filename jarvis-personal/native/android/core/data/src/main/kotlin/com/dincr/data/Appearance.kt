@@ -96,12 +96,12 @@ object AppearancePolicy {
     fun isPersonalizable(profile: Profile?): Boolean = profile?.isOwner == true
 
     /**
-     * Everyone else: [AppearancePrefs.CLASSIC]. The Owner: what the server returned, else the
+     * Everyone else: the default scene ([AppearancePrefs.OWNER_DEFAULT], historical name). The Owner: what the server returned, else the
      * cache of the same account (so the app starts in the Owner's look before the network), else
      * the Owner default. A cache from another account is never applied.
      */
     fun effective(profile: Profile?, saved: AppearancePrefs?, cached: CachedAppearance?): AppearancePrefs = when {
-        !isPersonalizable(profile) -> AppearancePrefs.CLASSIC
+        !isPersonalizable(profile) -> AppearancePrefs.OWNER_DEFAULT
         saved != null -> saved.sanitized()
         cached != null && cached.accountId == profile!!.id -> cached.preferences.sanitized()
         else -> AppearancePrefs.OWNER_DEFAULT

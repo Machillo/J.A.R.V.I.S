@@ -133,26 +133,17 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
     var dollarsRefresh by remember { mutableStateOf(0) }
     PullToRefreshBox(refreshing, onRefresh = { dollarsRefresh += 1; if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
         modifier = Modifier.fillMaxSize().padding(padding).testTag("home.refresh")) {
-        if (owner && agenda != null) {
-            OwnerHomeContent(model, profile?.firstName.orEmpty(), home, agenda, nav, dollarsRefresh) { dollarsRefresh += 1; home.reload() }
-        } else {
-            ScreenColumn {
-                Text(tx("Hola, ${profile?.firstName.orEmpty()}", "Hi, ${profile?.firstName.orEmpty()}"), style = MaterialTheme.typography.headlineMedium,
-                    color = Dincr.colors.text, modifier = Modifier.padding(top = DincrSpacing.s2).semantics { heading() })
-                Column(Modifier.testTag("home.today"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
-                    PendingDollarsCard(model, dollarsRefresh) { nav.tab(Destination.MOVEMENTS) }
-                    LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = { dollarsRefresh += 1; refreshHome() }) }
-                }
-            }
-        }
+        HomeContent(model, profile?.firstName.orEmpty(), home, if (owner) agenda else null, nav, dollarsRefresh, onSaved = { dollarsRefresh += 1; if (owner) home.reload() else refreshHome() })
     }
 }
 
-/** The Owner's Hoy: the hero, and on a rounded sheet over it the agenda and the blocks. */
+/** Hoy: the hero, and on a rounded sheet over it the blocks. [agenda] is given only on the Owner's Hoy, with JARVIS. */
 @Composable
-private fun OwnerHomeContent(model: AppModel, name: String, home: LoadHandle<HomeToday>, agenda: LoadHandle<List<JarvisEvent>>, nav: Navigator, dollarsRefresh: Int, onSaved: () -> Unit) {
+private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToday>, agenda: LoadHandle<List<JarvisEvent>>?, nav: Navigator, dollarsRefresh: Int, onSaved: () -> Unit) {
     var editor by remember { mutableStateOf<MovementKind?>(null) }
-    val greeting = when (OwnerHome.greeting(LocalTime.now().hour)) {
+    val owner = agenda != null
+    val prefix = if (owner) "owner.home" else "home"
+    val greeting = if (!owner) tx("Hola,", "Hi,") else when (OwnerHome.greeting(LocalTime.now().hour)) {
         OwnerHome.Greeting.MORNING -> tx("Buenos días,", "Good morning,")
         OwnerHome.Greeting.AFTERNOON -> tx("Buenas tardes,", "Good afternoon,")
         OwnerHome.Greeting.EVENING -> tx("Buenas noches,", "Good evening,")
@@ -167,15 +158,15 @@ private fun OwnerHomeContent(model: AppModel, name: String, home: LoadHandle<Hom
         onDispose { before?.let { controller.isAppearanceLightStatusBars = it } }
     }
     Column(Modifier.fillMaxSize().imePadding().background(Dincr.colors.bg).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-        OwnerHomeHero(greeting, name, status, status?.cycle?.let(::cycleText),
-            onExpense = { editor = MovementKind.EXPENSE }, onIncome = { editor = MovementKind.INCOME }, onJarvis = { nav.open("jarvis") },
+        HomeHero(prefix, greeting, name, status, status?.cycle?.let(::cycleText),
+            onExpense = { editor = MovementKind.EXPENSE }, onIncome = { editor = MovementKind.INCOME }, onJarvis = if (owner) ({ nav.open("jarvis") }) else null,
             modifier = Modifier.fillMaxWidth().padding(bottom = 0.dp))
-        Box(Modifier.fillMaxWidth().height(24.dp).background(OwnerHeroColor)) {
+        Box(Modifier.fillMaxWidth().height(24.dp).background(HomeHeroColor)) {
             Box(Modifier.fillMaxSize().background(Dincr.colors.bg, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)))
         }
-        Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(start = DincrSpacing.s4, end = DincrSpacing.s4, bottom = DincrSpacing.s4).testTag("owner.home"),
+        Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(start = DincrSpacing.s4, end = DincrSpacing.s4, bottom = DincrSpacing.s4).testTag(if (owner) "owner.home" else "home.today"),
             verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
-            OwnerAgenda(agenda, nav)
+            agenda?.let { OwnerAgenda(it, nav) }
             PendingDollarsCard(model, dollarsRefresh) { nav.tab(Destination.MOVEMENTS) }
             LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = onSaved, figureInHero = true) }
         }
@@ -241,7 +232,7 @@ private fun OwnerAgenda(agenda: LoadHandle<List<JarvisEvent>>, nav: Navigator) {
 // MARK: The four blocks
 
 @Composable
-private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved: () -> Unit, figureInHero: Boolean = false) {
+private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved: () -> Unit, figureInHero: Boolean) {
     var editor by remember { mutableStateOf<MovementKind?>(null) }
     val open: (HomeDestination) -> Unit = { destination ->
         when (destination) {

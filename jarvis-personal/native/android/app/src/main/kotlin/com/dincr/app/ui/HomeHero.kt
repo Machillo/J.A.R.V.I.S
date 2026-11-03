@@ -42,32 +42,32 @@ import com.dincr.design.TabularNums
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
 
-/** The solid top of the Owner's Hoy, with its text: one color in both schemes (iOS `OwnerColor.hero`). */
-internal val OwnerHeroColor = Color(0xFF1B2BD6)
+/** The solid top of Hoy, with its text: one color in both schemes (iOS `OwnerColor.hero`). */
+internal val HomeHeroColor = Color(0xFF2A2E6E)
 private val OnHero = Color.White
-private val OnHero2 = Color(0xFFDDE1FF)
-private val HeroControl = Color(0xFF3545E6)
+private val OnHero2 = Color(0xFFD9DBF5)
+private val HeroControl = Color(0xFF3D4290)
 
 /**
- * The top of the Owner's Hoy: greeting, the day's key figure and the main actions on one solid color.
+ * The top of Hoy in every plan: greeting, the day's key figure and the main actions on one solid color.
  * Read-only figures: the same [HomeStatus] the blocks below use, and unknown stays "—" (the block below
- * says what DINCR needs). iOS: `OwnerHomeHero`.
+ * says what DINCR needs). JARVIS only when [onJarvis] is given: the Owner's Hoy. iOS: `HomeHero`.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun OwnerHomeHero(greeting: String, name: String, status: HomeStatus?, cycle: String?, onExpense: () -> Unit, onIncome: () -> Unit, onJarvis: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.background(OwnerHeroColor).padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s4), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
-        Column(Modifier.testTag("owner.home.greeting").semantics(mergeDescendants = true) { heading() }) {
+internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status: HomeStatus?, cycle: String?, onExpense: () -> Unit, onIncome: () -> Unit, onJarvis: (() -> Unit)?, modifier: Modifier = Modifier) {
+    Column(modifier.background(HomeHeroColor).padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s4), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+        Column(Modifier.testTag("$tagPrefix.greeting").semantics(mergeDescendants = true) { heading() }) {
             Text(greeting, style = MaterialTheme.typography.bodyLarge, color = OnHero2)
             if (name.isNotEmpty()) Text("$name.", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = OnHero)
         }
         status?.let { Figure(it, cycle) }
         // Wraps instead of squeezing a label on a narrow screen or at a large text size.
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
-            HeroAction(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "owner.home.addExpense", onClick = onExpense)
-            HeroAction(tx("Ingreso", "Income"), tx("Registrar ingreso", "Record income"), Icons.Rounded.Add, prominent = false, tag = "owner.home.addIncome", onClick = onIncome)
-            // The one way into JARVIS from Hoy (spec OW-1).
-            HeroAction("JARVIS", "JARVIS", Icons.Rounded.AutoAwesome, prominent = false, tag = "owner.home.jarvis", onClick = onJarvis)
+            HeroAction(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
+            HeroAction(tx("Ingreso", "Income"), tx("Registrar ingreso", "Record income"), Icons.Rounded.Add, prominent = false, tag = "$tagPrefix.addIncome", onClick = onIncome)
+            // The one way into JARVIS from Hoy (spec OW-1): the Owner's Hoy only.
+            onJarvis?.let { HeroAction("JARVIS", "JARVIS", Icons.Rounded.AutoAwesome, prominent = false, tag = "owner.home.jarvis", onClick = it) }
         }
     }
 }
@@ -80,7 +80,7 @@ private fun Figure(status: HomeStatus, cycle: String?) {
             if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) tx("Podés gastar con tranquilidad", "Safe to spend") else tx("Resultado del mes", "This month’s result"),
             style = MaterialTheme.typography.labelLarge, color = OnHero2,
         )
-        HeroAmount(status.amount, MoneyFormat.Sign.NONE, big = true, modifier = Modifier.testTag("home.status.amount"))
+        HeroAmount(status.amount, MoneyFormat.Sign.NONE, big = true, modifier = Modifier.testTag(if (status.amount == null) "home.status.noFigure" else "home.status.amount")) // Unknown is "—", never reported as an amount.
         cycle?.let { Text(it, Modifier.testTag("home.status.cycle"), style = MaterialTheme.typography.bodySmall, color = OnHero2) }
     }
     FlowRow(Modifier.fillMaxWidth().testTag("home.status.facts"), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
@@ -124,8 +124,8 @@ private fun HeroAction(label: String, spokenLabel: String, icon: ImageVector, pr
                 .padding(horizontal = DincrSpacing.s4),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s1),
         ) {
-            Icon(icon, contentDescription = null, tint = if (prominent) OwnerHeroColor else OnHero, modifier = Modifier.size(18.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge, color = if (prominent) OwnerHeroColor else OnHero)
+            Icon(icon, contentDescription = null, tint = if (prominent) HomeHeroColor else OnHero, modifier = Modifier.size(18.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = if (prominent) HomeHeroColor else OnHero)
         }
     }
 }

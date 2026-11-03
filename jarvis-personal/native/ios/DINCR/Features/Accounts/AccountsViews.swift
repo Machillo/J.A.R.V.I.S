@@ -31,6 +31,7 @@ private struct BankListView: View {
     @State private var generation = 0
     @State private var appeared = false
     @State private var declaring = false
+    @State private var addingBank = false
     @State private var notice: String?
 
     var body: some View {
@@ -40,9 +41,16 @@ private struct BankListView: View {
                 .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             // An own account no notice came from (the other bank of a transfer): marking it lets
             // DINCR recognise transfers between your accounts instead of offering them as spending.
-            Button { declaring = true } label: { Label(tx("Agregar cuenta propia", "Add an own account"), systemImage: "plus.circle") }
-                .buttonStyle(.dincrSecondary)
-                .accessibilityIdentifier("accounts.declare")
+            // The Owner, whose mail is connected, adds a bank through the guided flow.
+            if Jarvis.isAvailable(to: model.profile) {
+                Button { addingBank = true } label: { Label(tx("Agregar cuenta", "Add account"), systemImage: "plus.circle") }
+                    .buttonStyle(.dincrPrimary)
+                    .accessibilityIdentifier("accounts.addBank")
+            } else {
+                Button { declaring = true } label: { Label(tx("Agregar cuenta propia", "Add an own account"), systemImage: "plus.circle") }
+                    .buttonStyle(.dincrSecondary)
+                    .accessibilityIdentifier("accounts.declare")
+            }
             if let notice { StatusBanner(tone: .info, title: notice, message: "").accessibilityIdentifier("accounts.notice") }
             AsyncContent(load: { () async throws -> Snapshot in
                 let service = model.service
@@ -71,6 +79,7 @@ private struct BankListView: View {
         .sheet(isPresented: $declaring) {
             DeclareOwnAccountForm { message in notice = message; generation += 1 }
         }
+        .sheet(isPresented: $addingBank, onDismiss: { generation += 1 }) { AddBankFlow() }
     }
 }
 
@@ -92,7 +101,7 @@ private struct BankRow: View {
                 Text(tx("\(group.accounts.count) \(group.accounts.count == 1 ? "cuenta" : "cuentas")", "\(group.accounts.count) \(group.accounts.count == 1 ? "account" : "accounts")"))
                     .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 Text(tx("\(group.movements) movimientos · \(group.pending) por revisar", "\(group.movements) transactions · \(group.pending) to review"))
-                    .font(DincrFont.caption).foregroundStyle(group.pending > 0 ? DincrColor.warning : DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(group.pending > 0 ? DincrColor.warning : OwnerColor.textMuted)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
@@ -271,9 +280,11 @@ extension AccountOwnership {
 
 /// "Agregar cuenta propia": institution, last 4 digits and currency of an own account no notice
 /// came from. Only the last 4 digits are asked for (and stored).
-private struct DeclareOwnAccountForm: View {
+struct DeclareOwnAccountForm: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    var institutionCode = "bac"
+    var institutionLabel = ""
     let onDone: (String) -> Void
     @State private var institution = "bac"
     @State private var institutionName = ""
@@ -332,6 +343,7 @@ private struct DeclareOwnAccountForm: View {
             }
         }
         .interactiveDismissDisabled(saving)
+        .onAppear { institution = institutionCode; institutionName = institutionLabel }
     }
 
     private func save() async {

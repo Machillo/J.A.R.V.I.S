@@ -179,7 +179,7 @@ private fun typography(editorial: Boolean = false): Typography {
 fun DincrTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     moneyFormat: MoneyFormat = MoneyFormat(),
-    appearance: AppearancePrefs = AppearancePrefs.CLASSIC,
+    appearance: AppearancePrefs = AppearancePrefs.OWNER_DEFAULT,
     content: @Composable () -> Unit,
 ) {
     val p = palette(darkTheme, appearance)

@@ -58,7 +58,7 @@ struct LegalConsentView: View {
                     }
                 }
             }
-            .tint(DincrColor.tint)
+            .tint(OwnerColor.accent)
             .accessibilityIdentifier(id)
             Link(tx("Leer documento", "Read document"), destination: link)
                 .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint)

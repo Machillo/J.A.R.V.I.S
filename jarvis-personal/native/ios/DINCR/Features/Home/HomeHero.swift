@@ -2,10 +2,12 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// The top of the Owner's Hoy: greeting, the day's key figure and the main actions on one solid color
-/// (DESIGN.md → Owner identity). Read-only figures: the same `HomeStatus` the blocks below use, and
-/// unknown stays "—" (the block below says what DINCR needs).
-struct OwnerHomeHero: View {
+/// The top of Hoy in every plan: greeting, the day's key figure and the main actions on one solid color
+/// (DESIGN.md). Read-only figures: the same `HomeStatus` the blocks below use, and unknown stays "—"
+/// (the block below says what DINCR needs). JARVIS appears only when the caller is the Owner's Hoy.
+struct HomeHero: View {
+    var idPrefix = "home"
+    var showsJarvis = false
     let greeting: String
     let name: String?
     let status: HomeStatus?
@@ -23,7 +25,7 @@ struct OwnerHomeHero: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("owner.home.greeting")
+            .accessibilityIdentifier("\(idPrefix).greeting")
             if let status { figure(status) }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: DincrSpacing.s2) { actions }
@@ -43,10 +45,11 @@ struct OwnerHomeHero: View {
                 Text(status.headline == .safeToSpend ? tx("Podés gastar con tranquilidad", "Safe to spend") : tx("Resultado del mes", "This month’s result"))
                     .font(DincrFont.label).foregroundStyle(OwnerColor.onHero2)
                 amount(status.amount, sign: .none, font: .system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
-                    .accessibilityIdentifier("owner.home.status.amount")
+                    // Unknown is "—", never reported as an amount.
+                    .accessibilityIdentifier(status.amount == nil ? "\(idPrefix).status.noFigure" : "\(idPrefix).status.amount")
                 if let cycle {
                     Text(cycle).font(DincrFont.caption).foregroundStyle(OwnerColor.onHero2)
-                        .accessibilityIdentifier("owner.home.status.cycle")
+                        .accessibilityIdentifier("\(idPrefix).status.cycle")
                 }
             }
             HStack(alignment: .top, spacing: DincrSpacing.s4) {
@@ -56,7 +59,7 @@ struct OwnerHomeHero: View {
                     fact(status.cycle == nil ? tx("Resultado del mes", "Month result") : tx("Resultado del corte", "Statement result"), status.result, sign: .none, unknown: "—")
                 }
             }
-            .accessibilityIdentifier("owner.home.status.facts")
+            .accessibilityIdentifier("\(idPrefix).status.facts")
         }
     }
 
@@ -89,18 +92,53 @@ struct OwnerHomeHero: View {
         }
         .buttonStyle(OwnerHeroButtonStyle(prominent: true))
         .accessibilityLabel(tx("Registrar gasto", "Record expense"))
-        .accessibilityIdentifier("owner.home.addExpense")
+        .accessibilityIdentifier("\(idPrefix).addExpense")
         Button { register(.income) } label: {
             Label(tx("Ingreso", "Income"), systemImage: "plus")
         }
         .buttonStyle(OwnerHeroButtonStyle(prominent: false))
         .accessibilityLabel(tx("Registrar ingreso", "Record income"))
-        .accessibilityIdentifier("owner.home.addIncome")
-        // The one way into JARVIS from Hoy (spec OW-1).
-        NavigationLink(value: ProfileRoute.jarvis) {
-            Label("JARVIS", systemImage: "sparkles")
+        .accessibilityIdentifier("\(idPrefix).addIncome")
+        // The one way into JARVIS from Hoy (spec OW-1): the Owner's Hoy only.
+        if showsJarvis {
+            NavigationLink(value: ProfileRoute.jarvis) {
+                Label("JARVIS", systemImage: "sparkles")
+            }
+            .buttonStyle(OwnerHeroButtonStyle(prominent: false))
+            .accessibilityIdentifier("owner.home.jarvis")
         }
-        .buttonStyle(OwnerHeroButtonStyle(prominent: false))
-        .accessibilityIdentifier("owner.home.jarvis")
+    }
+}
+
+/// The frame of Hoy: the hero, then the blocks on a sheet with rounded top corners. The hero's color
+/// stays behind the top (also when pulled down), and the sheet covers it while scrolling.
+struct HomeHeroScreen<Hero: View, Sheet: View>: View {
+    let id: String
+    @ViewBuilder let hero: Hero
+    @ViewBuilder let sheet: Sheet
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                hero
+                VStack(alignment: .leading, spacing: DincrSpacing.s4) { sheet }
+                    .padding(.horizontal, DincrSpacing.s4)
+                    .padding(.top, DincrSpacing.s2)
+                    .padding(.bottom, DincrSpacing.s8)
+                    .frame(maxWidth: 640)
+                    .frame(maxWidth: .infinity)
+                    .background(OwnerColor.backgroundMiddle, in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous))
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(id)
+        }
+        .background(alignment: .top) {
+            OwnerColor.backgroundMiddle.ignoresSafeArea()
+                .overlay(alignment: .top) { OwnerColor.hero.frame(height: 480).ignoresSafeArea() }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(OwnerColor.hero, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 }

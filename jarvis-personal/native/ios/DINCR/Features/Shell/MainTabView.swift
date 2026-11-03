@@ -66,9 +66,6 @@ struct MainTabView: View {
         profilePath = NavigationPath([ProfileRoute.mail])
     }
 
-    /// The Owner's scene (DESIGN.md → Owner identity) comes only from the server role in `/auth/me`.
-    private var isOwner: Bool { Jarvis.isAvailable(to: model.profile) }
-
     private var tabs: some View {
         // Classic tabItem API keeps the iOS 17 baseline.
         TabView(selection: $selection) {
@@ -95,8 +92,6 @@ struct MainTabView: View {
             .tabItem { Label(tx("Perfil", "Profile"), systemImage: "person.crop.circle") }
             .tag(Tab.profile)
         }
-        .environment(\.dincrOwnerAppearance, isOwner)
-        .tint(isOwner ? OwnerColor.accent : nil)
     }
 }
 
@@ -166,9 +161,9 @@ private struct NoticeToast: View {
         if let notice = model.notice {
             Text(notice)
                 .font(DincrFont.bodySmall.weight(.semibold))
-                .foregroundStyle(DincrColor.onTint)
+                .foregroundStyle(OwnerColor.onAccent)
                 .padding(.horizontal, DincrSpacing.s4).padding(.vertical, DincrSpacing.s3)
-                .background(DincrColor.tint, in: Capsule())
+                .background(OwnerColor.accent, in: Capsule())
                 .padding(.bottom, 64)
                 .accessibilityIdentifier("app.notice")
                 .task(id: notice) {
@@ -221,9 +216,9 @@ struct PlanBadge: View {
         let vip = plan == "vip"
         Text(PlanLabel.name(plan))
             .font(DincrFont.caption.weight(.semibold))
-            .foregroundStyle(vip ? DincrColor.vip : DincrColor.text2)
+            .foregroundStyle(vip ? DincrColor.vip : OwnerColor.text2)
             .padding(.horizontal, 8).padding(.vertical, 2)
-            .background(vip ? DincrColor.vipContainer : DincrColor.surface2, in: Capsule())
+            .background(vip ? DincrColor.vipContainer : OwnerColor.surface2, in: Capsule())
             .accessibilityLabel(tx("Suscripción \(PlanLabel.name(plan))", "\(PlanLabel.name(plan)) subscription"))
     }
 }
