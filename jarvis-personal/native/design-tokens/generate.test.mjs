@@ -21,6 +21,8 @@ const outputs = {
   swiftCatalog: "jarvis-personal/native/ios/DincrKit/Sources/DincrCore/Generated/AppearanceCatalog.swift",
   kotlinAppearance: "jarvis-personal/native/android/core/design/src/main/kotlin/com/dincr/design/generated/DincrAppearanceTokens.kt",
   kotlinCatalog: "jarvis-personal/native/android/core/data/src/main/kotlin/com/dincr/data/generated/AppearanceCatalog.kt",
+  swiftColorStyles: "jarvis-personal/native/ios/DincrKit/Sources/DincrDesign/Generated/DincrColorStyles.swift",
+  kotlinColorStyles: "jarvis-personal/native/android/core/design/src/main/kotlin/com/dincr/design/generated/DincrColorStyles.kt",
 };
 const edit = (from, to) => {
   assert.ok(design.includes(from), `fixture edit not applicable: ${from}`);
@@ -76,7 +78,7 @@ test("--check reports drift and never writes; the generator fixes it", () => {
       fs.copyFileSync(path.join(repoRoot, relative), path.join(sandbox, relative));
     };
     const script = "jarvis-personal/native/design-tokens/generate.mjs";
-    const companions = ["jarvis-personal/native/design-tokens/appearance.mjs", "jarvis-personal/native/design-tokens/appearance.json"];
+    const companions = ["jarvis-personal/native/design-tokens/appearance.mjs", "jarvis-personal/native/design-tokens/appearance.json", "jarvis-personal/native/design-tokens/color-styles.mjs", "jarvis-personal/native/design-tokens/color-styles.json"];
     [script, ...companions, "DESIGN.md", ...Object.values(outputs)].forEach(copy);
     const run = (...args) => spawnSync(process.execPath, [path.join(sandbox, script), ...args], { encoding: "utf8" });
     const snapshot = () => Object.values(outputs).map((file) => fs.readFileSync(path.join(sandbox, file), "utf8"));
