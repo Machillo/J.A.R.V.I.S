@@ -284,7 +284,7 @@ private struct MissingInputs: View {
             }
         }
         .padding(DincrSpacing.s3)
-        .background(DincrColor.surface2, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
+        .background(OwnerColor.surface2, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
     }
 }
 
@@ -326,7 +326,7 @@ private struct HomeNextCard: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack(alignment: .top, spacing: DincrSpacing.s3) {
                     Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
-                        .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+                        .frame(width: 36, height: 36).background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
@@ -444,7 +444,7 @@ private struct HomeShortcuts: View {
     private func tile(_ shortcut: HomeShortcut) -> some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Image(systemName: symbol(shortcut)).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
-                .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+                .frame(width: 36, height: 36).background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                 .accessibilityHidden(true)
             Text(title(shortcut)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
                 .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)

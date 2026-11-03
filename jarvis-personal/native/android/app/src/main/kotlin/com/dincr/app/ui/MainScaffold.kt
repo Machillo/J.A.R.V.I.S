@@ -125,8 +125,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
     var lastTab by rememberSaveable { mutableStateOf(Destination.HOME) }
     val current = owner ?: lastTab
     SideEffect { owner?.let { lastTab = it } }
-    val profile by model.profile.collectAsStateWithLifecycle()
-    val ownerHoy = entry?.destination?.route == "home" && profile?.isOwner == true
+    val onHoy = entry?.destination?.route == "home"
     fun select(destination: Destination) { lastTab = destination; nav.tab(destination) }
     val snackbar = remember { SnackbarHostState() }
     val notice by model.notice.collectAsStateWithLifecycle()
@@ -165,8 +164,8 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                         NavigationRailItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label) }, colors = dincrNavRailItemColors())
                     }
                 }
-                // The Owner's Hoy continues its hero's color behind the status bar.
-                Column(Modifier.weight(1f).then(if (ownerHoy) Modifier.background(OwnerHeroColor) else Modifier).statusBarsPadding()) {
+                // Hoy continues its hero's color behind the status bar.
+                Column(Modifier.weight(1f).then(if (onHoy) Modifier.background(HomeHeroColor) else Modifier).statusBarsPadding()) {
                     GlobalBanners(model)
                     Box(Modifier.weight(1f)) {
                         NavHost(controller, startDestination = Destination.HOME.route) {

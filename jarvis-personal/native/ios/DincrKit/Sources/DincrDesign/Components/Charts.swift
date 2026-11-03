@@ -35,7 +35,7 @@ public struct IncomeExpenseChart: View {
             .chartLegend(position: .top, alignment: .leading, spacing: DincrSpacing.s3)
             .chartYAxis {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                    AxisGridLine().foregroundStyle(DincrColor.line)
+                    AxisGridLine().foregroundStyle(OwnerColor.border)
                     AxisValueLabel {
                         if let number = value.as(Double.self) { Text(compact(number)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
                     }
@@ -66,7 +66,7 @@ public struct IncomeExpenseChart: View {
             } label: {
                 Text(language.pick("Ver como tabla", "Show as table")).font(DincrFont.label).foregroundStyle(.dincrTint)
             }
-            .tint(DincrColor.tint)
+            .tint(OwnerColor.accent)
         }
     }
 

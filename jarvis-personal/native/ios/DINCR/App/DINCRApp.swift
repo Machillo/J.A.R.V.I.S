@@ -22,7 +22,8 @@ struct DINCRApp: App {
                 .environment(\.moneyFormat, model.moneyFormat)
                 .environment(\.dincrDecorativeMotion, !animationsDisabled)
                 .preferredColorScheme(Appearance(rawValue: appearance)?.colorScheme)
-                .tint(DincrColor.tint)
+                .tint(OwnerColor.accent)
+                .environment(\.dincrOwnerAppearance, true)
                 .task {
                     DataExport.clear()
                     await model.start()

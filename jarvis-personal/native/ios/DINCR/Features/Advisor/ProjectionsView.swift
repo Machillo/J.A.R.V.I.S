@@ -116,7 +116,7 @@ enum ProjectionText {
         switch kind {
         case .cash: DincrColor.chartIncome
         case .debt: DincrColor.chartExpense
-        case .netWorth: DincrColor.tint
+        case .netWorth: OwnerColor.accent
         }
     }
 

@@ -29,7 +29,7 @@ object DincrAppearanceTokens {
         ),
         "oceano" to AppearancePair(
             light = AppearanceNeutrals(bg = Color(0xFFF2F2F7), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEFEFF4), line = Color(0xFFD1D1D6), lineStrong = Color(0xFFC7C7CC), fieldBorder = Color(0xFF86868B), text = Color(0xFF1C1C1E), text2 = Color(0xFF4F4F55), textMuted = Color(0xFF636366), positive = Color(0xFF08734F), glow = Color(0xFFF2F2F7)),
-            dark = AppearanceNeutrals(bg = Color(0xFF000000), surface = Color(0xFF1C1C1E), surface2 = Color(0xFF2C2C2E), line = Color(0xFF38383A), lineStrong = Color(0xFF48484A), fieldBorder = Color(0xFF8E8E93), text = Color(0xFFF5F5F7), text2 = Color(0xFFAEAEB2), textMuted = Color(0xFFA1A1A6), positive = Color(0xFF30D158), glow = Color(0xFF000000)),
+            dark = AppearanceNeutrals(bg = Color(0xFF0A0B1E), surface = Color(0xFF1C1E3A), surface2 = Color(0xFF2A2D52), line = Color(0xFF33365C), lineStrong = Color(0xFF454873), fieldBorder = Color(0xFF8A8DB0), text = Color(0xFFF5F5F7), text2 = Color(0xFFB4B6CC), textMuted = Color(0xFFA3A5BD), positive = Color(0xFF30D158), glow = Color(0xFF0A0B1E)),
         ),
         "arena" to AppearancePair(
             light = AppearanceNeutrals(bg = Color(0xFFF6F3EE), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEEE9E1), line = Color(0xFFE2DBD0), lineStrong = Color(0xFFCBC1B2), fieldBorder = Color(0xFF7F7567), text = Color(0xFF1C1813), text2 = Color(0xFF4D453A), textMuted = Color(0xFF62594D), positive = null, glow = null),
@@ -47,8 +47,8 @@ object DincrAppearanceTokens {
             dark = AppearanceAccent(tint = Color(0xFF45D3BC), tintPressed = Color(0xFF33B9A4), tintContainer = Color(0xFF0C3A34), onTint = Color(0xFF03201B), onTintContainer = Color(0xFFC0F2E8), focusRing = Color(0xFF45D3BC)),
         ),
         "cian" to AppearancePair(
-            light = AppearanceAccent(tint = Color(0xFF0066CC), tintPressed = Color(0xFF0055AA), tintContainer = Color(0xFFE3EFFC), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF003D7A), focusRing = Color(0xFF0066CC)),
-            dark = AppearanceAccent(tint = Color(0xFF2997FF), tintPressed = Color(0xFF64B0FF), tintContainer = Color(0xFF0B2A4A), onTint = Color(0xFF000000), onTintContainer = Color(0xFFBFDFFF), focusRing = Color(0xFF2997FF)),
+            light = AppearanceAccent(tint = Color(0xFF4A4FD9), tintPressed = Color(0xFF3B3FB8), tintContainer = Color(0xFFE8E9FC), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF2A2D8F), focusRing = Color(0xFF4A4FD9)),
+            dark = AppearanceAccent(tint = Color(0xFF8F95FF), tintPressed = Color(0xFFB0B4FF), tintContainer = Color(0xFF24275C), onTint = Color(0xFF0B0C2A), onTintContainer = Color(0xFFD6D8FF), focusRing = Color(0xFF8F95FF)),
         ),
         "ciruela" to AppearancePair(
             light = AppearanceAccent(tint = Color(0xFF7A3E9D), tintPressed = Color(0xFF64317F), tintContainer = Color(0xFFF1E4F8), onTint = Color(0xFFFFFFFF), onTintContainer = Color(0xFF3A1650), focusRing = Color(0xFF7A3E9D)),

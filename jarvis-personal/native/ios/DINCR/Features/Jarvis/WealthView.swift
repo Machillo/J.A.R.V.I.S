@@ -114,7 +114,7 @@ private struct InvestmentsContent: View {
                     .accessibilityIdentifier("wealth.investments.empty")
             }
             if let caption = syncCaption {
-                Text(caption).font(DincrFont.caption).foregroundStyle(center.syncState == .stale ? DincrColor.warning : DincrColor.textMuted)
+                Text(caption).font(DincrFont.caption).foregroundStyle(center.syncState == .stale ? DincrColor.warning : OwnerColor.textMuted)
             }
             FigureRow(label: tx("Reservado para invertir", "Reserved to invest"), amount: center.reservedToInvestCrc, currency: "CRC")
             if center.flexConfigured {

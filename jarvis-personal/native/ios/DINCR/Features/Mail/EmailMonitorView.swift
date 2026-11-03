@@ -135,7 +135,7 @@ private struct MailMonitorContent: View {
                     Text(tx("Acepto que DINCR lea mis avisos bancarios con acceso de solo lectura.", "I agree that DINCR reads my bank notices with read-only access."))
                         .font(DincrFont.body)
                 }
-                .tint(DincrColor.tint)
+                .tint(OwnerColor.accent)
                 .accessibilityIdentifier("mail.consent.toggle")
                 Button(tx("Aceptar y continuar", "Accept and continue")) { Task { await acceptConsent(status) } }
                     .buttonStyle(.dincrPrimary(loading: busy == "consent"))

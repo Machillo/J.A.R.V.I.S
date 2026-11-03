@@ -138,8 +138,8 @@ struct ProfileHubView: View {
     private var header: some View {
         HStack(spacing: DincrSpacing.s3) {
             Text(String(model.profile?.firstName?.prefix(1) ?? "D"))
-                .font(DincrFont.title2).foregroundStyle(DincrColor.onTintContainer)
-                .frame(width: 44, height: 44).background(DincrColor.tintContainer, in: Circle())
+                .font(DincrFont.title2).foregroundStyle(OwnerColor.onAccentContainer)
+                .frame(width: 44, height: 44).background(OwnerColor.accentContainer, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.profile?.displayName ?? tx("Tu cuenta", "Your account")).font(DincrFont.title2)

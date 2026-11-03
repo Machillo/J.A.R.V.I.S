@@ -32,7 +32,7 @@ object AppearanceCatalog {
         AppearanceOption(
             key = "accent", default = "cian", classic = "teal",
             values = listOf(
-                AppearanceOptionValue("cian", "Azul", "Blue"),
+                AppearanceOptionValue("cian", "Índigo", "Indigo"),
                 AppearanceOptionValue("teal", "Verde azulado", "Teal"),
                 AppearanceOptionValue("ciruela", "Ciruela", "Plum"),
                 AppearanceOptionValue("tinta", "Tinta", "Ink"),
