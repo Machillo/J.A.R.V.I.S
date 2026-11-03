@@ -431,7 +431,7 @@ private val HomeNext.detailText: String?
     get() = when (kind) {
         HomeNext.Kind.RECOMMENDATION -> detail
         HomeNext.Kind.NEEDS_INFORMATION -> null
-        HomeNext.Kind.COMMITMENT -> date?.let(::dateLabel)
+        HomeNext.Kind.COMMITMENT -> date?.let(::dateWithDistance)
         HomeNext.Kind.REGISTER_INCOME -> tx("Con tu salario o boleta de pago registrados, DINCR puede mostrarte el resultado del mes.",
             "With your salary or pay stub recorded, DINCR can show you this month’s result.")
         HomeNext.Kind.REGISTER_MOVEMENT -> tx("Registrá tus gastos e ingresos para ver tu mes completo.", "Record your expenses and income to see your whole month.")

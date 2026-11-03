@@ -244,6 +244,11 @@ enum Day {
 
     static func today() -> String { formatter().string(from: .now) }
 
+    /// A coming payment's day and how far it is: "12 nov 2026 · En 9 días".
+    static func labelWithDistance(_ day: String?) -> String {
+        [label(day), DaysLeft.label(day, today: today())].compactMap { $0 }.joined(separator: " · ")
+    }
+
     static func label(_ day: String?) -> String {
         guard let day, let date = formatter().date(from: String(day.prefix(10))) else { return "—" }
         return date.formatted(.dateTime.day().month(.abbreviated).year().locale(Locale(identifier: AppLanguage.current == .spanish ? "es_CR" : "en_US")))

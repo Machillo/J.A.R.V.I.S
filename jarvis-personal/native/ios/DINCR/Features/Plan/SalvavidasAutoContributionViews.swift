@@ -20,7 +20,7 @@ struct SalvavidasPlanBreakdown: View {
                         .accessibilityIdentifier("salvavidas.breakdown.interest")
                 }
                 if let next = plan.nextDate {
-                    InfoRow(label: tx("Próximo aporte", "Next contribution"), value: Day.label(next))
+                    InfoRow(label: tx("Próximo aporte", "Next contribution"), value: Day.labelWithDistance(next))
                         .accessibilityIdentifier("salvavidas.breakdown.next")
                 }
             }

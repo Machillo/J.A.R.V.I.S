@@ -68,7 +68,7 @@ internal fun SalvavidasPlanBreakdown(s: Salvavidas) {
             }
         }
         plan.nextDate?.let { next ->
-            Column(Modifier.testTag("salvavidas.breakdown.next")) { InfoLine(tx("Próximo aporte", "Next contribution"), dateLabel(next)) }
+            Column(Modifier.testTag("salvavidas.breakdown.next")) { InfoLine(tx("Próximo aporte", "Next contribution"), dateWithDistance(next)) }
         }
     }
 }

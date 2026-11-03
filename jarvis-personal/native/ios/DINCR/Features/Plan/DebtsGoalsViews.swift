@@ -186,7 +186,7 @@ private struct DebtRow: View {
             column(tx("Te falta", "Left"), debt.remainingAmount)
         }
         if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
-        if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.label(next)) }
+        if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.labelWithDistance(next)) }
         DebtPayoffLine(debt: debt)
         // DEB-07a: the payments recorded for this debt (read-only, every plan).
         Button(tx("Ver pagos", "See payments")) { history(debt) }
