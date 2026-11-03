@@ -68,4 +68,30 @@ final class MovementsReviewUITests: XCTestCase {
         app.tabBars.buttons["Perfil"].tap()
         XCTAssertTrue(element("profile.mail", in: app).waitForExistence(timeout: 10))
     }
+
+    /// Regression: two buttons in one List row both fired on a tap, so from the month before the
+    /// current one "previous" and "next" cancelled out and the month never moved again.
+    func testTheMonthArrowsWalkBackAndReturnToTheCurrentMonth() {
+        let app = XCUIApplication()
+        continueAfterFailure = false
+        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrPlan", "vip", "-DincrTab", "movements",
+                               "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
+        app.launch()
+        let title = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[^ ]+ [0-9]{4}$")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        let previous = app.buttons["Mes anterior"]
+        let next = app.buttons["Mes siguiente"]
+        let current = title.label
+        previous.tap()
+        let oneBack = title.label
+        XCTAssertNotEqual(oneBack, current)
+        previous.tap()
+        let twoBack = title.label
+        XCTAssertNotEqual(twoBack, oneBack, "still moves from the month before the current one")
+        next.tap()
+        XCTAssertEqual(title.label, oneBack)
+        next.tap()
+        XCTAssertEqual(title.label, current, "back at the current month")
+        XCTAssertFalse(next.isEnabled, "never after the current month")
+    }
 }

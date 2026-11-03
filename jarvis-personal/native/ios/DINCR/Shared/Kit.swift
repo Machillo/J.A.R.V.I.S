@@ -168,11 +168,14 @@ struct MonthPicker: View {
     var body: some View {
         HStack {
             Button { period = Period.shift(period, by: -1) } label: { Image(systemName: "chevron.left") }
+                // Borderless: in a List row, plain buttons all fire on any tap of the row.
+                .buttonStyle(.borderless)
                 .accessibilityLabel(tx("Mes anterior", "Previous month"))
             Spacer()
             Text(Period.title(period)).font(DincrFont.title2).foregroundStyle(.dincrText)
             Spacer()
             Button { period = Period.shift(period, by: 1) } label: { Image(systemName: "chevron.right") }
+                .buttonStyle(.borderless)
                 .accessibilityLabel(tx("Mes siguiente", "Next month"))
                 .disabled(period >= Period.current)
         }
@@ -190,11 +193,14 @@ struct YearPicker: View {
         let current = Int(Period.current.prefix(4)) ?? value
         HStack {
             Button { year = String(value - 1) } label: { Image(systemName: "chevron.left") }
+                // Borderless: in a List row, plain buttons all fire on any tap of the row.
+                .buttonStyle(.borderless)
                 .accessibilityLabel(tx("Año anterior", "Previous year"))
             Spacer()
             Text(year).font(DincrFont.title2).foregroundStyle(.dincrText)
             Spacer()
             Button { year = String(value + 1) } label: { Image(systemName: "chevron.right") }
+                .buttonStyle(.borderless)
                 .accessibilityLabel(tx("Año siguiente", "Next year"))
                 .disabled(value >= current)
         }
