@@ -52,6 +52,7 @@ class MainActivity : FragmentActivity() {
         setContent {
             val profile by model.profile.collectAsStateWithLifecycle()
             val personal by model.appearance.effective.collectAsStateWithLifecycle()
+            val colorStyle by model.appearance.colorStyle.collectAsStateWithLifecycle()
             // The Owner's theme travels with its personal appearance (APP-1); everyone else keeps
             // this device's Automático / Claro / Oscuro setting, as before.
             val dark = if (AppearancePolicy.isPersonalizable(profile)) when (personal.theme) {
@@ -63,7 +64,7 @@ class MainActivity : FragmentActivity() {
                 Appearance.LIGHT -> false
                 Appearance.DARK -> true
             }
-            DincrTheme(darkTheme = dark, moneyFormat = MoneyFormat.from(profile), appearance = personal) {
+            DincrTheme(darkTheme = dark, moneyFormat = MoneyFormat.from(profile), colorStyle = colorStyle, appearance = personal) {
                 RootScreen(model, appearance) { next ->
                     appearance = next
                     prefs.edit().putString("appearance", next.name).apply()

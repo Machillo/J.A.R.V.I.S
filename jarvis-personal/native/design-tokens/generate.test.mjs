@@ -1,6 +1,7 @@
 // Tests for generate.mjs: node --test jarvis-personal/native/design-tokens/generate.test.mjs
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { colorStyleFailures, parseColorStyles } from "./color-styles.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -160,6 +161,20 @@ test("the app's screens use the shared scene, so the old teal can't come back in
   const swift = fs.readdirSync(dir, { recursive: true }).filter((f) => f.endsWith(".swift"));
   const offenders = swift.filter((f) => /DincrColor\.(tint|tintContainer|onTint|onTintContainer|tintPressed)\b/.test(fs.readFileSync(path.join(dir, f), "utf8")));
   assert.deepEqual(offenders, []);
+});
+
+test("every color style keeps the contrast rules, and a weak one is caught", () => {
+  const raw = fs.readFileSync(path.join(here, "color-styles.json"), "utf8");
+  const base = colorMap(tokens);
+  assert.deepEqual(colorStyleFailures(parseColorStyles(raw), base), []);
+  const weak = JSON.parse(raw);
+  weak.styles.rosa.light.tint = "#EC4899"; // the swatch itself: too light for text on white
+  weak.styles.oliva.dark.tint = "#3D4337"; // the swatch itself: too dark on its surfaces
+  weak.styles.bosque["on-hero-2"] = "#3E5A3F";
+  const failures = colorStyleFailures(parseColorStyles(JSON.stringify(weak)), base);
+  assert.ok(failures.some((f) => f.startsWith("rosa+rosa.light tint/surface")), failures.join("; "));
+  assert.ok(failures.some((f) => f.startsWith("oliva+oliva.dark tint/surface")), failures.join("; "));
+  assert.ok(failures.some((f) => f.startsWith("bosque on-hero-2/hero")), failures.join("; "));
 });
 
 test("malformed appearance.json fails instead of dropping options", () => {

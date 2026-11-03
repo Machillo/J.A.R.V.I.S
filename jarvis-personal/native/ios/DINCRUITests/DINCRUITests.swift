@@ -212,6 +212,25 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Cafe del dia"].waitForExistence(timeout: 10))
     }
 
+    func testAColorStyleIsPickedAndStaysAfterRelaunching() {
+        let app = launch(extra: ["-DincrTab", "profile"])
+        open("profile.colorStyle", in: app)
+        let rosa = app.buttons["colorStyle.rosa"]
+        XCTAssertTrue(rosa.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["colorStyle.indigo"].exists && app.buttons["colorStyle.bosque"].exists && app.buttons["colorStyle.oliva"].exists)
+        rosa.tap()
+        XCTAssertTrue(rosa.isSelected, "applied at once")
+        XCTAssertFalse(app.buttons["colorStyle.indigo"].isSelected)
+        app.terminate()
+        app.launch()
+        open("profile.colorStyle", in: app)
+        XCTAssertTrue(rosa.waitForExistence(timeout: 10))
+        XCTAssertTrue(rosa.isSelected, "still picked after relaunching")
+        // Back to the default, so other tests on this simulator start from it.
+        app.buttons["colorStyle.indigo"].tap()
+        XCTAssertTrue(app.buttons["colorStyle.indigo"].isSelected)
+    }
+
     func testDebtPaymentIsRecorded() {
         let app = launch()
         // Hoy keeps its shortcut to the debts screen (managed in Plan → Deudas since UX-4).

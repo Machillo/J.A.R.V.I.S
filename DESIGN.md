@@ -470,6 +470,13 @@ category); trailing amount in tabular `body` weight 600 with sign (`+` in `posit
 are shortcuts only: the same actions are always reachable from the row's detail screen or context
 menu, so no action is swipe-only.
 
+## Color styles
+
+Perfil → Estilo de colores lets every plan pick one of the styles in `design-tokens/color-styles.json`. It
+replaces neutrals, accent and hero in both schemes, applies at once and stays on the device. Status and chart
+colors keep their meaning. A palette's raw color may be adjusted so text keeps its contrast (the generator
+enforces the same rules as an appearance).
+
 ## Progress
 
 Progress bars and rings are green (`positive`) in every plan, so the accent isn't everywhere; going over

@@ -39,7 +39,31 @@ data class DincrPalette(
     val warning: Color, val warningContainer: Color, val info: Color, val infoContainer: Color,
     val vip: Color, val vipContainer: Color, val chartIncome: Color, val chartExpense: Color,
     val hero: Color, val hero2: Color, val onHero: Color, val onHero2: Color, val heroAccent: Color,
+    /** The solid top of Hoy and the welcome story, with its secondary control and text. */
+    val scene: Color = Color(0xFF2A2E6E), val sceneControl: Color = Color(0xFF3D4290), val onScene2: Color = Color(0xFFD9DBF5),
 )
+
+/** One of the color styles a person may pick (`color-styles.json`). [colors] null is the default scene. */
+data class DincrColorStyle(val id: String, val nameEs: String, val nameEn: String, val swatches: List<Color>, val colors: DincrStyleColors?)
+
+data class DincrStyleColors(
+    val bg: DincrColorPair, val surface: DincrColorPair, val surface2: DincrColorPair, val line: DincrColorPair, val lineStrong: DincrColorPair, val fieldBorder: DincrColorPair,
+    val text: DincrColorPair, val text2: DincrColorPair, val textMuted: DincrColorPair,
+    val tint: DincrColorPair, val tintPressed: DincrColorPair, val tintContainer: DincrColorPair, val onTint: DincrColorPair, val onTintContainer: DincrColorPair,
+    val hero: Color, val heroControl: Color, val onHero2: Color,
+)
+
+/** The palette with a color style on top: neutrals, accent and hero; status and chart colors keep their meaning. */
+internal fun DincrPalette.styled(style: DincrStyleColors?, dark: Boolean): DincrPalette {
+    if (style == null) return this
+    fun DincrColorPair.pick() = if (dark) this.dark else light
+    return copy(
+        bg = style.bg.pick(), surface = style.surface.pick(), surface2 = style.surface2.pick(), line = style.line.pick(), lineStrong = style.lineStrong.pick(), fieldBorder = style.fieldBorder.pick(),
+        text = style.text.pick(), text2 = style.text2.pick(), textMuted = style.textMuted.pick(),
+        tint = style.tint.pick(), tintPressed = style.tintPressed.pick(), tintContainer = style.tintContainer.pick(), onTint = style.onTint.pick(), onTintContainer = style.onTintContainer.pick(),
+        scene = style.hero, sceneControl = style.heroControl, onScene2 = style.onHero2,
+    )
+}
 
 /**
  * The palette of an appearance: its neutrals and accent (appearance.json) over DESIGN.md's status
@@ -180,9 +204,10 @@ fun DincrTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     moneyFormat: MoneyFormat = MoneyFormat(),
     appearance: AppearancePrefs = AppearancePrefs.OWNER_DEFAULT,
+    colorStyle: String = com.dincr.design.generated.DincrColorStyles.DEFAULT_ID,
     content: @Composable () -> Unit,
 ) {
-    val p = palette(darkTheme, appearance)
+    val p = palette(darkTheme, appearance).styled(com.dincr.design.generated.DincrColorStyles.all.firstOrNull { it.id == colorStyle }?.colors, darkTheme)
     val look = DincrLook.of(appearance, darkTheme)
     val scale = appearance.textScale
     val density = LocalDensity.current
