@@ -179,6 +179,39 @@ final class DINCRUITests: XCTestCase {
         element.tap()
     }
 
+    func testALargeAmountIsReviewedBeforeSavingAndAnEverydayOneIsNot() {
+        let app = launch(extra: ["-DincrTab", "movements"])
+        open("movements.add", in: app)
+        let amount = app.textFields["editor.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap()
+        amount.typeText("600000")
+        let description = app.textFields["editor.description"]
+        description.tap()
+        description.typeText("Compra grande")
+        app.buttons["editor.save"].tap()
+        let confirm = app.buttons["editor.review.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "a large amount is read twice")
+        XCTAssertTrue(app.staticTexts["Compra grande"].exists)
+        app.buttons["editor.review.edit"].tap()
+        XCTAssertTrue(app.buttons["editor.save"].waitForExistence(timeout: 5), "back to the form")
+        XCTAssertEqual(description.value as? String, "Compra grande", "nothing typed is lost")
+        app.buttons["editor.save"].tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["Compra grande"].waitForExistence(timeout: 10), "saved after confirming")
+
+        open("movements.add", in: app)
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap()
+        amount.typeText("1800")
+        description.tap()
+        description.typeText("Cafe del dia")
+        app.buttons["editor.save"].tap()
+        XCTAssertFalse(confirm.waitForExistence(timeout: 2), "an everyday amount saves directly")
+        XCTAssertTrue(app.staticTexts["Cafe del dia"].waitForExistence(timeout: 10))
+    }
+
     func testDebtPaymentIsRecorded() {
         let app = launch()
         // Hoy keeps its shortcut to the debts screen (managed in Plan → Deudas since UX-4).
@@ -279,6 +312,9 @@ final class DINCRUITests: XCTestCase {
         rate.typeText("510")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Se guardará como")).firstMatch.waitForExistence(timeout: 2))
         app.buttons["editor.save"].tap()
+        let confirm = app.buttons["editor.review.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "a conversion is read twice")
+        confirm.tap()
         XCTAssertTrue(app.staticTexts["Libro"].waitForExistence(timeout: 10))
     }
 

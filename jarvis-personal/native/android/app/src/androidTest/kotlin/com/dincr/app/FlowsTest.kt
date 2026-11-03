@@ -169,6 +169,9 @@ class FlowsTest {
         compose.onNodeWithTag("editor.rate").performTextInput("507,5")
         waitForText(tx("Se registra como ₡5.075", "Recorded as ₡5.075"), substring = true)
         compose.onNodeWithTag("editor.save").performScrollTo().performClick()
+        // A conversion is read twice before saving.
+        waitForTag("editor.review.confirm")
+        compose.onNodeWithTag("editor.review.confirm").performClick()
         waitForText("Libro en línea")
         waitForText(tx("TC 507,5", "Rate 507,5"), substring = true)
     }
@@ -389,5 +392,23 @@ class FlowsTest {
         waitForText(tx("Sabé dónde estás", "Know where you stand"))
         compose.onNodeWithTag("welcome.skip", useUnmergedTree = true).performClick()
         waitForText(tx("¿Cómo querés que te llamemos?", "What should we call you?"))
+    }
+
+    @Test fun aLargeAmountIsReviewedBeforeSaving() {
+        launch()
+        openMovements()
+        compose.onNodeWithTag("movements.add").performClick()
+        waitForTag("editor.amount")
+        compose.onNodeWithTag("editor.amount").performTextInput("600000")
+        compose.onNodeWithTag("editor.description").performTextInput("Compra grande")
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
+        waitForTag("editor.review.confirm")
+        compose.onNodeWithTag("editor.review.edit").performClick()
+        waitForTag("editor.save")
+        compose.onNodeWithTag("editor.description").assert(hasText("Compra grande"))
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
+        waitForTag("editor.review.confirm")
+        compose.onNodeWithTag("editor.review.confirm").performClick()
+        waitForText("Compra grande")
     }
 }
