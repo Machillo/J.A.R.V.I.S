@@ -352,6 +352,9 @@ fun DateField(label: String, value: LocalDate?, onChange: (LocalDate?) -> Unit, 
 fun dateLabel(date: LocalDate): String =
     java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(date)
 
+/** A coming payment's day and how far it is: "12 nov 2026 · En 9 días". */
+fun dateWithDistance(iso: String?): String = listOfNotNull(dateLabel(iso), com.dincr.data.DaysLeft.label(iso)).joinToString(" · ")
+
 fun dateLabel(iso: String?): String = iso?.take(10)?.let { runCatching { dateLabel(LocalDate.parse(it)) }.getOrNull() } ?: "—"
 
 /** One-of-many choice as chips (wraps on small screens). */

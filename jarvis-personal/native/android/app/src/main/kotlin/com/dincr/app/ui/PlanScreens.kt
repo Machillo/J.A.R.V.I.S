@@ -256,7 +256,7 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
                     }
                 } else DebtFigure(tx("Te falta", "Left"), debt.remainingAmount, Modifier.fillMaxWidth())
                 debt.monthlyPayment?.let { AmountLine(tx("Cuota mensual", "Monthly payment"), it) }
-                debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateLabel(it)) }
+                debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateWithDistance(it)) }
                 DebtPayoffLine(debt)
                 // DEB-07a: the payments recorded for this debt (read-only, every plan).
                 TextButton(onHistory, modifier = Modifier.heightIn(min = 48.dp).testTag("debt.history.${debt.id}")) { Text(tx("Ver pagos", "See payments"), color = Dincr.colors.tint) }

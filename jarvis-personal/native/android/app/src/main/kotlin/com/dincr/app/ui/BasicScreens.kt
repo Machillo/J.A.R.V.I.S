@@ -240,7 +240,7 @@ fun CalendarScreen(model: AppModel, nav: Navigator) {
             }
             if (c.events.isEmpty()) EmptyState(Icons.Rounded.CalendarMonth, tx("Nada programado", "Nothing scheduled"), tx("Tus pagos recurrentes, cuotas y metas aparecen acá.", "Your recurring payments, instalments and goals appear here."))
             c.events.groupBy { it.date.orEmpty() }.toSortedMap().forEach { (date, events) ->
-                SectionTitle(dateLabel(date))
+                SectionTitle(dateWithDistance(date))
                 DincrCard {
                     Column {
                         events.forEach { e -> AmountLine("${eventKind(e.kind)} · ${e.name.orEmpty()}", e.amount?.takeIf { it.signum() > 0 }, sign = if (e.kind == "income") com.dincr.data.MoneyFormat.Sign.INCOME else com.dincr.data.MoneyFormat.Sign.NONE) }
