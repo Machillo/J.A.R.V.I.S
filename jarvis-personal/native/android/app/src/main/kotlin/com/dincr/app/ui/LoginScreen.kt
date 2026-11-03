@@ -1,5 +1,21 @@
 package com.dincr.app.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.BorderStroke
@@ -54,16 +70,30 @@ fun LoginScreen(model: AppModel) {
     val context = LocalContext.current
     val error by model.signInError.collectAsStateWithLifecycle()
     val signingIn by model.signingIn.collectAsStateWithLifecycle()
-    Column(
-        Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = DincrSpacing.s4),
-        verticalArrangement = Arrangement.spacedBy(DincrSpacing.s6),
-    ) {
-        Row(Modifier.padding(top = DincrSpacing.s8), verticalAlignment = Alignment.CenterVertically) {
-            BrandMark(44)
-            Text("DINCR", style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, letterSpacing = MaterialTheme.typography.titleMedium.letterSpacing * 4, modifier = Modifier.padding(start = DincrSpacing.s3))
+    // The opening: the brand alone on the dark scene, then the scene settles and the sign-in appears.
+    val motion = android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+    var opening by remember { mutableStateOf(motion) }
+    LaunchedEffect(Unit) { if (opening) { delay(850); opening = false } }
+    val progress by animateFloatAsState(if (opening) 1f else 0f, tween(700), label = "login.opening")
+    BoxWithConstraints(Modifier.fillMaxSize().background(Dincr.colors.surface)) {
+        val settled = (maxHeight * 0.36f).coerceIn(240.dp, 340.dp)
+        val sceneHeight = settled + (maxHeight + 120.dp - settled) * progress
+        // The dark scene with its curved edge. Decorative.
+        Canvas(Modifier.fillMaxWidth().height(sceneHeight)) {
+            val edge = size.height * 0.82f
+            val path = Path().apply {
+                moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, edge * 0.82f)
+                quadraticTo(size.width * 0.45f, size.height * 1.12f, 0f, edge); close()
+            }
+            drawPath(path, Brush.verticalGradient(listOf(Color.Black, Color(0xFF0B1626)), endY = size.height))
         }
-        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
-            Text(tx("Tu dinero, con propósito", "Your money, with purpose"), style = MaterialTheme.typography.displaySmall, color = Dincr.colors.text, modifier = Modifier.semantics { heading() })
+    Column(
+        Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = DincrSpacing.s6),
+        verticalArrangement = Arrangement.spacedBy(DincrSpacing.s5),
+    ) {
+        Spacer(Modifier.height(settled))
+        Column(Modifier.graphicsLayer { alpha = 1f - progress }, verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+            Text(tx("Entrá a tu cuenta", "Sign in to your account"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Dincr.colors.text, modifier = Modifier.semantics { heading() })
             Text(tx("Ordená tus ingresos, gastos, deudas y metas, y sabé qué sigue.", "Organize your income, expenses, debts and goals, and know what comes next."), style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text2)
         }
         // Google branding: light button, official "G", #1F1F1F text, #747775 outline.
@@ -95,5 +125,15 @@ fun LoginScreen(model: AppModel) {
                 style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.textMuted, modifier = Modifier.padding(start = DincrSpacing.s2))
         }
         if (model.isFixtures) StatusBanner(BannerTone.INFO, tx("Modo de demostración", "Demo mode"), tx("Datos de ejemplo. No se conecta a ninguna cuenta real.", "Sample data. Not connected to any real account."))
+    }
+        Column(
+            Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = DincrSpacing.s6)
+                .padding(top = DincrSpacing.s6 + (maxHeight * 0.36f) * progress),
+            horizontalAlignment = if (progress > 0.5f) Alignment.CenterHorizontally else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2),
+        ) {
+            Text("DINCR", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, color = Color.White, letterSpacing = 6.sp)
+            Text(tx("Tu dinero, con propósito", "Your money, with purpose"), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.72f))
+        }
     }
 }
