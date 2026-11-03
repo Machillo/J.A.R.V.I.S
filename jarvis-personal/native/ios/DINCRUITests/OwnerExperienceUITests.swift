@@ -55,6 +55,14 @@ final class OwnerExperienceUITests: XCTestCase {
 
     // MARK: Today
 
+    func testOwnerTodayHeroShowsTheFigureAndOpensTheEditor() {
+        let app = launch()
+        XCTAssertTrue(element("owner.home.status.amount", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("owner.home.status.facts", in: app).exists)
+        element("owner.home.addExpense", in: app).tap()
+        XCTAssertTrue(element("editor.amount", in: app).waitForExistence(timeout: 10))
+    }
+
     func testOwnerTodayAnswersMoneyAttentionAgendaAndJarvis() {
         let app = launch()
         XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))

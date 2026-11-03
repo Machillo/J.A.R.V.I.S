@@ -78,3 +78,38 @@ public extension ButtonStyle where Self == DincrPrimaryButtonStyle {
 public extension ButtonStyle where Self == DincrSecondaryButtonStyle {
     static var dincrSecondary: DincrSecondaryButtonStyle { DincrSecondaryButtonStyle() }
 }
+
+/// A row of filter pills, one selected. Each is a real button of at least 44 pt that says it is selected;
+/// scrolls sideways instead of squeezing at large text sizes.
+public struct DincrFilterChips<Value: Hashable>: View {
+    let options: [Value]
+    @Binding var selection: Value
+    let title: (Value) -> String
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    public init(_ options: [Value], selection: Binding<Value>, title: @escaping (Value) -> String) {
+        self.options = options; _selection = selection; self.title = title
+    }
+
+    public var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DincrSpacing.s2) {
+                ForEach(options, id: \.self) { option in
+                    let selected = option == selection
+                    Button { selection = option } label: {
+                        Text(title(option))
+                            .font(DincrFont.bodySmall.weight(.semibold))
+                            .foregroundStyle(selected ? (owner ? OwnerColor.onAccent : DincrColor.onTint) : (owner ? OwnerColor.text2 : DincrColor.text2))
+                            .padding(.horizontal, DincrSpacing.s4)
+                            .frame(minHeight: 44)
+                            .background(selected ? (owner ? OwnerColor.accent : DincrColor.tint) : (owner ? OwnerColor.surface : DincrColor.surface), in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
+}

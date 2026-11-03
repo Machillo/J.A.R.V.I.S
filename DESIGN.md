@@ -478,7 +478,10 @@ and changes only the scene, below a root that reads the server role (`dincrOwner
   light and dark, text ≥ 4.5:1 on every Owner surface.
 - Color is for meaning. Icons are plain symbols without wells. A message is a plain row: its icon's
   color says what it means, with no filled background or accent bar, so a fact never reads as a failure.
-- JARVIS has one way in, on Hoy, and no mark competing with the greeting.
+- Hoy opens on one solid blue hero, the only full color block in the Owner's app: greeting, the day's
+  key figure, its income, expenses and result, and the actions (Gasto, Ingreso, JARVIS) as pills. White
+  text stays ≥ 4.5:1 on it, in both schemes. The rest of Hoy sits below on a sheet with rounded top corners.
+- JARVIS has one way in, on Hoy's hero, and no mark competing with the greeting.
 - Cards: radius 16; controls and quick actions: 12. Lists of records stay native lists or one
   grouped surface with separated rows — never one card per record.
 - Everything else in this file still applies: no eyebrows, no stat-tile grids, money signed with

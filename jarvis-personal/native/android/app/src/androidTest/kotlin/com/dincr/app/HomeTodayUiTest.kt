@@ -138,6 +138,15 @@ class HomeTodayUiTest {
         waitForText(tx("Chat", "Chat"))
     }
 
+    @Test fun ownerHeroShowsTheFigureAndOpensTheEditor() {
+        launch("vip", role = "owner")
+        waitForTag("home.status.amount")
+        waitForTag("owner.home.addExpense")
+        compose.onAllNodes(hasAnyAncestor(hasTestTag("owner.home.addExpense")) and hasClickAction()).onFirst()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        waitForText(tx("Monto", "Amount"))
+    }
+
     @Test fun otherAccountsNeverSeeTheOwnersJarvisSpace() {
         for (plan in listOf("free", "basic", "vip")) {
             launch(plan)
