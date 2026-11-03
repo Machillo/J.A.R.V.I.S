@@ -19,6 +19,8 @@ enum DebtStyle {
 struct DebtsView: View {
     @Environment(AppModel.self) private var model
     @State private var generation = 0
+    /// Kept above the reload: a debt stays open after recording a payment on it.
+    @State private var openDebts: Set<Debt.ID> = []
     @State private var action: AmountAction?
     @State private var form: DebtForm.Mode?
     @State private var deleting: Debt?
@@ -36,7 +38,7 @@ struct DebtsView: View {
                                                  waiting: (try? await model.service.debtsAfterExtraPending()) ?? [:]) }) { data, _ in
                 // Debts waiting for the bank's answer after an extra payment (optional: never hides the list).
                 WaitingForBankCard(debts: data.debts, waiting: data.waiting, canWrite: model.flags.isEnabled(.financialWrites)) { answering = $0 }
-                DebtList(debts: data.debts, strategyDate: data.strategyDate, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
+                DebtList(openDebts: $openDebts, debts: data.debts, strategyDate: data.strategyDate, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
                          pay: { action = .payDebt($0) }, edit: { form = .edit($0) }, delete: { deleting = $0 }, history: { history = $0 })
             }
             .id(generation)
@@ -91,6 +93,7 @@ private struct DebtsScreenData: Equatable {
 
 private struct DebtList: View {
     @Environment(AppModel.self) private var model
+    @Binding var openDebts: Set<Debt.ID>
     let debts: [Debt]
     let strategyDate: DebtProgress.StrategyDate?
     let canWrite: Bool
@@ -107,51 +110,114 @@ private struct DebtList: View {
         }
         DebtPayoffSummary(summary: DebtPayoff.summary(debts), total: DebtProgress.total(debts), strategy: strategyDate)
         ForEach(debts) { debt in
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(debt.name ?? tx("Deuda", "Debt")).font(DincrFont.body.weight(.semibold))
-                        Text(DebtStyle.label(debt.debtType)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+            DebtRow(debt: debt, open: Binding(get: { openDebts.contains(debt.id) }, set: { if $0 { openDebts.insert(debt.id) } else { openDebts.remove(debt.id) } }), canWrite: canWrite, canEdit: canEdit, pay: pay, edit: edit, delete: delete, history: history)
+        }
+    }
+}
+
+/// One debt: its name and progress bar; opened, the ring with everything else about it. Closed until
+/// tapped, so the list reads at a glance.
+private struct DebtRow: View {
+    let debt: Debt
+    @Binding var open: Bool
+    let canWrite: Bool
+    let canEdit: Bool
+    let pay: (Debt) -> Void
+    let edit: (Debt) -> Void
+    let delete: (Debt) -> Void
+    let history: (Debt) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The backend sends 0 % when the original amount is unknown: progress only from a known one.
+    private var amounts: DebtProgress.Amounts? { DebtProgress.of(debt) }
+    private var name: String { debt.name ?? tx("Deuda", "Debt") }
+    private var paidPercent: Int? { amounts?.progress.fraction.map { Int(($0 * 100).rounded()) } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            Button {
+                withAnimation(DincrMotion.standard(reduceMotion)) { open.toggle() }
+            } label: {
+                VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                    HStack {
+                        Text(name).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
+                        Spacer(minLength: DincrSpacing.s2)
+                        Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(.dincrTextMuted)
+                            .rotationEffect(.degrees(open ? 180 : 0))
                     }
-                    Spacer()
-                    MoneyText(debt.remainingAmount)
+                    if let fraction = amounts?.progress.fraction {
+                        DincrProgressBar(fraction: fraction)
+                    } else {
+                        Text(tx("Sin monto original", "No original amount")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                    }
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(paidPercent.map { tx("\(name), pagado \($0) %", "\(name), \($0) % paid") } ?? name)
+            .accessibilityValue(open ? tx("Abierta", "Open") : tx("Cerrada", "Closed"))
+            .accessibilityIdentifier("debt.row.\(debt.id)")
+            if open { detail }
+        }
+        .dincrCard()
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        Text(DebtStyle.label(debt.debtType)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+            .frame(maxWidth: .infinity)
+        if let amounts, let fraction = amounts.progress.fraction {
+            DincrProgressRing(fraction: fraction) {
+                VStack(spacing: 2) {
+                    Text("\(paidPercent ?? 0) %").font(.largeTitle.weight(.bold).monospacedDigit()).foregroundStyle(.dincrText)
+                    Text(tx("Pagado", "Paid")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 }
                 .accessibilityElement(children: .combine)
-                // The backend sends 0 % when the original amount is unknown: progress only from a known one.
-                if let amounts = DebtProgress.of(debt), let fraction = amounts.progress.fraction {
-                    DincrProgressBar(fraction: fraction)
-                    Text(tx("Pagado \(model.moneyFormat.string(amounts.paid)) de \(model.moneyFormat.string(amounts.original)) · te falta el \(Int((amounts.remainingFraction * 100).rounded())) %",
-                            "Paid \(model.moneyFormat.string(amounts.paid)) of \(model.moneyFormat.string(amounts.original)) · \(Int((amounts.remainingFraction * 100).rounded())) % left"))
-                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
-                        .accessibilityIdentifier("debt.progress.\(debt.id)")
-                }
-                if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
-                if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.label(next)) }
-                DebtPayoffLine(debt: debt)
-                // DEB-07a: the payments recorded for this debt (read-only, every plan).
-                Button(tx("Ver pagos", "See payments")) { history(debt) }
-                    .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("debt.history.\(debt.id)")
-                if canWrite {
-                    HStack(spacing: DincrSpacing.s2) {
-                        if (debt.remainingAmount ?? 0) > 0 {
-                            Button(tx("Registrar pago", "Record payment")) { pay(debt) }
-                                .buttonStyle(.dincrSecondary)
-                                .accessibilityIdentifier("debt.pay.\(debt.id)")
-                        }
-                        Menu {
-                            if canEdit { Button(tx("Editar", "Edit"), systemImage: "pencil") { edit(debt) } }
-                            Button(tx("Eliminar", "Delete"), systemImage: "trash", role: .destructive) { delete(debt) }
-                        } label: {
-                            Image(systemName: "ellipsis.circle").font(.title3).frame(minWidth: 44, minHeight: 44)
-                        }
-                        .accessibilityLabel(tx("Más acciones", "More actions"))
-                    }
-                }
             }
-            .dincrCard()
+            .frame(maxWidth: .infinity)
+            HStack(alignment: .top) {
+                column(tx("Pagado", "Paid"), amounts.paid)
+                column(tx("Te falta", "Left"), debt.remainingAmount)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("debt.progress.\(debt.id)")
+        } else {
+            column(tx("Te falta", "Left"), debt.remainingAmount)
         }
+        if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
+        if let next = debt.nextPaymentDate { InfoRow(label: tx("Próximo pago", "Next payment"), value: Day.label(next)) }
+        DebtPayoffLine(debt: debt)
+        // DEB-07a: the payments recorded for this debt (read-only, every plan).
+        Button(tx("Ver pagos", "See payments")) { history(debt) }
+            .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint)
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("debt.history.\(debt.id)")
+        if canWrite {
+            HStack(spacing: DincrSpacing.s2) {
+                if (debt.remainingAmount ?? 0) > 0 {
+                    Button(tx("Registrar pago", "Record payment")) { pay(debt) }
+                        .buttonStyle(.dincrSecondary)
+                        .accessibilityIdentifier("debt.pay.\(debt.id)")
+                }
+                Menu {
+                    if canEdit { Button(tx("Editar", "Edit"), systemImage: "pencil") { edit(debt) } }
+                    Button(tx("Eliminar", "Delete"), systemImage: "trash", role: .destructive) { delete(debt) }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.title3).frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel(tx("Más acciones", "More actions"))
+            }
+        }
+    }
+
+    private func column(_ label: String, _ amount: Decimal?) -> some View {
+        VStack(spacing: 2) {
+            Text(label).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+            MoneyText(amount)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 

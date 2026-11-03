@@ -32,7 +32,10 @@ final class DebtPayoffUITests: XCTestCase {
             // What has been paid of all the debts and what is left.
             XCTAssertTrue(element("debts.progress.total", in: app).exists, "\(context): the total progress")
             XCTAssertTrue(text("Pagado", in: app).exists && text("Te falta el", in: app).exists, context)
-            XCTAssertTrue(element("debt.progress.31", in: app).exists || element("debt.progress.32", in: app).exists, "\(context): each debt's progress")
+            // A debt is closed until tapped: its name and bar, then the ring and the rest.
+            XCTAssertFalse(element("debt.progress.31", in: app).exists, "\(context): closed at first")
+            element("debt.row.31", in: app).tap()
+            XCTAssertTrue(element("debt.progress.31", in: app).waitForExistence(timeout: 5), "\(context): each debt's progress")
             // Owner and VIP read their strategy's debt-free date; Free only the installments' estimate.
             let strategy = element("debts.strategy.date", in: app)
             if plan == nil {
@@ -43,7 +46,7 @@ final class DebtPayoffUITests: XCTestCase {
                 XCTAssertTrue(text("Libre de deudas según tu estrategia", in: app).exists, context)
                 XCTAssertTrue(text("Solo con las cuotas", in: app).exists, context)
             }
-            XCTAssertTrue(element("debt.payoff.31", in: app).exists || element("debt.payoff.32", in: app).exists, "\(context): each debt says when it ends")
+            XCTAssertTrue(element("debt.payoff.31", in: app).exists, "\(context): each debt says when it ends")
             XCTAssertTrue(text("cuotas", in: app).exists, context)
             app.terminate()
         }

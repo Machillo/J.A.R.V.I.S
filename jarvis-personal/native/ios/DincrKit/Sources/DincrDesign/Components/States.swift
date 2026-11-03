@@ -171,7 +171,7 @@ public struct DincrProgressBar: View {
         overColor = switch overMeaning {
         case .favorable: DincrColor.positive
         case .unfavorable: DincrColor.negative
-        case .neutral: OwnerColor.accent
+        case .neutral: DincrColor.positive
         }
     }
 
@@ -180,7 +180,7 @@ public struct DincrProgressBar: View {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(onHero ? DincrColor.onHero.opacity(0.16) : OwnerColor.surface2)
-                    Capsule().fill(isOver ? AnyShapeStyle(overColor) : AnyShapeStyle(.dincrTint))
+                    Capsule().fill(isOver ? overColor : DincrColor.positive)
                         .frame(width: max(proxy.size.width * fraction, fraction > 0 ? 6 : 0))
                 }
             }
@@ -189,5 +189,30 @@ public struct DincrProgressBar: View {
         } else {
             Text(VisualText.noData().capitalizedFirst).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
         }
+    }
+}
+
+/// Progress as a ring, with what it means in the middle (DESIGN.md → Data visualization). Green, like
+/// the bars; the caller says the figure in words, so the ring itself is decorative.
+public struct DincrProgressRing<Center: View>: View {
+    let fraction: Double
+    let size: CGFloat
+    let center: Center
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    public init(fraction: Double, size: CGFloat = 180, @ViewBuilder center: () -> Center) {
+        self.fraction = min(max(fraction, 0), 1); self.size = size; self.center = center()
+    }
+
+    public var body: some View {
+        ZStack {
+            Circle().stroke(owner ? OwnerColor.surface2 : DincrColor.surface2, lineWidth: size * 0.1)
+            Circle().trim(from: 0, to: max(fraction, 0.005))
+                .stroke(DincrColor.positive, style: StrokeStyle(lineWidth: size * 0.1, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            center
+        }
+        .frame(width: size, height: size)
+        .padding(size * 0.05)
     }
 }

@@ -32,6 +32,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
+import com.dincr.design.DincrProgressRing
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -213,39 +221,64 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
 
 @Composable
 private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: () -> Unit, onDelete: () -> Unit, onHistory: () -> Unit) {
+    // Its name and progress bar; opened, the ring with everything else. Closed until tapped, so the list reads at a glance.
+    var open by androidx.compose.runtime.saveable.rememberSaveable(debt.id) { mutableStateOf(false) }
+    // The backend sends 0 % when the original amount is unknown: progress only from a known one.
+    val amounts = DebtProgress.of(debt)
+    val paid = amounts?.let { Math.round(it.ratio * 100) }
+    val name = debt.name.orEmpty()
+    val rowLabel = paid?.let { tx("$name, pagado $it %", "$name, $it % paid") } ?: name
     DincrCard {
-        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(debt.name.orEmpty(), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
-                    Caption(debtTypeLabel(debt.debtType) + (debt.interestRate?.let { " · " + tx("${it.stripTrailingZeros().toPlainString()} % anual", "${it.stripTrailingZeros().toPlainString()} % a year") } ?: ""))
+        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
+            Column(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("debt.row.${debt.id}").clickable { open = !open }
+                .semantics(mergeDescendants = true) { contentDescription = rowLabel; stateDescription = if (open) tx("Abierta", "Open") else tx("Cerrada", "Closed") },
+                verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
+                    Icon(if (open) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = Dincr.colors.textMuted)
                 }
-                MoneyText(debt.remainingAmount)
+                if (amounts != null) LinearProgressIndicator(progress = { amounts.ratio.coerceIn(0.0, 1.0).toFloat() }, modifier = Modifier.fillMaxWidth().height(8.dp), color = Dincr.colors.positive, trackColor = Dincr.colors.surface2, drawStopIndicator = {})
+                else Caption(tx("Sin monto original", "No original amount"))
             }
-            // The backend sends 0 % when the original amount is unknown: progress only from a known one.
-            DebtProgress.of(debt)?.let { amounts ->
-                val left = Math.round(amounts.remainingFraction * 100)
-                Column(Modifier.testTag("debt.progress.${debt.id}")) {
-                    ProgressLine(amounts.ratio, tx("Pagado ${Dincr.money.format(amounts.paid)} de ${Dincr.money.format(amounts.original)} · te falta el $left %",
-                        "Paid ${Dincr.money.format(amounts.paid)} of ${Dincr.money.format(amounts.original)} · $left % left"))
+            if (open) {
+                Text(debtTypeLabel(debt.debtType) + (debt.interestRate?.let { " · " + tx("${it.stripTrailingZeros().toPlainString()} % anual", "${it.stripTrailingZeros().toPlainString()} % a year") } ?: ""),
+                    Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                if (amounts != null) {
+                    DincrProgressRing(amounts.ratio, Modifier.align(Alignment.CenterHorizontally)) {
+                        Column(Modifier.semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("$paid %", style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
+                            Text(tx("Pagado", "Paid"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().testTag("debt.progress.${debt.id}")) {
+                        DebtFigure(tx("Pagado", "Paid"), amounts.paid, Modifier.weight(1f))
+                        DebtFigure(tx("Te falta", "Left"), debt.remainingAmount, Modifier.weight(1f))
+                    }
+                } else DebtFigure(tx("Te falta", "Left"), debt.remainingAmount, Modifier.fillMaxWidth())
+                debt.monthlyPayment?.let { AmountLine(tx("Cuota mensual", "Monthly payment"), it) }
+                debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateLabel(it)) }
+                DebtPayoffLine(debt)
+                // DEB-07a: the payments recorded for this debt (read-only, every plan).
+                TextButton(onHistory, modifier = Modifier.heightIn(min = 48.dp).testTag("debt.history.${debt.id}")) { Text(tx("Ver pagos", "See payments"), color = Dincr.colors.tint) }
+                Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                    // A payment on a paid-off debt would record a zero payment: not offered.
+                    if ((debt.remainingAmount ?: BigDecimal.ZERO).signum() > 0) TextButton(onPay, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Registrar pago", "Record payment"), color = Dincr.colors.tint) }
+                    if (advanced) TextButton(onEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Editar", "Edit"), color = Dincr.colors.tint) }
+                    TextButton(onDelete, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Eliminar", "Delete"), color = Dincr.colors.negative) }
                 }
-            }
-            debt.monthlyPayment?.let { AmountLine(tx("Cuota mensual", "Monthly payment"), it) }
-            debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateLabel(it)) }
-            DebtPayoffLine(debt)
-            // DEB-07a: the payments recorded for this debt (read-only, every plan).
-            TextButton(onHistory, modifier = Modifier.heightIn(min = 48.dp).testTag("debt.history.${debt.id}")) { Text(tx("Ver pagos", "See payments"), color = Dincr.colors.tint) }
-            Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
-                // A payment on a paid-off debt would record a zero payment: not offered.
-                if ((debt.remainingAmount ?: BigDecimal.ZERO).signum() > 0) TextButton(onPay, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Registrar pago", "Record payment"), color = Dincr.colors.tint) }
-                if (advanced) TextButton(onEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Editar", "Edit"), color = Dincr.colors.tint) }
-                TextButton(onDelete, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Eliminar", "Delete"), color = Dincr.colors.negative) }
             }
         }
     }
 }
 
-/** DEB-07a — the payments recorded in DINCR for one debt, newest first (iOS: `DebtPaymentsSheet`). */
+@Composable
+private fun DebtFigure(label: String, amount: BigDecimal?, modifier: Modifier) {
+    Column(modifier.semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
+        Caption(label)
+        MoneyText(amount)
+    }
+}
+
 @Composable
 private fun DebtPaymentsDialog(model: AppModel, debt: Debt, onDismiss: () -> Unit) {
     val payments = rememberLoad(model, debt.id) { model.api.debtPayments(debt.id) }

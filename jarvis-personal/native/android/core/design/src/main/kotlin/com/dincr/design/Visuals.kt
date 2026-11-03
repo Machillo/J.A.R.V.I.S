@@ -49,6 +49,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.unit.dp
 import com.dincr.data.AppLanguage
 import com.dincr.data.Composition
@@ -375,17 +377,29 @@ fun DincrProgressBar(progress: ProgressValue, overMeaning: TrendMeaning = TrendM
         Text(VisualText.noData().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelMedium, color = c.textMuted)
         return
     }
-    val fill = if (!progress.isOver) c.tint else when (overMeaning) {
-        TrendMeaning.FAVORABLE -> c.positive
-        TrendMeaning.UNFAVORABLE -> c.negative
-        TrendMeaning.NEUTRAL -> c.tint
-    }
+    val fill = if (progress.isOver && overMeaning == TrendMeaning.UNFAVORABLE) c.negative else c.positive
     Box(Modifier.fillMaxWidth().height(8.dp).background(c.surface2, CircleShape).clearAndSetSemantics { }) {
         if (fraction > 0) Box(Modifier.fillMaxWidth(fraction.toFloat()).widthIn(min = 6.dp).height(8.dp).background(fill, CircleShape))
     }
 }
 
 // endregion
+
+/** Progress as a ring, with what it means in the middle. Green, like the bars; the caller says the figure in words. iOS: `DincrProgressRing`. */
+@Composable
+fun DincrProgressRing(fraction: Double, modifier: Modifier = Modifier, size: Dp = 180.dp, center: @Composable () -> Unit) {
+    val track = Dincr.colors.surface2
+    val fill = Dincr.colors.positive
+    val sweep = 360f * fraction.coerceIn(0.0, 1.0).toFloat()
+    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(size * 0.05f).clearAndSetSemantics { }) {
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = this.size.width * 0.1f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawArc(track, 0f, 360f, false, style = stroke)
+            drawArc(fill, -90f, maxOf(sweep, 1f), false, style = stroke)
+        }
+        center()
+    }
+}
 
 /** Why a chart isn't drawn, in words; TalkBack hears which chart it is about. */
 @Composable
