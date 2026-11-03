@@ -54,4 +54,40 @@ final class OwnAccountsUITests: XCTestCase {
         XCTAssertTrue(text("No la reconozco", in: app).waitForExistence(timeout: 10))
         XCTAssertFalse(element("accounts.own.1", in: app).exists, "answered: no longer offered as unanswered")
     }
+
+    /// The Owner adds a bank: pick it, confirm what the mail showed, see it listed. Only the Owner has the flow.
+    func testTheOwnerAddsABankThroughTheGuidedFlow() {
+        let app = launchForAddBank(role: "owner")
+        XCTAssertFalse(element("accounts.declare", in: app).exists)
+        open("accounts.addBank", in: app)
+        open("addBank.bank.bac", in: app)
+        XCTAssertTrue(element("addBank.account.1", in: app).waitForExistence(timeout: 10), "the detected account, chosen")
+        XCTAssertTrue(element("addBank.account.1", in: app).isSelected)
+        XCTAssertFalse(element("addBank.account.2", in: app).isEnabled, "already the Owner's")
+        open("addBank.add", in: app)
+        XCTAssertTrue(element("addBank.done", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("addBank.done", in: app).label.contains("2 cuentas"))
+        open("addBank.another", in: app)
+        open("addBank.bank.bn", in: app)
+        XCTAssertTrue(element("addBank.none", in: app).waitForExistence(timeout: 10), "nothing in the mail: said, and by hand instead")
+        XCTAssertTrue(element("addBank.review.manual", in: app).exists)
+    }
+
+    func testAVipKeepsTheOwnAccountFormAndNoGuidedFlow() {
+        let app = launchForAddBank(role: nil)
+        XCTAssertTrue(element("accounts.declare", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("accounts.addBank", in: app).exists)
+    }
+
+    private func launchForAddBank(role: String?) -> XCUIApplication {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        var arguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrPlan", "vip", "-DincrTab", "wealth",
+                         "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
+        if let role { arguments += ["-DincrRole", role] }
+        app.launchArguments = arguments
+        app.launch()
+        open("wealth.accounts", in: app)
+        return app
+    }
 }
