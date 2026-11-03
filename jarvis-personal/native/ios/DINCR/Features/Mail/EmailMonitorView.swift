@@ -109,12 +109,12 @@ private struct MailMonitorContent: View {
     @ViewBuilder
     private func onboarding(_ status: MailStatus) -> some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-            Image(systemName: "envelope.open").font(.system(size: 32)).foregroundStyle(DincrColor.tint).accessibilityHidden(true)
+            Image(systemName: "envelope.open").font(.system(size: 32)).foregroundStyle(.dincrTint).accessibilityHidden(true)
             Text(tx("Tus avisos bancarios, sin escribirlos a mano", "Your bank notices, without typing them"))
-                .font(DincrFont.title1).foregroundStyle(DincrColor.text).accessibilityAddTraits(.isHeader)
+                .font(DincrFont.title1).foregroundStyle(.dincrText).accessibilityAddTraits(.isHeader)
             Text(tx("DINCR busca en tu correo los avisos de compra, depósito y transferencia de tu banco, y te los muestra para que los confirmes.",
                     "DINCR finds your bank’s purchase, deposit and transfer notices in your mail and shows them to you to confirm."))
-                .font(DincrFont.body).foregroundStyle(DincrColor.text2)
+                .font(DincrFont.body).foregroundStyle(.dincrText2)
             bullet("eye", tx("Acceso de solo lectura a Gmail (gmail.readonly): DINCR no envía, borra ni modifica correos.", "Read-only Gmail access (gmail.readonly): DINCR never sends, deletes or changes email."))
                 .accessibilityIdentifier("mail.readonly")
             bullet("checkmark.shield", tx("Nada se guarda sin tu revisión. Podés desconectar cuando quieras.", "Nothing is saved without your review. You can disconnect at any time."))
@@ -155,13 +155,13 @@ private struct MailMonitorContent: View {
                         .disabled(busy != nil)
                 }
                 Text(tx("Se abrirá una ventana segura de Google. DINCR nunca ve tu contraseña.", "A secure Google window will open. DINCR never sees your password."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
         }
     }
 
     private func bullet(_ symbol: String, _ text: String) -> some View {
-        Label { Text(text).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text) } icon: { Image(systemName: symbol).foregroundStyle(DincrColor.tint) }
+        Label { Text(text).font(DincrFont.bodySmall).foregroundStyle(.dincrText) } icon: { Image(systemName: symbol).foregroundStyle(.dincrTint) }
     }
 
     // MARK: Connected: mailboxes, sync, review
@@ -196,7 +196,7 @@ private struct MailMonitorContent: View {
                         .accessibilityIdentifier("mail.sync")
                 }
                 if let syncSummary {
-                    Text(syncSummary).font(DincrFont.caption).foregroundStyle(DincrColor.text2).accessibilityIdentifier("mail.syncSummary")
+                    Text(syncSummary).font(DincrFont.caption).foregroundStyle(.dincrText2).accessibilityIdentifier("mail.syncSummary")
                 }
             }
             .dincrCard()
@@ -422,10 +422,10 @@ struct CandidateCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(candidate.description ?? candidate.subject ?? tx("Aviso bancario", "Bank notice")).font(DincrFont.body.weight(.semibold))
                     Text([candidate.bank, Day.label(candidate.transactionDate)].compactMap { $0 }.joined(separator: " · "))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     if let source = candidate.captureSourceLabel() {
                         Label(source, systemImage: candidate.sourceProvider == "apple_pay_shortcut" ? "wave.3.right.circle" : "message")
-                            .font(DincrFont.caption.weight(.semibold)).foregroundStyle(DincrColor.tint)
+                            .font(DincrFont.caption.weight(.semibold)).foregroundStyle(.dincrTint)
                             .accessibilityIdentifier("candidate.source.\(candidate.candidateId ?? 0)")
                     }
                 }
@@ -444,13 +444,13 @@ struct CandidateCard: View {
                 } else if candidate.waitsForClose {
                     Text(tx("Queda en \(candidate.nativeCurrency ?? "") hasta el corte de la tarjeta; ahí te pedimos el tipo de cambio.",
                             "It stays in \(candidate.nativeCurrency ?? "") until the card’s cut; you’ll enter the rate then."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 } else if candidate.needsRate {
                     Text(tx("Está en \(candidate.nativeCurrency ?? ""). Tocá Corregir e indicá tu tipo de cambio.", "It’s in \(candidate.nativeCurrency ?? ""). Tap Correct and enter your exchange rate."))
                         .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
                 }
                 if let note = candidate.resolutionNote {
-                    Text(Self.text(for: note)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(Self.text(for: note)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         .accessibilityIdentifier("candidate.note.\(candidate.candidateId ?? 0)")
                 }
                 HStack(spacing: DincrSpacing.s2) {
@@ -567,7 +567,7 @@ private struct OwnTransferCard: View {
             let declared = OwnTransferRequest.unknownDirection(first: first.direction, second: second.direction)
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 Text(tx("Estos dos avisos parecen el mismo dinero moviéndose entre cuentas tuyas.", "These two notices look like the same money moving between your accounts."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.caption).foregroundStyle(.dincrText2)
                 side(first, declared: declared)
                 side(second, declared: declared)
                 if declared == OwnTransferRequest.cannotInfer {
@@ -642,10 +642,10 @@ private struct AccountsContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 Text(account.accountName ?? account.bankName ?? tx("Cuenta", "Account")).font(DincrFont.body.weight(.semibold))
                 Text([account.bankName, account.accountLast4.map { "•••• \($0)" }, account.currency].compactMap { $0 }.joined(separator: " · "))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 switch account.ownershipStatus {
                 case "own": Label(tx("Es mía", "It’s mine"), systemImage: "checkmark.circle").foregroundStyle(DincrColor.positive)
-                case "not_mine": Label(tx("No es mía", "Not mine"), systemImage: "xmark.circle").foregroundStyle(DincrColor.textMuted)
+                case "not_mine": Label(tx("No es mía", "Not mine"), systemImage: "xmark.circle").foregroundStyle(.dincrTextMuted)
                 default:
                     HStack {
                         Button(tx("Es mía", "It’s mine")) { set(account, true) }.buttonStyle(.dincrSecondary)

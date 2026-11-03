@@ -30,7 +30,8 @@ final class MoneyUITests: XCTestCase {
     }
 
     private func openMoney(_ app: XCUIApplication) {
-        tap("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        tap("owner.home.jarvis", in: app)
         tap("jarvis.section.money", in: app)
         XCTAssertTrue(element("money.cycle", in: app).waitForExistence(timeout: 10))
     }

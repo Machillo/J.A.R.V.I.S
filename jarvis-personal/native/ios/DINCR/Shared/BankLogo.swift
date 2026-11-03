@@ -18,12 +18,12 @@ struct BankLogo: View {
             } else if brand.isKnown || !brand.name.isEmpty {
                 Text(brand.short)
                     .font(.system(size: size * 0.32, weight: .bold))
-                    .foregroundStyle(DincrColor.text2)
+                    .foregroundStyle(.dincrText2)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
                     .padding(size * 0.08)
             } else {
-                Image(systemName: "building.columns").foregroundStyle(DincrColor.text2)
+                Image(systemName: "building.columns").foregroundStyle(.dincrText2)
             }
         }
         .frame(width: size, height: size)

@@ -26,7 +26,7 @@ private struct ProjectionsContent: View {
         switch Projections.state(center) {
         case .complete(let points, let lowConfidence):
             if lowConfidence {
-                Text(ProjectionText.lowConfidence).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                Text(ProjectionText.lowConfidence).font(DincrFont.caption).foregroundStyle(.dincrText2)
                     .accessibilityIdentifier("projections.lowConfidence")
             }
             // UX-14 / I09: the same points as lines; the cards below stay as the text alternative.
@@ -71,9 +71,9 @@ private struct ProjectionIncomplete: View {
                 .accessibilityIdentifier("projections.incomplete")
             ForEach(missing, id: \.self) { input in
                 VStack(alignment: .leading, spacing: DincrSpacing.s1) {
-                    Text(ProjectionText.explanation(input)).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    Text(ProjectionText.explanation(input)).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     NavigationLink { destination(input.destination) } label: {
-                        Text(ProjectionText.action(input)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.tint).frame(minHeight: 44)
+                        Text(ProjectionText.action(input)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint).frame(minHeight: 44)
                     }
                     .accessibilityIdentifier("projections.missing.\(input.rawValue)")
                 }

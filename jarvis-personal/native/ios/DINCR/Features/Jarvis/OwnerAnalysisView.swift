@@ -59,7 +59,7 @@ private struct OwnerAnalysisContent: View {
                     FigureRow(label: tx("Cambio desde la última lectura", "Change since the last reading"), amount: change)
                 }
                 if let interpretation = worth.interpretation {
-                    Text(interpretation).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                    Text(interpretation).font(DincrFont.caption).foregroundStyle(.dincrText2)
                 }
             }
             .dincrCard()
@@ -86,7 +86,7 @@ private struct OwnerAnalysisContent: View {
                 MonthBars(points: Array(byMonth))
                 Text(tx("Solo gastos registrados como movimientos, sin restar reembolsos: por eso puede diferir del gráfico de ingresos y gastos.",
                         "Only spending recorded as movements, refunds not taken out, so it can differ from the income and spending chart."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             .dincrCard()
         }
@@ -96,7 +96,7 @@ private struct OwnerAnalysisContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 SectionHeader(title: tx("Distribución del gasto", "Spending by category"))
                 if let label = transactions.spendingBreakdown?.period?.label {
-                    Text(label).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(label).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 SpendingDonut(rows: transactions.spendingBreakdown?.categories ?? [])
                 CategoryBars(categories: categories, limit: SpendingDonut.barsLimit)
@@ -132,10 +132,10 @@ private struct OwnerAnalysisContent: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Recomendaciones", "Recommendations"))
                 Text(tx("Sugerencias de DINCR: no son movimientos ni pagos hechos.", "DINCR’s suggestions: not movements or payments made."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 ForEach(Array(recommendations.enumerated()), id: \.offset) { _, text in
-                    Label { Text(text).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) } icon: {
-                        Image(systemName: "lightbulb").foregroundStyle(DincrColor.tint)
+                    Label { Text(text).font(DincrFont.bodySmall).foregroundStyle(.dincrText2) } icon: {
+                        Image(systemName: "lightbulb").foregroundStyle(.dincrTint)
                     }
                 }
             }
@@ -160,11 +160,11 @@ private struct MonthBars: View {
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
                 AxisGridLine().foregroundStyle(DincrColor.line)
-                AxisValueLabel().font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                AxisValueLabel().font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
         }
         .chartXAxis {
-            AxisMarks { _ in AxisValueLabel().font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+            AxisMarks { _ in AxisValueLabel().font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
         }
         .frame(height: 160)
         .accessibilityElement(children: .ignore)

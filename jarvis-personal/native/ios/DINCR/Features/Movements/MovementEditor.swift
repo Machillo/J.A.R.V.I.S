@@ -105,9 +105,9 @@ struct MovementEditor: View {
                         .accessibilityIdentifier("editor.currency")
                     }
                     VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                        Text(tx("Monto", "Amount")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                        Text(tx("Monto", "Amount")).font(DincrFont.label).foregroundStyle(.dincrText2)
                         HStack(spacing: DincrSpacing.s2) {
-                            Text(MoneyFormat(currency: currency.isEmpty ? base : currency).symbol).font(DincrFont.title1).foregroundStyle(DincrColor.textMuted).accessibilityHidden(true)
+                            Text(MoneyFormat(currency: currency.isEmpty ? base : currency).symbol).font(DincrFont.title1).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
                             TextField(tx("Monto", "Amount"), text: $amountText, prompt: Text("0"))
                                 .font(DincrFont.title1.monospacedDigit())
                                 .keyboardType(.decimalPad)
@@ -123,12 +123,12 @@ struct MovementEditor: View {
                                  ? tx("Queda en dólares hasta el corte de la tarjeta (o fin de mes sin tarjeta); ahí se convierte con un solo tipo de cambio.",
                                       "It stays in dollars until the card’s statement cut (or month end without a card), then converts with one rate.")
                                  : tx("Se convierte ahora con tu tipo de cambio.", "It converts now with your rate."))
-                                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         }
                     }
                     if isForeign && !waits {
                         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                            Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                            Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label).foregroundStyle(.dincrText2)
                             TextField(tx("Tipo de cambio", "Exchange rate"), text: $rateText, prompt: Text(format.inputText(Decimal(string: "507.5")!)))
                                 .keyboardType(.decimalPad)
                                 .accessibilityIdentifier("editor.rate")
@@ -136,13 +136,13 @@ struct MovementEditor: View {
                             if let preview = ConversionPreview.baseAmount(typed: AmountInput.parse(amountText, separators: format.separators), currency: currency, base: base,
                                                                           rate: CorrectionInput.rate(rateText, separators: format.separators)) {
                                 Text(tx("Se guardará como \(format.string(preview)). DINCR usa tu tipo de cambio; no consulta tasas.", "Saved as \(format.string(preview)). DINCR uses your rate; it doesn’t look rates up."))
-                                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                                     .accessibilityIdentifier("editor.preview")
                             }
                         }
                     }
                     VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                        Text(tx("Descripción", "Description")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                        Text(tx("Descripción", "Description")).font(DincrFont.label).foregroundStyle(.dincrText2)
                         TextField(tx("Descripción", "Description"), text: $description, prompt: Text(tx("¿Qué movimiento fue?", "What was it?")))
                             .accessibilityIdentifier("editor.description")
                         if let error = fieldErrors[.description] { fieldError(error) }
@@ -164,7 +164,7 @@ struct MovementEditor: View {
                 if kind == .income && !isEditing {
                     Section {
                         Text(tx("Ingresá el monto real que recibiste según tu boleta o depósito.", "Enter the actual amount you received, per your pay stub or deposit."))
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                 }
                 if let saveError {

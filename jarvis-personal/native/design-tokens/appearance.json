@@ -15,7 +15,7 @@
    "default": "oceano",
    "classic": "clasico",
    "values": {
-    "oceano": { "es": "Océano", "en": "Ocean" },
+    "oceano": { "es": "Sistema", "en": "System" },
     "clasico": { "es": "Clásico", "en": "Classic" },
     "arena": { "es": "Arena", "en": "Sand" },
     "grafito": { "es": "Grafito", "en": "Graphite" }
@@ -25,7 +25,7 @@
    "default": "cian",
    "classic": "teal",
    "values": {
-    "cian": { "es": "Cian", "en": "Cyan" },
+    "cian": { "es": "Azul", "en": "Blue" },
     "teal": { "es": "Verde azulado", "en": "Teal" },
     "ciruela": { "es": "Ciruela", "en": "Plum" },
     "tinta": { "es": "Tinta", "en": "Ink" }
@@ -72,8 +72,8 @@
    "dark": { "bg": "#070E1A", "surface": "#0F1A2B", "surface-2": "#172539", "line": "#22324A", "line-strong": "#33445F", "field-border": "#6A7A94", "text": "#EDF2F9", "text-2": "#B3C0D2", "text-muted": "#94A3B9" }
   },
   "oceano": {
-   "light": { "bg": "#F0F6FA", "surface": "#FFFFFF", "surface-2": "#EAF2F8", "line": "#D3E2EE", "line-strong": "#B6CCDD", "field-border": "#6A8197", "text": "#0B1526", "text-2": "#3F5368", "text-muted": "#52677D", "positive": "#08734F", "glow": "#F6FAFD" },
-   "dark": { "bg": "#021221", "surface": "#091726", "surface-2": "#0D2135", "line": "#123858", "line-strong": "#1D4B70", "field-border": "#5F84A3", "text": "#F2FAFF", "text-2": "#87A6BF", "text-muted": "#7A9CB5", "positive": "#1FEBAB", "glow": "#041C30" }
+   "light": { "bg": "#F2F2F7", "surface": "#FFFFFF", "surface-2": "#EFEFF4", "line": "#D1D1D6", "line-strong": "#C7C7CC", "field-border": "#86868B", "text": "#1C1C1E", "text-2": "#4F4F55", "text-muted": "#636366", "positive": "#08734F", "glow": "#F2F2F7" },
+   "dark": { "bg": "#000000", "surface": "#1C1C1E", "surface-2": "#2C2C2E", "line": "#38383A", "line-strong": "#48484A", "field-border": "#8E8E93", "text": "#F5F5F7", "text-2": "#AEAEB2", "text-muted": "#A1A1A6", "positive": "#30D158", "glow": "#000000" }
   },
   "arena": {
    "light": { "bg": "#F6F3EE", "surface": "#FFFFFF", "surface-2": "#EEE9E1", "line": "#E2DBD0", "line-strong": "#CBC1B2", "field-border": "#7F7567", "text": "#1C1813", "text-2": "#4D453A", "text-muted": "#62594D" },
@@ -90,8 +90,8 @@
    "dark": { "tint": "#45D3BC", "tint-pressed": "#33B9A4", "tint-container": "#0C3A34", "on-tint": "#03201B", "on-tint-container": "#C0F2E8", "focus-ring": "#45D3BC" }
   },
   "cian": {
-   "light": { "tint": "#0068A3", "tint-pressed": "#00598C", "tint-container": "#DDF0FB", "on-tint": "#FFFFFF", "on-tint-container": "#00405F", "focus-ring": "#0068A3" },
-   "dark": { "tint": "#1FB8FF", "tint-pressed": "#1AD9FF", "tint-container": "#0D344D", "on-tint": "#021221", "on-tint-container": "#BDEBFF", "focus-ring": "#1FB8FF" }
+   "light": { "tint": "#0066CC", "tint-pressed": "#0055AA", "tint-container": "#E3EFFC", "on-tint": "#FFFFFF", "on-tint-container": "#003D7A", "focus-ring": "#0066CC" },
+   "dark": { "tint": "#2997FF", "tint-pressed": "#64B0FF", "tint-container": "#0B2A4A", "on-tint": "#000000", "on-tint-container": "#BFDFFF", "focus-ring": "#2997FF" }
   },
   "ciruela": {
    "light": { "tint": "#7A3E9D", "tint-pressed": "#64317F", "tint-container": "#F1E4F8", "on-tint": "#FFFFFF", "on-tint-container": "#3A1650", "focus-ring": "#7A3E9D" },
@@ -104,7 +104,7 @@
  },
  "shapes": {
   "tonal": { "card": "20px", "control": "14px" },
-  "outlined": { "card": "22px", "control": "16px" }
+  "outlined": { "card": "16px", "control": "12px" }
  },
  "density": {
   "comfortable": { "gap": "16px", "card-padding": "16px", "row-min": "56px" },

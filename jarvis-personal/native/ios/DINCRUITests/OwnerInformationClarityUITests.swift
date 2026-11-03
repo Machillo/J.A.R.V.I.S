@@ -112,7 +112,8 @@ final class OwnerInformationClarityUITests: XCTestCase {
     func testTheOwnersAnalysisListsTheMonthsNotCompleteYet() {
         for l in ["es", "en"] {
             let app = launch(l, tab: "profile")
-            open("profile.jarvis", in: app)
+            app.tabBars.buttons.element(boundBy: 0).tap()
+            open("owner.home.jarvis", in: app)
             open("jarvis.section.analysis", in: app)
             reveal(pick(l, "Meses todavía incompletos", "Months not complete yet"), in: app, l)
             XCTAssertTrue(element("jarvis.analysis.incomplete", in: app).exists, l)

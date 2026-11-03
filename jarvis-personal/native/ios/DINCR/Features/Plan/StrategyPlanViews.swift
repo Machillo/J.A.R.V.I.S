@@ -196,9 +196,9 @@ private struct RecommendedPriorityCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Recomendación de DINCR", "DINCR’s recommendation")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
-            Text(priority.title).font(DincrFont.title2).foregroundStyle(DincrColor.text)
-            if let why = priority.why { Text(why).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) }
+            Text(tx("Recomendación de DINCR", "DINCR’s recommendation")).font(DincrFont.label).foregroundStyle(.dincrText2)
+            Text(priority.title).font(DincrFont.title2).foregroundStyle(.dincrText)
+            if let why = priority.why { Text(why).font(DincrFont.bodySmall).foregroundStyle(.dincrText2) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dincrCard()
@@ -215,10 +215,10 @@ private struct MonthPlanSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Text(plan.kind == .basic ? tx("Libre después de tus compromisos", "Left after your commitments") : tx("Sobrante para repartir", "Surplus to allocate"))
-                .font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                .font(DincrFont.label).foregroundStyle(.dincrText2)
             MoneyText(plan.base, font: DincrFont.displayAmount)
             if showsHeadline, let headline = plan.summaryHeadline {
-                Text(headline).font(DincrFont.body).foregroundStyle(DincrColor.text)
+                Text(headline).font(DincrFont.body).foregroundStyle(.dincrText)
             }
         }
         .dincrCard()
@@ -239,17 +239,17 @@ private struct MonthPlanSplit: View {
             if plan.parts.isEmpty {
                 Text(plan.kind == .basic ? tx("Este mes no queda dinero libre para repartir.", "There’s no money left to split this month.")
                                          : tx("Este mes no hay sobrante real para repartir.", "There’s no real surplus to allocate this month."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             } else if plan.showsComposition {
                 CompositionDonut(title: title, composition: plan.composition)
             } else {
                 ForEach(plan.parts) { part in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(part.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text)
+                            Text(part.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText)
                             Spacer(minLength: DincrSpacing.s3)
                             if let percentage = part.percentage {
-                                Text(String(format: "%.0f%%", percentage)).font(DincrFont.caption.monospacedDigit()).foregroundStyle(DincrColor.textMuted)
+                                Text(String(format: "%.0f%%", percentage)).font(DincrFont.caption.monospacedDigit()).foregroundStyle(.dincrTextMuted)
                             }
                             MoneyText(part.amount, font: DincrFont.amount)
                         }
@@ -292,7 +292,7 @@ private struct BasicPlanDetail: View {
             .padding(.top, DincrSpacing.s2)
         } label: {
             // The identifier goes on the label: on the group it would replace the identifiers inside.
-            Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+            Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(.dincrTint)
                 .accessibilityIdentifier("plan.month.why")
         }
         .tint(DincrColor.tint)
@@ -310,7 +310,7 @@ private struct DashboardPlanDetail: View {
     var body: some View {
         DisclosureGroup(isExpanded: $showsWhy) {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                if let detail = plan.priority?.detail { Text(detail).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) }
+                if let detail = plan.priority?.detail { Text(detail).font(DincrFont.bodySmall).foregroundStyle(.dincrText2) }
                 if let lines = plan.distributionFormula?.lines, !lines.isEmpty {
                     SectionHeader(title: tx("De dónde sale", "Where it comes from"))
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
@@ -322,7 +322,7 @@ private struct DashboardPlanDetail: View {
             .padding(.top, DincrSpacing.s2)
         } label: {
             // The identifier goes on the label: on the group it would replace the identifiers inside.
-            Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+            Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(.dincrTint)
                 .accessibilityIdentifier("plan.month.why")
         }
         .tint(DincrColor.tint)
@@ -331,7 +331,7 @@ private struct DashboardPlanDetail: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) { sections }
                 .padding(.top, DincrSpacing.s2)
         } label: {
-            Text(tx("Ver todo el detalle", "See full details")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+            Text(tx("Ver todo el detalle", "See full details")).font(DincrFont.label).foregroundStyle(.dincrTint)
                 .accessibilityIdentifier("plan.month.detail")
         }
         .tint(DincrColor.tint)
@@ -340,8 +340,8 @@ private struct DashboardPlanDetail: View {
     @ViewBuilder private var sections: some View {
         if let title = plan.title, !title.isEmpty, let objective = plan.objective {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text).accessibilityAddTraits(.isHeader)
-                Text(objective).font(DincrFont.body).foregroundStyle(DincrColor.text2)
+                Text(title).font(DincrFont.title2).foregroundStyle(.dincrText).accessibilityAddTraits(.isHeader)
+                Text(objective).font(DincrFont.body).foregroundStyle(.dincrText2)
             }
             .dincrCard()
         }
@@ -353,7 +353,7 @@ private struct DashboardPlanDetail: View {
                 OwnerPeriodNote(label: tx("Ciclo", "Cycle"), period: plan.cyclePeriod)
                 FigureRow(label: tx("Ingresos esperados del ciclo", "Income expected this cycle"), amount: plan.monthlyIncome)
                 if let source = IncomeSourceLabel.label(plan.incomePolicy?.source) {
-                    Text(source).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(source).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 OwnerCaption(tx("Salario y extras previstos para el ciclo (proyección).", "Salary and extras expected for the cycle (projection)."))
                 FigureRow(label: tx("Gastos comprometidos", "Committed spending"), amount: plan.monthlyExpenses)
@@ -370,7 +370,7 @@ private struct DashboardPlanDetail: View {
                 SectionHeader(title: tx("Tu mes", "Your month"))
                 FigureRow(label: tx("Ingreso mensual", "Monthly income"), amount: plan.monthlyIncome)
                 if let source = IncomeSourceLabel.label(plan.incomePolicy?.source) {
-                    Text(source).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(source).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 FigureRow(label: tx("Gastos registrados este mes", "Spending recorded this month"), amount: plan.monthlyExpenses)
                 FigureRow(label: tx("Cuotas de deuda pendientes", "Pending debt payments"), amount: plan.debtCommitmentCurrentCycle)
@@ -393,7 +393,7 @@ private struct DashboardPlanDetail: View {
                     FigureRow(label: tx("Te falta", "Still missing"), amount: fund.gapToNextTarget)
                     if let level = StrategyText.emergencyLevel(fund.level) { InfoRow(label: tx("Nivel", "Level"), value: level) }
                     if let recommendation = fund.recommendation {
-                        Text(recommendation).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                        Text(recommendation).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                             .accessibilityIdentifier("plan.month.salvavidas.recommendation")
                     }
                 }
@@ -419,7 +419,7 @@ private struct DashboardPlanDetail: View {
                 FigureRow(label: tx("Deuda total", "Total debt"), amount: plan.totalDebt)
                 if let progress = plan.debtProgressPercent {
                     DincrProgressBar(fraction: progress / 100)
-                    Text(tx("\(Int(progress.rounded()))% pagado", "\(Int(progress.rounded()))% paid")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    Text(tx("\(Int(progress.rounded()))% pagado", "\(Int(progress.rounded()))% paid")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 if let free = plan.estimatedDebtFreeDate { InfoRow(label: tx("Libre de deudas", "Debt-free"), value: Day.label(free)) }
                 if plan.isOwnerScope, let saved = plan.monthsSavedByCurrentExtras, saved > 0 {
@@ -441,8 +441,8 @@ private struct DashboardPlanDetail: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Reglas", "Rules"))
                 ForEach(Array(rules.enumerated()), id: \.offset) { _, rule in
-                    Label { Text(rule).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) } icon: {
-                        Image(systemName: "checkmark.circle").foregroundStyle(DincrColor.tint)
+                    Label { Text(rule).font(DincrFont.bodySmall).foregroundStyle(.dincrText2) } icon: {
+                        Image(systemName: "checkmark.circle").foregroundStyle(.dincrTint)
                     }
                 }
             }
@@ -510,7 +510,7 @@ private struct DistributionContent: View {
                     FigureRow(label: tx("Libre después de tus compromisos", "Left after your commitments"), amount: basic.strategicMargin)
                     if allocations.isEmpty {
                         Text(tx("Este mes no queda dinero libre para repartir.", "There’s no money left to split this month."))
-                            .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     }
                     ForEach(Array(allocations.enumerated()), id: \.offset) { _, allocation in
                         FigureRow(label: allocation.label ?? allocation.bucket ?? "", amount: allocation.amount)
@@ -544,20 +544,20 @@ struct DashboardDistribution: View {
     var body: some View {
         let items = plan.allocationItems ?? []
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Sobrante para repartir", "Surplus to allocate")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            Text(tx("Sobrante para repartir", "Surplus to allocate")).font(DincrFont.label).foregroundStyle(.dincrText2)
             MoneyText(plan.allocationBaseAmount, font: DincrFont.displayAmount)
             if items.isEmpty {
                 Text(tx("Este mes no tiene sobrante real. Primero cubrí obligaciones y gastos registrados.",
                         "This month has no real surplus. Cover obligations and recorded expenses first."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             }
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(DistributionLabels.bucket(item.key, targetName: item.targetName)).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text)
+                        Text(DistributionLabels.bucket(item.key, targetName: item.targetName)).font(DincrFont.bodySmall).foregroundStyle(.dincrText)
                         Spacer(minLength: DincrSpacing.s3)
                         if let percentage = item.percentage {
-                            Text(String(format: "%.0f%%", percentage)).font(DincrFont.caption.monospacedDigit()).foregroundStyle(DincrColor.textMuted)
+                            Text(String(format: "%.0f%%", percentage)).font(DincrFont.caption.monospacedDigit()).foregroundStyle(.dincrTextMuted)
                         }
                         MoneyText(item.amount, font: DincrFont.amount)
                     }

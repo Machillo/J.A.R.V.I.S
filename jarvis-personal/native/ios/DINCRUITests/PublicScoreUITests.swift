@@ -33,7 +33,8 @@ final class PublicScoreUITests: XCTestCase {
 
     func testTheOwnerKeepsTheScoreInJarvis() {
         let app = launch(role: "owner", tab: "profile")
-        open("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        open("owner.home.jarvis", in: app)
         open("jarvis.section.analysis", in: app)
         let health = element("jarvis.analysis.health", in: app)
         if !health.waitForExistence(timeout: 10) { app.swipeUp() }

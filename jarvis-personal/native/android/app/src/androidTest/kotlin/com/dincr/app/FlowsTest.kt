@@ -185,8 +185,10 @@ class FlowsTest {
         compose.onNodeWithTag("editor.description").performTextInput("Hotel en dólares")
         compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForGone(tx("Nuevo movimiento", "New transaction"))
-        waitForTag("movements.pending.total.USD")
+        // The running totals sit above the list: on a small screen the waiting section needs a scroll.
+        waitUntil("the waiting expense") { runCatching { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Hotel en dólares")) }.isSuccess }
         waitForText("Hotel en dólares")
+        waitForTag("movements.pending.total.USD")
         // One section per close: "En dólares · Octubre 2026".
         waitForText(tx("En dólares ·", "In dollars ·"), substring = true)
     }

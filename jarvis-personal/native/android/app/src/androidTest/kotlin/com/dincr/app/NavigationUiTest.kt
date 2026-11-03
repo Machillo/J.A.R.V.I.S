@@ -113,6 +113,7 @@ class NavigationUiTest {
         waitUntil("Hoy") { present(tx("Hoy", "Today")) }
         assertEquals(tabs, tabLabels())
         tab(tx("Perfil", "Profile"))
+        click(tx("Hoy", "Today"))
         click("JARVIS")
         waitUntil("JARVIS") { present(tx("Tu espacio personal", "Your personal space")) || present("Chat") }
     }

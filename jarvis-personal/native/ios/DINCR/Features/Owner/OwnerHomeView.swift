@@ -2,10 +2,9 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// The Owner's "Hoy" (DINCR Owner; UX-6). The Owner is Kenneth's identity, not a plan: JARVIS comes
-/// first, as it historically did, and the financial blocks follow.
-/// 0. JARVIS — who and when (greeting), the JARVIS mark, Chat / Agenda / Todo JARVIS and the next
-///    agenda events;
+/// The Owner's "Hoy" (DINCR Owner; UX-6). The Owner is an identity, not a plan.
+/// 0. The hero (`OwnerHomeHero`) — greeting, the key figure and the actions, among them the one entry
+///    to JARVIS — and, on the sheet below, the next agenda events;
 /// 1–4. the same four blocks as the public Hoy (Estado de hoy, Para atender, Qué sigue, Accesos
 ///    rápidos), from the command center while `vip_intelligence` is on (Basic's sources otherwise).
 /// Read-only: opening it never writes. The money and the agenda load on their own, so a failing
@@ -15,31 +14,57 @@ struct OwnerHomeView: View {
     var openMovements: (() -> Void)?
     @State private var home: LoadState<HomeToday> = .loading
     @State private var agenda: LoadState<[JarvisEvent]> = .loading
+    @State private var unreadNotices = 0
+    @State private var editor: EditorRequest?
 
     var body: some View {
         let tier = ownerTier
         ScrollView {
-            VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-                header
-                jarvisSection
-                upcomingSection
-                PendingDollarsCard(openMovements: openMovements)
-                financesSection(tier)
+            VStack(spacing: 0) {
+                hero
+                VStack(alignment: .leading, spacing: DincrSpacing.s4) {
+                    upcomingSection
+                    PendingDollarsCard(openMovements: openMovements)
+                    financesSection(tier)
+                }
+                .padding(.horizontal, DincrSpacing.s4)
+                .padding(.top, DincrSpacing.s2)
+                .padding(.bottom, DincrSpacing.s8)
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+                .background(OwnerColor.backgroundMiddle, in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous))
             }
-            .padding(.horizontal, DincrSpacing.s4)
-            .padding(.bottom, DincrSpacing.s8)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("owner.home")
         }
-        .dincrScreenBackground()
+        // The hero's color behind the top (also when pulled down); the sheet covers it while scrolling.
+        .background(alignment: .top) {
+            OwnerColor.backgroundMiddle.ignoresSafeArea()
+                .overlay(alignment: .top) { OwnerColor.hero.frame(height: 480).ignoresSafeArea() }
+        }
         .navigationTitle(tx("Hoy", "Today"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(OwnerColor.hero, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .sheet(item: $editor) { request in
+            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await loadHome(tier) } }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { OwnerNoticesView() } label: {
+                    Image(systemName: unreadNotices > 0 ? "bell.badge" : "bell").foregroundStyle(OwnerColor.onHero)
+                }
+                .accessibilityLabel(unreadNotices > 0 ? tx("Avisos, \(unreadNotices) sin leer", "Notices, \(unreadNotices) unread") : tx("Avisos", "Notices"))
+                .accessibilityIdentifier("owner.home.notices")
+            }
+        }
         .refreshable {
             await loadHome(tier)
             await loadAgenda()
+            await loadNotices()
         }
+        .onAppear { Task { await loadNotices() } }
         // Two independent tasks: the money and the agenda load in parallel and fail separately.
         .task(id: tier) { await loadHome(tier) }
         .task { await loadAgenda() }
@@ -48,29 +73,12 @@ struct OwnerHomeView: View {
     /// The Owner's financial blocks read the command center while VIP intelligence is on (as before).
     private var ownerTier: HomeToday.Tier { model.flags.isEnabled(.vipIntelligence) ? .vip : .basic }
 
-    // MARK: 0. JARVIS — greeting
+    // MARK: 0. The hero
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: DincrSpacing.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greeting).font(DincrFont.title2.weight(.regular)).foregroundStyle(OwnerColor.text2)
-                if let name = model.profile?.firstName, !name.isEmpty {
-                    Text("\(name).").font(.largeTitle.weight(.bold)).foregroundStyle(OwnerColor.text)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("owner.home.greeting")
-            Spacer(minLength: DincrSpacing.s2)
-            NavigationLink(value: ProfileRoute.jarvisSection(.chat)) {
-                JarvisMark(size: 52)
-            }
-            .buttonStyle(.plain)
-            .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel(tx("Abrir JARVIS", "Open JARVIS"))
-            .accessibilityIdentifier("owner.home.jarvis.mark")
-        }
-        .padding(.top, DincrSpacing.s2)
+    private var hero: some View {
+        let status: HomeStatus? = if case .loaded(let value) = home { value.status } else { nil }
+        return OwnerHomeHero(greeting: greeting, name: model.profile?.firstName, status: status, cycle: status?.cycle.map(HomeStatusCopy.cycle),
+                             register: { editor = EditorRequest(kind: $0) })
     }
 
     private var greeting: String {
@@ -91,7 +99,7 @@ struct OwnerHomeView: View {
         case .failed(let message):
             ErrorStateView(message: message) { Task { await loadHome(tier) } }
         case .loaded(let value):
-            HomeBlocks(home: value, idPrefix: "owner.home", ownerStyle: true, openMovements: openMovements) { await loadHome(tier) }
+            HomeBlocks(home: value, idPrefix: "owner.home", ownerStyle: true, figureInHero: true, openMovements: openMovements) { await loadHome(tier) }
         }
     }
 
@@ -121,37 +129,10 @@ struct OwnerHomeView: View {
                     .accessibilityIdentifier("owner.home.agenda.empty")
                 }
                 ForEach(Array(next.enumerated()), id: \.element.id) { index, event in
-                    if index > 0 { OwnerDivider() }
+                    if index > 0 { OwnerDivider(inset: 0) }
                     OwnerAgendaRow(event: event)
                 }
             }
-        }
-    }
-
-    // MARK: 0. JARVIS — chat, agenda, everything
-
-    @ViewBuilder
-    private var jarvisSection: some View {
-        OwnerSectionHeader("JARVIS")
-        OwnerGroup {
-            NavigationLink(value: ProfileRoute.jarvisSection(.chat)) {
-                OwnerRow(symbol: "bubble.left.and.text.bubble.right", title: tx("Chat", "Chat"),
-                         detail: tx("Horas extra, VGH, feriados, bonos y tu agenda", "Overtime, VGH, holidays, bonuses and your calendar"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.jarvis.chat")
-            OwnerDivider()
-            NavigationLink(value: ProfileRoute.jarvisSection(.calendar)) {
-                OwnerRow(symbol: "calendar", title: tx("Agenda", "Calendar"), detail: tx("Tus eventos y recordatorios", "Your events and reminders"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.jarvis.agenda")
-            OwnerDivider()
-            NavigationLink(value: ProfileRoute.jarvis) {
-                OwnerRow(symbol: "square.grid.2x2", title: tx("Todo JARVIS", "All of JARVIS"), detail: tx("Tu espacio personal", "Your personal space"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.jarvis.hub")
         }
     }
 
@@ -171,6 +152,11 @@ struct OwnerHomeView: View {
         }
     }
 
+    /// Only the bell's count: a failure leaves it as it was, never hiding the rest of Hoy.
+    private func loadNotices() async {
+        if let notices = try? await model.service.ownerNotices() { unreadNotices = notices.unread ?? 0 }
+    }
+
     private func loadAgenda() async {
         let epoch = model.currentEpoch
         do {
@@ -186,22 +172,17 @@ struct OwnerHomeView: View {
     }
 }
 
-/// One agenda event: its day ("Hoy", "Mañana" or the date) with the time when it has one, and its title.
+/// One agenda event: its title, and its day ("Hoy", "Mañana" or the date) with the time when it has one.
 struct OwnerAgendaRow: View {
     let event: JarvisEvent
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DincrSpacing.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(JarvisAgendaLabel.day(event)).font(DincrFont.caption).foregroundStyle(OwnerColor.textMuted)
-                Text(event.time ?? tx("Todo el día", "All day"))
-                    .font(DincrFont.bodySmall.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(event.time == nil ? OwnerColor.text2 : OwnerColor.accent)
-            }
-            .frame(minWidth: 72, alignment: .leading)
+        VStack(alignment: .leading, spacing: 2) {
             Text(event.title).font(DincrFont.body).foregroundStyle(OwnerColor.text)
-            Spacer(minLength: 0)
+            Text("\(JarvisAgendaLabel.day(event)) · \(event.time ?? tx("Todo el día", "All day"))")
+                .font(DincrFont.bodySmall).foregroundStyle(OwnerColor.text2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, DincrSpacing.s3)
         .frame(minHeight: 44)
         .accessibilityElement(children: .combine)

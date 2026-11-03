@@ -17,10 +17,12 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.auth.current_user import get_current_workspace_id
+from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.core.time import costa_rica_today
+from backend.finance import owner_change_notices
+from backend.finance.category_catalog import owner_account_context
 from backend.finance.debt_extra_payment import MAX_INSTALLMENTS, adjust_after_extra
 
 PREFERENCE_KEY = "pending_debt_adjustments"
@@ -78,6 +80,11 @@ def remind_day(value: Any) -> date | None:
     return day
 
 
+def _installments_left(debt: dict[str, Any]) -> int | None:
+    term = debt.get("term_months")
+    return None if term is None else max(int(term) - int(debt.get("installments_paid") or 0), 0)
+
+
 def answer(debt_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     """The bank's answer for a debt (installments left, new installment or nothing changed), or a new
     day to be reminded. Exactly one of them."""
@@ -92,7 +99,7 @@ def answer(debt_id: int, payload: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=tx("Indicá la cuota nueva.", "Enter the new installment."))
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        debt = conn.execute("SELECT id FROM debts WHERE id=%s AND workspace_id=%s FOR UPDATE", (debt_id, workspace_id)).fetchone()
+        debt = conn.execute("SELECT * FROM debts WHERE id=%s AND workspace_id=%s FOR UPDATE", (debt_id, workspace_id)).fetchone()
         if not debt:   # another workspace's debt is simply not found
             raise HTTPException(status_code=404, detail=tx("Deuda no encontrada.", "Debt not found."))
         if remind_on is not None:
@@ -100,6 +107,12 @@ def answer(debt_id: int, payload: dict[str, Any]) -> dict[str, Any]:
         else:
             adjust_after_extra(conn, workspace_id, debt_id, remaining_installments=remaining,
                                new_monthly_payment=float(installment) if installment is not None else None)
+            if not unchanged and owner_account_context(conn, get_current_account_id(), workspace_id):
+                owner_change_notices.record(conn, workspace_id, {
+                    "kind": "debt_change", "debt_id": debt_id, "debt_name": debt.get("name"),
+                    "old_payment": debt.get("monthly_payment"), "new_payment": float(installment) if installment is not None else None,
+                    "old_installments": _installments_left(debt), "new_installments": remaining,
+                })
             conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"{PREFERENCE_KEY}:{workspace_id}",))
             items = pending(conn, workspace_id)
             if items.pop(str(debt_id), None) is not None:

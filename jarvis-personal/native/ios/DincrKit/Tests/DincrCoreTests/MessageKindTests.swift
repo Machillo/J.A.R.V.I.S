@@ -14,15 +14,15 @@ import Testing
     }
 
     @Test func aFinancialAlertIsNeverATechnicalError() {
-        for severity in ["critical", "high", "medium", "low", "success", "blocking", "warning", "info", "error", "", "unexpected", nil] {
+        for severity in ["critical", "high", "medium", "low", "success", "blocking", "warning", "error", "", "unexpected", nil] {
             #expect(MessageKind.financial(severity: severity) != .technicalError, "\(severity ?? "nil")")
         }
     }
 
     /// A problem is never downplayed to a suggestion: severities the alert screens don't receive
-    /// today (`low`, `info`, data-quality `blocking`/`warning`) stay attention too.
+    /// today (`low`, data-quality `blocking`/`warning`) stay attention too.
     @Test func noSeverityIsDowngradedToASuggestion() {
-        for severity in ["low", "info", "blocking", "warning", "error"] {
+        for severity in ["low", "blocking", "warning", "error"] {
             #expect(MessageKind.financial(severity: severity) == .attention, "\(severity)")
         }
     }

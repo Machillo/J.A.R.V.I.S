@@ -19,7 +19,8 @@ final class JarvisChatUITests: XCTestCase {
     }
 
     private func openChat(_ app: XCUIApplication) {
-        let entry = element("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        let entry = element("owner.home.jarvis", in: app)
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         entry.tap()
         let chat = element("jarvis.section.chat", in: app)
@@ -129,8 +130,9 @@ final class JarvisChatUITests: XCTestCase {
         openChat(app)
         send("hola", in: app)
         XCTAssertTrue(bubble("Señor, esto es una respuesta de ejemplo.", in: app).waitForExistence(timeout: 10))
-        // Back to the Profile hub (chat → JARVIS → Profile), sign out and in again: the chat starts empty.
+        // Back to Hoy (chat → JARVIS → Hoy), then Perfil, sign out and in again: the chat starts empty.
         for _ in 0..<2 { app.navigationBars.buttons.element(boundBy: 0).tap() }
+        app.tabBars.buttons["Perfil"].tap()
         let signOut = element("profile.signOut", in: app)
         XCTAssertTrue(element("profile.subscription", in: app).waitForExistence(timeout: 5))
         for _ in 0..<6 where !(signOut.exists && signOut.isHittable) { app.swipeUp() }

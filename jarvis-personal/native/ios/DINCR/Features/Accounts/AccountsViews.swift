@@ -37,7 +37,7 @@ private struct BankListView: View {
         ScreenScroll(title: tx("Cuentas", "Accounts")) {
             Text(tx("Las cuentas que DINCR detectó en tus avisos bancarios. DINCR no ve saldos ni números completos.",
                     "The accounts DINCR detected in your bank notices. DINCR doesn’t see balances or full numbers."))
-                .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             // An own account no notice came from (the other bank of a transfer): marking it lets
             // DINCR recognise transfers between your accounts instead of offering them as spending.
             Button { declaring = true } label: { Label(tx("Agregar cuenta propia", "Add an own account"), systemImage: "plus.circle") }
@@ -88,14 +88,14 @@ private struct BankRow: View {
         HStack(spacing: DincrSpacing.s3) {
             BankLogo(brand: group.logoBrand, size: 44)
             VStack(alignment: .leading, spacing: 2) {
-                Text(group.title).font(DincrFont.body.weight(.semibold)).foregroundStyle(DincrColor.text)
+                Text(group.title).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
                 Text(tx("\(group.accounts.count) \(group.accounts.count == 1 ? "cuenta" : "cuentas")", "\(group.accounts.count) \(group.accounts.count == 1 ? "account" : "accounts")"))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 Text(tx("\(group.movements) movimientos · \(group.pending) por revisar", "\(group.movements) transactions · \(group.pending) to review"))
                     .font(DincrFont.caption).foregroundStyle(group.pending > 0 ? DincrColor.warning : DincrColor.textMuted)
             }
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(DincrColor.textMuted).accessibilityHidden(true)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -183,12 +183,12 @@ private struct AccountCard: View {
             NavigationLink { AccountDetailView(account: account) } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(account.accountName ?? tx("Cuenta", "Account")).font(DincrFont.body.weight(.semibold)).foregroundStyle(DincrColor.text)
+                        Text(account.accountName ?? tx("Cuenta", "Account")).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
                         Text([account.maskedNumber, account.currency].compactMap { $0 }.joined(separator: " · "))
-                            .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(DincrColor.textMuted).accessibilityHidden(true)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
@@ -210,9 +210,9 @@ private struct CutDayControl: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(tx("Día de corte", "Statement cut day")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                Text(tx("Día de corte", "Statement cut day")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 Text(tx("Las compras en dólares se convierten en el corte.", "Dollar purchases are converted at the cut."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             Spacer(minLength: DincrSpacing.s2)
             Menu {
@@ -236,7 +236,7 @@ private struct OwnershipControl: View {
         HStack {
             switch account.ownership {
             case .own?: Label(tx("Es mía", "It’s mine"), systemImage: "checkmark.circle").foregroundStyle(DincrColor.positive)
-            case .notMine?: Label(tx("No es mía", "Not mine"), systemImage: "xmark.circle").foregroundStyle(DincrColor.textMuted)
+            case .notMine?: Label(tx("No es mía", "Not mine"), systemImage: "xmark.circle").foregroundStyle(.dincrTextMuted)
             case .unknown?: Label(tx("No la reconozco", "I don’t recognise it"), systemImage: "questionmark.circle").foregroundStyle(DincrColor.warning)
             case nil:
                 Button(tx("Es mía", "It’s mine")) { set(.own) }.buttonStyle(.dincrSecondary)
@@ -360,7 +360,7 @@ private struct AccountDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(account.brand.name.isEmpty ? tx("Institución", "Institution") : account.brand.name).font(DincrFont.body.weight(.semibold))
                     Text([account.maskedNumber, account.currency].compactMap { $0 }.joined(separator: " · "))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
             }
             .accessibilityElement(children: .combine)

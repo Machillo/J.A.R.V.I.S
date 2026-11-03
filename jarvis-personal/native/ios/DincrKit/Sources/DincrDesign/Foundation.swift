@@ -117,7 +117,8 @@ private struct DincrCardModifier: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(owner ? OwnerColor.surface : DincrColor.surface, in: shape)
             .overlay {
-                shape.strokeBorder(owner ? OwnerColor.border : DincrColor.line, lineWidth: 1)
+                // The Owner's surfaces stand on the background alone.
+                if !owner { shape.strokeBorder(DincrColor.line, lineWidth: 1) }
             }
     }
 }

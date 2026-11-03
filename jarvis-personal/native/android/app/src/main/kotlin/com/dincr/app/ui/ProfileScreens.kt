@@ -96,10 +96,6 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
                 PlanBadge(planName(profile?.plan))
             }
         }
-        if (Jarvis.isAvailable(profile)) DincrCard {
-            // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
-            NavRow(Icons.Rounded.Key, "JARVIS", tx("Tu espacio personal", "Your personal space")) { nav.open("jarvis") }
-        }
         // APP-1: the personal appearance is an Owner-only experiment (the server refuses everyone else).
         if (AppearancePolicy.isPersonalizable(profile)) DincrCard(Modifier.testTag("profile.appearance")) {
             NavRow(Icons.Rounded.Palette, tx("Personalización", "Personalization"), tx("Tema, colores, texto y densidad", "Theme, colors, text and density")) { nav.open("appearance") }

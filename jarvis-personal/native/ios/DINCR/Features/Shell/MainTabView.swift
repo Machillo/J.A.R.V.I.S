@@ -188,12 +188,12 @@ private struct LockScreenView: View {
     var body: some View {
         VStack(spacing: DincrSpacing.s4) {
             Spacer()
-            Image(systemName: "lock.fill").font(.system(size: 40)).foregroundStyle(DincrColor.tint).accessibilityHidden(true)
+            Image(systemName: "lock.fill").font(.system(size: 40)).foregroundStyle(.dincrTint).accessibilityHidden(true)
             Text(tx("DINCR está bloqueado", "DINCR is locked")).font(DincrFont.title1)
             if let message, !message.isEmpty { Text(message).font(DincrFont.bodySmall).foregroundStyle(DincrColor.negative).multilineTextAlignment(.center) }
             Spacer()
             Button(tx("Desbloquear", "Unlock")) { Task { message = await model.appLock.unlock() } }.buttonStyle(.dincrPrimary)
-            Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }.foregroundStyle(DincrColor.tint).frame(minHeight: 44)
+            Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }.foregroundStyle(.dincrTint).frame(minHeight: 44)
         }
         .padding(DincrSpacing.s6)
         .frame(maxWidth: 600)

@@ -185,7 +185,7 @@ struct AmountSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(explanation).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    Text(explanation).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                     TextField(tx("Monto", "Amount"), text: $text)
                         .keyboardType(.decimalPad)
                         .accessibilityIdentifier("amount.field")

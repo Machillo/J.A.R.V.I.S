@@ -37,12 +37,12 @@ public struct IncomeExpenseChart: View {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
                     AxisGridLine().foregroundStyle(DincrColor.line)
                     AxisValueLabel {
-                        if let number = value.as(Double.self) { Text(compact(number)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+                        if let number = value.as(Double.self) { Text(compact(number)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
                     }
                 }
             }
             .chartXAxis {
-                AxisMarks { _ in AxisValueLabel().font(DincrFont.caption).foregroundStyle(DincrColor.textMuted) }
+                AxisMarks { _ in AxisValueLabel().font(DincrFont.caption).foregroundStyle(.dincrTextMuted) }
             }
             .frame(height: 180)
             .accessibilityElement(children: .ignore)
@@ -53,7 +53,7 @@ public struct IncomeExpenseChart: View {
                 VStack(spacing: DincrSpacing.s2) {
                     ForEach(months) { month in
                         HStack {
-                            Text(shortMonth(month.month)).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            Text(shortMonth(month.month)).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                             Spacer()
                             MoneyText(month.income, sign: .income, font: DincrFont.bodySmall.monospacedDigit())
                             MoneyText(month.expenses, sign: .expense, font: DincrFont.bodySmall.monospacedDigit())
@@ -64,7 +64,7 @@ public struct IncomeExpenseChart: View {
                 }
                 .padding(.top, DincrSpacing.s2)
             } label: {
-                Text(language.pick("Ver como tabla", "Show as table")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                Text(language.pick("Ver como tabla", "Show as table")).font(DincrFont.label).foregroundStyle(.dincrTint)
             }
             .tint(DincrColor.tint)
         }
@@ -112,7 +112,7 @@ public struct CategoryBars: View {
             ForEach(shown) { item in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(CategoryStyle.label(item.category)).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text)
+                        Text(CategoryStyle.label(item.category)).font(DincrFont.bodySmall).foregroundStyle(.dincrText)
                         Spacer()
                         MoneyText(item.amount, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
                     }

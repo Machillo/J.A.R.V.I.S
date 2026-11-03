@@ -133,6 +133,10 @@ data class MonthTotals(
     val expenses: Money,
     @SerialName("debt_paid") val debtPaid: Money? = null,
     val balance: Money? = null,
+    /** The Owner's card statement (`owner_ledger.owner_cycle_totals`): first and last day, and when it is paid. */
+    @SerialName("period_start") val periodStart: String? = null,
+    @SerialName("period_end") val periodEnd: String? = null,
+    @SerialName("payment_date") val paymentDate: String? = null,
 )
 
 @Serializable
@@ -180,6 +184,8 @@ data class Movement(
     @SerialName("exchange_rate") val exchangeRate: Money? = null,
     /** The own account or card a manual expense says paid it; null = not told (never inferred). */
     @SerialName("financial_account_id") val financialAccountId: Long? = null,
+    /** The Owner's list only: what the row counts as in his ledger (`owner_ledger.classify_movement`). */
+    @SerialName("counts_in") val countsIn: String? = null,
 ) {
     /**
      * Whether this app may edit or delete the row. The prototype does not edit currencies (it

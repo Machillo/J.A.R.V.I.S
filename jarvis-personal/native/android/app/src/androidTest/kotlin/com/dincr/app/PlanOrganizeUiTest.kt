@@ -135,7 +135,7 @@ class PlanOrganizeUiTest {
             back()
             tab(tx("Perfil", "Profile"))
             waitUntil("Perfil") { present(tx("Suscripción", "Subscription")) }
-            assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
+            assertFalse("$role: JARVIS opens from Hoy", present("JARVIS"))
         }
     }
 
@@ -147,7 +147,7 @@ class PlanOrganizeUiTest {
             waitUntil("Perfil ($role)") { present(tx("Suscripción", "Subscription")) }
             listOf(tx("Finanzas", "Finances"), tx("Presupuesto", "Budget"), tx("Calendario financiero", "Financial calendar"), recurring)
                 .forEach { assertFalse("$plan/$role: $it", present(it)) }
-            assertEquals("$role: JARVIS", role == "owner", present("JARVIS"))
+            assertFalse("$role: JARVIS opens from Hoy", present("JARVIS"))
         }
     }
 

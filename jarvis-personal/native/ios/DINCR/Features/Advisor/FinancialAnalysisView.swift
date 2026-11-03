@@ -47,10 +47,10 @@ private struct HealthCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Tu salud financiera", "Your financial health")).font(DincrFont.label).foregroundStyle(DincrColor.text2).accessibilityAddTraits(.isHeader)
+            Text(tx("Tu salud financiera", "Your financial health")).font(DincrFont.label).foregroundStyle(.dincrText2).accessibilityAddTraits(.isHeader)
             Text(reading.word).font(DincrFont.title1).foregroundStyle(color).accessibilityIdentifier("health.word")
-            Text(reading.reason).font(DincrFont.body).foregroundStyle(DincrColor.text).fixedSize(horizontal: false, vertical: true)
-            Text(reading.action).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2).fixedSize(horizontal: false, vertical: true)
+            Text(reading.reason).font(DincrFont.body).foregroundStyle(.dincrText).fixedSize(horizontal: false, vertical: true)
+            Text(reading.action).font(DincrFont.bodySmall).foregroundStyle(.dincrText2).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dincrCard()
@@ -90,7 +90,7 @@ private struct FinancialAnalysisContent: View {
                 SectionHeader(title: tx("Mes a mes", "Month by month"))
                 Text(tx("Lo que entró y lo que salió cada mes. Los meses sin nada registrado no aparecen.",
                         "What came in and went out each month. Months with nothing recorded are not shown."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 IncomeExpenseChart(months: months)
             }
             .dincrCard()
@@ -112,9 +112,9 @@ private struct ReadingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(title).font(DincrFont.label).foregroundStyle(DincrColor.text2).accessibilityAddTraits(.isHeader)
-            Text(sentence).font(DincrFont.title2).foregroundStyle(DincrColor.text).fixedSize(horizontal: false, vertical: true)
-            Text(explanation).font(DincrFont.bodySmall).foregroundStyle(DincrColor.textMuted).fixedSize(horizontal: false, vertical: true)
+            Text(title).font(DincrFont.label).foregroundStyle(.dincrText2).accessibilityAddTraits(.isHeader)
+            Text(sentence).font(DincrFont.title2).foregroundStyle(.dincrText).fixedSize(horizontal: false, vertical: true)
+            Text(explanation).font(DincrFont.bodySmall).foregroundStyle(.dincrTextMuted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dincrCard()
@@ -131,19 +131,19 @@ private struct RisesCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Text(tx("¿En qué gastás más de lo normal este mes?", "Where are you spending more than usual this month?"))
-                .font(DincrFont.label).foregroundStyle(DincrColor.text2).accessibilityAddTraits(.isHeader)
+                .font(DincrFont.label).foregroundStyle(.dincrText2).accessibilityAddTraits(.isHeader)
             if rises.isEmpty {
                 Text(tx("En nada, por ahora: ninguna categoría pasa de lo que gastás normalmente.",
                         "Nothing so far: no category is above what you usually spend."))
-                    .font(DincrFont.body).foregroundStyle(DincrColor.text)
+                    .font(DincrFont.body).foregroundStyle(.dincrText)
             } else {
                 ForEach(Array(rises.enumerated()), id: \.offset) { _, row in
-                    Text(FinancialReading.riseLine(row, format: model.moneyFormat)).font(DincrFont.body).foregroundStyle(DincrColor.text)
+                    Text(FinancialReading.riseLine(row, format: model.moneyFormat)).font(DincrFont.body).foregroundStyle(.dincrText)
                 }
             }
             Text(tx("Comparamos este mes con el promedio de tus últimos meses. El mes todavía no termina.",
                     "We compare this month with the average of your last months. The month is not over yet."))
-                .font(DincrFont.bodySmall).foregroundStyle(DincrColor.textMuted)
+                .font(DincrFont.bodySmall).foregroundStyle(.dincrTextMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dincrCard()

@@ -38,7 +38,8 @@ final class OwnerWealthUITests: XCTestCase {
     }
 
     private func openWealth(_ app: XCUIApplication) {
-        tap("profile.jarvis", in: app)
+        app.tabBars.buttons.element(boundBy: 0).tap()
+        tap("owner.home.jarvis", in: app)
         tap("jarvis.section.wealth", in: app)
     }
 

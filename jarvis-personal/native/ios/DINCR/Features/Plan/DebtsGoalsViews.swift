@@ -111,7 +111,7 @@ private struct DebtList: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(debt.name ?? tx("Deuda", "Debt")).font(DincrFont.body.weight(.semibold))
-                        Text(DebtStyle.label(debt.debtType)).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        Text(DebtStyle.label(debt.debtType)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                     }
                     Spacer()
                     MoneyText(debt.remainingAmount)
@@ -122,7 +122,7 @@ private struct DebtList: View {
                     DincrProgressBar(fraction: fraction)
                     Text(tx("Pagado \(model.moneyFormat.string(amounts.paid)) de \(model.moneyFormat.string(amounts.original)) · te falta el \(Int((amounts.remainingFraction * 100).rounded())) %",
                             "Paid \(model.moneyFormat.string(amounts.paid)) of \(model.moneyFormat.string(amounts.original)) · \(Int((amounts.remainingFraction * 100).rounded())) % left"))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                         .accessibilityIdentifier("debt.progress.\(debt.id)")
                 }
                 if let monthly = debt.monthlyPayment { FigureRow(label: tx("Cuota mensual", "Monthly payment"), amount: monthly) }
@@ -130,7 +130,7 @@ private struct DebtList: View {
                 DebtPayoffLine(debt: debt)
                 // DEB-07a: the payments recorded for this debt (read-only, every plan).
                 Button(tx("Ver pagos", "See payments")) { history(debt) }
-                    .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.tint)
+                    .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint)
                     .frame(minHeight: 44)
                     .accessibilityIdentifier("debt.history.\(debt.id)")
                 if canWrite {
@@ -165,17 +165,17 @@ private struct DebtPaymentsSheet: View {
     var body: some View {
         NavigationStack {
             ScreenScroll(title: tx("Pagos registrados", "Recorded payments")) {
-                Text(debt.name ?? tx("Deuda", "Debt")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+                Text(debt.name ?? tx("Deuda", "Debt")).font(DincrFont.title2).foregroundStyle(.dincrText)
                 AsyncContent(load: { try await model.service.debtPayments(id: debt.id) }) { payments, _ in
                     if payments.isEmpty {
                         Text(tx("Todavía no registraste pagos de esta deuda en DINCR.", "You haven’t recorded payments for this debt in DINCR yet."))
-                            .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                            .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                             .accessibilityIdentifier("debt.payments.empty")
                     } else {
                         VStack(spacing: 0) {
                             ForEach(payments) { payment in
                                 HStack {
-                                    Text(payment.paymentDate.map(Day.label) ?? "—").font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+                                    Text(payment.paymentDate.map(Day.label) ?? "—").font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                                     Spacer()
                                     MoneyText(payment.amount, font: DincrFont.amount)
                                 }
@@ -189,7 +189,7 @@ private struct DebtPaymentsSheet: View {
                     }
                 }
                 Text(tx("Aparecen los pagos registrados con «Registrar pago».", "Payments recorded with “Record payment” appear here."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(tx("Cerrar", "Close")) { dismiss() } } }
         }
@@ -413,7 +413,7 @@ private struct GoalsContent: View {
     var body: some View {
         SectionHeader(title: tx("Metas", "Goals"))
         if snapshot.goals.isEmpty {
-            Text(tx("Todavía no tenés metas.", "You have no goals yet.")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(tx("Todavía no tenés metas.", "You have no goals yet.")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
         }
         ForEach(snapshot.goals) { goal in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
@@ -433,7 +433,7 @@ private struct GoalsContent: View {
                 if let date = goal.targetDate { InfoRow(label: tx("Fecha objetivo", "Target date"), value: Day.label(date)) }
                 // GO-1: what the goal takes, in plain words.
                 ForEach(Array(GoalPlan.lines(goal, today: Date(), normalLeft: snapshot.normalLeft, format: format).enumerated()), id: \.offset) { _, line in
-                    Text(line).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2).fixedSize(horizontal: false, vertical: true)
+                    Text(line).font(DincrFont.bodySmall).foregroundStyle(.dincrText2).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityIdentifier("goal.plan.\(goal.id)")
                 if canWrite {
@@ -455,7 +455,7 @@ private struct GoalsContent: View {
         }
         SectionHeader(title: tx("Planes de ahorro", "Savings plans"))
         if snapshot.plans.isEmpty {
-            Text(tx("Sin planes de ahorro.", "No savings plans.")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            Text(tx("Sin planes de ahorro.", "No savings plans.")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
         }
         ForEach(snapshot.plans) { plan in
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {

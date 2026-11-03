@@ -83,7 +83,7 @@ struct AutoContributionCard: View {
     @ViewBuilder private var form: some View {
             Text(tx("Si un monto fijo entra a tu Salvavidas (por ejemplo, una transferencia automática), DINCR lo suma a tu saldo según el plan.",
                     "If a fixed amount goes into your emergency fund (for example, an automatic transfer), DINCR adds it to your balance following the plan."))
-                .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                .font(DincrFont.caption).foregroundStyle(.dincrText2)
             Toggle(tx("Activar aportes automáticos", "Turn on automatic contributions"), isOn: $enabled)
                 .tint(DincrColor.tint)
                 .disabled(!canWrite || saving)
@@ -91,7 +91,7 @@ struct AutoContributionCard: View {
             if showsFields {
                 MoneyField(label: tx("Monto por aporte", "Amount per contribution"), text: $amount, identifier: "salvavidas.auto.amount")
                 VStack(alignment: .leading, spacing: DincrSpacing.s1) {
-                    Text(tx("Frecuencia", "Frequency")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                    Text(tx("Frecuencia", "Frequency")).font(DincrFont.label).foregroundStyle(.dincrText2)
                     Picker(tx("Frecuencia", "Frequency"), selection: $frequency) {
                         ForEach(SalvavidasAutoContribution.frequencies, id: \.self) { value in
                             Text(SalvavidasAutoContribution.frequencyLabel(value)).tag(value)
@@ -116,14 +116,14 @@ struct AutoContributionCard: View {
             }
             if fund.offersInterestRate {
                 VStack(alignment: .leading, spacing: DincrSpacing.s1) {
-                    Text(tx("Interés anual ganado (%)", "Annual interest earned (%)")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
+                    Text(tx("Interés anual ganado (%)", "Annual interest earned (%)")).font(DincrFont.label).foregroundStyle(.dincrText2)
                     TextField(tx("Interés anual ganado (%)", "Annual interest earned (%)"), text: $rate, prompt: Text("2,5"))
                         .keyboardType(.decimalPad)
                         .font(DincrFont.body.monospacedDigit())
                         .accessibilityIdentifier("salvavidas.auto.rate")
                     Text(tx("Estimamos los intereses con esta tasa; el banco acredita los reales.",
                             "We estimate the interest with this rate; your bank credits the real one."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
             }
             if let error {
