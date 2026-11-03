@@ -62,7 +62,7 @@ struct RootView: View {
             case .choosePlan:
                 PlanChooserView()
             case .profileSetup:
-                ProfileSetupView()
+                WelcomeThenProfileSetup()
             case .ready:
                 MainTabView()
             }
