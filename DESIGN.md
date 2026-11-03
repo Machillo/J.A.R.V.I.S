@@ -484,6 +484,13 @@ and changes only the scene, below a root that reads the server role (`dincrOwner
 - Everything else in this file still applies: no eyebrows, no stat-tile grids, money signed with
   `+` / `−` and never by color alone, unknown values "—", system materials only for blur.
 
+## Sign-in
+
+The sign-in comes before any plan or role, so it is one screen for everyone: the brand alone on a dark
+scene, which settles into a curved header above a plain sheet with the provider buttons (each one keeps
+its provider's branding). The opening is skipped with Reduce Motion. There is no password field: DINCR
+never sees a password.
+
 ## Personal appearance (APP-1, Owner-only experiment)
 
 A person may choose a limited, validated set of alternatives to the base above. Phase 1 offers it

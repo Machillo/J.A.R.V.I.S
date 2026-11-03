@@ -38,5 +38,10 @@
 	<string>$(DINCR_SUPABASE_URL)</string>
 	<key>DINCRSupabaseAnonKey</key>
 	<string>$(DINCR_SUPABASE_ANON_KEY)</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 </dict>
 </plist>
