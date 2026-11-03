@@ -11,6 +11,8 @@ from backend.sports.service import ensure_owner_sports_preferences, get_sports_c
 
 from backend.ai.owner_debt_block_store import apply_block, cancel_block, create_block
 from backend.ai.owner_debt_blocks import get_owner_debt_savings_blocks
+from backend.ai.owner_notices import get_owner_notices
+from backend.finance import owner_change_notices
 from backend.ai.strategy_dashboard import get_additional_card_report, get_owner_exact_distribution, get_premium_strategy_dashboard
 
 from backend.ai.profile_preferences import get_profile_preferences, update_profile_preferences
@@ -46,6 +48,17 @@ def jarvis_premium_initial_strategy():
 @router.get("/premium/strategy-dashboard")
 def jarvis_premium_strategy_dashboard():
     return get_premium_strategy_dashboard()
+
+
+@router.get("/premium/notices")
+def jarvis_notices():
+    """What changed in the Owner's money and what it means today (read-only)."""
+    return get_owner_notices()
+
+
+@router.post("/premium/notices/{notice_id}/read")
+def jarvis_notice_read(notice_id: str):
+    return owner_change_notices.mark_read(notice_id)
 
 
 @router.get("/premium/debt-savings-blocks")

@@ -37,15 +37,15 @@ class AppearanceTest {
         AppearanceCatalog.options.forEach { option -> assertTrue(option.key, option.values.size >= 2 && option.has(option.default) && option.has(option.classic)) }
     }
 
-    @Test fun freeBasicAndVipAlwaysSeeTheClassicLookWhateverIsStoredOnTheDevice() {
+    @Test fun freeBasicAndVipAlwaysSeeTheDefaultSceneWhateverIsStoredOnTheDevice() {
         val cache = CachedAppearance(accountId = 7, preferences = choice)
         listOf("free", "basic", "vip").forEach { plan ->
             val user = profile(7, "user", plan)
             assertFalse(AppearancePolicy.isPersonalizable(user))
-            assertEquals(AppearancePrefs.CLASSIC, AppearancePolicy.effective(user, saved = choice, cached = cache))
+            assertEquals(AppearancePrefs.OWNER_DEFAULT, AppearancePolicy.effective(user, saved = choice, cached = cache))
         }
-        assertEquals(AppearancePrefs.CLASSIC, AppearancePolicy.effective(null, saved = choice, cached = cache))
-        assertEquals("a role DINCR does not serve", AppearancePrefs.CLASSIC, AppearancePolicy.effective(profile(1, "admin"), choice, cache))
+        assertEquals(AppearancePrefs.OWNER_DEFAULT, AppearancePolicy.effective(null, saved = choice, cached = cache))
+        assertEquals("a role DINCR does not serve", AppearancePrefs.OWNER_DEFAULT, AppearancePolicy.effective(profile(1, "admin"), choice, cache))
     }
 
     @Test fun theOwnerSeesItsChoiceThenItsOwnCacheThenTheDefault() {

@@ -78,6 +78,8 @@ public actor FixtureBackend: HTTPTransport {
     var debtsWaitingForBank: [String: [String: Any]] = [:]
     /// The block that matured yesterday was paid into its debt (FixtureBackend+DebtBlocks.swift).
     var ownerMaturedBlockPaid = false
+    /// The Owner's sample notice was opened (FixtureBackend+Notices.swift).
+    var ownerNoticeRead = false
     /// Perfil → Atajos de iPhone (FixtureBackend+Shortcuts.swift): the account's current shortcut token
     /// (invented, never a real credential) and the captures received, by Idempotency-Key.
     var shortcutToken: String?
@@ -369,6 +371,7 @@ public actor FixtureBackend: HTTPTransport {
         }
 
         if let answer = debtBlocksRoute(method, path, body) { return answer }
+        if let answer = noticesRoute(method, path) { return answer }
         if let answer = planRoute(method, path, query, body) { return answer }
         if parts.starts(with: ["user-product", "free", "movements"]), parts.count == 4 { return editMovement(method, parts[3].removingPercentEncoding ?? parts[3], body) }
         if method == "GET", path == "/user-product/finance/debts/after-extra" { return ok(["items": debtsWaitingForBank]) }

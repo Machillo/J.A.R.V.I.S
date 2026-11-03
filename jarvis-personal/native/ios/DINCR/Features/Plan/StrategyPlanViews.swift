@@ -295,7 +295,7 @@ private struct BasicPlanDetail: View {
             Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(.dincrTint)
                 .accessibilityIdentifier("plan.month.why")
         }
-        .tint(DincrColor.tint)
+        .tint(OwnerColor.accent)
     }
 }
 
@@ -325,7 +325,7 @@ private struct DashboardPlanDetail: View {
             Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(.dincrTint)
                 .accessibilityIdentifier("plan.month.why")
         }
-        .tint(DincrColor.tint)
+        .tint(OwnerColor.accent)
 
         DisclosureGroup(isExpanded: $showsDetail) {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) { sections }
@@ -334,7 +334,7 @@ private struct DashboardPlanDetail: View {
             Text(tx("Ver todo el detalle", "See full details")).font(DincrFont.label).foregroundStyle(.dincrTint)
                 .accessibilityIdentifier("plan.month.detail")
         }
-        .tint(DincrColor.tint)
+        .tint(OwnerColor.accent)
     }
 
     @ViewBuilder private var sections: some View {

@@ -46,7 +46,7 @@ public enum AppearanceCatalog {
         AppearanceOption(
             key: "accent", defaultValue: "cian", classic: "teal",
             values: [
-                AppearanceOptionValue(id: "cian", es: "Azul", en: "Blue"),
+                AppearanceOptionValue(id: "cian", es: "Índigo", en: "Indigo"),
                 AppearanceOptionValue(id: "teal", es: "Verde azulado", en: "Teal"),
                 AppearanceOptionValue(id: "ciruela", es: "Ciruela", en: "Plum"),
                 AppearanceOptionValue(id: "tinta", es: "Tinta", en: "Ink"),

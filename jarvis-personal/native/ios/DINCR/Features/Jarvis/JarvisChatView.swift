@@ -155,7 +155,7 @@ struct JarvisChatView: View {
                 .font(DincrFont.body)
                 .padding(.horizontal, DincrSpacing.s3).padding(.vertical, DincrSpacing.s2)
                 .background(OwnerColor.surface, in: RoundedRectangle(cornerRadius: OwnerRadius.control, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: OwnerRadius.control, style: .continuous).stroke(DincrColor.fieldBorder))
+                .overlay(RoundedRectangle(cornerRadius: OwnerRadius.control, style: .continuous).stroke(OwnerColor.fieldBorder))
                 .focused($composing)
                 .submitLabel(.send)
                 .onSubmit(sendDraft)

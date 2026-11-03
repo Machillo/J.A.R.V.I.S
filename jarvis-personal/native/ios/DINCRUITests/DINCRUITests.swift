@@ -119,6 +119,29 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Cerrar sesión"].exists)
     }
 
+    func testANewUserSeesTheWelcomeStoryOnceThenTheSetup() {
+        // The argument hides a "seen" mark left by an earlier run on this simulator; the relaunch drops it.
+        let app = launch("newUser", extra: ["-DincrWelcomeStory", "-dincr.welcomeSeen.4201", "NO"])
+        let next = app.buttons["welcome.next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["welcome.skip"].exists)
+        XCTAssertTrue(app.staticTexts["Tu dinero, con propósito"].exists)
+        next.tap()
+        XCTAssertTrue(app.staticTexts["Sabé dónde estás"].waitForExistence(timeout: 5))
+        next.tap()
+        XCTAssertTrue(app.staticTexts["Sabé qué sigue"].waitForExistence(timeout: 5))
+        next.tap()
+        XCTAssertTrue(app.staticTexts["Tus datos, tus decisiones"].waitForExistence(timeout: 5))
+        XCTAssertEqual(next.label, "Empezar")
+        next.tap()
+        XCTAssertTrue(app.buttons["setup.continue"].waitForExistence(timeout: 5), "then the profile setup")
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "-dincr.welcomeSeen.4201" || $0 == "NO" }
+        app.launch()
+        XCTAssertTrue(app.buttons["setup.continue"].waitForExistence(timeout: 10), "only once")
+        XCTAssertFalse(app.buttons["welcome.next"].exists)
+    }
+
     func testNewUserGoesThroughProfileSetup() {
         let app = launch("newUser")
         let next = app.buttons["setup.continue"]

@@ -24,9 +24,9 @@ public struct DincrPrimaryButtonStyle: ButtonStyle {
 
         var body: some View {
             let tint = owner ? (configuration.isPressed ? OwnerColor.accentActive : OwnerColor.accent)
-                             : (configuration.isPressed ? DincrColor.tintPressed : DincrColor.tint)
+                             : (configuration.isPressed ? OwnerColor.accentActive : OwnerColor.accent)
             let fill = role == .destructive ? DincrColor.negative : tint
-            let label = owner && role != .destructive ? OwnerColor.onAccent : DincrColor.onTint
+            let label = owner && role != .destructive ? OwnerColor.onAccent : OwnerColor.onAccent
             ZStack {
                 configuration.label.opacity(isLoading ? 0 : 1)
                 if isLoading { ProgressView().tint(label) }
@@ -59,10 +59,10 @@ public struct DincrSecondaryButtonStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .font(DincrFont.title2)
-                .foregroundStyle(owner ? OwnerColor.onAccentContainer : DincrColor.onTintContainer)
+                .foregroundStyle(owner ? OwnerColor.onAccentContainer : OwnerColor.onAccentContainer)
                 .frame(maxWidth: .infinity, minHeight: 52)
                 .padding(.horizontal, DincrSpacing.s5)
-                .background(owner ? OwnerColor.accentContainer : DincrColor.tintContainer,
+                .background(owner ? OwnerColor.accentContainer : OwnerColor.accentContainer,
                             in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
                 .opacity(configuration.isPressed ? 0.85 : 1)
                 .contentShape(Rectangle())
@@ -77,4 +77,39 @@ public extension ButtonStyle where Self == DincrPrimaryButtonStyle {
 
 public extension ButtonStyle where Self == DincrSecondaryButtonStyle {
     static var dincrSecondary: DincrSecondaryButtonStyle { DincrSecondaryButtonStyle() }
+}
+
+/// A row of filter pills, one selected. Each is a real button of at least 44 pt that says it is selected;
+/// scrolls sideways instead of squeezing at large text sizes.
+public struct DincrFilterChips<Value: Hashable>: View {
+    let options: [Value]
+    @Binding var selection: Value
+    let title: (Value) -> String
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    public init(_ options: [Value], selection: Binding<Value>, title: @escaping (Value) -> String) {
+        self.options = options; _selection = selection; self.title = title
+    }
+
+    public var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DincrSpacing.s2) {
+                ForEach(options, id: \.self) { option in
+                    let selected = option == selection
+                    Button { selection = option } label: {
+                        Text(title(option))
+                            .font(DincrFont.bodySmall.weight(.semibold))
+                            .foregroundStyle(selected ? (owner ? OwnerColor.onAccent : OwnerColor.onAccent) : (owner ? OwnerColor.text2 : OwnerColor.text2))
+                            .padding(.horizontal, DincrSpacing.s4)
+                            .frame(minHeight: 44)
+                            .background(selected ? (owner ? OwnerColor.accent : OwnerColor.accent) : (owner ? OwnerColor.surface : OwnerColor.surface), in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
 }

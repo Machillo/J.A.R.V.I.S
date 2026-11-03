@@ -25,7 +25,7 @@ struct ProfileSetupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DincrSpacing.s6) {
                     ProgressView(value: Double(step + 1), total: Double(totalSteps))
-                        .tint(DincrColor.tint)
+                        .tint(OwnerColor.accent)
                         .accessibilityLabel(tx("Paso \(step + 1) de \(totalSteps)", "Step \(step + 1) of \(totalSteps)"))
                     Group {
                         switch step {
@@ -129,7 +129,7 @@ struct ProfileSetupView: View {
                             Text(label).font(DincrFont.body).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
                             Spacer()
                             Image(systemName: goal == id ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(goal == id ? DincrColor.tint : DincrColor.fieldBorder)
+                                .foregroundStyle(goal == id ? OwnerColor.accent : OwnerColor.fieldBorder)
                         }
                         .padding(.vertical, DincrSpacing.s3)
                         .frame(minHeight: 52)
@@ -137,11 +137,11 @@ struct ProfileSetupView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(goal == id ? [.isSelected] : [])
-                    if id != goals.last?.0 { Divider().overlay(DincrColor.line) }
+                    if id != goals.last?.0 { Divider().overlay(OwnerColor.border) }
                 }
             }
             .padding(.horizontal, DincrSpacing.s4)
-            .background(DincrColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
+            .background(OwnerColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
             .sensoryFeedback(.selection, trigger: goal)
         }
     }
@@ -161,7 +161,7 @@ struct ProfileSetupView: View {
                 Toggle(isOn: $alsoOtherCurrency) {
                     Text(tx("También uso \(baseCurrency == "CRC" ? "USD" : "CRC")", "I also use \(baseCurrency == "CRC" ? "USD" : "CRC")"))
                 }
-                .tint(DincrColor.tint)
+                .tint(OwnerColor.accent)
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                     Text(tx("Formato de números", "Number format")).font(DincrFont.label).foregroundStyle(.dincrText2)
                     Picker(tx("Formato de números", "Number format"), selection: $separators) {
@@ -231,7 +231,7 @@ struct ProfileSetupView: View {
                     BankLogo(brand: brand, size: 44)
                     Spacer(minLength: 0)
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected ? DincrColor.tint : DincrColor.fieldBorder)
+                        .foregroundStyle(selected ? OwnerColor.accent : OwnerColor.fieldBorder)
                         .accessibilityHidden(true)
                 }
                 Text(name).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
@@ -243,9 +243,9 @@ struct ProfileSetupView: View {
             }
             .padding(DincrSpacing.s3)
             .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-            .background(DincrColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
+            .background(OwnerColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous)
-                .strokeBorder(selected ? DincrColor.tint : DincrColor.line, lineWidth: selected ? 2 : 1))
+                .strokeBorder(selected ? OwnerColor.accent : OwnerColor.border, lineWidth: selected ? 2 : 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -298,10 +298,10 @@ struct DincrTextField: View {
                 .focused($focused)
                 .padding(.horizontal, DincrSpacing.s4)
                 .frame(minHeight: 52)
-                .background(DincrColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+                .background(OwnerColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous)
-                        .strokeBorder(error != nil ? DincrColor.negative : (focused ? DincrColor.tint : DincrColor.fieldBorder), lineWidth: focused || error != nil ? 2 : 1)
+                        .strokeBorder(error != nil ? DincrColor.negative : (focused ? OwnerColor.accent : OwnerColor.fieldBorder), lineWidth: focused || error != nil ? 2 : 1)
                 )
             if let error {
                 Label(error, systemImage: "exclamationmark.circle")

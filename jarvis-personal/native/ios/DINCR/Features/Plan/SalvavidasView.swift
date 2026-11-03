@@ -225,7 +225,7 @@ private struct OwnerSalvavidasContent: View {
                             MoneyText(expense.monthlyAmount, font: DincrFont.bodySmall.monospacedDigit())
                         }
                     }
-                    .tint(DincrColor.tint)
+                    .tint(OwnerColor.accent)
                     .disabled(!canWrite || saving)
                     .accessibilityIdentifier("salvavidas.protect.\(expense.lineId ?? 0)")
                 }
@@ -249,7 +249,7 @@ private struct SalvavidasDetails<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("salvavidas.details")
         }
-        .tint(DincrColor.tint)
+        .tint(OwnerColor.accent)
         .dincrCard()
     }
 }
@@ -267,7 +267,7 @@ private struct ObligationLines: View {
             ForEach(Array(milestones.enumerated()), id: \.offset) { _, milestone in
                 HStack {
                     Image(systemName: milestone.reached == true ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(milestone.reached == true ? DincrColor.positive : DincrColor.textMuted)
+                        .foregroundStyle(milestone.reached == true ? DincrColor.positive : OwnerColor.textMuted)
                         .accessibilityHidden(true)
                     let months = milestone.months ?? 0
                     Text(tx("\(months) \(months == 1 ? "mes" : "meses")", "\(months) \(months == 1 ? "month" : "months")")).font(DincrFont.bodySmall)

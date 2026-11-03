@@ -1,40 +1,45 @@
 import SwiftUI
 
-/// DINCR Owner identity (the single Owner account and its personal layer, JARVIS).
-///
-/// The Owner is not a plan: DESIGN.md's "plans don't repaint the app" still holds for Free, Basic and
-/// VIP. The Owner's screens keep DINCR's structure, type and components and change only the scene: the
-/// platform's own look, a flat grouped background, plain surfaces without borders and one blue accent
+/// DINCR's scene for every account (historical name: it began as the Owner's identity). Plans don't
+/// repaint the app. The screens keep DINCR's structure, type and components on the scene: the
+/// platform's own look, a flat grouped background, plain surfaces without borders and one indigo accent
 /// (DESIGN.md → Owner identity). Light and dark both exist, because DINCR follows the system
 /// appearance, and keep WCAG AA (≥ 4.5:1) for text on every Owner surface.
 ///
-/// Screens never read these directly to decide *whether* they are the Owner's: the root sets
-/// `dincrOwnerAppearance` from the server role, and the shared modifiers and components read it.
+/// The app's root sets `dincrOwnerAppearance`, and the shared modifiers and components read it.
 public enum OwnerColor {
     /// The screen background: one flat color (the stops stay so both apps read the same tokens).
-    public static let backgroundCenter = Color(light: 0xF2F2F7, dark: 0x000000)
-    public static let backgroundMiddle = Color(light: 0xF2F2F7, dark: 0x000000)
-    public static let backgroundEdge = Color(light: 0xF2F2F7, dark: 0x000000)
+    public static let backgroundCenter = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
+    public static let backgroundMiddle = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
+    public static let backgroundEdge = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
     /// Cards and grouped rows.
-    public static let surface = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
+    public static let surface = Color(light: 0xFFFFFF, dark: 0x1C1E3A)
     /// Nested regions inside a surface: icon wells, fields.
-    public static let surface2 = Color(light: 0xEFEFF4, dark: 0x2C2C2E)
+    public static let surface2 = Color(light: 0xEFEFF4, dark: 0x2A2D52)
     /// Hairline around Owner surfaces (decorative only; never the only boundary of a control).
-    public static let border = Color(light: 0xD1D1D6, dark: 0x38383A)
+    /// The boundary of a field (3:1 on its surface).
+    public static let fieldBorder = Color(light: 0x86868B, dark: 0x8A8DB0)
+    public static let border = Color(light: 0xD1D1D6, dark: 0x33365C)
     /// The Owner accent: actions, links, selection, JARVIS.
-    public static let accent = Color(light: 0x0066CC, dark: 0x2997FF)
+    public static let accent = Color(light: 0x4A4FD9, dark: 0x8F95FF)
     /// Pressed / active state of the accent.
-    public static let accentActive = Color(light: 0x0055AA, dark: 0x64B0FF)
-    public static let onAccent = Color(light: 0xFFFFFF, dark: 0x000000)
+    public static let accentActive = Color(light: 0x3B3FB8, dark: 0xB0B4FF)
+    public static let onAccent = Color(light: 0xFFFFFF, dark: 0x0B0C2A)
     /// Tonal container of the accent: secondary buttons, quick actions, icon wells.
-    public static let accentContainer = Color(light: 0xE3EFFC, dark: 0x0B2A4A)
-    public static let onAccentContainer = Color(light: 0x003D7A, dark: 0xBFDFFF)
+    public static let accentContainer = Color(light: 0xE8E9FC, dark: 0x24275C)
+    public static let onAccentContainer = Color(light: 0x2A2D8F, dark: 0xD6D8FF)
     public static let positive = Color(light: 0x08734F, dark: 0x30D158)
     public static let text = Color(light: 0x1C1C1E, dark: 0xF5F5F7)
-    public static let text2 = Color(light: 0x4F4F55, dark: 0xAEAEB2)
-    public static let textMuted = Color(light: 0x636366, dark: 0xA1A1A6)
+    public static let text2 = Color(light: 0x4F4F55, dark: 0xB4B6CC)
+    public static let textMuted = Color(light: 0x636366, dark: 0xA3A5BD)
+    /// The solid top of the Owner's Hoy, with its text: one color in both schemes, white stays AA on it.
+    public static let hero = Color(light: 0x2A2E6E, dark: 0x2A2E6E)
+    public static let onHero = Color(light: 0xFFFFFF, dark: 0xFFFFFF)
+    public static let onHero2 = Color(light: 0xD9DBF5, dark: 0xD9DBF5)
+    /// A secondary button on the hero.
+    public static let heroControl = Color(light: 0x3D4290, dark: 0x3D4290)
     /// Chart series beyond income/expense. Color always repeats a meaning that is also in text.
-    public static let chartCyan = Color(light: 0x0066CC, dark: 0x2997FF)
+    public static let chartCyan = Color(light: 0x4A4FD9, dark: 0x8F95FF)
     public static let chartGreen = Color(light: 0x08734F, dark: 0x30D158)
     public static let chartOrange = Color(light: 0xB4501F, dark: 0xFF855C)
     public static let chartPurple = Color(light: 0x7A45C2, dark: 0xB078F2)
@@ -69,8 +74,8 @@ private struct OwnerAppearanceKey: EnvironmentKey {
 }
 
 public extension EnvironmentValues {
-    /// True only below the root of a signed-in Owner (server role in `/auth/me`). Shared modifiers
-    /// and components switch to the Owner scene; every other account keeps DINCR's default look.
+    /// True below the app's root. Shared modifiers and components use the scene; a plain preview or
+    /// test without the root keeps the DESIGN.md tokens.
     var dincrOwnerAppearance: Bool {
         get { self[OwnerAppearanceKey.self] }
         set { self[OwnerAppearanceKey.self] = newValue }
@@ -252,6 +257,27 @@ public struct OwnerQuickActionStyle: ButtonStyle {
             .background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: OwnerRadius.control, style: .continuous))
             .opacity(configuration.isPressed ? 0.8 : 1)
             .contentShape(Rectangle())
+    }
+}
+
+/// An action on the hero's color: a white pill for the main one, a lighter blue for the rest. At least
+/// 44 pt, and it grows with the text.
+public struct OwnerHeroButtonStyle: ButtonStyle {
+    let prominent: Bool
+
+    public init(prominent: Bool) {
+        self.prominent = prominent
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DincrFont.bodySmall.weight(.semibold))
+            .foregroundStyle(prominent ? OwnerColor.hero : OwnerColor.onHero)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, DincrSpacing.s3)
+            .background(prominent ? OwnerColor.onHero : OwnerColor.heroControl, in: Capsule())
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .contentShape(Capsule())
     }
 }
 

@@ -1,5 +1,6 @@
 package com.dincr.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -124,6 +125,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
     var lastTab by rememberSaveable { mutableStateOf(Destination.HOME) }
     val current = owner ?: lastTab
     SideEffect { owner?.let { lastTab = it } }
+    val onHoy = entry?.destination?.route == "home"
     fun select(destination: Destination) { lastTab = destination; nav.tab(destination) }
     val snackbar = remember { SnackbarHostState() }
     val notice by model.notice.collectAsStateWithLifecycle()
@@ -162,7 +164,8 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                         NavigationRailItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label) }, colors = dincrNavRailItemColors())
                     }
                 }
-                Column(Modifier.weight(1f).statusBarsPadding()) {
+                // Hoy continues its hero's color behind the status bar.
+                Column(Modifier.weight(1f).then(if (onHoy) Modifier.background(HomeHeroColor) else Modifier).statusBarsPadding()) {
                     GlobalBanners(model)
                     Box(Modifier.weight(1f)) {
                         NavHost(controller, startDestination = Destination.HOME.route) {

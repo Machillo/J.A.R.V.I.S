@@ -51,7 +51,7 @@ private struct RetirementContent: View {
             }
             ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                 Text(line).font(index == 0 ? DincrFont.title2 : DincrFont.bodySmall)
-                    .foregroundStyle(index == 0 ? DincrColor.text : DincrColor.text2).fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(index == 0 ? OwnerColor.text : OwnerColor.text2).fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

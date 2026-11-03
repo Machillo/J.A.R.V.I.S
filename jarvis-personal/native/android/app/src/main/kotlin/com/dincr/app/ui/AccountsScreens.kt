@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,7 @@ import com.dincr.data.FinancialIdentity
 import com.dincr.data.MailCandidate
 import com.dincr.data.OpsFlag
 import com.dincr.design.Dincr
+import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.DincrCard
 import com.dincr.design.EmptyState
 import com.dincr.design.generated.DincrSpacing
@@ -90,6 +92,8 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
     LifecycleResumeEffect(Unit) { data.reload(); onPauseOrDispose { } }
     val canRead = model.profile.collectAsStateWithLifecycle().value?.canReadMail == true
     var declaring by remember { mutableStateOf(false) }
+    var addingBank by remember { mutableStateOf(false) }
+    val profile by model.profile.collectAsStateWithLifecycle()
     DetailScaffold(tx("Cuentas", "Accounts"), nav::back) {
         if (accountsPaused(model)) return@DetailScaffold
         Caption(if (canRead) tx("Tus bancos según los avisos que DINCR leyó. DINCR no muestra saldos ni números de cuenta completos.",
@@ -98,7 +102,12 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
             "Your own accounts, to recognize transfers between them. DINCR shows no balances or full account numbers."))
         // An own account no notice came from (the other bank of a transfer): marking it lets DINCR
         // recognise transfers between your accounts instead of offering them as spending.
-        TextButton({ declaring = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.declare")) {
+        // The Owner, whose mail is connected, adds a bank through the guided flow.
+        if (profile?.isOwner == true) {
+            Box(Modifier.fillMaxWidth().testTag("accounts.addBank")) {
+                DincrPrimaryButton(tx("Agregar cuenta", "Add account"), { addingBank = true }, modifier = Modifier.fillMaxWidth())
+            }
+        } else TextButton({ declaring = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("accounts.declare")) {
             Text(tx("Agregar cuenta propia", "Add an own account"), color = Dincr.colors.tint)
         }
         LoadContent(data) { d ->
@@ -126,6 +135,7 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
             }
         }
     }
+    if (addingBank) AddBankFlow(model) { addingBank = false; data.reload() }
     if (declaring) DeclareOwnAccountSheet(model, onDismiss = { declaring = false }) { message ->
         declaring = false; model.showNotice(message); data.reload()
     }
@@ -136,9 +146,9 @@ fun AccountsScreen(model: AppModel, nav: Navigator) {
  * from. Only the last 4 digits are asked for (and stored). iOS: `DeclareOwnAccountForm`.
  */
 @Composable
-private fun DeclareOwnAccountSheet(model: AppModel, onDismiss: () -> Unit, onSaved: (String) -> Unit) {
-    var institution by remember { mutableStateOf("bac") }
-    var institutionName by remember { mutableStateOf("") }
+internal fun DeclareOwnAccountSheet(model: AppModel, onDismiss: () -> Unit, institutionCode: String = "bac", institutionLabel: String = "", onSaved: (String) -> Unit) {
+    var institution by remember { mutableStateOf(institutionCode) }
+    var institutionName by remember { mutableStateOf(institutionLabel) }
     var last4 by remember { mutableStateOf("") }
     var currency by remember { mutableStateOf("CRC") }
     var displayName by remember { mutableStateOf("") }

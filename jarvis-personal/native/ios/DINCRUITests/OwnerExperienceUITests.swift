@@ -55,6 +55,14 @@ final class OwnerExperienceUITests: XCTestCase {
 
     // MARK: Today
 
+    func testOwnerTodayHeroShowsTheFigureAndOpensTheEditor() {
+        let app = launch()
+        XCTAssertTrue(element("owner.home.status.amount", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("owner.home.status.facts", in: app).exists)
+        element("owner.home.addExpense", in: app).tap()
+        XCTAssertTrue(element("editor.amount", in: app).waitForExistence(timeout: 10))
+    }
+
     func testOwnerTodayAnswersMoneyAttentionAgendaAndJarvis() {
         let app = launch()
         XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))
@@ -135,6 +143,19 @@ final class OwnerExperienceUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         reveal("owner.home.attention.all", in: app)
+    }
+
+    func testANoticeSaysWhatChangedAndWhatTheSavingsDo() {
+        let app = launch()
+        XCTAssertTrue(element("owner.home.notices", in: app).waitForExistence(timeout: 10))
+        element("owner.home.notices", in: app).tap()
+        let notice = element("owner.notices.n1", in: app)
+        XCTAssertTrue(notice.waitForExistence(timeout: 10))
+        notice.tap()
+        XCTAssertTrue(element("owner.notice.changed", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("owner.notice.destination", in: app).exists)
+        XCTAssertTrue(text("De momento no", in: app).exists, "the automatic savings' decision, with its reason")
+        XCTAssertTrue(element("owner.notice.plan", in: app).exists)
     }
 
     // MARK: Chat scope

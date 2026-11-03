@@ -62,7 +62,7 @@ struct RootView: View {
             case .choosePlan:
                 PlanChooserView()
             case .profileSetup:
-                ProfileSetupView()
+                WelcomeThenProfileSetup()
             case .ready:
                 MainTabView()
             }
@@ -89,7 +89,7 @@ private struct BootView: View {
     var body: some View {
         VStack(spacing: DincrSpacing.s3) {
             BrandMark(size: 56)
-            ProgressView().tint(DincrColor.tint)
+            ProgressView().tint(OwnerColor.accent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .dincrScreenBackground()
@@ -137,9 +137,9 @@ struct BrandMark: View {
     var body: some View {
         Text("D")
             .font(.system(size: size * 0.55, weight: .heavy, design: .rounded))
-            .foregroundStyle(DincrColor.onTint)
+            .foregroundStyle(OwnerColor.onAccent)
             .frame(width: size, height: size)
-            .background(DincrColor.tint, in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+            .background(OwnerColor.accent, in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
             .accessibilityHidden(true)
     }
 }

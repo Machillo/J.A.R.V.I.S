@@ -9,6 +9,8 @@ struct HomeBlocks: View {
     let home: HomeToday
     var idPrefix = "home"
     var ownerStyle = false
+    /// The key figure and its facts are on the Owner's hero, so the status block keeps only the detail.
+    var figureInHero = false
     /// Switches to the Movimientos tab when the screen can (public Hoy); otherwise it is pushed.
     var openMovements: (() -> Void)?
     let reload: () async -> Void
@@ -17,7 +19,7 @@ struct HomeBlocks: View {
     var body: some View {
         let links = HomeLinkContext(editor: $editor, openMovements: openMovements)
         VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-            HomeStatusCard(status: home.status, idPrefix: idPrefix, ownerStyle: ownerStyle, links: links)
+            HomeStatusCard(status: home.status, idPrefix: idPrefix, ownerStyle: ownerStyle, figureInHero: figureInHero, links: links)
             if let attention = home.attention {
                 AttentionSection(today: attention, idPrefix: "\(idPrefix).attention", ownerStyle: ownerStyle)
             }
@@ -91,6 +93,7 @@ private struct HomeStatusCard: View {
     let status: HomeStatus
     let idPrefix: String
     let ownerStyle: Bool
+    let figureInHero: Bool
     let links: HomeLinkContext
     @State private var explains = false
     @Environment(\.moneyFormat) private var format
@@ -99,16 +102,18 @@ private struct HomeStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             BlockHeader(title: tx("Estado de hoy", "Today’s status"), ownerStyle: ownerStyle)
-            if let cycle = status.cycle {
-                Text(cycleText(cycle)).font(DincrFont.caption).foregroundStyle(.dincrText2)
+            if !figureInHero, let cycle = status.cycle {
+                Text(HomeStatusCopy.cycle(cycle)).font(DincrFont.caption).foregroundStyle(.dincrText2)
                     .accessibilityIdentifier("\(idPrefix).status.cycle")
             }
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 VStack(alignment: .leading, spacing: DincrSpacing.s1) {
-                    Text(headline).font(DincrFont.label).foregroundStyle(.dincrText2)
+                    if !figureInHero { Text(headline).font(DincrFont.label).foregroundStyle(.dincrText2) }
                     if let amount = status.amount {
-                        MoneyText(amount, font: DincrFont.displayAmount)
-                            .accessibilityIdentifier("\(idPrefix).status.amount")
+                        if !figureInHero {
+                            MoneyText(amount, font: DincrFont.displayAmount)
+                                .accessibilityIdentifier("\(idPrefix).status.amount")
+                        }
                     } else {
                         unknown
                     }
@@ -133,7 +138,7 @@ private struct HomeStatusCard: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
-                facts
+                if !figureInHero { facts }
                 if let paid = status.debtPaid { line(tx("Pagado a deudas", "Paid to debts"), paid, id: "debtPaid") }
                 if let owed = status.debtBalance { line(tx("Deuda pendiente", "Outstanding debt"), owed, id: "debtBalance") }
                 if let budget = status.budget {
@@ -175,7 +180,7 @@ private struct HomeStatusCard: View {
     private var unknown: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             HStack(alignment: .center, spacing: DincrSpacing.s2) {
-                Text("—").font(DincrFont.displayAmount).foregroundStyle(.dincrText2).accessibilityHidden(true)
+                if !figureInHero { Text("—").font(DincrFont.displayAmount).foregroundStyle(.dincrText2).accessibilityHidden(true) }
                 Text(tx("Aún no puedo calcularlo", "I can’t calculate this yet")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
                 Spacer(minLength: 0)
                 Button { explains.toggle() } label: {
@@ -216,25 +221,6 @@ private struct HomeStatusCard: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "22 sep – 21 oct · se paga el 5 nov": the statement Ingresos, Gastos and the result belong to.
-    private func cycleText(_ cycle: HomeStatus.Cycle) -> String {
-        let period = "\(shortDay(cycle.start)) – \(shortDay(cycle.end))"
-        guard let payment = cycle.payment else { return period }
-        return tx("\(period) · se paga el \(shortDay(payment))", "\(period) · paid on \(shortDay(payment))")
-    }
-
-    private func shortDay(_ day: String) -> String {
-        let parser = DateFormatter()
-        parser.calendar = Calendar(identifier: .gregorian)
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let date = parser.date(from: day) else { return day }
-        let output = DateFormatter()
-        output.locale = Locale(identifier: AppLanguage.current == .spanish ? "es_CR" : "en_US")
-        output.setLocalizedDateFormatFromTemplate("dMMM")
-        return output.string(from: date)
-    }
-
     private func line(_ label: String, _ amount: Decimal, id: String) -> some View {
         HStack {
             Text(label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
@@ -251,6 +237,27 @@ private struct HomeStatusCard: View {
         let count = pending.count == 1 ? tx("1 pago", "1 payment") : tx("\(pending.count) pagos", "\(pending.count) payments")
         guard let total = pending.total else { return tx("\(count) · monto por confirmar", "\(count) · amount to confirm") }
         return "\(count) · \(format.string(total))"
+    }
+}
+
+/// "22 sep – 21 oct · se paga el 5 nov": the statement Ingresos, Gastos and the result belong to.
+enum HomeStatusCopy {
+    static func cycle(_ cycle: HomeStatus.Cycle) -> String {
+        let period = "\(shortDay(cycle.start)) – \(shortDay(cycle.end))"
+        guard let payment = cycle.payment else { return period }
+        return tx("\(period) · se paga el \(shortDay(payment))", "\(period) · paid on \(shortDay(payment))")
+    }
+
+    private static func shortDay(_ day: String) -> String {
+        let parser = DateFormatter()
+        parser.calendar = Calendar(identifier: .gregorian)
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: day) else { return day }
+        let output = DateFormatter()
+        output.locale = Locale(identifier: AppLanguage.current == .spanish ? "es_CR" : "en_US")
+        output.setLocalizedDateFormatFromTemplate("dMMM")
+        return output.string(from: date)
     }
 }
 
@@ -277,7 +284,7 @@ private struct MissingInputs: View {
             }
         }
         .padding(DincrSpacing.s3)
-        .background(DincrColor.surface2, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
+        .background(OwnerColor.surface2, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
     }
 }
 
@@ -319,7 +326,7 @@ private struct HomeNextCard: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 HStack(alignment: .top, spacing: DincrSpacing.s3) {
                     Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
-                        .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+                        .frame(width: 36, height: 36).background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
@@ -437,7 +444,7 @@ private struct HomeShortcuts: View {
     private func tile(_ shortcut: HomeShortcut) -> some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Image(systemName: symbol(shortcut)).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
-                .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+                .frame(width: 36, height: 36).background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                 .accessibilityHidden(true)
             Text(title(shortcut)).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)
                 .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
