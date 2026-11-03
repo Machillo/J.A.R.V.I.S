@@ -33,6 +33,12 @@ public enum OwnerColor {
     public static let text = Color(light: 0x1C1C1E, dark: 0xF5F5F7)
     public static let text2 = Color(light: 0x4F4F55, dark: 0xAEAEB2)
     public static let textMuted = Color(light: 0x636366, dark: 0xA1A1A6)
+    /// The solid top of the Owner's Hoy, with its text: one color in both schemes, white stays AA on it.
+    public static let hero = Color(light: 0x1B2BD6, dark: 0x1B2BD6)
+    public static let onHero = Color(light: 0xFFFFFF, dark: 0xFFFFFF)
+    public static let onHero2 = Color(light: 0xDDE1FF, dark: 0xDDE1FF)
+    /// A secondary button on the hero.
+    public static let heroControl = Color(light: 0x3545E6, dark: 0x3545E6)
     /// Chart series beyond income/expense. Color always repeats a meaning that is also in text.
     public static let chartCyan = Color(light: 0x0066CC, dark: 0x2997FF)
     public static let chartGreen = Color(light: 0x08734F, dark: 0x30D158)
@@ -252,6 +258,27 @@ public struct OwnerQuickActionStyle: ButtonStyle {
             .background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: OwnerRadius.control, style: .continuous))
             .opacity(configuration.isPressed ? 0.8 : 1)
             .contentShape(Rectangle())
+    }
+}
+
+/// An action on the hero's color: a white pill for the main one, a lighter blue for the rest. At least
+/// 44 pt, and it grows with the text.
+public struct OwnerHeroButtonStyle: ButtonStyle {
+    let prominent: Bool
+
+    public init(prominent: Bool) {
+        self.prominent = prominent
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DincrFont.bodySmall.weight(.semibold))
+            .foregroundStyle(prominent ? OwnerColor.hero : OwnerColor.onHero)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, DincrSpacing.s3)
+            .background(prominent ? OwnerColor.onHero : OwnerColor.heroControl, in: Capsule())
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .contentShape(Capsule())
     }
 }
 

@@ -37,10 +37,8 @@ struct MovementsView: View {
     var body: some View {
         List {
             Section {
-                Picker(tx("Tipo", "Type"), selection: $filter) {
-                    ForEach(Filter.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                DincrFilterChips(Filter.allCases, selection: $filter) { $0.title }
+                .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
                 .sensoryFeedback(.selection, trigger: filter)

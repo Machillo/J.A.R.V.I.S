@@ -2,9 +2,9 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// The Owner's "Hoy" (DINCR Owner; UX-6). The Owner is Kenneth's identity, not a plan: JARVIS comes
-/// first, as it historically did, and the financial blocks follow.
-/// 0. JARVIS — who and when (greeting), the one entry to JARVIS and the next agenda events;
+/// The Owner's "Hoy" (DINCR Owner; UX-6). The Owner is an identity, not a plan.
+/// 0. The hero (`OwnerHomeHero`) — greeting, the key figure and the actions, among them the one entry
+///    to JARVIS — and, on the sheet below, the next agenda events;
 /// 1–4. the same four blocks as the public Hoy (Estado de hoy, Para atender, Qué sigue, Accesos
 ///    rápidos), from the command center while `vip_intelligence` is on (Basic's sources otherwise).
 /// Read-only: opening it never writes. The money and the agenda load on their own, so a failing
@@ -15,31 +15,45 @@ struct OwnerHomeView: View {
     @State private var home: LoadState<HomeToday> = .loading
     @State private var agenda: LoadState<[JarvisEvent]> = .loading
     @State private var unreadNotices = 0
+    @State private var editor: EditorRequest?
 
     var body: some View {
         let tier = ownerTier
         ScrollView {
-            VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-                header
-                jarvisSection
-                upcomingSection
-                PendingDollarsCard(openMovements: openMovements)
-                financesSection(tier)
+            VStack(spacing: 0) {
+                hero
+                VStack(alignment: .leading, spacing: DincrSpacing.s4) {
+                    upcomingSection
+                    PendingDollarsCard(openMovements: openMovements)
+                    financesSection(tier)
+                }
+                .padding(.horizontal, DincrSpacing.s4)
+                .padding(.top, DincrSpacing.s2)
+                .padding(.bottom, DincrSpacing.s8)
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+                .background(OwnerColor.backgroundMiddle, in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous))
             }
-            .padding(.horizontal, DincrSpacing.s4)
-            .padding(.bottom, DincrSpacing.s8)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("owner.home")
         }
-        .dincrScreenBackground()
+        // The hero's color behind the top (also when pulled down); the sheet covers it while scrolling.
+        .background(alignment: .top) {
+            OwnerColor.backgroundMiddle.ignoresSafeArea()
+                .overlay(alignment: .top) { OwnerColor.hero.frame(height: 480).ignoresSafeArea() }
+        }
         .navigationTitle(tx("Hoy", "Today"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(OwnerColor.hero, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .sheet(item: $editor) { request in
+            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await loadHome(tier) } }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink { OwnerNoticesView() } label: {
-                    Image(systemName: unreadNotices > 0 ? "bell.badge" : "bell")
+                    Image(systemName: unreadNotices > 0 ? "bell.badge" : "bell").foregroundStyle(OwnerColor.onHero)
                 }
                 .accessibilityLabel(unreadNotices > 0 ? tx("Avisos, \(unreadNotices) sin leer", "Notices, \(unreadNotices) unread") : tx("Avisos", "Notices"))
                 .accessibilityIdentifier("owner.home.notices")
@@ -59,21 +73,12 @@ struct OwnerHomeView: View {
     /// The Owner's financial blocks read the command center while VIP intelligence is on (as before).
     private var ownerTier: HomeToday.Tier { model.flags.isEnabled(.vipIntelligence) ? .vip : .basic }
 
-    // MARK: 0. JARVIS — greeting
+    // MARK: 0. The hero
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: DincrSpacing.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greeting).font(DincrFont.title2.weight(.regular)).foregroundStyle(OwnerColor.text2)
-                if let name = model.profile?.firstName, !name.isEmpty {
-                    Text("\(name).").font(.largeTitle.weight(.bold)).foregroundStyle(OwnerColor.text)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("owner.home.greeting")
-        }
-        .padding(.top, DincrSpacing.s2)
+    private var hero: some View {
+        let status: HomeStatus? = if case .loaded(let value) = home { value.status } else { nil }
+        return OwnerHomeHero(greeting: greeting, name: model.profile?.firstName, status: status, cycle: status?.cycle.map(HomeStatusCopy.cycle),
+                             register: { editor = EditorRequest(kind: $0) })
     }
 
     private var greeting: String {
@@ -94,7 +99,7 @@ struct OwnerHomeView: View {
         case .failed(let message):
             ErrorStateView(message: message) { Task { await loadHome(tier) } }
         case .loaded(let value):
-            HomeBlocks(home: value, idPrefix: "owner.home", ownerStyle: true, openMovements: openMovements) { await loadHome(tier) }
+            HomeBlocks(home: value, idPrefix: "owner.home", ownerStyle: true, figureInHero: true, openMovements: openMovements) { await loadHome(tier) }
         }
     }
 
@@ -128,19 +133,6 @@ struct OwnerHomeView: View {
                     OwnerAgendaRow(event: event)
                 }
             }
-        }
-    }
-
-    // MARK: 0. JARVIS — the one way in
-
-    private var jarvisSection: some View {
-        OwnerGroup {
-            NavigationLink(value: ProfileRoute.jarvis) {
-                OwnerRow(symbol: "sparkles", title: "JARVIS",
-                         detail: tx("Chat, agenda, estrategia, mi dinero y todo lo demás", "Chat, calendar, strategy, my money and everything else"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.jarvis")
         }
     }
 

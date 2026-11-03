@@ -1,6 +1,10 @@
 package com.dincr.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +13,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -30,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +48,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -121,18 +131,55 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
     }
     PullToRefreshBox(refreshing, onRefresh = { if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
         modifier = Modifier.fillMaxSize().padding(padding).testTag("home.refresh")) {
-        ScreenColumn {
-            if (owner && agenda != null) {
-                OwnerJarvisSpace(profile?.firstName.orEmpty(), agenda, nav)
-            } else {
+        if (owner && agenda != null) {
+            OwnerHomeContent(model, profile?.firstName.orEmpty(), home, agenda, nav)
+        } else {
+            ScreenColumn {
                 Text(tx("Hola, ${profile?.firstName.orEmpty()}", "Hi, ${profile?.firstName.orEmpty()}"), style = MaterialTheme.typography.headlineMedium,
                     color = Dincr.colors.text, modifier = Modifier.padding(top = DincrSpacing.s2).semantics { heading() })
-            }
-            Column(Modifier.testTag(if (owner) "owner.home" else "home.today"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
-                PendingDollarsCard(model) { nav.tab(Destination.MOVEMENTS) }
-                LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = if (owner) home.reload else { { refreshHome() } }) }
+                Column(Modifier.testTag("home.today"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+                    PendingDollarsCard(model) { nav.tab(Destination.MOVEMENTS) }
+                    LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = { refreshHome() }) }
+                }
             }
         }
+    }
+}
+
+/** The Owner's Hoy: the hero, and on a rounded sheet over it the agenda and the blocks. */
+@Composable
+private fun OwnerHomeContent(model: AppModel, name: String, home: LoadHandle<HomeToday>, agenda: LoadHandle<List<JarvisEvent>>, nav: Navigator) {
+    var editor by remember { mutableStateOf<MovementKind?>(null) }
+    val greeting = when (OwnerHome.greeting(LocalTime.now().hour)) {
+        OwnerHome.Greeting.MORNING -> tx("Buenos días,", "Good morning,")
+        OwnerHome.Greeting.AFTERNOON -> tx("Buenas tardes,", "Good afternoon,")
+        OwnerHome.Greeting.EVENING -> tx("Buenas noches,", "Good evening,")
+    }
+    val status = (home.state as? Load.Ready)?.value?.status
+    // Light status bar icons over the hero, only while this screen is on.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val controller = (view.context as? android.app.Activity)?.window?.let { WindowCompat.getInsetsController(it, view) }
+        val before = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = false
+        onDispose { before?.let { controller.isAppearanceLightStatusBars = it } }
+    }
+    Column(Modifier.fillMaxSize().imePadding().background(Dincr.colors.bg).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        OwnerHomeHero(greeting, name, status, status?.cycle?.let(::cycleText),
+            onExpense = { editor = MovementKind.EXPENSE }, onIncome = { editor = MovementKind.INCOME }, onJarvis = { nav.open("jarvis") },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 0.dp))
+        Box(Modifier.fillMaxWidth().height(24.dp).background(OwnerHeroColor)) {
+            Box(Modifier.fillMaxSize().background(Dincr.colors.bg, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)))
+        }
+        Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(start = DincrSpacing.s4, end = DincrSpacing.s4, bottom = DincrSpacing.s4).testTag("owner.home"),
+            verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+            OwnerAgenda(agenda, nav)
+            PendingDollarsCard(model) { nav.tab(Destination.MOVEMENTS) }
+            LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = home.reload, figureInHero = true) }
+        }
+    }
+    editor?.let { kind ->
+        MovementEditorSheet(model, EditorMode.Create, onDismiss = { editor = null }, onSaved = { editor = null; home.reload() }, onDelete = {}, initialKind = kind)
     }
 }
 
@@ -160,24 +207,10 @@ private suspend fun loadHomeToday(model: AppModel, tier: HomeToday.Tier, mailRev
     }
 }
 
-// MARK: 0. The Owner's JARVIS space (first, as it historically was)
+// MARK: 0. The Owner's agenda
 
 @Composable
-private fun OwnerJarvisSpace(name: String, agenda: LoadHandle<List<JarvisEvent>>, nav: Navigator) {
-    val greeting = when (OwnerHome.greeting(LocalTime.now().hour)) {
-        OwnerHome.Greeting.MORNING -> tx("Buenos días,", "Good morning,")
-        OwnerHome.Greeting.AFTERNOON -> tx("Buenas tardes,", "Good afternoon,")
-        OwnerHome.Greeting.EVENING -> tx("Buenas noches,", "Good evening,")
-    }
-    Column(Modifier.padding(top = DincrSpacing.s2).testTag("owner.home.greeting").semantics(mergeDescendants = true) { heading() }) {
-        Text(greeting, style = MaterialTheme.typography.titleLarge, color = Dincr.colors.text2)
-        if (name.isNotEmpty()) Text("$name.", style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
-    }
-    DincrCard {
-        Box(Modifier.testTag("owner.home.jarvis")) {
-            NavRow(Icons.Rounded.AutoAwesome, "JARVIS", tx("Chat, agenda, estrategia, mi dinero y todo lo demás", "Chat, calendar, strategy, my money and everything else")) { nav.open("jarvis") }
-        }
-    }
+private fun OwnerAgenda(agenda: LoadHandle<List<JarvisEvent>>, nav: Navigator) {
     SectionTitle(tx("Próximos", "Coming up"))
     LoadContent(agenda, rows = 2) { events ->
         val next = OwnerHome.upcoming(events)
@@ -206,7 +239,7 @@ private fun OwnerJarvisSpace(name: String, agenda: LoadHandle<List<JarvisEvent>>
 // MARK: The four blocks
 
 @Composable
-private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved: () -> Unit) {
+private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved: () -> Unit, figureInHero: Boolean = false) {
     var editor by remember { mutableStateOf<MovementKind?>(null) }
     val open: (HomeDestination) -> Unit = { destination ->
         when (destination) {
@@ -216,7 +249,7 @@ private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved
             else -> destination.route?.let(nav::open)
         }
     }
-    HomeStatusCard(home.status, open)
+    HomeStatusCard(home.status, open, figureInHero)
     home.attention?.let { AttentionSection(it, nav) }
     HomeNextCard(home.next, open)
     HomeShortcuts(home.shortcuts, open)
@@ -236,15 +269,16 @@ private fun cycleText(cycle: HomeStatus.Cycle): String {
 }
 
 @Composable
-private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) {
+private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit, figureInHero: Boolean) {
     var explains by remember { mutableStateOf(false) }
     Column(Modifier.testTag("home.status"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
         SectionTitle(tx("Estado de hoy", "Today’s status"))
-        status.cycle?.let { Text(cycleText(it), Modifier.testTag("home.status.cycle"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.text2) }
-        DincrHeroCard {
+        if (!figureInHero) status.cycle?.let { Text(cycleText(it), Modifier.testTag("home.status.cycle"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.text2) }
+        // On the Owner's Hoy the figure is on the hero: this is a plain detail card below it.
+        val detail: @Composable () -> Unit = {
             Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
                 Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
-                    Text(
+                    if (!figureInHero) Text(
                         when (status.headline) {
                             HomeStatus.Headline.MONTH_RESULT -> tx("Resultado del mes", "This month’s result")
                             HomeStatus.Headline.SAFE_TO_SPEND -> tx("Podés gastar con tranquilidad", "Safe to spend")
@@ -252,11 +286,11 @@ private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) 
                         style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2,
                     )
                     if (status.amount != null) {
-                        MoneyText(status.amount, modifier = Modifier.testTag("home.status.amount"), style = MaterialTheme.typography.displaySmall)
+                        if (!figureInHero) MoneyText(status.amount, modifier = Modifier.testTag("home.status.amount"), style = MaterialTheme.typography.displaySmall)
                     } else {
                         // Unknown, never ₡0: what DINCR can't calculate yet, and on "?" why and how to give it.
                         Row(Modifier.testTag("home.status.unknown"), verticalAlignment = Alignment.CenterVertically) {
-                            Text("—", style = MaterialTheme.typography.displaySmall, color = Dincr.colors.text2, modifier = Modifier.clearAndSetSemantics {})
+                            if (!figureInHero) Text("—", style = MaterialTheme.typography.displaySmall, color = Dincr.colors.text2, modifier = Modifier.clearAndSetSemantics {})
                             Text(tx("Aún no puedo calcularlo", "I can’t calculate this yet"), style = MaterialTheme.typography.bodyMedium,
                                 color = Dincr.colors.text2, modifier = Modifier.weight(1f).padding(start = DincrSpacing.s2))
                             val helpLabel = tx("Qué necesita DINCR", "What DINCR needs")
@@ -279,7 +313,7 @@ private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) 
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().testTag("home.status.facts"), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+                if (!figureInHero) Row(Modifier.fillMaxWidth().testTag("home.status.facts"), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
                     Fact(tx("Ingresos", "Income"), status.income, MoneyFormat.Sign.INCOME, tx("Sin registrar", "Not recorded"))
                     Fact(tx("Gastos", "Expenses"), status.expenses, MoneyFormat.Sign.EXPENSE, tx("Sin registrar", "Not recorded"))
                     if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) Fact(if (status.cycle == null) tx("Resultado del mes", "Month result") else tx("Resultado del corte", "Statement result"), status.result, MoneyFormat.Sign.NONE, "—")
@@ -301,6 +335,7 @@ private fun HomeStatusCard(status: HomeStatus, open: (HomeDestination) -> Unit) 
                 }
             }
         }
+        if (figureInHero) DincrCard(content = detail) else DincrHeroCard(content = detail)
     }
 }
 
