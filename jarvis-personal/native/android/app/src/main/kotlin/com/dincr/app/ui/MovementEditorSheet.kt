@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AmountInput
+import com.dincr.data.MovementReview
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.EntryCreate
@@ -150,7 +151,10 @@ fun MovementEditorSheet(
     val haptics = LocalHapticFeedback.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    fun save() {
+    /** Set while the review before saving is on screen (`MovementReview`). */
+    var review by remember { mutableStateOf<MovementReviewSummary?>(null) }
+
+    fun save(reviewed: Boolean = false) {
         if (saving) return
         val foreign = currency != base
         // Untouched on edit: send the stored value, digit for digit (the original amount and the
@@ -171,6 +175,13 @@ fun MovementEditorSheet(
         rateError = if (foreign && !waits && rate == null) tx("Escribí cuántos colones vale 1 dólar (mayor que cero).", "Enter how many colones 1 dollar is worth (above zero).") else null
         descriptionError = if (description.isBlank()) tx("Escribí una descripción.", "Enter a description.") else null
         if (amount == null || (foreign && !waits && rate == null) || description.isBlank()) { haptics.performHapticFeedback(HapticFeedbackType.Reject); return }
+        // Only a new movement, where a slip costs more: an edit is already a second look.
+        if (!reviewed && editing == null && MovementReview.isNeeded(amount, currency, convertsNow = foreign && !waits)) {
+            review = MovementReviewSummary(kind, format.format(amount, currencyOverride = currency),
+                if (foreign && !waits) ConversionPreview.baseAmount(amount, currency, base, rate)?.let { format.format(it) } else null,
+                if (foreign && !waits) rate?.let(format::inputText) else null, waits, description.trim(), category, dateLabel(date.toString()))
+            return
+        }
         val sentCurrency = if (foreign) currency else null
         saving = true; saveError = null
         scope.launch {
@@ -207,6 +218,9 @@ fun MovementEditorSheet(
         }
     }
 
+    review?.let { summary ->
+        MovementReviewDialog(summary, onConfirm = { review = null; save(reviewed = true) }, onEdit = { review = null })
+    }
     ModalBottomSheet(onDismissRequest = { if (!saving) onDismiss() }, sheetState = sheet, containerColor = Dincr.colors.surface) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().navigationBarsPadding().padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
             Text(if (editing != null) tx("Editar movimiento", "Edit transaction") else tx("Nuevo movimiento", "New transaction"), style = MaterialTheme.typography.headlineSmall, color = Dincr.colors.text)
@@ -234,8 +248,11 @@ fun MovementEditorSheet(
                 }
             }
             val symbol = if (currency == base) format.symbol else format.copy(currency = currency).symbol
-            OutlinedTextField(amountText, { amountText = it; amountError = null }, label = { Text(tx("Monto", "Amount")) }, prefix = { Text(symbol) },
-                textStyle = MaterialTheme.typography.headlineSmall.merge(TabularNums), singleLine = true, isError = amountError != null,
+            // The amount is what this screen is about: large and centered.
+            val bigAmount = MaterialTheme.typography.displaySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            OutlinedTextField(amountText, { amountText = it; amountError = null }, label = { Text(tx("Monto", "Amount")) }, prefix = { Text(symbol, style = bigAmount, color = Dincr.colors.textMuted) },
+                textStyle = bigAmount.merge(TabularNums), singleLine = true, isError = amountError != null,
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent, focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent),
                 supportingText = amountError?.let { { Text(it) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().testTag("editor.amount"))
             if (offersWaitForClose) {
@@ -286,7 +303,7 @@ fun MovementEditorSheet(
                 }
             }
             saveError?.let { ErrorState(it) }
-            DincrPrimaryButton(tx("Guardar", "Save"), ::save, loading = saving, modifier = Modifier.testTag("editor.save"))
+            DincrPrimaryButton(tx("Guardar", "Save"), { save() }, loading = saving, modifier = Modifier.testTag("editor.save"))
             Row { if (editing != null && editing.canEdit(entryCurrencies)) TextButton({ onDelete(editing) }) { Text(tx("Eliminar movimiento", "Delete transaction"), color = Dincr.colors.negative) } }
         }
     }
@@ -299,3 +316,40 @@ fun MovementEditorSheet(
     }
 }
 
+/** What a new movement will save, in the user's words. */
+private data class MovementReviewSummary(val kind: MovementKind, val amount: String, val converted: String?, val rate: String?, val waitsForClose: Boolean, val description: String, val category: String, val day: String)
+
+/** The review before saving: confirm, or go back to the form with everything still typed. iOS: `MovementReviewSheet`. */
+@Composable
+private fun MovementReviewDialog(summary: MovementReviewSummary, onConfirm: () -> Unit, onEdit: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onEdit,
+        containerColor = Dincr.colors.surface,
+        title = {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (summary.kind == MovementKind.INCOME) tx("Ingreso", "Income") else tx("Gasto", "Expense"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
+                Text(summary.amount, Modifier.testTag("editor.review.amount"), style = MaterialTheme.typography.headlineMedium.merge(TabularNums), color = Dincr.colors.text, maxLines = 1)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                summary.converted?.let { ReviewLine(tx("Se guardará como", "Saved as"), it) }
+                summary.rate?.let { ReviewLine(tx("Tipo de cambio", "Exchange rate"), it) }
+                if (summary.waitsForClose) ReviewLine(tx("Conversión", "Conversion"), tx("Al cierre", "At the close"))
+                ReviewLine(tx("Descripción", "Description"), summary.description)
+                ReviewLine(tx("Categoría", "Category"), summary.category)
+                ReviewLine(tx("Fecha", "Date"), summary.day)
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onConfirm, Modifier.heightIn(min = 48.dp).testTag("editor.review.confirm")) { Text(tx("Confirmar", "Confirm"), color = Dincr.colors.tint) } },
+        dismissButton = { androidx.compose.material3.TextButton(onEdit, Modifier.heightIn(min = 48.dp).testTag("editor.review.edit")) { Text(tx("Editar", "Edit"), color = Dincr.colors.tint) } },
+    )
+}
+
+@Composable
+private fun ReviewLine(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
+        Text(value, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+    }
+}
