@@ -64,7 +64,11 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
+import com.dincr.data.MoneyFormat
+import com.dincr.design.MoneyText
 import com.dincr.data.MovementMonth
+import java.math.BigDecimal
+import com.dincr.data.MovementTotals
 import com.dincr.data.SearchText
 import com.dincr.data.Movement
 import com.dincr.data.PendingConversion
@@ -84,6 +88,32 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 enum class MovementFilter { ALL, INCOME, EXPENSE, DEBT }
+
+/** What the rows on screen add up to, on one line so the list stays on screen: both sides and the result, or the one the filter asks for. */
+@Composable
+private fun MovementTotalsRow(totals: MovementTotals, filter: MovementFilter, waiting: Boolean) {
+    val income = filter == MovementFilter.INCOME
+    val all = filter == MovementFilter.ALL
+    Column(Modifier.fillMaxWidth().testTag("movements.totals"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+        // Wraps instead of squeezing a figure on a narrow screen or at a large text size.
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+            if (all || income) TotalFact(tx("Ingresos", "Income"), totals.income, "income", MoneyFormat.Sign.INCOME)
+            if (!income) TotalFact(tx("Gastos", "Expenses"), totals.expenses, "expenses", MoneyFormat.Sign.EXPENSE)
+            if (!income) totals.debtPaid?.let { TotalFact(tx("A deudas", "To debts"), it, "debtPaid", MoneyFormat.Sign.EXPENSE) }
+            if (all) totals.result?.let { TotalFact(tx("Resultado", "Result"), it, "result", MoneyFormat.Sign.NONE) }
+        }
+        if (!income && waiting) Caption(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
+    }
+}
+
+@Composable
+private fun TotalFact(label: String, amount: BigDecimal?, id: String, sign: MoneyFormat.Sign) {
+    Column(Modifier.testTag("movements.totals.$id").semantics(mergeDescendants = true) {}) {
+        Caption(label)
+        if (amount != null) MoneyText(amount, sign = sign, style = MaterialTheme.typography.bodyMedium)
+        else Text(tx("Sin registrar", "Not recorded"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
+    }
+}
 
 /** Debt-related rows, the same rule as the Capacitor filter (`movementPreview.js`). */
 private val DEBT_WORDS = Regex("deud|debt|pr[eé]stamo|loan|cuota", RegexOption.IGNORE_CASE)
@@ -186,6 +216,11 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                 MovementFilter.DEBT -> DEBT_WORDS.containsMatchIn("${it.category.orEmpty()} ${it.description.orEmpty()}")
                             }
                             kindMatches && SearchText.matches(query, listOf(it.description, it.category))
+                        }
+                        if (visible.isNotEmpty()) item {
+                            Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s2)) {
+                                MovementTotalsRow(MovementTotals.of(visible), filter, pending.items.isNotEmpty())
+                            }
                         }
                         if (visible.isEmpty()) item {
                             Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) {

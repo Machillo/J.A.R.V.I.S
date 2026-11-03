@@ -52,6 +52,10 @@ struct MovementsView: View {
                         .accessibilityIdentifier("movements.month")
                 }
             }
+            if case .loaded(let rows) = state {
+                let shown = visibleRows(rows)
+                if !shown.isEmpty { totalsSection(MovementTotals(shown)) }
+            }
             // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
             Section {
                 NavigationLink { AnalysisHubView() } label: { Label(tx("Análisis", "Analysis"), systemImage: "chart.bar.doc.horizontal") }
@@ -82,7 +86,7 @@ struct MovementsView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
             case .loaded(let rows):
-                let groups = grouped(rows)
+                let groups = grouped(visibleRows(rows))
                 if groups.isEmpty {
                     Section {
                         let emptyMonth = !rows.isEmpty && query.trimmingCharacters(in: .whitespaces).isEmpty && filter == .all
@@ -264,11 +268,47 @@ struct MovementsView: View {
         return nil
     }
 
-    private func grouped(_ rows: [Movement]) -> [(day: String, rows: [Movement])] {
-        let visible = MovementMonth.rows(rows, month: month, query: query).filter { row in
+    private func visibleRows(_ rows: [Movement]) -> [Movement] {
+        MovementMonth.rows(rows, month: month, query: query).filter { row in
             (filter == .all || row.transactionType.rawValue == filter.rawValue)
                 && SearchText.matches(query, in: [row.description, row.category])
         }
+    }
+
+    /// What the rows on screen add up to, on one line so the list stays on screen: both sides and the
+    /// result, or the one the filter asks for.
+    private func totalsSection(_ totals: MovementTotals) -> some View {
+        Section {
+            HStack(alignment: .top, spacing: DincrSpacing.s4) {
+                if filter != .expense { totalFact(tx("Ingresos", "Income"), totals.income, sign: .income, id: "income") }
+                if filter != .income { totalFact(tx("Gastos", "Expenses"), totals.expenses, sign: .expense, id: "expenses") }
+                if filter != .income, let paid = totals.debtPaid { totalFact(tx("A deudas", "To debts"), paid, sign: .expense, id: "debtPaid") }
+                if filter == .all, let result = totals.result { totalFact(tx("Resultado", "Result"), result, sign: .none, id: "result") }
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("movements.totals")
+        } footer: {
+            if filter != .income, !pending.items.isEmpty {
+                Text(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
+            }
+        }
+    }
+
+    private func totalFact(_ label: String, _ amount: Decimal?, sign: MoneyFormat.Sign, id: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+            if let amount {
+                MoneyText(amount, sign: sign, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
+            } else {
+                Text(tx("Sin registrar", "Not recorded")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("movements.totals.\(id)")
+    }
+
+    private func grouped(_ visible: [Movement]) -> [(day: String, rows: [Movement])] {
         let byDay = Dictionary(grouping: visible) { $0.day ?? "" }
         return byDay.keys.sorted(by: >).map { (day: $0, rows: byDay[$0]!) }
     }
