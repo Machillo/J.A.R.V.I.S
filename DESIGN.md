@@ -466,6 +466,13 @@ category); trailing amount in tabular `body` weight 600 with sign (`+` in `posit
 are shortcuts only: the same actions are always reachable from the row's detail screen or context
 menu, so no action is swipe-only.
 
+## Welcome story
+
+Right before a new account's first profile setup, four short pages say what DINCR is and what it's
+for: one drawing, one title, one sentence, on the solid hero color. It can be skipped, shows once per
+account on a device, and asks nothing. Its parts arrive one after another; with Reduce Motion they are
+simply there. It promises only what every plan has: never mail reading or automation.
+
 ## Owner identity (DINCR Owner / JARVIS)
 
 The single Owner account is not a plan, so "plans don't repaint the app" does not apply to it. The

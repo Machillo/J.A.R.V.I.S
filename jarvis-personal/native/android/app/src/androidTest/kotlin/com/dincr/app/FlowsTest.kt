@@ -45,10 +45,11 @@ class FlowsTest {
 
     @After fun close() { scenario?.close() }
 
-    private fun launch(fixture: String = "POPULATED", skipLogin: Boolean = true, plan: String = "free", role: String? = null): ActivityScenario<MainActivity> {
+    private fun launch(fixture: String = "POPULATED", skipLogin: Boolean = true, plan: String = "free", role: String? = null, welcomeStory: Boolean = false): ActivityScenario<MainActivity> {
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
             .putExtra("dincrFixtures", fixture).putExtra("dincrSkipLogin", skipLogin).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
         role?.let { intent.putExtra("dincrRole", it) }
+        if (welcomeStory) intent.putExtra("dincrWelcomeStory", true)
         return ActivityScenario.launch<MainActivity>(intent).also { scenario = it }
     }
 
@@ -377,5 +378,15 @@ class FlowsTest {
         waitForText(tx("Elegí tu suscripción", "Choose your subscription"))
         click(tx("Elegir Free", "Choose Free"))
         waitForText(tx("Resultado del mes", "This month’s result"))
+    }
+
+    @Test fun aNewUserSeesTheWelcomeStoryThenTheSetup() {
+        ApplicationProvider.getApplicationContext<android.content.Context>().getSharedPreferences("dincr_welcome", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        launch("NEW_USER", welcomeStory = true)
+        waitForText(tx("Tu dinero, con propósito", "Your money, with purpose"))
+        compose.onNodeWithTag("welcome.next").performClick()
+        waitForText(tx("Sabé dónde estás", "Know where you stand"))
+        compose.onNodeWithTag("welcome.skip", useUnmergedTree = true).performClick()
+        waitForText(tx("¿Cómo querés que te llamemos?", "What should we call you?"))
     }
 }

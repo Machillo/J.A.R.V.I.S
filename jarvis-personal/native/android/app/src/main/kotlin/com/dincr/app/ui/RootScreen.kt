@@ -78,7 +78,7 @@ fun RootScreen(model: AppModel, appearance: Appearance, onAppearance: (Appearanc
                     tx("Su rol ya no es compatible con DINCR. Cerrá sesión para entrar con otra cuenta.", "Its role is no longer supported by DINCR. Sign out to use another account."),
                     primary = null, onSignOut = { model.signOut() })
                 Phase.LegalRequired -> LegalConsentScreen(model)
-                Phase.ProfileSetup -> ProfileSetupScreen(model)
+                Phase.ProfileSetup -> WelcomeThenProfileSetup(model)
                 Phase.ChoosePlan -> PlanChooserScreen(model)
                 // The lock replaces the app instead of covering it: sheets and dialogs are windows
                 // of their own and would stay visible and usable above an overlay.
