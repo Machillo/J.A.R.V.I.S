@@ -51,6 +51,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.dincr.data.AppLanguage
 import com.dincr.data.Composition
@@ -84,15 +87,27 @@ import kotlin.math.min
 @Composable
 fun CompositionDonut(
     title: String, composition: Composition, color: Color = Dincr.colors.chartExpense, showsLegend: Boolean = true, showsTotal: Boolean = true,
+    asBar: Boolean = false,
 ) {
     var selectedId by remember(composition) { mutableStateOf<String?>(null) }
     val format = Dincr.money
     val parts = composition.spokenParts(format)
+    val barColors = if (Dincr.colors.bg.luminance() < 0.5f) BAR_COLORS_DARK else BAR_COLORS_LIGHT
     fun shade(index: Int, id: String): Color =
-        if (selectedId != null) color.copy(alpha = if (id == selectedId) 1f else 0.4f) else color.copy(alpha = visualShade(index))
+        if (asBar) barColors[index % barColors.size].let { if (selectedId == null || id == selectedId) it else it.copy(alpha = 0.3f) }
+        else if (selectedId != null) color.copy(alpha = if (id == selectedId) 1f else 0.4f) else color.copy(alpha = visualShade(index))
 
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
-        if (composition.isDrawable) {
+        if (composition.isDrawable && asBar) {
+            // One stacked bar, one color per part (the legend names them). iOS: `CompositionDonut.bar`.
+            Row(Modifier.fillMaxWidth().height(20.dp).clip(CircleShape).clearAndSetSemantics { if (!showsLegend) contentDescription = "$title. ${parts.joinToString("; ")}" },
+                horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                composition.segments.forEachIndexed { index, segment ->
+                    val share = segment.share ?: 0.0
+                    if (share > 0) Box(Modifier.weight(share.toFloat()).fillMaxHeight().background(shade(index, segment.id)))
+                }
+            }
+        } else if (composition.isDrawable) {
             Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                 Canvas(
                     Modifier.size(200.dp)
@@ -165,6 +180,10 @@ fun CompositionDonut(
         }
     }
 }
+
+/** The parts of a stacked bar, told apart by color and always named in the legend (iOS: `VisualShade.barColors`). */
+private val BAR_COLORS_LIGHT = listOf(Color(0xFF08734F), Color(0xFFB4501F), Color(0xFF0A6E9E), Color(0xFFB0307A), Color(0xFF4A4FD9), Color(0xFF6B6B76))
+private val BAR_COLORS_DARK = listOf(Color(0xFF30D158), Color(0xFFFF855C), Color(0xFF5AC8FA), Color(0xFFFF7EB6), Color(0xFF8F95FF), Color(0xFFA3A5BD))
 
 /** Opacity steps for the parts of one hue: strong first, never fainter than readable. */
 internal fun visualShade(index: Int): Float = max(0.3f, 1f - index * 0.17f)
