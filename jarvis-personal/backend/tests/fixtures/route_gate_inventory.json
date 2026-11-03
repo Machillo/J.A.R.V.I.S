@@ -1211,6 +1211,21 @@
  },
  {
   "method": "GET",
+  "path": "/jarvis/premium/notices",
+  "gates": [
+   "router_roles:owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/premium/notices/{notice_id}/read",
+  "gates": [
+   "router_roles:owner"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/jarvis/premium/debt-savings-blocks",
   "gates": [
    "router_roles:owner"

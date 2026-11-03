@@ -14,6 +14,7 @@ struct OwnerHomeView: View {
     var openMovements: (() -> Void)?
     @State private var home: LoadState<HomeToday> = .loading
     @State private var agenda: LoadState<[JarvisEvent]> = .loading
+    @State private var unreadNotices = 0
 
     var body: some View {
         let tier = ownerTier
@@ -35,10 +36,21 @@ struct OwnerHomeView: View {
         .dincrScreenBackground()
         .navigationTitle(tx("Hoy", "Today"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { OwnerNoticesView() } label: {
+                    Image(systemName: unreadNotices > 0 ? "bell.badge" : "bell")
+                }
+                .accessibilityLabel(unreadNotices > 0 ? tx("Avisos, \(unreadNotices) sin leer", "Notices, \(unreadNotices) unread") : tx("Avisos", "Notices"))
+                .accessibilityIdentifier("owner.home.notices")
+            }
+        }
         .refreshable {
             await loadHome(tier)
             await loadAgenda()
+            await loadNotices()
         }
+        .onAppear { Task { await loadNotices() } }
         // Two independent tasks: the money and the agenda load in parallel and fail separately.
         .task(id: tier) { await loadHome(tier) }
         .task { await loadAgenda() }
@@ -146,6 +158,11 @@ struct OwnerHomeView: View {
                 home = .failed(message)
             }
         }
+    }
+
+    /// Only the bell's count: a failure leaves it as it was, never hiding the rest of Hoy.
+    private func loadNotices() async {
+        if let notices = try? await model.service.ownerNotices() { unreadNotices = notices.unread ?? 0 }
     }
 
     private func loadAgenda() async {

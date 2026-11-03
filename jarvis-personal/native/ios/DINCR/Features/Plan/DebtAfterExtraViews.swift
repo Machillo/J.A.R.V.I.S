@@ -121,7 +121,9 @@ struct AfterExtraSheet: View {
         do {
             try await model.service.answerAfterExtra(debtID: debt.id, answer)
             dismiss()
-            done(choice == .later ? tx("Te lo recordamos ese día", "We'll remind you that day") : tx("Deuda actualizada", "Debt updated"))
+            done(choice == .later ? tx("Te lo recordamos ese día", "We'll remind you that day")
+                : Jarvis.isAvailable(to: model.profile) && choice != .unchanged ? tx("Deuda actualizada. Mirá qué cambió en los avisos de Hoy.", "Debt updated. See what changed in Hoy's notices.")
+                : tx("Deuda actualizada", "Debt updated"))
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))
         }

@@ -305,6 +305,18 @@
      "path": "/jarvis/calendar/upcoming",
      "gate": "router_roles:owner",
      "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/jarvis/premium/notices",
+     "gate": "router_roles:owner",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/jarvis/premium/notices/{notice_id}/read",
+     "gate": "router_roles:owner",
+     "used_by": []
     }
    ],
    "ios": {
