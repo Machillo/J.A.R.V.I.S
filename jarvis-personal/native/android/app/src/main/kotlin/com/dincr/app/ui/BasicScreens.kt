@@ -126,7 +126,7 @@ fun MonthlySummaryScreen(model: AppModel, nav: Navigator) {
             }
             Box(Modifier.testTag("summary.categories")) {
                 Section(tx("¿A dónde se fue?", "Where did it go?")) {
-                    CompositionDonut(tx("Gastos, deudas y ahorro", "Spending, debts and savings"), SummaryVisuals.outflows(s), showsTotal = false)
+                    CompositionDonut(tx("Gastos, deudas y ahorro", "Spending, debts and savings"), SummaryVisuals.outflows(s), showsTotal = false, asBar = true)
                 }
             }
         }

@@ -262,7 +262,7 @@ private struct SummaryContent: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             SectionHeader(title: tx("¿A dónde se fue?", "Where did it go?"))
             CompositionDonut(title: tx("Gastos, deudas y ahorro", "Spending, debts and savings"), composition: SummaryVisuals.outflows(summary),
-                             color: DincrColor.chartExpense, showsTotal: false)
+                             color: DincrColor.chartExpense, showsTotal: false, asBar: true)
         }
         .dincrCard()
         .accessibilityElement(children: .contain)
