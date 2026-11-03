@@ -23,6 +23,7 @@ final class DebtPaymentsUITests: XCTestCase {
     func testARecordedPaymentAppearsInTheDebtsHistory() {
         let app = launch()
         tap("home.debts", in: app)
+        tap("debt.row.31", in: app)
         tap("debt.history.31", in: app)
         XCTAssertTrue(element("debt.payments.empty", in: app).waitForExistence(timeout: 10), "no payment recorded yet: said in words")
         app.buttons["Cerrar"].tap()

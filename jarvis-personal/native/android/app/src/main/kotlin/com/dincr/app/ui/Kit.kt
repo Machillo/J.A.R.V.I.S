@@ -280,7 +280,7 @@ fun PlanBadge(text: String) {
 fun ProgressLine(ratio: Double, label: String) {
     val clamped = ratio.coerceIn(0.0, 1.0).toFloat()
     Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = label }) {
-        LinearProgressIndicator(progress = { clamped }, modifier = Modifier.fillMaxWidth().height(8.dp), color = Dincr.colors.tint, trackColor = Dincr.colors.surface2, drawStopIndicator = {})
+        LinearProgressIndicator(progress = { clamped }, modifier = Modifier.fillMaxWidth().height(8.dp), color = Dincr.colors.positive, trackColor = Dincr.colors.surface2, drawStopIndicator = {})
         Text(label, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.text2, modifier = Modifier.padding(top = DincrSpacing.s1))
     }
 }

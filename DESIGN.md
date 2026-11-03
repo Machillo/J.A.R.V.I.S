@@ -466,6 +466,12 @@ category); trailing amount in tabular `body` weight 600 with sign (`+` in `posit
 are shortcuts only: the same actions are always reachable from the row's detail screen or context
 menu, so no action is swipe-only.
 
+## Progress
+
+Progress bars and rings are green (`positive`) in every plan, so the accent isn't everywhere; going over
+a budget stays red. A debt in the list shows only its name and bar; tapped, it opens with the ring and
+everything else about it.
+
 ## Welcome story
 
 Right before a new account's first profile setup, four short pages say what DINCR is and what it's

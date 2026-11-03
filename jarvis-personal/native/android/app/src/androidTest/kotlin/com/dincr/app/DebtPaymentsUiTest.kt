@@ -49,6 +49,7 @@ class DebtPaymentsUiTest {
         waitUntil("Hoy") { present(tx("Resultado del mes", "This month’s result")) }
         click(tx("Deudas", "Debts"))
         waitUntil("the debts") { present("Tarjeta de ejemplo") }
+        click("Tarjeta de ejemplo")
 
         click(tx("Ver pagos", "See payments"))
         waitUntil("no payment yet, said in words") { tagged("debt.payments.empty") }

@@ -62,6 +62,7 @@ final class DebtSavingsBlocksUITests: XCTestCase {
     func testAnExtraPaymentWaitsForTheBankAndIsAnsweredLater() {
         let app = launch(plan: "vip")
         reveal("plan.debts", in: app).tap()
+        reveal("debt.row.31", in: app).tap()
         let pay = element("debt.pay.31", in: app)
         XCTAssertTrue(pay.waitForExistence(timeout: 10))
         pay.tap()

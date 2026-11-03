@@ -83,6 +83,7 @@ class DebtSavingsBlocksUiTest {
         launch("vip")
         click(tx("Plan", "Plan"), selectable = true)
         click(tx("Deudas", "Debts"))
+        click("Tarjeta de ejemplo")
         click(tx("Registrar pago", "Record payment"))
         waitUntil("the amount") { tagged("amount.field") }
         compose.onAllNodes(hasTestTag("amount.field")).onFirst().performTextInput("100000")   // above the installment

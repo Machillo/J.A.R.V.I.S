@@ -183,6 +183,7 @@ final class DINCRUITests: XCTestCase {
         let app = launch()
         // Hoy keeps its shortcut to the debts screen (managed in Plan → Deudas since UX-4).
         open("home.debts", in: app)
+        open("debt.row.31", in: app)
         let pay = app.buttons["debt.pay.31"]
         XCTAssertTrue(pay.waitForExistence(timeout: 5))
         pay.tap()

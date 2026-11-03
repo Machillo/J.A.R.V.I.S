@@ -265,6 +265,7 @@ class FlowsTest {
         // Debts live in Hoy.
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
+        click("Tarjeta de ejemplo")
         click(tx("Registrar pago", "Record payment"))
         waitForText(tx("Pendiente:", "Outstanding:"), substring = true)
         compose.onAllNodes(hasText(tx("Monto", "Amount"))).onFirst().performTextInput("10.000")
