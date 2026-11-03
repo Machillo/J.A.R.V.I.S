@@ -25,7 +25,7 @@
    "default": "cian",
    "classic": "teal",
    "values": {
-    "cian": { "es": "Azul", "en": "Blue" },
+    "cian": { "es": "Índigo", "en": "Indigo" },
     "teal": { "es": "Verde azulado", "en": "Teal" },
     "ciruela": { "es": "Ciruela", "en": "Plum" },
     "tinta": { "es": "Tinta", "en": "Ink" }
@@ -73,7 +73,7 @@
   },
   "oceano": {
    "light": { "bg": "#F2F2F7", "surface": "#FFFFFF", "surface-2": "#EFEFF4", "line": "#D1D1D6", "line-strong": "#C7C7CC", "field-border": "#86868B", "text": "#1C1C1E", "text-2": "#4F4F55", "text-muted": "#636366", "positive": "#08734F", "glow": "#F2F2F7" },
-   "dark": { "bg": "#000000", "surface": "#1C1C1E", "surface-2": "#2C2C2E", "line": "#38383A", "line-strong": "#48484A", "field-border": "#8E8E93", "text": "#F5F5F7", "text-2": "#AEAEB2", "text-muted": "#A1A1A6", "positive": "#30D158", "glow": "#000000" }
+   "dark": { "bg": "#0A0B1E", "surface": "#1C1E3A", "surface-2": "#2A2D52", "line": "#33365C", "line-strong": "#454873", "field-border": "#8A8DB0", "text": "#F5F5F7", "text-2": "#B4B6CC", "text-muted": "#A3A5BD", "positive": "#30D158", "glow": "#0A0B1E" }
   },
   "arena": {
    "light": { "bg": "#F6F3EE", "surface": "#FFFFFF", "surface-2": "#EEE9E1", "line": "#E2DBD0", "line-strong": "#CBC1B2", "field-border": "#7F7567", "text": "#1C1813", "text-2": "#4D453A", "text-muted": "#62594D" },
@@ -90,8 +90,8 @@
    "dark": { "tint": "#45D3BC", "tint-pressed": "#33B9A4", "tint-container": "#0C3A34", "on-tint": "#03201B", "on-tint-container": "#C0F2E8", "focus-ring": "#45D3BC" }
   },
   "cian": {
-   "light": { "tint": "#0066CC", "tint-pressed": "#0055AA", "tint-container": "#E3EFFC", "on-tint": "#FFFFFF", "on-tint-container": "#003D7A", "focus-ring": "#0066CC" },
-   "dark": { "tint": "#2997FF", "tint-pressed": "#64B0FF", "tint-container": "#0B2A4A", "on-tint": "#000000", "on-tint-container": "#BFDFFF", "focus-ring": "#2997FF" }
+   "light": { "tint": "#4A4FD9", "tint-pressed": "#3B3FB8", "tint-container": "#E8E9FC", "on-tint": "#FFFFFF", "on-tint-container": "#2A2D8F", "focus-ring": "#4A4FD9" },
+   "dark": { "tint": "#8F95FF", "tint-pressed": "#B0B4FF", "tint-container": "#24275C", "on-tint": "#0B0C2A", "on-tint-container": "#D6D8FF", "focus-ring": "#8F95FF" }
   },
   "ciruela": {
    "light": { "tint": "#7A3E9D", "tint-pressed": "#64317F", "tint-container": "#F1E4F8", "on-tint": "#FFFFFF", "on-tint-container": "#3A1650", "focus-ring": "#7A3E9D" },

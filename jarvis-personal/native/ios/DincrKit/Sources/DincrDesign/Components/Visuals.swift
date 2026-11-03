@@ -223,7 +223,7 @@ public struct TrendLineChart: View {
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     if point.period == selectedPeriod {
                         PointMark(x: .value("Periodo", point.period), y: .value("Monto", VisualAxis.double(point.value)))
-                            .symbol { Circle().fill(color).frame(width: 10, height: 10).overlay(Circle().stroke(DincrColor.surface, lineWidth: 2)) }
+                            .symbol { Circle().fill(color).frame(width: 10, height: 10).overlay(Circle().stroke(OwnerColor.surface, lineWidth: 2)) }
                     } else if points.count == 1 {
                         PointMark(x: .value("Periodo", point.period), y: .value("Monto", VisualAxis.double(point.value)))
                             .foregroundStyle(color).symbolSize(30)
@@ -232,7 +232,7 @@ public struct TrendLineChart: View {
             }
             RuleMark(y: .value("Cero", 0)).foregroundStyle(DincrColor.lineStrong)
             if let point = selectedPoint, point.value != nil {
-                RuleMark(x: .value("Periodo", point.period)).foregroundStyle(DincrColor.line)
+                RuleMark(x: .value("Periodo", point.period)).foregroundStyle(OwnerColor.border)
             }
         }
         .chartXScale(domain: series.points.map(\.period))
@@ -263,7 +263,7 @@ public struct TrendLineChart: View {
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                AxisGridLine().foregroundStyle(DincrColor.line)
+                AxisGridLine().foregroundStyle(OwnerColor.border)
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
                         Text(VisualAxis.compact(number)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
@@ -404,8 +404,8 @@ public struct TrendIndicator: View {
         switch tone {
         case .positive: (DincrColor.positive, DincrColor.positiveContainer)
         case .attention: (DincrColor.warning, DincrColor.warningContainer)
-        case .neutral: (DincrColor.text2, DincrColor.surface2)
-        case .unavailable: (DincrColor.textMuted, DincrColor.surface2)
+        case .neutral: (OwnerColor.text2, OwnerColor.surface2)
+        case .unavailable: (OwnerColor.textMuted, OwnerColor.surface2)
         }
     }
 }
@@ -424,7 +424,7 @@ struct VisualNotice: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DincrSpacing.s3)
-        .background(DincrColor.surface2, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
+        .background(OwnerColor.surface2, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
     }
 }
 

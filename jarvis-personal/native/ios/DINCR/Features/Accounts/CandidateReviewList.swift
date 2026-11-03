@@ -124,9 +124,9 @@ struct CandidateStatusLabel: View {
             if internalTransfer { return (tx("Transferencia entre tus cuentas", "Transfer between your accounts"), "arrow.left.arrow.right", DincrColor.positive) }
             return (tx("Confirmado", "Confirmed"), "checkmark.circle", DincrColor.positive)
         case "auto_saved"?: return (tx("Guardado automáticamente", "Saved automatically"), "checkmark.circle", DincrColor.positive)
-        case "rejected"?: return (tx("Descartado", "Dismissed"), "xmark.circle", DincrColor.textMuted)
-        case "duplicate"?: return (tx("Repetido", "Duplicate"), "doc.on.doc", DincrColor.textMuted)
-        default: return (tx("Revisado", "Reviewed"), "checkmark.circle", DincrColor.textMuted)
+        case "rejected"?: return (tx("Descartado", "Dismissed"), "xmark.circle", OwnerColor.textMuted)
+        case "duplicate"?: return (tx("Repetido", "Duplicate"), "doc.on.doc", OwnerColor.textMuted)
+        default: return (tx("Revisado", "Reviewed"), "checkmark.circle", OwnerColor.textMuted)
         }
     }
 }

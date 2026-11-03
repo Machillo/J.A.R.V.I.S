@@ -23,30 +23,29 @@ private struct PublicHomeView: View {
     @Environment(AppModel.self) private var model
     let openMovements: () -> Void
     @State private var state: LoadState<HomeToday> = .loading
+    @State private var editor: EditorRequest?
 
     var body: some View {
         let tier = HomeTodayLoader.tier(model)
-        ScrollView {
-            VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-                switch state {
-                case .loading:
-                    SkeletonView(rows: 3)
-                case .failed(let message):
-                    ErrorStateView(message: message) { Task { await load(tier) } }
-                case .loaded(let home):
-                    PendingDollarsCard(openMovements: openMovements)
-                    HomeBlocks(home: home, openMovements: openMovements) { await load(tier) }
-                }
+        let status: HomeStatus? = if case .loaded(let home) = state { home.status } else { nil }
+        HomeHeroScreen(id: "home.today") {
+            HomeHero(greeting: tx("Hola,", "Hi,"), name: model.profile?.firstName, status: status, cycle: status?.cycle.map(HomeStatusCopy.cycle),
+                     register: { editor = EditorRequest(kind: $0) })
+        } sheet: {
+            switch state {
+            case .loading:
+                SkeletonView(rows: 3)
+            case .failed(let message):
+                ErrorStateView(message: message) { Task { await load(tier) } }
+            case .loaded(let home):
+                PendingDollarsCard(openMovements: openMovements)
+                HomeBlocks(home: home, figureInHero: true, openMovements: openMovements) { await load(tier) }
             }
-            .padding(.horizontal, DincrSpacing.s4)
-            .padding(.bottom, DincrSpacing.s6)
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("home.today")
         }
-        .dincrScreenBackground()
-        .navigationTitle(tx("Hola, \(model.profile?.firstName ?? "")", "Hi, \(model.profile?.firstName ?? "")"))
+        .navigationTitle(tx("Hoy", "Today"))
+        .sheet(item: $editor) { request in
+            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await load(tier) } }
+        }
         .refreshable { await load(tier) }
         .task(id: tier) { await load(tier) }
         // New mail on return (AppModel.syncOnReturn): read again, keeping the screen if it fails.

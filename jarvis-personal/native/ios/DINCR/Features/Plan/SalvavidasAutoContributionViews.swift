@@ -85,7 +85,7 @@ struct AutoContributionCard: View {
                     "If a fixed amount goes into your emergency fund (for example, an automatic transfer), DINCR adds it to your balance following the plan."))
                 .font(DincrFont.caption).foregroundStyle(.dincrText2)
             Toggle(tx("Activar aportes automáticos", "Turn on automatic contributions"), isOn: $enabled)
-                .tint(DincrColor.tint)
+                .tint(OwnerColor.accent)
                 .disabled(!canWrite || saving)
                 .accessibilityIdentifier("salvavidas.auto.enabled")
             if showsFields {
@@ -103,7 +103,7 @@ struct AutoContributionCard: View {
                 DatePicker(tx("Primer aporte", "First contribution"), selection: $start, displayedComponents: .date)
                     .accessibilityIdentifier("salvavidas.auto.start")
                 Toggle(tx("Tiene fecha final", "Has an end date"), isOn: $hasEnd)
-                    .tint(DincrColor.tint)
+                    .tint(OwnerColor.accent)
                     .accessibilityIdentifier("salvavidas.auto.hasEnd")
                 if hasEnd {
                     DatePicker(tx("Termina", "Ends"), selection: $end, in: start..., displayedComponents: .date)

@@ -48,7 +48,7 @@ public struct SkeletonView: View {
         .accessibilityLabel(AppLanguage.current.pick("Cargando", "Loading"))
     }
 
-    private var placeholder: Color { owner ? OwnerColor.surface2 : DincrColor.surface2 }
+    private var placeholder: Color { owner ? OwnerColor.surface2 : OwnerColor.surface2 }
 
     private func block(width: CGFloat, height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: DincrRadius.xs).fill(placeholder).frame(width: width, height: height)
@@ -73,15 +73,15 @@ public struct EmptyStateView<Action: View>: View {
             // Owner: scales with Dynamic Type (a text style). Other accounts keep their current size.
             Image(systemName: symbol)
                 .font(owner ? Font.largeTitle.weight(.regular) : Font.system(size: 32, weight: .regular))
-                .foregroundStyle(owner ? OwnerColor.accent : DincrColor.tint)
+                .foregroundStyle(owner ? OwnerColor.accent : OwnerColor.accent)
                 .accessibilityHidden(true)
-            Text(title).font(DincrFont.title2).foregroundStyle(owner ? OwnerColor.text : DincrColor.text).multilineTextAlignment(.center)
-            Text(message).font(DincrFont.bodySmall).foregroundStyle(owner ? OwnerColor.text2 : DincrColor.text2).multilineTextAlignment(.center)
+            Text(title).font(DincrFont.title2).foregroundStyle(owner ? OwnerColor.text : OwnerColor.text).multilineTextAlignment(.center)
+            Text(message).font(DincrFont.bodySmall).foregroundStyle(owner ? OwnerColor.text2 : OwnerColor.text2).multilineTextAlignment(.center)
             action.padding(.top, DincrSpacing.s2)
         }
         .padding(DincrSpacing.s6)
         .frame(maxWidth: .infinity)
-        .background(owner ? OwnerColor.surface : DincrColor.surface, in: shape)
+        .background(owner ? OwnerColor.surface : OwnerColor.surface, in: shape)
         .overlay {
             if owner { shape.strokeBorder(OwnerColor.border, lineWidth: 1) }
         }
@@ -171,7 +171,7 @@ public struct DincrProgressBar: View {
         overColor = switch overMeaning {
         case .favorable: DincrColor.positive
         case .unfavorable: DincrColor.negative
-        case .neutral: DincrColor.tint
+        case .neutral: OwnerColor.accent
         }
     }
 
@@ -179,7 +179,7 @@ public struct DincrProgressBar: View {
         if let fraction {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(onHero ? DincrColor.onHero.opacity(0.16) : DincrColor.surface2)
+                    Capsule().fill(onHero ? DincrColor.onHero.opacity(0.16) : OwnerColor.surface2)
                     Capsule().fill(isOver ? AnyShapeStyle(overColor) : AnyShapeStyle(.dincrTint))
                         .frame(width: max(proxy.size.width * fraction, fraction > 0 ? 6 : 0))
                 }

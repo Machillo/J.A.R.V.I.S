@@ -468,18 +468,19 @@ menu, so no action is swipe-only.
 
 ## Owner identity (DINCR Owner / JARVIS)
 
-The single Owner account is not a plan, so "plans don't repaint the app" does not apply to it. The
-Owner keeps DINCR's structure, navigation (the same five tabs), system type, components and voice,
-and changes only the scene, below a root that reads the server role (`dincrOwnerAppearance`):
+**This scene is now every account's, from sign-in on** (historical name; the Owner chose it on
+2026-11-03). Plans don't repaint the app. The apps set it at their root (`dincrOwnerAppearance`,
+`AppearancePolicy`). The frontmatter's tokens remain the landing's and the classic set's. JARVIS, its
+Hoy agenda and personal appearance stay Owner-only:
 
 - The platform's own look, as if the system had drawn it: one flat grouped background (near white in
-  light, black in dark), plain surfaces without borders, hairlines only between rows, and one blue
+  light, deep indigo in dark), plain surfaces without borders, hairlines only between rows, and one indigo
   accent instead of the teal tint. Owner tokens: `OwnerColor` in DincrDesign (`Owner/OwnerTheme.swift`),
   light and dark, text ≥ 4.5:1 on every Owner surface.
 - Color is for meaning. Icons are plain symbols without wells. A message is a plain row: its icon's
   color says what it means, with no filled background or accent bar, so a fact never reads as a failure.
-- Hoy opens on one solid blue hero, the only full color block in the Owner's app: greeting, the day's
-  key figure, its income, expenses and result, and the actions (Gasto, Ingreso, JARVIS) as pills. White
+- Hoy opens on one solid dark indigo hero, the only full color block in the app: greeting, the day's
+  key figure, its income, expenses and result, and the actions (Gasto, Ingreso and, for the Owner, JARVIS) as pills. White
   text stays ≥ 4.5:1 on it, in both schemes. The rest of Hoy sits below on a sheet with rounded top corners.
 - JARVIS has one way in, on Hoy's hero, and no mark competing with the greeting.
 - Cards: radius 16; controls and quick actions: 12. Lists of records stay native lists or one
@@ -513,7 +514,7 @@ that breaks the rules of this file.
 | Density | Cómoda, Compacta (12 gaps, 48 rows) | Cómoda |
 | Surfaces | Con contorno (hairline, cards 22 / controls 16), Tonal | Tonal |
 
-- **Sistema + Azul is the Owner identity** (above), so the Owner's default is the
+- **Sistema + Índigo is the Owner identity** (above), so the Owner's default is the
   same scene on iOS and Android; the generator test holds the tokens equal to `OwnerColor`.
 - Every palette × accent × scheme keeps text ≥ 4.5:1 on `bg`, `surface` and `surface-2`, control
   boundaries and focus ≥ 3:1, labels on filled and tonal accents ≥ 4.5:1, status colors ≥ 4.5:1 and
@@ -522,7 +523,7 @@ that breaks the rules of this file.
   info and VIP keep their meaning (Sistema only uses the Owner identity's own positive).
 - The text size multiplies the platform scale (Dynamic Type / font scale); it never replaces it,
   and compact density never takes touch targets below 48.
-- No new accent may collide with a status or chart meaning (no green, red, amber or indigo tint).
+- No new accent may collide with a status or chart meaning (no green, red or amber tint; the indigo accent is the Owner's decision of 2026-11-03, with chart-expense kept apart by its label).
 - Preferences belong to one account (`user_preferences`, one key per account in its workspace) and
   follow it to every signed-in device; a GET never writes and no stored value means the default.
 

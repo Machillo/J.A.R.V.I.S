@@ -92,7 +92,7 @@ private struct BankRow: View {
                 Text(tx("\(group.accounts.count) \(group.accounts.count == 1 ? "cuenta" : "cuentas")", "\(group.accounts.count) \(group.accounts.count == 1 ? "account" : "accounts")"))
                     .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 Text(tx("\(group.movements) movimientos · \(group.pending) por revisar", "\(group.movements) transactions · \(group.pending) to review"))
-                    .font(DincrFont.caption).foregroundStyle(group.pending > 0 ? DincrColor.warning : DincrColor.textMuted)
+                    .font(DincrFont.caption).foregroundStyle(group.pending > 0 ? DincrColor.warning : OwnerColor.textMuted)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)

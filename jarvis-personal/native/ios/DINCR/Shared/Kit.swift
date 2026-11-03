@@ -112,7 +112,7 @@ struct HubRow: View {
     var body: some View {
         HStack(spacing: DincrSpacing.s3) {
             Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
-                .frame(width: 36, height: 36).background(DincrColor.tintContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+                .frame(width: 36, height: 36).background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)

@@ -34,7 +34,7 @@ final class PrivacyCover {
     private struct CoverView: View {
         var body: some View {
             ZStack {
-                DincrColor.bg.ignoresSafeArea()
+                OwnerColor.backgroundMiddle.ignoresSafeArea()
                 Image(systemName: "lock.fill").font(.system(size: 40)).foregroundStyle(.dincrTint)
             }
             .accessibilityHidden(true)

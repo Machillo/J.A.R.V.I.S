@@ -22,7 +22,7 @@ struct MonthReviewView: View {
                         Text(card.title).font(DincrFont.label).foregroundStyle(.dincrText2).accessibilityAddTraits(.isHeader)
                         ForEach(Array(card.lines.enumerated()), id: \.offset) { line, text in
                             Text(text).font(line == 0 ? DincrFont.title2 : DincrFont.bodySmall)
-                                .foregroundStyle(line == 0 ? DincrColor.text : DincrColor.text2)
+                                .foregroundStyle(line == 0 ? OwnerColor.text : OwnerColor.text2)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }

@@ -49,7 +49,7 @@ public struct DincrMessage: View {
                 .font(.system(size: DincrIconSize.md, weight: .medium))
                 .foregroundStyle(style.color)
                 .frame(width: 36, height: 36)
-                .background(DincrColor.surface, in: Circle())
+                .background(OwnerColor.surface, in: Circle())
                 .accessibilityLabel(style.spokenKind)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(DincrFont.title2).foregroundStyle(.dincrText)
@@ -85,13 +85,13 @@ struct DincrMessageStyle {
         let language = AppLanguage.current
         switch kind {
         case .technicalError:
-            (symbol, color, fill) = ("exclamationmark.icloud", DincrColor.text2, DincrColor.surface2)
+            (symbol, color, fill) = ("exclamationmark.icloud", OwnerColor.text2, OwnerColor.surface2)
             spokenKind = language.pick("Problema técnico", "Technical problem")
         case .attention:
             (symbol, color, fill) = ("bell.badge", DincrColor.warning, DincrColor.warningContainer)
             spokenKind = language.pick("Para atender", "Needs attention")
         case .opportunity:
-            (symbol, color, fill) = ("sparkles", DincrColor.tint, DincrColor.tintContainer)
+            (symbol, color, fill) = ("sparkles", OwnerColor.accent, OwnerColor.accentContainer)
             spokenKind = language.pick("Recomendación", "Suggestion")
         case .positive:
             (symbol, color, fill) = ("checkmark.seal", DincrColor.positive, DincrColor.positiveContainer)

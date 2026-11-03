@@ -39,7 +39,7 @@ class AppearanceController(private val store: SharedPreferences, scope: Coroutin
     val effective: StateFlow<AppearancePrefs> = combine(profile, saved, draft, cached) { who, server, preview, local ->
         if (preview != null && AppearancePolicy.isPersonalizable(who)) preview.sanitized()
         else AppearancePolicy.effective(who, server?.preferences, local)
-    }.stateIn(scope, SharingStarted.Eagerly, AppearancePrefs.CLASSIC)
+    }.stateIn(scope, SharingStarted.Eagerly, AppearancePrefs.OWNER_DEFAULT)
 
     /** A new or refreshed identity. Another account starts clean; the Owner's choice is read again. */
     fun onIdentity(next: Profile) {

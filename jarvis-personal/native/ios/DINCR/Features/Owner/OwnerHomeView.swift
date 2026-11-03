@@ -3,7 +3,7 @@ import DincrDesign
 import SwiftUI
 
 /// The Owner's "Hoy" (DINCR Owner; UX-6). The Owner is an identity, not a plan.
-/// 0. The hero (`OwnerHomeHero`) — greeting, the key figure and the actions, among them the one entry
+/// 0. The hero (`HomeHero`) — greeting, the key figure and the actions, among them the one entry
 ///    to JARVIS — and, on the sheet below, the next agenda events;
 /// 1–4. the same four blocks as the public Hoy (Estado de hoy, Para atender, Qué sigue, Accesos
 ///    rápidos), from the command center while `vip_intelligence` is on (Basic's sources otherwise).
@@ -19,34 +19,14 @@ struct OwnerHomeView: View {
 
     var body: some View {
         let tier = ownerTier
-        ScrollView {
-            VStack(spacing: 0) {
-                hero
-                VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-                    upcomingSection
-                    PendingDollarsCard(openMovements: openMovements)
-                    financesSection(tier)
-                }
-                .padding(.horizontal, DincrSpacing.s4)
-                .padding(.top, DincrSpacing.s2)
-                .padding(.bottom, DincrSpacing.s8)
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
-                .background(OwnerColor.backgroundMiddle, in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous))
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("owner.home")
-        }
-        // The hero's color behind the top (also when pulled down); the sheet covers it while scrolling.
-        .background(alignment: .top) {
-            OwnerColor.backgroundMiddle.ignoresSafeArea()
-                .overlay(alignment: .top) { OwnerColor.hero.frame(height: 480).ignoresSafeArea() }
+        HomeHeroScreen(id: "owner.home") {
+            hero
+        } sheet: {
+            upcomingSection
+            PendingDollarsCard(openMovements: openMovements)
+            financesSection(tier)
         }
         .navigationTitle(tx("Hoy", "Today"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(OwnerColor.hero, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(item: $editor) { request in
             MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await loadHome(tier) } }
         }
@@ -77,7 +57,7 @@ struct OwnerHomeView: View {
 
     private var hero: some View {
         let status: HomeStatus? = if case .loaded(let value) = home { value.status } else { nil }
-        return OwnerHomeHero(greeting: greeting, name: model.profile?.firstName, status: status, cycle: status?.cycle.map(HomeStatusCopy.cycle),
+        return HomeHero(idPrefix: "owner.home", showsJarvis: true, greeting: greeting, name: model.profile?.firstName, status: status, cycle: status?.cycle.map(HomeStatusCopy.cycle),
                              register: { editor = EditorRequest(kind: $0) })
     }
 

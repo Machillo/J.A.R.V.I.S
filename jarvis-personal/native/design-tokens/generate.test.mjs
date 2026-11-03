@@ -155,6 +155,13 @@ test("every palette x accent x scheme keeps the contrast rules, and a weak color
   assert.equal(contrast("#000000", "#FFFFFF").toFixed(1), "21.0");
 });
 
+test("the app's screens use the shared scene, so the old teal can't come back in one screen", () => {
+  const dir = path.join(here, "../ios/DINCR");
+  const swift = fs.readdirSync(dir, { recursive: true }).filter((f) => f.endsWith(".swift"));
+  const offenders = swift.filter((f) => /DincrColor\.(tint|tintContainer|onTint|onTintContainer|tintPressed)\b/.test(fs.readFileSync(path.join(dir, f), "utf8")));
+  assert.deepEqual(offenders, []);
+});
+
 test("malformed appearance.json fails instead of dropping options", () => {
   const cases = {
     "unknown default": (a) => { a.options.palette.default = "neon"; },

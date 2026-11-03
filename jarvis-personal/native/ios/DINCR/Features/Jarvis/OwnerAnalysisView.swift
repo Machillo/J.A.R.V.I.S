@@ -159,7 +159,7 @@ private struct MonthBars: View {
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
-                AxisGridLine().foregroundStyle(DincrColor.line)
+                AxisGridLine().foregroundStyle(OwnerColor.border)
                 AxisValueLabel().font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
         }

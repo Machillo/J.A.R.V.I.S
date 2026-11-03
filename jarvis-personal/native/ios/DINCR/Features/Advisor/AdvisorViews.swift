@@ -307,7 +307,7 @@ private struct OwnerLedgerDetail: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("summary.owner.detail")
             }
-            .tint(DincrColor.tint)
+            .tint(OwnerColor.accent)
         }
         .dincrCard()
     }

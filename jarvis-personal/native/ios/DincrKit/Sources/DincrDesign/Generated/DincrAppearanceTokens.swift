@@ -35,17 +35,17 @@ public enum DincrAppearanceTokens {
             glow: nil
         ),
         "oceano": AppearanceNeutrals(
-            bg: Color(light: 0xF2F2F7, dark: 0x000000),
-            surface: Color(light: 0xFFFFFF, dark: 0x1C1C1E),
-            surface2: Color(light: 0xEFEFF4, dark: 0x2C2C2E),
-            line: Color(light: 0xD1D1D6, dark: 0x38383A),
-            lineStrong: Color(light: 0xC7C7CC, dark: 0x48484A),
-            fieldBorder: Color(light: 0x86868B, dark: 0x8E8E93),
+            bg: Color(light: 0xF2F2F7, dark: 0x0A0B1E),
+            surface: Color(light: 0xFFFFFF, dark: 0x1C1E3A),
+            surface2: Color(light: 0xEFEFF4, dark: 0x2A2D52),
+            line: Color(light: 0xD1D1D6, dark: 0x33365C),
+            lineStrong: Color(light: 0xC7C7CC, dark: 0x454873),
+            fieldBorder: Color(light: 0x86868B, dark: 0x8A8DB0),
             text: Color(light: 0x1C1C1E, dark: 0xF5F5F7),
-            text2: Color(light: 0x4F4F55, dark: 0xAEAEB2),
-            textMuted: Color(light: 0x636366, dark: 0xA1A1A6),
+            text2: Color(light: 0x4F4F55, dark: 0xB4B6CC),
+            textMuted: Color(light: 0x636366, dark: 0xA3A5BD),
             positive: Color(light: 0x08734F, dark: 0x30D158),
-            glow: Color(light: 0xF2F2F7, dark: 0x000000)
+            glow: Color(light: 0xF2F2F7, dark: 0x0A0B1E)
         ),
         "arena": AppearanceNeutrals(
             bg: Color(light: 0xF6F3EE, dark: 0x12100D),
@@ -85,12 +85,12 @@ public enum DincrAppearanceTokens {
             focusRing: Color(light: 0x0A6B5C, dark: 0x45D3BC)
         ),
         "cian": AppearanceAccent(
-            tint: Color(light: 0x0066CC, dark: 0x2997FF),
-            tintPressed: Color(light: 0x0055AA, dark: 0x64B0FF),
-            tintContainer: Color(light: 0xE3EFFC, dark: 0x0B2A4A),
-            onTint: Color(light: 0xFFFFFF, dark: 0x000000),
-            onTintContainer: Color(light: 0x003D7A, dark: 0xBFDFFF),
-            focusRing: Color(light: 0x0066CC, dark: 0x2997FF)
+            tint: Color(light: 0x4A4FD9, dark: 0x8F95FF),
+            tintPressed: Color(light: 0x3B3FB8, dark: 0xB0B4FF),
+            tintContainer: Color(light: 0xE8E9FC, dark: 0x24275C),
+            onTint: Color(light: 0xFFFFFF, dark: 0x0B0C2A),
+            onTintContainer: Color(light: 0x2A2D8F, dark: 0xD6D8FF),
+            focusRing: Color(light: 0x4A4FD9, dark: 0x8F95FF)
         ),
         "ciruela": AppearanceAccent(
             tint: Color(light: 0x7A3E9D, dark: 0xD3A6F0),
