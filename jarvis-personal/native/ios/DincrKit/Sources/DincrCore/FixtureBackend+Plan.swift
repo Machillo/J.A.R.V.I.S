@@ -30,6 +30,12 @@ extension FixtureBackend {
         case ("GET", "/user-product/vip/wealth"):
             if let denied = needs(.vip) { return denied }
             return ok(wealthSample(debts: debts.filter { (decimal($0["remaining_amount"]) ?? 0) > 0 }))
+        case ("GET", "/user-product/vip/investment-choice"):
+            return ok(["wants_investing": wantsInvesting])
+        case ("PUT", "/user-product/vip/investment-choice"):
+            guard let wanted = body["wants_investing"] as? Bool else { return error(422, "Elegí si querés incluir inversiones.") }
+            wantsInvesting = wanted
+            return ok(["wants_investing": wanted])
         case ("GET", "/user-product/vip/retirement"):
             if let denied = needs(.vip) { return denied }
             return ok(["config": retirement])

@@ -20,6 +20,7 @@ from backend.goals.strategy import build_goal_portfolio
 from backend.user_product.debt_payments import with_known_payments
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import load_income_baseline
+from backend.user_product.investment_choice import PREFERENCE_KEY as INVESTMENT_CHOICE
 from backend.user_product.strategy_engine import missing_rates_warning
 
 # The Owner boundary. The personal JARVIS strategy (payroll/OT/bonus income, the pay
@@ -389,6 +390,7 @@ def _build_dynamic_director_allocation(
     emergency_monthly_base: float,
     rates_known: bool = True,
     owner_month: Any = None,
+    investing_wanted: bool = True,
     split_every_cent: bool = False,
     salvavidas_target_months: int | None = None,
 ) -> dict[str, Any]:
@@ -404,6 +406,9 @@ def _build_dynamic_director_allocation(
 
     `owner_month` (Owner only, `owner_analysis.OwnerMonth`): what is left to split follows the analysis
     of his month instead of the mode's fixed percentages. Users never pass it.
+
+    `investing_wanted` False (Users who didn't choose it, `user_product/investment_choice.py`): no share
+    goes to investing, whatever else allows it; that money protects the Salvavidas.
 
     `rates_known` False (Users, a debt without a known rate): the highest rate is unknown, so the
     "10% or more" rule is neither assumed true nor false (never computed from a missing rate as 0%).
@@ -450,6 +455,7 @@ def _build_dynamic_director_allocation(
         and highest_debt_apr is not None
         and highest_debt_apr < 10.0
     )
+    investment_allowed = investment_allowed and investing_wanted
     goal_portfolio = build_goal_portfolio(
         goal_items,
         available=base,
@@ -1627,6 +1633,10 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
 
     month_start = today.replace(day=1)
     with get_connection() as conn:
+        choice = conn.execute("SELECT preference_value FROM user_preferences WHERE workspace_id=%s AND preference_key=%s",
+                              (workspace_id, INVESTMENT_CHOICE)).fetchone()
+        stored_choice = (choice or {}).get("preference_value")
+        wants_investing = isinstance(stored_choice, dict) and stored_choice.get("wants_investing") is True
         # Debts as the user stored them (no import repair), active and paid off (for progress).
         debts = [dict(row) for row in conn.execute(
             """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,monthly_payment_known,interest_rate,interest_rate_known
@@ -1653,6 +1663,7 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
         "period": {"start": month_start.isoformat(), "end": (_next_month(month_start) - timedelta(days=1)).isoformat()},
         "recurring_expense_monthly": round(sum(item["monthly_amount"] for item in recurring_items), 2),
         "recurring_items": recurring_items,
+        "wants_investing": wants_investing,
     }
 
 
@@ -1716,7 +1727,9 @@ def _users_blueprint_from_inputs(
 
     # A debt without a known rate: no decision that compares rates is made from it (UNKNOWN ≠ 0%).
     missing_rates = unknown_rate_count(debts)
+    investing_wanted = inputs.get("wants_investing") is True  # Not chosen: off (investment_choice.py).
     director = _build_dynamic_director_allocation(
+        investing_wanted=investing_wanted,
         available_before_allocation=max(current_before_allocation, 0.0),
         debts=debts,
         goal_reserves=goal_reserves,
@@ -1735,6 +1748,7 @@ def _users_blueprint_from_inputs(
     current_debt_attack_extra = _f(allocation_amounts.get("ataque_de_deuda"))
 
     recurring_director = _build_dynamic_director_allocation(
+        investing_wanted=investing_wanted,
         available_before_allocation=max(monthly_income - recurring_expense_monthly - configured_debt_payments, 0.0),
         debts=debts,
         goal_reserves=goal_reserves,

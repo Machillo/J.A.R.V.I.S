@@ -121,7 +121,7 @@ class ScopedConn:
             rows = [{"month": k, "total": v} for k, v in totals.items()]
         elif "to_regclass('public.' || t) IS NULL" in q:
             rows = [{"missing": None}]
-        elif "FROM finva_recurring_items" in q:
+        elif "FROM finva_recurring_items" in q or "FROM user_preferences" in q:
             rows = []
         else:
             raise AssertionError(q[:80])
