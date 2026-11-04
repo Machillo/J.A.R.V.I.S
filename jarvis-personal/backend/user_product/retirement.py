@@ -36,8 +36,12 @@ def normalize(raw: Any) -> dict[str, Any]:
     year = int(year) if isinstance(year, int) and 1930 <= year <= date.today().year else None
     age = raw.get("retire_age")
     age = int(age) if isinstance(age, int) and 50 <= age <= 80 else DEFAULT_RETIRE_AGE
-    return {"rop_balance": _amount(raw.get("rop_balance")), "voluntary_balance": _amount(raw.get("voluntary_balance")),
-            "birth_year": year, "retire_age": age}
+    config = {"rop_balance": _amount(raw.get("rop_balance")), "voluntary_balance": _amount(raw.get("voluntary_balance")),
+              "birth_year": year, "retire_age": age}
+    # Only with the Owner's statement (owner_pensions.py): nobody else has them.
+    if isinstance(raw.get("pensions_as_of"), str):
+        config.update(fcl_balance=_amount(raw.get("fcl_balance")), pensions_as_of=raw["pensions_as_of"])
+    return config
 
 
 def get_retirement() -> dict[str, Any]:

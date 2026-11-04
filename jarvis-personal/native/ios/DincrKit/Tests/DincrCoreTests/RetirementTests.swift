@@ -44,4 +44,13 @@ import Testing
         let body = try JSONSerialization.jsonObject(with: APIClient.encoder.encode(RetirementUpdate(ropBalance: 100, voluntaryBalance: nil, birthYear: 1990, retireAge: 65))) as? [String: Any]
         #expect(body?["rop_balance"] as? Int == 100 && body?["voluntary_balance"] is NSNull && body?["birth_year"] as? Int == 1990)
     }
+
+    @Test func thePensionStatementFiguresAreReadAndOthersDoNotHaveThem() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let owner = try decoder.decode(Retirement.self, from: Data(#"{"config":{"rop_balance":100,"fcl_balance":50,"pensions_as_of":"2026-09"}}"#.utf8))
+        #expect(owner.config.fclBalance == 50 && owner.config.pensionsAsOf == "2026-09")
+        let other = try decoder.decode(Retirement.self, from: Data(#"{"config":{"rop_balance":100}}"#.utf8))
+        #expect(other.config.fclBalance == nil && other.config.pensionsAsOf == nil)
+    }
 }

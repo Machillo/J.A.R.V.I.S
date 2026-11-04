@@ -22,6 +22,9 @@ data class Retirement(val config: Config = Config()) {
         @SerialName("voluntary_balance") val voluntaryBalance: Money? = null,
         @SerialName("birth_year") val birthYear: Int? = null,
         @SerialName("retire_age") val retireAge: Int? = null,
+        /** From the Owner's monthly pension statement; nobody else has them. */
+        @SerialName("fcl_balance") val fclBalance: Money? = null,
+        @SerialName("pensions_as_of") val pensionsAsOf: String? = null,
     )
 }
 

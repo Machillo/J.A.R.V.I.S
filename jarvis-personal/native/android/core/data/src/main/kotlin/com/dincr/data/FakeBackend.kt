@@ -988,7 +988,8 @@ class FakeBackend(
             val update = json.decodeFromJsonElement(RetirementUpdate.serializer(), body)
             retirementConfig = Retirement.Config(update.ropBalance, update.voluntaryBalance, update.birthYear, update.retireAge ?: 65)
         }
-        return ok(Retirement(retirementConfig))
+        // The Owner's statement (owner_pensions.py): invented figures.
+        return ok(Retirement(if (isInternal) retirementConfig.copy(fclBalance = BigDecimal(150_000), pensionsAsOf = "2026-09") else retirementConfig))
     }
 
     private fun freeDashboard(): FreeDashboard {

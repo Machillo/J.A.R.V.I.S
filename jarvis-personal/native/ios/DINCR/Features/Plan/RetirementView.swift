@@ -58,6 +58,19 @@ private struct RetirementContent: View {
         .dincrCard()
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("retirement.reading")
+        // The Owner's pension statement keeps these by itself.
+        if let asOf = loaded.retirement.config.pensionsAsOf {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                FigureRow(label: tx("ROP", "ROP"), amount: loaded.retirement.config.ropBalance)
+                FigureRow(label: tx("FCL (Fondo de Capitalización Laboral)", "FCL (labor capitalization fund)"), amount: loaded.retirement.config.fclBalance)
+                Text(tx("Se actualizan solos con tu estado de cuenta de BAC Pensiones (\(asOf)).", "They update by themselves from your BAC Pensiones statement (\(asOf))."))
+                    .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dincrCard()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("retirement.pensions")
+        }
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             SectionHeader(title: tx("Tus datos", "Your details"))
             MoneyField(label: tx("Saldo del ROP", "ROP balance"), text: $rop, identifier: "retirement.rop")
