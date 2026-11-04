@@ -93,6 +93,8 @@ fun MovementEditorSheet(
     model: AppModel, mode: EditorMode, onDismiss: () -> Unit, onSaved: (String) -> Unit, onDelete: (Movement) -> Unit, latestRate: BigDecimal? = null,
     /** What a new movement starts as (Hoy opens it as an income to register the month's pay). */
     initialKind: MovementKind = MovementKind.EXPENSE,
+    /** What a text shared into DINCR proposes; the user reviews it and only saving records it. */
+    shared: com.dincr.data.SharedExpense? = null,
 ) {
     val format = Dincr.money
     val profile by model.profile.collectAsStateWithLifecycle()
@@ -106,14 +108,14 @@ fun MovementEditorSheet(
     // A dollar expense still waiting for the close: edited in its own currency, without a rate.
     val storedPending = editing?.takeIf { it.isPendingConversion }
     var kind by remember { mutableStateOf(editing?.kind ?: initialKind) }
-    var currency by remember { mutableStateOf((storedForeign ?: storedPending)?.originalCurrency?.uppercase() ?: base) }
+    var currency by remember { mutableStateOf((storedForeign ?: storedPending)?.originalCurrency?.uppercase() ?: shared?.currency?.takeIf { it == base || it == otherCurrency } ?: base) }
     // A row typed in another currency is edited in that currency (its original amount).
     val prefilledAmount = remember { editing?.let { (storedForeign ?: storedPending)?.originalAmount?.let(format::inputText) ?: format.inputText(it.amount) } ?: "" }
-    var amountText by remember { mutableStateOf(prefilledAmount) }
+    var amountText by remember { mutableStateOf(shared?.amount?.let(format::inputText) ?: prefilledAmount) }
     val prefilledRate = remember { (storedForeign?.exchangeRate ?: latestRate)?.let(format::inputText) ?: "" }
     var rateText by remember { mutableStateOf(prefilledRate) }
     var rateError by remember { mutableStateOf<String?>(null) }
-    var description by remember { mutableStateOf(editing?.description.orEmpty()) }
+    var description by remember { mutableStateOf(editing?.description ?: shared?.merchant.orEmpty()) }
     val storedCategory = editing?.category?.takeIf { it.isNotEmpty() }
     val baseCategories = if (kind == MovementKind.INCOME) incomeCategories else expenseCategories
     val categories = if (storedCategory != null && storedCategory !in baseCategories) listOf(storedCategory) + baseCategories else baseCategories
