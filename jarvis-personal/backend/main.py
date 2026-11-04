@@ -38,6 +38,7 @@ from backend.user_product.routes import router as user_product_router
 from backend.user_product.shortcut_routes import CAPTURE_PATHS as SHORTCUT_CAPTURE_PATHS, router as shortcut_router
 from backend.user_product.appearance_routes import router as appearance_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
+from backend.integrations.bccr_rates import router as exchange_rates_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.posthog_events import capture_backend_event_later
 from backend.core import observability as ops
@@ -114,6 +115,7 @@ PUBLIC_PATHS = {
     "/deployment-monitor/webhook/render",
     "/integrations/ibkr/snapshot",
     "/integrations/ibkr/flex/cron",
+    "/integrations/exchange-rates/cron",
     "/internal/owner-bridge/verify",
     # iOS Shortcuts App Intents: authenticated by the Shortcuts token, never the app session
     # (backend/user_product/shortcut_routes.py checks the token, legal acceptance, write limit and plan).
@@ -496,6 +498,7 @@ app.include_router(notifications_router)
 app.include_router(financial_history_router)
 app.include_router(investment_center_router, dependencies=INTERNAL_ONLY)
 app.include_router(ibkr_readonly_router)
+app.include_router(exchange_rates_router)
 app.include_router(business_center_router, dependencies=INTERNAL_ONLY)
 app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)

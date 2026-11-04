@@ -15,9 +15,17 @@ cannot exist: the listing says "unavailable" and only a request that asks for it
 
 A mail or statement expense confirmed without a rate waits the same way (`candidate_waits`): it
 becomes a pending expense, with no transaction until there is a rate to give it a base amount.
+
+Dollars in a colones account also get, with the Banco Central's published selling rate
+(`integrations/bccr_rates.py`):
+- an estimate while they wait, read-only and labeled as such, at the purchase day's rate;
+- their conversion when the close arrives (`close_due_periods`, a scheduled command), at the rate of
+  the close's last day, as a card does. The user asked for that by keeping the expense in dollars
+  until the close, and can still correct it or close it by hand first.
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -30,11 +38,14 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.core.idempotency import mark_applied
 from backend.core.time import costa_rica_today
+from backend.integrations import bccr_rates
 from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category
 from backend.user_product import conversion_periods, expense_account
 from backend.user_product.entry_currency import (
     MAX_ORIGINAL, SUPPORTED_CURRENCIES, _finite, _within, account_base_currency, resolve_entry_amount,
 )
+
+logger = logging.getLogger(__name__)
 
 FIELD = "convert_at_close"
 CONSTRAINT = "expenses_amount_known_or_pending_check"
@@ -141,14 +152,38 @@ def _period(row) -> conversion_periods.Period:
                                          account_type=row["account_type"], cut_day=row["statement_cut_day"])
 
 
-def _totals(rows) -> list[dict[str, Any]]:
+def _totals(rows, estimates: dict[int, Decimal] | None = None) -> list[dict[str, Any]]:
+    estimates = estimates or {}
     totals: dict[str, dict[str, Any]] = {}
     for row in rows:
         currency = str(row["original_currency"])
-        total = totals.setdefault(currency, {"currency": currency, "amount": Decimal("0"), "count": 0})
+        total = totals.setdefault(currency, {"currency": currency, "amount": Decimal("0"), "count": 0, "estimated_amount": Decimal("0")})
         total["amount"] += Decimal(str(row["original_amount"]))
         total["count"] += 1
-    return [{**total, "amount": _amount(total["amount"])} for _, total in sorted(totals.items())]
+        estimate = estimates.get(row["id"])
+        # One expense without an estimate leaves the total unknown: it would otherwise read as complete.
+        total["estimated_amount"] = None if estimate is None or total["estimated_amount"] is None else total["estimated_amount"] + estimate
+    listed = []
+    for _, total in sorted(totals.items()):
+        estimate = total.pop("estimated_amount")
+        # Left out when unknown: a reader never finds a number that isn't there.
+        listed.append({**total, "amount": _amount(total["amount"]), **({} if estimate is None else {"estimated_amount": _amount(estimate)})})
+    return listed
+
+
+def _estimates(conn, rows, base: str) -> dict[int, Decimal]:
+    """Each waiting dollar expense in colones, at its purchase day's rate. No rate for that day: no estimate."""
+    dollars = [row for row in rows if base == "CRC" and str(row["original_currency"]) == bccr_rates.CURRENCY]
+    if not dollars:
+        return {}
+    days = [date.fromisoformat(str(row["entry_date"])[:10]) for row in dollars]
+    rates = bccr_rates.rates_between(conn, min(days), max(days))
+    estimates = {}
+    for row, day in zip(dollars, days):
+        rate = bccr_rates.rate_on_or_before(rates, day)
+        if rate is not None:
+            estimates[row["id"]] = Decimal(str(row["original_amount"])) * rate
+    return estimates
 
 
 def list_pending() -> dict[str, Any]:
@@ -158,6 +193,9 @@ def list_pending() -> dict[str, Any]:
         if not pending_available(conn):
             return {"status": "ok", "available": False, "items": [], "totals": [], "periods": []}
         rows = _pending_rows(conn, workspace_id)
+        base = account_base_currency(conn, get_current_account_id())
+        estimates = _estimates(conn, rows, base) if rows else {}
+        auto_close = base == "CRC" and bccr_rates.auto_close_active(conn)
     today = costa_rica_today()
     items, groups = [], {}
     for row in rows:
@@ -167,6 +205,7 @@ def list_pending() -> dict[str, Any]:
             "description": row["description"], "category": row["category"],
             "original_amount": _amount(row["original_amount"]), "original_currency": str(row["original_currency"]),
             "financial_account_id": row["financial_account_id"], "period_key": period.key,
+            "estimated_amount": _amount(estimates[row["id"]]) if row["id"] in estimates else None,
         })
         group = groups.setdefault(period.key, {"period": period, "rows": [], "card": row if period.kind == "card" else None})
         group["rows"].append(row)
@@ -179,9 +218,82 @@ def list_pending() -> dict[str, Any]:
                 _period(row).cut_day_missing for row in group["rows"]),
             "account_id": period.account_id,
             "account_name": card["account_name"] if card else None, "account_last4": card["account_last4"] if card else None,
-            "totals": _totals(group["rows"]), "count": len(group["rows"]),
+            "totals": _totals(group["rows"], estimates), "count": len(group["rows"]),
         })
-    return {"status": "ok", "available": True, "items": items, "totals": _totals(rows), "periods": periods}
+    return {"status": "ok", "available": True, "items": items, "totals": _totals(rows, estimates), "periods": periods,
+            "auto_close": auto_close}
+
+
+def _convert(conn, rows, base: str, exchange_rate: float, workspace_id: str) -> tuple[int, Decimal, dict[str, Any]]:
+    """One rate for the whole close. Only a row still waiting converts, so no close applies twice."""
+    converted, total, values = 0, Decimal("0"), {}
+    for row in rows:
+        # The same conversion as an expense typed with a rate (entry_currency).
+        values = resolve_entry_amount(base, row["original_amount"], row["original_currency"], exchange_rate)
+        done = conn.execute(
+            "UPDATE expenses SET amount=%s, exchange_rate=%s WHERE id=%s AND workspace_id=%s AND amount IS NULL RETURNING id",
+            (values["amount"], values["exchange_rate"], row["id"], workspace_id),
+        ).fetchone()
+        if done:
+            converted += 1
+            total += values["amount"]
+    return converted, total, values
+
+
+def _close_due_in_workspace(conn, workspace_id: str, base: str, today: date) -> dict[str, int]:
+    """Converts this workspace's dollars whose close has arrived, each close with the rate of its last day."""
+    due: dict[str, list[dict]] = {}
+    periods = {}
+    for row in _pending_rows(conn, workspace_id, lock=True):
+        period = _period(row)
+        if period.closable(today) and str(row["original_currency"]) == bccr_rates.CURRENCY:
+            due.setdefault(period.key, []).append(row)
+            periods[period.key] = period
+    result = {"closed_periods": 0, "converted": 0, "waiting_for_rate": 0}
+    if not due:
+        return result
+    ends = [period.end for period in periods.values()]
+    rates = bccr_rates.rates_between(conn, min(ends), max(ends))
+    for key, rows in due.items():
+        rate = bccr_rates.closing_rate(rates, periods[key].end, today)
+        if rate is None:
+            result["waiting_for_rate"] += 1
+            continue
+        converted, _, _ = _convert(conn, rows, base, float(rate), workspace_id)
+        result["closed_periods"] += 1
+        result["converted"] += converted
+    return result
+
+
+def close_due_periods(today: date) -> dict[str, int]:
+    """The scheduled close, for every workspace, each one isolated in its own transaction: one that
+    fails stays waiting and never touches another. A close without its rate waits for a later run.
+    Only a colones account's dollars: no other pair has a published rate here."""
+    totals = {"closed_periods": 0, "converted": 0, "waiting_for_rate": 0, "failed_workspaces": 0}
+    with get_connection() as conn:
+        if not pending_available(conn) or not bccr_rates.available(conn):
+            return totals
+        owners = conn.execute(
+            """SELECT DISTINCT workspaces.id AS workspace_id, workspaces.owner_account_id AS account_id
+               FROM expenses JOIN workspaces ON workspaces.id = expenses.workspace_id
+               WHERE expenses.amount IS NULL AND expenses.original_currency = %s""",
+            (bccr_rates.CURRENCY,),
+        ).fetchall()
+    for owner in owners:
+        try:
+            with get_connection() as conn:
+                base = account_base_currency(conn, owner["account_id"])
+                if base != "CRC":
+                    continue
+                result = _close_due_in_workspace(conn, owner["workspace_id"], base, today)
+                conn.commit()
+        except Exception as exc:  # noqa: BLE001 - one workspace never stops the others; no ids or amounts logged
+            logger.error("Scheduled dollar close failed type=%s", type(exc).__name__)
+            totals["failed_workspaces"] += 1
+            continue
+        for key, value in result.items():
+            totals[key] += value
+    return totals
 
 
 def close_period(period_key: str, exchange_rate: float) -> dict[str, Any]:
@@ -208,17 +320,7 @@ def close_period(period_key: str, exchange_rate: float) -> dict[str, Any]:
             raise HTTPException(status_code=409, detail={"code": "period_open", "message": tx(
                 f"Este cierre termina el {period.end.isoformat()}: se convierte desde ese día.",
                 f"This close ends on {period.end.isoformat()}: it converts from that day.")})
-        converted, total = 0, Decimal("0")
-        for row in rows:
-            # The same conversion as an expense typed with a rate (entry_currency): one rate for the whole close.
-            values = resolve_entry_amount(base, row["original_amount"], row["original_currency"], exchange_rate)
-            done = conn.execute(
-                "UPDATE expenses SET amount=%s, exchange_rate=%s WHERE id=%s AND workspace_id=%s AND amount IS NULL RETURNING id",
-                (values["amount"], values["exchange_rate"], row["id"], workspace_id),
-            ).fetchone()
-            if done:
-                converted += 1
-                total += values["amount"]
+        converted, total, values = _convert(conn, rows, base, exchange_rate, workspace_id)
         mark_applied(conn)
         conn.commit()
     return {"status": "ok", "period_key": period_key, "converted": converted, "amount": _amount(total), "currency": base,

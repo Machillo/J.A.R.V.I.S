@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from backend.auth.owner_role import enabled_owner_email
 from backend.core import observability
 from backend.core.database import get_connection, serialize_row, serialize_rows
+from backend.integrations import bccr_rates
 
 
 router = APIRouter(prefix="/integrations/ibkr", tags=["IBKR read-only"])
@@ -294,7 +295,9 @@ def _persist_snapshot(payload: IbkrSnapshot, sync_method: str = "bridge") -> dic
             """,
             (workspace_id,),
         ).fetchone()
-        exchange_rate_crc = payload.exchange_rate_crc or float((rate_row or {}).get("exchange_rate") or os.getenv("USD_CRC_FALLBACK", "495"))
+        # The Banco Central's rate when there is one; the typed rows only had a rate when someone typed it.
+        market_rate = bccr_rates.latest_rate(conn)
+        exchange_rate_crc = payload.exchange_rate_crc or float(market_rate or (rate_row or {}).get("exchange_rate") or os.getenv("USD_CRC_FALLBACK", "495"))
         market_value_crc = payload.net_liquidation * exchange_rate_crc
         row = conn.execute(
             """
