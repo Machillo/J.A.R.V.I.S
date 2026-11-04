@@ -36,6 +36,14 @@ class PendingEstimateTest {
         assertEquals(BigDecimal(20), MovementTotals(null, null, null).addingEstimate(BigDecimal(20)).expenses)
     }
 
+    @Test fun oneExpenseWithoutARateDoesNotHideTheOthersOnHoy() = assertEquals(PendingEstimate(BigDecimal(18_000), 1), pending.estimateOfAll)
+
+    @Test fun aReadOnlySalaryRowDecodesAndCannotBeEdited() {
+        val row = Json { ignoreUnknownKeys = true }.decodeFromString(Movement.serializer(), """{"movement_id":"salary_estimate:2026-11","source_id":null,"origin":"salary_estimate","transaction_date":"2026-11-01","description":"Salario del mes (estimado)","amount":400000,"transaction_type":"income","category":"Salario","editable":false,"counts_in":"income"}""")
+        assertFalse(row.editable)
+        assertEquals(0, BigDecimal(400_000).compareTo(MovementTotals.of(listOf(row)).income))
+    }
+
     @Test fun anOlderServerPromisesNothing() {
         val json = Json { ignoreUnknownKeys = true }
         val old = json.decodeFromString(PendingConversion.serializer(), """{"available":true,"totals":[{"currency":"USD","amount":5,"count":1}]}""")

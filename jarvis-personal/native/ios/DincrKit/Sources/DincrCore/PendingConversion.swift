@@ -103,6 +103,9 @@ public struct PendingConversion: Decodable, Sendable, Equatable {
 
     public static let unavailable = PendingConversion(available: false, items: [], totals: [])
 
+    /// Every waiting expense, whatever its month (Hoy's card).
+    public var estimateOfAll: PendingEstimate { estimate(month: "", query: "") }
+
     /// What the waiting dollars on screen add to the expenses: with a search every month, without
     /// one only `month` (`YYYY-MM`), like the colones rows. `sum` nil: none has an estimate.
     public func estimate(month: String, query: String) -> PendingEstimate {

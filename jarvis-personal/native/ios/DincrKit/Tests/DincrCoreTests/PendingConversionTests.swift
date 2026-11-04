@@ -140,6 +140,18 @@ struct PendingEstimateTests {
         #expect(MovementTotals(income: nil, expenses: nil, debtPaid: nil).addingEstimate(20).expenses == 20)
     }
 
+    @Test func oneExpenseWithoutARateDoesNotHideTheOthersOnHoy() {
+        #expect(pending.estimateOfAll == PendingEstimate(sum: 18_000, withoutEstimate: 1))
+    }
+
+    @Test func aReadOnlySalaryRowDecodesAndCannotBeEdited() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let row = try decoder.decode(Movement.self, from: Data(#"{"movement_id":"salary_estimate:2026-11","source_id":null,"origin":"salary_estimate","transaction_date":"2026-11-01","description":"Salario del mes (estimado)","amount":400000,"transaction_type":"income","category":"Salario","editable":false,"counts_in":"income"}"#.utf8))
+        #expect(row.transactionType == .income && !row.canEdit(entryCurrencies: ["USD"]))
+        #expect(MovementTotals([row]).income == 400_000)
+    }
+
     @Test func anOlderServerPromisesNothing() throws {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase

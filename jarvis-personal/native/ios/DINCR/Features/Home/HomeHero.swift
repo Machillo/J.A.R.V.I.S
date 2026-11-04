@@ -14,6 +14,9 @@ struct HomeHero: View {
     let cycle: String?
     let register: (Movement.Kind) -> Void
     @Environment(\.moneyFormat) private var format
+    @Environment(AppModel.self) private var model
+    /// The dollars of this month still waiting for their close, as an estimate; nil: none or unknown.
+    @State private var dollars: Decimal?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s4) {
@@ -37,6 +40,10 @@ struct HomeHero: View {
         .padding(.bottom, DincrSpacing.s6)
         .frame(maxWidth: 640, alignment: .leading)
         .frame(maxWidth: .infinity)
+        .task(id: model.dataGeneration) {
+            // Optional: Hoy never fails because of it; on error the figures stay as registered.
+            if let read = try? await model.service.pendingConversion() { dollars = read.estimate(month: String(Day.today().prefix(7)), query: "").sum }
+        }
     }
 
     private func figure(_ status: HomeStatus) -> some View {
@@ -58,14 +65,19 @@ struct HomeHero: View {
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) { facts(status) }
             }
             .accessibilityIdentifier("\(idPrefix).status.facts")
+            if let dollars {
+                Text(tx("Gastos incluye ≈ \(format.string(dollars)) estimado en dólares.", "Expenses include ≈ \(format.string(dollars)) estimated in dollars."))
+                    .font(DincrFont.caption).foregroundStyle(OwnerColor.onHero2)
+                    .accessibilityIdentifier("\(idPrefix).status.dollars")
+            }
         }
     }
 
     @ViewBuilder private func facts(_ status: HomeStatus) -> some View {
         fact(tx("Ingresos", "Income"), status.income, sign: .income, unknown: tx("Sin registrar", "Not recorded"))
-        fact(tx("Gastos", "Expenses"), status.expenses, sign: .expense, unknown: tx("Sin registrar", "Not recorded"))
+        fact(tx("Gastos", "Expenses"), dollars.map { (status.expenses ?? 0) + $0 } ?? status.expenses, sign: .expense, unknown: tx("Sin registrar", "Not recorded"))
         if status.headline == .safeToSpend {
-            fact(status.cycle == nil ? tx("Resultado del mes", "Month result") : tx("Resultado del corte", "Statement result"), status.result, sign: .none, unknown: "—")
+            fact(status.cycle == nil ? tx("Resultado del mes", "Month result") : tx("Resultado del corte", "Statement result"), status.result.map { $0 - (dollars ?? 0) }, sign: .none, unknown: "—")
         }
     }
 

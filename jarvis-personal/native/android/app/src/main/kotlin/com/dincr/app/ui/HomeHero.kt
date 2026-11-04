@@ -55,13 +55,13 @@ private val HeroControl: Color @Composable get() = Dincr.colors.sceneControl
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status: HomeStatus?, cycle: String?, onExpense: () -> Unit, onIncome: () -> Unit, onJarvis: (() -> Unit)?, modifier: Modifier = Modifier) {
+internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status: HomeStatus?, cycle: String?, onExpense: () -> Unit, onIncome: () -> Unit, onJarvis: (() -> Unit)?, modifier: Modifier = Modifier, dollars: BigDecimal? = null) {
     Column(modifier.background(HomeHeroColor).padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s4), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
         Column(Modifier.testTag("$tagPrefix.greeting").semantics(mergeDescendants = true) { heading() }) {
             Text(greeting, style = MaterialTheme.typography.bodyLarge, color = OnHero2)
             if (name.isNotEmpty()) Text("$name.", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = OnHero)
         }
-        status?.let { Figure(it, cycle) }
+        status?.let { Figure(it, cycle, dollars) }
         // Wraps instead of squeezing a label on a narrow screen or at a large text size.
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             HeroAction(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
@@ -74,7 +74,7 @@ internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status:
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Figure(status: HomeStatus, cycle: String?) {
+private fun Figure(status: HomeStatus, cycle: String?, dollars: BigDecimal?) {
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
         Text(
             if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) tx("Podés gastar con tranquilidad", "Safe to spend") else tx("Resultado del mes", "This month’s result"),
@@ -85,10 +85,15 @@ private fun Figure(status: HomeStatus, cycle: String?) {
     }
     FlowRow(Modifier.fillMaxWidth().testTag("home.status.facts"), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s4), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
         HeroFact(tx("Ingresos", "Income"), status.income, MoneyFormat.Sign.INCOME, tx("Sin registrar", "Not recorded"))
-        HeroFact(tx("Gastos", "Expenses"), status.expenses, MoneyFormat.Sign.EXPENSE, tx("Sin registrar", "Not recorded"))
+        HeroFact(tx("Gastos", "Expenses"), dollars?.let { (status.expenses ?: BigDecimal.ZERO) + it } ?: status.expenses, MoneyFormat.Sign.EXPENSE, tx("Sin registrar", "Not recorded"))
         if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) {
-            HeroFact(if (status.cycle == null) tx("Resultado del mes", "Month result") else tx("Resultado del corte", "Statement result"), status.result, MoneyFormat.Sign.NONE, "—")
+            HeroFact(if (status.cycle == null) tx("Resultado del mes", "Month result") else tx("Resultado del corte", "Statement result"), status.result?.let { it - (dollars ?: BigDecimal.ZERO) }, MoneyFormat.Sign.NONE, "—")
         }
+    }
+    dollars?.let {
+        val amount = Dincr.money.format(it)
+        Text(tx("Gastos incluye ≈ $amount estimado en dólares.", "Expenses include ≈ $amount estimated in dollars."),
+            Modifier.testTag("home.status.dollars"), style = MaterialTheme.typography.bodySmall, color = OnHero2)
     }
 }
 
