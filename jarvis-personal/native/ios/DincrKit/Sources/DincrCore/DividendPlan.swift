@@ -78,6 +78,14 @@ public struct DividendPlanUpdate: Encodable, Sendable, Equatable {
     }
 }
 
+/// One number is enough: the monthly goal. The stocks and their yields come from what is held.
+public struct DividendGoalUpdate: Encodable, Sendable, Equatable {
+    public let goalMonthlyUsd: Decimal
+    public let fromHoldings = true
+    public init(goalMonthlyUsd: Decimal) { self.goalMonthlyUsd = goalMonthlyUsd }
+    enum CodingKeys: String, CodingKey { case goalMonthlyUsd, fromHoldings }
+}
+
 /// `POST /finance/investment-center/dividend-yield`: a stock's last year of dividends over its price.
 public struct DividendYield: Decodable, Sendable, Equatable {
     public let symbol: String
@@ -92,6 +100,11 @@ extension DincrService {
     /// Looks the stock's yield up (an outside service that can fail; then it is typed by hand).
     public func dividendYield(symbol: String) async throws -> DividendYield {
         try await client.send("POST", "/finance/investment-center/dividend-yield", body: DividendYieldRequest(symbol: symbol))
+    }
+
+    /// Calculates what the goal needs with the stocks already held.
+    public func calculateDividendGoal(_ goal: Decimal) async throws -> DividendPlan {
+        try await client.send("PUT", "/finance/investment-center/dividend-plan", body: DividendGoalUpdate(goalMonthlyUsd: goal))
     }
 
     /// A read: it only calculates, and never buys or moves anything.

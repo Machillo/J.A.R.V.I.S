@@ -36,6 +36,11 @@ extension FixtureBackend {
         case ("GET", "/finance/investment-center/dividend-plan"):
             return ok(dividendPlanAnswer())
         case ("PUT", "/finance/investment-center/dividend-plan"):
+            var body = body
+            if body["from_holdings"] as? Bool == true {
+                guard let goal = decimal(body["goal_monthly_usd"]), goal > 0 else { return error(422, "Escribí cuánto querés ganar al mes.") }
+                body = ["stocks": [["symbol": "ACME", "share_pct": 100, "yield_pct": 4]], "goal_monthly_usd": number(goal), "withholding_pct": 30]
+            }
             let stocks = body["stocks"] as? [[String: Any]] ?? []
             guard !stocks.isEmpty, stocks.count <= 2 else { return error(422, "Elegí una o dos acciones.") }
             guard stocks.reduce(Decimal(0), { $0 + (decimal($1["share_pct"]) ?? 0) }) == 100 else { return error(422, "Los porcentajes tienen que sumar 100.") }

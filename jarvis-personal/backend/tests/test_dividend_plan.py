@@ -176,3 +176,55 @@ def test_a_bad_symbol_never_goes_out(monkeypatch):
     with pytest.raises(HTTPException) as refused:
         dp.lookup_yield("../etc passwd")
     assert refused.value.status_code == 422
+
+
+def position(symbol, value, currency="USD", kind="STK"):
+    return {"symbol": symbol, "currency": currency, "sec_type": kind, "market_value": value}
+
+
+@pytest.fixture
+def yields(monkeypatch):
+    table = {"AAA": 4, "BBB": 2}
+
+    def lookup(symbol):
+        if symbol not in table:
+            raise HTTPException(status_code=502, detail="down")
+        return {"yield_pct": table[symbol]}
+
+    monkeypatch.setattr(dp, "lookup_yield", lookup)
+
+
+def test_one_number_is_enough_his_stock_and_its_yield_come_by_themselves(yields):
+    config = dp.goal_from_holdings(1000, [position("AAA", 300)], dp.normalize({}))
+    assert config["stocks"] == [{"symbol": "AAA", "share_pct": 100, "yield_pct": 4}] and config["goal_monthly_usd"] == 1000
+    result = dp.calculate(dp.normalize(config), [position("AAA", 300)], OPEN)
+    assert result["capital_needed_usd"] == pytest.approx(12_000 / 0.028, abs=0.01)
+    assert result["missing_usd"] == pytest.approx(12_000 / 0.028 - 300, abs=0.01) and result["monthly_needed"]
+
+
+def test_two_stocks_share_by_what_each_is_worth_and_add_up_to_100(yields):
+    stocks = dp.goal_from_holdings(1000, [position("BBB", 100), position("AAA", 200)], dp.normalize({}))["stocks"]
+    assert [s["symbol"] for s in stocks] == ["AAA", "BBB"] and [s["share_pct"] for s in stocks] == [66.67, 33.33]
+
+
+def test_only_his_two_largest_dollar_stocks_count(yields):
+    rows = [position("AAA", 300), position("BBB", 200), position("CCC", 100), position("EUR1", 900, currency="EUR"), position("OPT", 900, kind="OPT")]
+    assert [s["symbol"] for s in dp.goal_from_holdings(1000, rows, dp.normalize({}))["stocks"]] == ["AAA", "BBB"]
+
+
+def test_a_yield_not_found_stays_unknown(yields):
+    config = dp.normalize(dp.goal_from_holdings(1000, [position("ZZZ", 100)], dp.normalize({})))
+    assert config["stocks"][0]["yield_pct"] is None and dp.calculate(config, [position("ZZZ", 100)], OPEN)["ready"] is False
+
+
+@pytest.mark.parametrize("goal,rows", [(0, [position("AAA", 1)]), ("abc", [position("AAA", 1)]), (1000, []), (1000, None), (1000, [position("AAA", 0)])])
+def test_it_says_what_is_missing_instead_of_guessing(yields, goal, rows):
+    with pytest.raises(HTTPException) as refused:
+        dp.goal_from_holdings(goal, rows, dp.normalize({}))
+    assert refused.value.status_code == 422
+
+
+def test_it_keeps_what_was_already_set(yields):
+    previous = dp.normalize({"withholding_pct": 15, "monthly_amount_usd": 40})
+    config = dp.goal_from_holdings(500, [position("AAA", 1)], previous)
+    assert config["withholding_pct"] == 15 and config["monthly_amount_usd"] == 40

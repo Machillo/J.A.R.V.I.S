@@ -99,17 +99,16 @@ class OwnerWealthUiTest {
         waitForTag("wealth.investments")
     }
 
-    /** Plan de dividendos: prefills the stock held, shows the capital needed, and with the gate closed says why instead of what to buy. */
-    @Test fun theDividendPlanSaysWhatTheGoalNeedsAndNeverSaysBuyWithTheGateClosed() {
+    /** Plan de dividendos: one field, the goal. It answers with the stock held and its dividend, and with the gate closed says why instead of what to buy. */
+    @Test fun oneNumberAnswersHowMuchMoreToBuy() {
         launchOwner()
         openWealth()
-        tapTag("wealth.dividends.edit")
-        // The stock held is prefilled and its dividend comes by itself.
-        waitForTag("wealth.dividends.yieldNote")
-        tapTag("wealth.dividends.save")
-        waitForText(tx("Capital que necesitás", "Capital you need"))
+        waitForTag("wealth.dividends.goal")
+        tapTag("wealth.dividends.calculate")
+        waitForText(tx("Te falta comprar", "Still to buy"))
+        waitForText(tx("Necesitás tener invertido", "You need invested"))
+        waitForText("ACME", substring = true)
         waitForText(tx("Todavía no te toca comprar más", "It’s not time to buy more yet"))
-        waitForText(tx("Tenés deuda con tasa anual de 10% o más.", "You have debt at 10% a year or more."))
         assertTrue("never says buy with the gate closed", !present(tx("Este mes comprá", "This month, buy")))
     }
 
