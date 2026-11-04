@@ -381,7 +381,16 @@ def _build_dynamic_director_allocation(
     highest_debt_apr = max((_f(debt.get("interest_rate")) for debt in debts), default=0.0) if rates_known else None
     safety_gap_mini = max(mini_fund_target - savings_total, 0.0)
     safety_gap_month = max(one_month_target - savings_total, 0.0)
-    investment_allowed = (
+    # Without debt, a month of safety is enough. With debt, only cheap debt (under 10% a year) and a
+    # Salvavidas of 3 months: below that, paying the debt or saving does more. Unknown stays closed.
+    investing_alongside_debt = (
+        debt_exists
+        and monthly_base > 0
+        and savings_total >= three_month_target
+        and highest_debt_apr is not None
+        and highest_debt_apr < 10.0
+    )
+    investment_allowed = investing_alongside_debt or (
         not debt_exists
         and safety_gap_month <= 0.01
         and highest_debt_apr is not None
@@ -425,6 +434,11 @@ def _build_dynamic_director_allocation(
         mode_label = "DEBT ATTACK"
         mode_reason = tx("El mini-colchón ya existe; se acelera deuda sin dejar de construir un mes de seguridad.", "The mini cushion exists; debt is accelerated while still building one month of safety.")
         remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "investment": 0.0}
+    elif investing_alongside_debt:
+        mode = "debt_attack"
+        mode_label = "DEBT ATTACK"
+        mode_reason = tx("La deuda es barata y hay 3 meses de seguridad: se sigue abonando y se empieza a invertir.", "The debt is cheap and there are 3 months of safety: keep paying it and start investing.")
+        remaining_weights = {"debt": 0.45, "emergency": 0.10, "life": 0.15, "investment": 0.30}
     elif debt_exists:
         mode = "debt_attack"
         mode_label = "DEBT ATTACK"
@@ -567,10 +581,10 @@ def _build_dynamic_director_allocation(
         "active_goal": active_goal,
         "investment_blockers": [
             reason for blocked, reason in (
-                (debt_exists, tx("Hay deudas activas.", "There are active debts.")),
                 (highest_debt_apr is None, tx("Falta la tasa de interés de una deuda.", "A debt's interest rate is missing.")),
                 (highest_debt_apr is not None and highest_debt_apr >= 10.0, tx("Existe deuda con tasa anual de 10% o más.", "There is debt with an annual rate of 10% or more.")),
                 (safety_gap_month > 0.01, tx("El Salvavidas todavía no cubre un mes.", "The emergency fund doesn’t cover one month yet.")),
+                (debt_exists and safety_gap_month <= 0.01 and not investing_alongside_debt, tx("Con deudas, el Salvavidas tiene que cubrir 3 meses.", "With debts, the emergency fund has to cover 3 months.")),
             ) if blocked
         ],
     }

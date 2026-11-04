@@ -66,6 +66,39 @@ class AdvisorFoundationTests(unittest.TestCase):
         self.assertEqual(result["allocation_amounts"]["inversion"], 45_000)
         self.assertEqual(result["allocation_amounts"]["pension_complementaria"], 10_000)
 
+    def _with_low_rate_debt(self, apr, savings, base=100_000, known=True):
+        return _build_dynamic_director_allocation(
+            available_before_allocation=100_000,
+            debts=[{"remaining_amount": 500_000, "interest_rate": apr}],
+            goal_reserves={},
+            savings_total=savings,
+            emergency_monthly_base=base,
+            rates_known=known,
+        )
+
+    def test_debt_under_ten_percent_and_three_months_saved_lets_investing_start(self):
+        result = self._with_low_rate_debt(apr=9.99, savings=300_000)
+        self.assertTrue(result["investment_allowed"])
+        self.assertEqual(result["mode"], "debt_attack")
+        self.assertEqual(result["allocation_amounts"]["inversion"], 30_000)
+        # The pension still comes out of the debt share.
+        self.assertEqual(result["allocation_amounts"]["ataque_de_deuda"], 40_000)
+        self.assertEqual(result["investment_blockers"], [])
+        self.assertAlmostEqual(sum(result["allocation_amounts"].values()), 100_000, places=2)
+
+    def test_investing_with_debt_stays_closed_outside_the_agreed_gate(self):
+        for label, kwargs in {
+            "ten percent": {"apr": 10, "savings": 300_000},
+            "under three months": {"apr": 5, "savings": 299_999},
+            "unknown rate": {"apr": 5, "savings": 300_000, "known": False},
+            "unknown monthly cost": {"apr": 5, "savings": 300_000, "base": 0},
+        }.items():
+            with self.subTest(label):
+                result = self._with_low_rate_debt(**kwargs)
+                self.assertFalse(result["investment_allowed"])
+                self.assertEqual(result["allocation_amounts"]["inversion"], 0)
+                self.assertTrue(result["investment_blockers"])
+
     def test_goal_portfolio_funds_only_selected_trip_alternative(self):
         goals = [
             {"id": 1, "name": "Argentina", "status": "active", "alternative_group": "viaje-2027", "is_selected": True, "remaining_amount": 600_000, "monthly_required": 60_000, "funding_order": 10},
