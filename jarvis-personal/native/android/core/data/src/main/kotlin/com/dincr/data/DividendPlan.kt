@@ -58,6 +58,18 @@ data class DividendPlan(
     val isConfigured: Boolean get() = config.stocks.isNotEmpty()
 }
 
+/** `POST /finance/investment-center/dividend-yield`: a stock's last year of dividends over its price. */
+@Serializable
+data class DividendYield(
+    val symbol: String,
+    @SerialName("yield_pct") val yieldPct: Money,
+    @SerialName("annual_dividend_usd") val annualDividendUsd: Money? = null,
+    @SerialName("price_usd") val priceUsd: Money? = null,
+)
+
+@Serializable
+data class DividendYieldRequest(val symbol: String)
+
 /** `PUT /finance/investment-center/dividend-plan`: every field is sent (a null clears it). */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable

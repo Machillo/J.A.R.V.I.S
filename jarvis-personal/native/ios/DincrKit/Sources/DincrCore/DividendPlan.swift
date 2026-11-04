@@ -78,7 +78,22 @@ public struct DividendPlanUpdate: Encodable, Sendable, Equatable {
     }
 }
 
+/// `POST /finance/investment-center/dividend-yield`: a stock's last year of dividends over its price.
+public struct DividendYield: Decodable, Sendable, Equatable {
+    public let symbol: String
+    public let yieldPct: Decimal
+    public let annualDividendUsd: Decimal?
+    public let priceUsd: Decimal?
+}
+
+private struct DividendYieldRequest: Encodable, Sendable { let symbol: String }
+
 extension DincrService {
+    /// Looks the stock's yield up (an outside service that can fail; then it is typed by hand).
+    public func dividendYield(symbol: String) async throws -> DividendYield {
+        try await client.send("POST", "/finance/investment-center/dividend-yield", body: DividendYieldRequest(symbol: symbol))
+    }
+
     /// A read: it only calculates, and never buys or moves anything.
     public func dividendPlan() async throws -> DividendPlan { try await client.get("/finance/investment-center/dividend-plan") }
 

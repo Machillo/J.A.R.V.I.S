@@ -61,6 +61,8 @@ final class PullToRefreshUITests: XCTestCase {
             XCTAssertTrue(app.tabBars.buttons["Plan"].isSelected, "\(context): still on Plan")
 
             app.tabBars.buttons["Patrimonio"].tap()
+            XCTAssertTrue(element("wealth.debts.toggle", in: app).waitForExistence(timeout: 10), "\(context): debts")
+            element("wealth.debts.toggle", in: app).tap()
             XCTAssertTrue(element("wealth.debts.composition", in: app).waitForExistence(timeout: 10), "\(context): debts")
             XCTAssertEqual(label("wealth.accounts", in: app).contains("Disponible desde VIP"), plan != "vip", "\(context): Cuentas")
             pullKeeping(["wealth.accounts", "wealth.debts"], in: app, "\(context) Patrimonio")
@@ -75,6 +77,8 @@ final class PullToRefreshUITests: XCTestCase {
 
     func testAFailedRefreshKeepsTheScreenAndSaysSoInTheNotice() {
         let app = launch(plan: "vip", tab: "wealth", refreshFails: true)
+        XCTAssertTrue(element("wealth.debts.toggle", in: app).waitForExistence(timeout: 10))
+        element("wealth.debts.toggle", in: app).tap()
         XCTAssertTrue(element("wealth.debts.composition", in: app).waitForExistence(timeout: 10))
         let accounts = label("wealth.accounts", in: app)
         pull(app)

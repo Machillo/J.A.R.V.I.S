@@ -125,3 +125,54 @@ def test_a_valid_save_keeps_every_value_and_uppercases_the_symbol():
                           "goal_monthly_usd": 500, "monthly_amount_usd": 0, "withholding_pct": 0})
     assert saved["stocks"][0]["symbol"] == "AAA" and saved["stocks"][1]["yield_pct"] is None
     assert (saved["goal_monthly_usd"], saved["monthly_amount_usd"], saved["withholding_pct"]) == (500, 0, 0)
+
+
+def chart(symbol="AAA", price=50, dividends=(0.5, 0.5, 0.5, 0.5), currency="USD"):
+    return {"chart": {"result": [{"meta": {"symbol": symbol, "currency": currency, "regularMarketPrice": price},
+                                  "events": {"dividends": {str(i): {"amount": amount, "date": i} for i, amount in enumerate(dividends)}}}]}}
+
+
+def test_the_yield_is_a_year_of_dividends_over_the_price():
+    found = dp._yield_from_chart("AAA", chart())
+    assert found["yield_pct"] == 4 and found["annual_dividend_usd"] == 2 and found["price_usd"] == 50 and found["payments"] == 4
+
+
+@pytest.mark.parametrize("payload", [
+    None, {}, {"chart": {"result": None}}, chart(symbol="OTHER"), chart(currency="EUR"), chart(price=0), chart(price=None),
+    chart(dividends=()), chart(dividends=(-1,)), chart(dividends=(40,)),
+])
+def test_a_yield_that_cannot_be_trusted_is_unknown_not_zero(payload):
+    assert dp._yield_from_chart("AAA", payload) is None
+
+
+def test_only_the_symbol_goes_out_and_a_failure_can_be_typed_instead(monkeypatch):
+    seen = {}
+
+    class Answer:
+        status_code = 200
+
+        def json(self):
+            return chart()
+
+    def get(url, params, headers, timeout):
+        seen.update(url=url, params=params)
+        return Answer()
+
+    monkeypatch.setattr(dp.requests, "get", get)
+    assert dp.lookup_yield(" aaa ")["yield_pct"] == 4
+    assert seen["url"].endswith("/AAA") and set(seen["params"]) == {"range", "interval", "events"}
+
+    def down(*_a, **_k):
+        raise dp.requests.ConnectionError("down")
+
+    monkeypatch.setattr(dp.requests, "get", down)
+    with pytest.raises(HTTPException) as failed:
+        dp.lookup_yield("AAA")
+    assert failed.value.status_code == 502
+
+
+def test_a_bad_symbol_never_goes_out(monkeypatch):
+    monkeypatch.setattr(dp.requests, "get", lambda *a, **k: pytest.fail("no request"))
+    with pytest.raises(HTTPException) as refused:
+        dp.lookup_yield("../etc passwd")
+    assert refused.value.status_code == 422

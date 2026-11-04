@@ -36,8 +36,8 @@ import kotlinx.coroutines.launch
 /**
  * JARVIS → Patrimonio → Inversiones: "Plan de dividendos". Says how much capital the monthly goal
  * needs with the stocks the Owner picked, and what to buy this month only when the plan allows it
- * (no debt at 10% a year or more, 3 months of Salvavidas). Opening it only reads. The app has no
- * market data: the yield is what the Owner typed. iOS: `DividendPlanCard`.
+ * (no debt at 10% a year or more, 3 months of Salvavidas). Opening it only reads. The form brings the
+ * stock's yield from an outside service, and it can be typed when that fails. iOS: `DividendPlanCard`.
  */
 @Composable
 fun DividendPlanCard(model: AppModel) {
@@ -92,8 +92,8 @@ private fun Figures(plan: DividendPlan) {
             plan.gate.blockers.forEach { Text(blocker(it.code), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text) }
         }
     }
-    Caption(tx("Es un cálculo con el dividendo que escribiste, después de la retención, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
-        "It’s a calculation with the dividend you typed, after withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
+    Caption(tx("Es un cálculo con ese dividendo, después de la retención, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
+        "It’s a calculation with that dividend, after withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
 }
 
 private fun pace(months: Int?, amount: BigDecimal?): String? {
@@ -140,6 +140,23 @@ private fun DividendPlanDialog(model: AppModel, plan: DividendPlan, onDismiss: (
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    var yieldNote by remember { mutableStateOf<String?>(null) }
+    // Fills the field with the yield found; a failure is said and the field stays as it was, to type it.
+    suspend fun bringYield(symbol: String, fill: (String) -> Unit) {
+        val trimmed = symbol.trim().uppercase()
+        if (trimmed.isEmpty()) { yieldNote = tx("Escribí primero el símbolo.", "Enter the symbol first."); return }
+        yieldNote = try {
+            val found = model.api.dividendYield(trimmed).yieldPct.stripTrailingZeros().toPlainString()
+            fill(found)
+            tx("$trimmed: $found % según los dividendos del último año. Podés cambiarlo.", "$trimmed: $found % from the last year of dividends. You can change it.")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            tx("No pudimos traer el dividendo de $trimmed. Podés escribirlo vos.", "We couldn’t bring $trimmed’s dividend. You can type it.")
+        }
+    }
+    // First time: the stock held is already there, so its dividend comes too.
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (yieldA.isEmpty() && symbolA.isNotBlank()) bringYield(symbolA) { yieldA = it } }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(tx("Plan de dividendos", "Dividend plan")) },
@@ -149,15 +166,18 @@ private fun DividendPlanDialog(model: AppModel, plan: DividendPlan, onDismiss: (
                 FormField(tx("Símbolo", "Symbol"), symbolA, { symbolA = it; error = null }, modifier = Modifier.testTag("wealth.dividends.symbolA"))
                 FormField(tx("Parte de lo que comprás (%)", "Share of what you buy (%)"), shareA, { shareA = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.shareA"))
                 FormField(tx("Dividendo anual (%)", "Yearly dividend (%)"), yieldA, { yieldA = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.yieldA"))
+                TextButton({ scope.launch { bringYield(symbolA) { yieldA = it } } }, Modifier.testTag("wealth.dividends.bringA")) { Text(tx("Traer el dividendo de esta acción", "Bring this stock’s dividend"), color = Dincr.colors.tint) }
+                yieldNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted, modifier = Modifier.testTag("wealth.dividends.yieldNote")) }
                 Caption(tx("Segunda acción (opcional)", "Second stock (optional)"))
                 FormField(tx("Símbolo", "Symbol"), symbolB, { symbolB = it; error = null }, modifier = Modifier.testTag("wealth.dividends.symbolB"))
                 FormField(tx("Parte de lo que comprás (%)", "Share of what you buy (%)"), shareB, { shareB = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.shareB"))
                 FormField(tx("Dividendo anual (%)", "Yearly dividend (%)"), yieldB, { yieldB = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.yieldB"))
+                TextButton({ scope.launch { bringYield(symbolB) { yieldB = it } } }, Modifier.testTag("wealth.dividends.bringB")) { Text(tx("Traer el dividendo de esta acción", "Bring this stock’s dividend"), color = Dincr.colors.tint) }
                 FormField(tx("Meta de dividendos al mes (US$)", "Monthly dividend goal (US$)"), goal, { goal = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.goal"))
                 FormField(tx("Cuánto comprarías al mes (US$)", "How much you’d buy monthly (US$)"), monthly, { monthly = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.monthly"))
                 FormField(tx("Retención de impuestos (%)", "Tax withholding (%)"), withholding, { withholding = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.withholding"))
-                Caption(tx("El dividendo anual lo ves en tu bróker. La retención suele ser 30% en acciones de EE. UU.; confirmala con tu bróker.",
-                    "You’ll find the yearly dividend at your broker. Withholding is usually 30% on US stocks; confirm it with your broker."))
+                Caption(tx("La retención suele ser 30% en acciones de EE. UU.; confirmala con tu bróker.",
+                    "Withholding is usually 30% on US stocks; confirm it with your broker."))
                 error?.let { Text(it, color = Dincr.colors.negative, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("wealth.dividends.error")) }
             }
         },

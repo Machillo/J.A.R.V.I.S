@@ -703,6 +703,13 @@
  },
  {
   "method": "POST",
+  "path": "/finance/investment-center/dividend-yield",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
   "path": "/finance/investment-center/snapshots",
   "gates": [
    "internal_only"

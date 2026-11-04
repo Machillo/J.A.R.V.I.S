@@ -4,8 +4,8 @@ import SwiftUI
 
 /// JARVIS → Patrimonio → Inversiones: "Plan de dividendos". Says how much capital the monthly goal
 /// needs with the stocks the Owner picked, and what to buy this month only when the plan allows it
-/// (no debt at 10% a year or more, 3 months of Salvavidas). Opening it only reads. The app has no
-/// market data: the yield is what the Owner typed. Android: `DividendPlanCard`.
+/// (no debt at 10% a year or more, 3 months of Salvavidas). Opening it only reads. The form brings the
+/// stock's yield from an outside service, and it can be typed when that fails. Android: `DividendPlanCard`.
 struct DividendPlanCard: View {
     @Environment(AppModel.self) private var model
     @State private var editing: DividendPlan?
@@ -79,8 +79,8 @@ struct DividendPlanCard: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("wealth.dividends.gate")
         }
-        Text(tx("Es un cálculo con el dividendo que escribiste, después de la retención, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
-                "It’s a calculation with the dividend you typed, after withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
+        Text(tx("Es un cálculo con ese dividendo, después de la retención, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
+                "It’s a calculation with that dividend, after withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
             .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
     }
 
@@ -125,6 +125,7 @@ private struct DividendPlanSheet: View {
     @State private var withholding = ""
     @State private var error: String?
     @State private var saving = false
+    @State private var yieldNote: String?
 
     var body: some View {
         NavigationStack {
@@ -133,19 +134,24 @@ private struct DividendPlanSheet: View {
                     field(tx("Símbolo", "Symbol"), $symbolA, id: "wealth.dividends.symbolA").textInputAutocapitalization(.characters).autocorrectionDisabled()
                     field(tx("Parte de lo que comprás (%)", "Share of what you buy (%)"), $shareA, id: "wealth.dividends.shareA").keyboardType(.decimalPad)
                     field(tx("Dividendo anual (%)", "Yearly dividend (%)"), $yieldA, id: "wealth.dividends.yieldA").keyboardType(.decimalPad)
+                    Button(tx("Traer el dividendo de esta acción", "Bring this stock’s dividend")) { Task { await bringYield(symbolA) { yieldA = $0 } } }
+                        .accessibilityIdentifier("wealth.dividends.bringA")
+                    if let yieldNote { Text(yieldNote).font(DincrFont.caption).foregroundStyle(.dincrTextMuted).accessibilityIdentifier("wealth.dividends.yieldNote") }
                 }
                 Section(tx("Segunda acción (opcional)", "Second stock (optional)")) {
                     field(tx("Símbolo", "Symbol"), $symbolB, id: "wealth.dividends.symbolB").textInputAutocapitalization(.characters).autocorrectionDisabled()
                     field(tx("Parte de lo que comprás (%)", "Share of what you buy (%)"), $shareB, id: "wealth.dividends.shareB").keyboardType(.decimalPad)
                     field(tx("Dividendo anual (%)", "Yearly dividend (%)"), $yieldB, id: "wealth.dividends.yieldB").keyboardType(.decimalPad)
+                    Button(tx("Traer el dividendo de esta acción", "Bring this stock’s dividend")) { Task { await bringYield(symbolB) { yieldB = $0 } } }
+                        .accessibilityIdentifier("wealth.dividends.bringB")
                 }
                 Section {
                     field(tx("Meta de dividendos al mes (US$)", "Monthly dividend goal (US$)"), $goal, id: "wealth.dividends.goal").keyboardType(.decimalPad)
                     field(tx("Cuánto comprarías al mes (US$)", "How much you’d buy monthly (US$)"), $monthly, id: "wealth.dividends.monthly").keyboardType(.decimalPad)
                     field(tx("Retención de impuestos (%)", "Tax withholding (%)"), $withholding, id: "wealth.dividends.withholding").keyboardType(.decimalPad)
                 } footer: {
-                    Text(tx("El dividendo anual lo ves en tu bróker. La retención suele ser 30% en acciones de EE. UU.; confirmala con tu bróker.",
-                            "You’ll find the yearly dividend at your broker. Withholding is usually 30% on US stocks; confirm it with your broker."))
+                    Text(tx("La retención suele ser 30% en acciones de EE. UU.; confirmala con tu bróker.",
+                            "Withholding is usually 30% on US stocks; confirm it with your broker."))
                 }
                 if let error {
                     Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative).accessibilityIdentifier("wealth.dividends.error")
@@ -160,6 +166,8 @@ private struct DividendPlanSheet: View {
                 }
             }
             .onAppear(perform: prefill)
+            // First time: the stock held is already there, so its dividend comes too.
+            .task { if yieldA.isEmpty, !symbolA.isEmpty { await bringYield(symbolA) { yieldA = $0 } } }
         }
         .interactiveDismissDisabled(saving)
     }
@@ -169,6 +177,20 @@ private struct DividendPlanSheet: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(DincrFont.caption).foregroundStyle(.dincrText2).accessibilityHidden(true)
             TextField(label, text: text, prompt: Text("")).accessibilityIdentifier(id)
+        }
+    }
+
+    /// Fills the field with the yield found; a failure is said and the field stays as it was, to type it.
+    private func bringYield(_ symbol: String, into fill: (String) -> Void) async {
+        let trimmed = symbol.trimmingCharacters(in: .whitespaces).uppercased()
+        guard !trimmed.isEmpty else { yieldNote = tx("Escribí primero el símbolo.", "Enter the symbol first."); return }
+        do {
+            let found = try await model.service.dividendYield(symbol: trimmed)
+            fill(plain(found.yieldPct))
+            yieldNote = tx("\(trimmed): \(plain(found.yieldPct)) % según los dividendos del último año. Podés cambiarlo.",
+                           "\(trimmed): \(plain(found.yieldPct)) % from the last year of dividends. You can change it.")
+        } catch {
+            yieldNote = tx("No pudimos traer el dividendo de \(trimmed). Podés escribirlo vos.", "We couldn’t bring \(trimmed)’s dividend. You can type it.")
         }
     }
 

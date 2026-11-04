@@ -47,7 +47,8 @@ struct WealthHubView: View {
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
                            subtitle: tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"), id: "wealth.accounts") { AccountsView() }
-                SectionHeader(title: tx("Deudas", "Debts"))
+                // IBKR connected: what the investments are worth; opening it shows what they hold and the dividend plan.
+                if model.profile?.isOwner == true { WealthInvestmentsCard().id(netWorthToken) }
                 WealthDebtsCard(debts: debts) { Task { await loadDebts(refreshing: false) } }
             }
         }
@@ -97,7 +98,7 @@ private struct NetWorthCard: View {
                         .accessibilityIdentifier("wealth.netWorth.missing")
                 }
                 WealthGroup(title: tx("Lo que tenés", "What you have"), total: wealth.assets?.total, items: wealth.owned, id: "wealth.assets")
-                WealthGroup(title: tx("Lo que debés", "What you owe"), total: wealth.liabilities?.total, items: wealth.owed(), id: "wealth.liabilities")
+                WealthGroup(title: tx("Lo que debés", "What you owe"), total: wealth.liabilities?.total, items: wealth.owed(), id: "wealth.liabilities", collapsible: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .dincrCard()
@@ -112,15 +113,25 @@ private struct WealthGroup: View {
     let total: Decimal?
     let items: [Wealth.Item]
     let id: String
+    /// Only the total until asked for (what is owed, debt by debt).
+    var collapsible = false
+    @State private var open = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             FigureRow(label: title, amount: total, emphasized: true)
+            if collapsible, !items.isEmpty {
+                Button(open ? tx("Ocultar detalle", "Hide details") : tx("Ver detalle", "See details")) { open.toggle() }
+                    .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint).frame(minHeight: 44)
+                    .accessibilityIdentifier("\(id).toggle")
+            }
             if items.isEmpty {
                 Text(tx("Nada registrado.", "Nothing recorded.")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                FigureRow(label: item.name ?? tx("Sin nombre", "Unnamed"), amount: item.amount)
+            if !collapsible || open {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    FigureRow(label: item.name ?? tx("Sin nombre", "Unnamed"), amount: item.amount)
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -133,9 +144,31 @@ private struct WealthGroup: View {
 private struct WealthDebtsCard: View {
     let debts: LoadState<[Debt]>
     let retry: () -> Void
+    /// Closed until asked for: only what is owed, by debt, opens here.
+    @State private var open = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            Button { open.toggle() } label: {
+                HStack {
+                    Text(tx("Deudas", "Debts")).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
+                    Spacer()
+                    Image(systemName: open ? "chevron.up" : "chevron.down").foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(open ? tx("Abierto", "Open") : tx("Cerrado", "Closed"))
+            .accessibilityIdentifier("wealth.debts.toggle")
+            if open { content }
+        }
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("wealth.debts")
+    }
+
+    @ViewBuilder private var content: some View {
             switch debts {
             case .loading:
                 SkeletonView(rows: 3)
@@ -157,10 +190,45 @@ private struct WealthDebtsCard: View {
                     .foregroundStyle(.dincrTint).frame(minHeight: 44)
             }
             .accessibilityIdentifier("wealth.debts.manage")
+    }
+}
+
+/// Patrimonio → Inversiones (Owner): what the portfolio is worth and how fresh that is. Opening it shows
+/// what it holds and the dividend plan. Unknown stays said: without a snapshot it never reads as $0.
+private struct WealthInvestmentsCard: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        AsyncContent(fallback: tx("No pudimos cargar tus inversiones.", "We couldn’t load your investments."),
+                     load: { try await model.service.investmentCenter() }) { center, _ in
+            NavigationLink { WealthView() } label: {
+                VStack(alignment: .leading, spacing: DincrSpacing.s1) {
+                    HStack {
+                        Text(tx("Inversiones", "Investments")).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
+                    }
+                    if let figures = center.figures {
+                        MoneyText(figures.marketValue, currency: figures.currency, font: DincrFont.title2.monospacedDigit())
+                        Text(Self.summary(center)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                    } else {
+                        Text(tx("Todavía no hay datos de tu portafolio", "There’s no portfolio data yet")).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .dincrCard()
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("wealth.investments")
         }
-        .dincrCard()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("wealth.debts")
+    }
+
+    private static func summary(_ center: InvestmentCenter) -> String {
+        let symbols = center.positions.compactMap(\.symbol).joined(separator: ", ")
+        let holdings = symbols.isEmpty ? tx("Sin posiciones", "No positions") : symbols
+        guard let hours = center.ageHours else { return holdings }
+        let age = hours < 24 ? tx("actualizado hace \(hours) h", "updated \(hours) h ago") : tx("actualizado hace \(hours / 24) d", "updated \(hours / 24) d ago")
+        return "\(holdings) · \(age)"
     }
 }
 

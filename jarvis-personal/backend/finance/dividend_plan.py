@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import math
 import re
+from datetime import date
 from typing import Any
 
+import requests
 from fastapi import HTTPException
 
 PREFERENCE_KEY = "dividend_plan"
@@ -146,3 +148,46 @@ def calculate(config: dict[str, Any], positions: list[dict[str, Any]] | None, ga
     if amount is not None:
         result["months_to_goal"] = _months_to(target, value, rate, amount)
     return result
+
+
+# The stock's yield, so the Owner doesn't have to look it up. Only the symbol goes out. An unofficial
+# public service: when it fails or answers oddly the yield stays unknown and can be typed.
+QUOTE_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+MAX_PLAUSIBLE_YIELD_PCT = 25.0
+
+
+def _yield_from_chart(symbol: str, payload: Any) -> dict[str, Any] | None:
+    """The last 12 months of dividends over the price. No price or no dividends: unknown, never 0%."""
+    try:
+        result = payload["chart"]["result"][0]
+        meta = result["meta"]
+        dividends = (result.get("events") or {}).get("dividends") or {}
+    except (KeyError, IndexError, TypeError):
+        return None
+    if str(meta.get("symbol") or "").upper() != symbol or str(meta.get("currency") or "").upper() != "USD":
+        return None
+    price = _number(meta.get("regularMarketPrice"))
+    amounts = [_number(row.get("amount")) for row in dividends.values() if isinstance(row, dict)]
+    if not price or price <= 0 or not amounts or any(amount is None or amount <= 0 for amount in amounts):
+        return None
+    annual = sum(amounts)
+    pct = annual / price * 100
+    if pct > MAX_PLAUSIBLE_YIELD_PCT:
+        return None
+    return {"symbol": symbol, "yield_pct": round(pct, 2), "annual_dividend_usd": round(annual, 4), "price_usd": round(price, 2),
+            "payments": len(amounts), "as_of": date.today().isoformat(), "source": "yahoo_finance"}
+
+
+def lookup_yield(raw_symbol: Any) -> dict[str, Any]:
+    symbol = str(raw_symbol or "").strip().upper()
+    if not _SYMBOL.match(symbol):
+        raise HTTPException(status_code=422, detail="Revisá el símbolo de la acción.")
+    try:
+        response = requests.get(QUOTE_URL.format(symbol=symbol), params={"range": "1y", "interval": "1mo", "events": "div"},
+                                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"}, timeout=15)
+        found = _yield_from_chart(symbol, response.json()) if response.status_code == 200 else None
+    except (requests.RequestException, ValueError):
+        found = None
+    if found is None:
+        raise HTTPException(status_code=502, detail="No pudimos traer el dividendo de esa acción. Podés escribirlo vos.")
+    return found
