@@ -32,6 +32,10 @@ struct PendingDollarsCard: View {
                 Text(tx("Por convertir al cierre", "To convert at the close")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 ForEach(pending.totals) { total in
                     Text(summary(total)).font(DincrFont.bodySmall.weight(.semibold).monospacedDigit()).foregroundStyle(.dincrText)
+                    if let estimate = total.estimatedAmount {
+                        Text(tx("≈ \(model.moneyFormat.string(estimate)) estimado", "≈ \(model.moneyFormat.string(estimate)) estimated"))
+                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                    }
                 }
             }
             Spacer(minLength: 0)

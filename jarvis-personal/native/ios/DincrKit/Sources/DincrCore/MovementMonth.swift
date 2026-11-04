@@ -12,18 +12,29 @@ public enum MovementMonth {
 }
 
 /// What the rows on screen add up to, in the base currency: the running totals of Movimientos.
-/// Only what is registered in the list: a dollar expense waiting for its close has no colones amount
-/// and is not a row here, and no row of a kind is unknown, never ₡0. Android: `MovementTotals`.
+/// A dollar expense waiting for its close has no colones amount and is not a row here; its estimate
+/// is added apart (`addingEstimate`) and the screen says so. No row of a kind is unknown, never ₡0.
+/// Android: `MovementTotals`.
 public struct MovementTotals: Sendable, Equatable {
     public let income: Decimal?
     public let expenses: Decimal?
     /// The Owner's debt payments, a line of their own in his ledger; nil when there are none.
     public let debtPaid: Decimal?
 
+    /// With the estimate of the waiting dollars in the expenses. Nothing to add leaves them as they are.
+    public func addingEstimate(_ estimate: Decimal?) -> MovementTotals {
+        guard let estimate else { return self }
+        return MovementTotals(income: income, expenses: (expenses ?? 0) + estimate, debtPaid: debtPaid)
+    }
+
     /// Income minus expenses and debt payments; nil while either side is unknown.
     public var result: Decimal? {
         guard let income, let expenses else { return nil }
         return income - expenses - (debtPaid ?? 0)
+    }
+
+    public init(income: Decimal?, expenses: Decimal?, debtPaid: Decimal?) {
+        self.income = income; self.expenses = expenses; self.debtPaid = debtPaid
     }
 
     public init(_ rows: [Movement]) {

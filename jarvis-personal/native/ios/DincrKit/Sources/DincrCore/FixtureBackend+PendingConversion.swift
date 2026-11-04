@@ -61,7 +61,8 @@ extension FixtureBackend {
             ["movement_id": row["movement_id"] ?? "", "id": row["source_id"] ?? 0, "entry_date": row["transaction_date"] ?? "",
              "description": row["description"] ?? "", "category": row["category"] ?? "", "original_amount": row["original_amount"] ?? 0,
              "original_currency": row["original_currency"] ?? "", "financial_account_id": row["financial_account_id"] ?? NSNull(),
-             "period_key": pendingPeriod(row)["key"] ?? ""]
+             "period_key": pendingPeriod(row)["key"] ?? "",
+             "estimated_amount": number((decimal(row["original_amount"]) ?? 0) * Self.fixtureDollarRate)]
         }
         var groups: [String: (period: [String: Any], rows: [[String: Any]])] = [:]
         for row in pending {
@@ -76,8 +77,11 @@ extension FixtureBackend {
             period["count"] = group.rows.count
             return period
         }
-        return ["status": "ok", "available": true, "items": items, "totals": totals(pending), "periods": periods]
+        return ["status": "ok", "available": true, "items": items, "totals": totals(pending), "periods": periods, "auto_close": true]
     }
+
+    /// An invented rate: the fixtures' estimate of a waiting dollar expense.
+    static let fixtureDollarRate: Decimal = 500
 
     private func totals(_ rows: [[String: Any]]) -> [[String: Any]] {
         var totals: [String: (Decimal, Int)] = [:]
@@ -86,7 +90,9 @@ extension FixtureBackend {
             let current = totals[currency] ?? (0, 0)
             totals[currency] = (current.0 + (decimal(row["original_amount"]) ?? 0), current.1 + 1)
         }
-        return totals.keys.sorted().map { ["currency": $0, "amount": number(totals[$0]!.0), "count": totals[$0]!.1] }
+        return totals.keys.sorted().map {
+            ["currency": $0, "amount": number(totals[$0]!.0), "count": totals[$0]!.1, "estimated_amount": number(totals[$0]!.0 * Self.fixtureDollarRate)]
+        }
     }
 
     /// The close: one rate converts every row still waiting in the period, once it has ended.
