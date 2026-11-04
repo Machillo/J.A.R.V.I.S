@@ -6,7 +6,8 @@ and his dividend plan. Deterministic arithmetic, no generative AI. Owner only: t
 keeps its own rules and never reaches this module.
 
 What is left to split goes, in this order:
-1. Living costs still to come this cycle, as seen in his closed months (unknown: the old 15%).
+1. Free money: at least his 15%, more if the necessary costs of his closed months (food, transport)
+   still to come need it. Choices such as trips count in his margin, but aren't reserved.
 2. The Salvavidas, what keeps it on course to its current stage; all of the gap without debts.
 3. Debts or investing, by what each colón returns. Investing needs no debt at 10% a year or more,
    3 months of Salvavidas and a dividend above every rate; otherwise it goes to debts.
@@ -24,7 +25,7 @@ from backend.core.i18n import tx
 
 MAX_STOCK_DEBT_APR = 10.0
 STOCK_SALVAVIDAS_MONTHS = 3
-FALLBACK_LIFE_SHARE = 0.15
+FREE_MONEY_SHARE = 0.15  # His own rule (2026-11-01): free money is always kept.
 MINI_FUND_MONTHS, STAGE_MONTHS = 6, 12
 PROJECTION_LIMIT_MONTHS = 600
 
@@ -38,13 +39,15 @@ def _f(value: Any) -> float:
 
 @dataclass(frozen=True)
 class OwnerMonth:
-    """His usual month. `lived_variable` None: no closed months to read it from."""
+    """His usual month. `lived_variable` (everything beyond fixed expenses and debts) and
+    `lived_necessary` (the part he can't stop): None when no closed months can tell."""
     income: float
     installments: float
     fixed_expenses: float
     lived_variable: float | None
     spent_this_cycle: float
     net_dividend_yield: float | None = None
+    lived_necessary: float | None = None
 
     @property
     def margin(self) -> float:
@@ -102,10 +105,8 @@ def decide(remaining: float, month: OwnerMonth, debts: list[dict[str, Any]], sav
            target_months: int | None, mini_target: float, highest_apr: float | None) -> dict[str, Any]:
     """How `remaining` splits, why, and which debt comes first. The weights add up to 1."""
     has_debt = any(_f(debt.get("remaining_amount")) > 1 for debt in debts)
-    if month.lived_variable is None:
-        life = remaining * FALLBACK_LIFE_SHARE
-    else:
-        life = min(max(month.lived_variable - month.spent_this_cycle, 0.0), remaining)
+    necessary_left = max((month.lived_necessary or 0.0) - month.spent_this_cycle, 0.0)
+    life = min(max(necessary_left, remaining * FREE_MONEY_SHARE), remaining)
     after_life = remaining - life
 
     stage_target = monthly_base * (target_months or 1)
@@ -148,6 +149,7 @@ def decide(remaining: float, month: OwnerMonth, debts: list[dict[str, Any]], sav
             "fixed_expenses": round(month.fixed_expenses, 2),
             "lived_variable": None if month.lived_variable is None else round(month.lived_variable, 2),
             "lived_variable_known": month.lived_variable is not None,
+            "lived_necessary": None if month.lived_necessary is None else round(month.lived_necessary, 2),
             "margin": round(month.margin, 2), "order": "relief" if relief_first else "rate",
             "debt_order": [debt.get("id") for debt in ordered],
             "compared": {"relief": by_relief, "rate": by_rate} if has_debt else None,

@@ -324,32 +324,45 @@ PENSION_SHARE_WITH_DEBT = 0.05
 PENSION_SHARE = 0.10
 # A month with fewer expense rows than this has no real activity to read living costs from.
 OWNER_LIVED_MIN_ROWS = 10
+# What he can't stop spending on; the rest (trips, purchases, restaurants) is a choice.
+OWNER_NECESSARY_CATEGORIES = {"Comida", "Transporte", "Gasolina", "Salud"}
 
 
-def _owner_lived_variable(workspace_id: str, fixed_monthly: float, today: date) -> float | None:
-    """What his closed months spent beyond the fixed expenses: the median, so one trip doesn't set
-    it. Fewer than two months with real activity: unknown, never 0."""
-    months = []
-    first = today.replace(day=1)
+def _owner_lived_spending(workspace_id: str, fixed_categories: set[str], today: date) -> tuple[float | None, float | None]:
+    """What his closed months spent beyond fixed expenses and debts, and how much of it was necessary:
+    the median of each, so one trip doesn't set them. By category, because a fixed expense isn't always
+    recorded as a movement. Fewer than two months with real activity: unknown, never 0."""
+    from backend.finance.category_catalog import expense_type_for_category  # no cycle: only here
+
+    months: list[tuple[float, float]] = []
+    end = today.replace(day=1)
     with get_connection() as conn:
-        for back in range(1, 4):
-            end = first
-            for _ in range(back - 1):
-                end = (end - timedelta(days=1)).replace(day=1)
+        for _ in range(3):
             start = (end - timedelta(days=1)).replace(day=1)
-            row = conn.execute(
-                """SELECT COALESCE(SUM(CASE WHEN transaction_type='expense' THEN amount ELSE -amount END),0) AS total,
-                          COUNT(*) FILTER (WHERE transaction_type='expense') AS rows_seen
-                   FROM transactions WHERE workspace_id=%s AND transaction_type IN ('expense','refund')
-                     AND transaction_date >= %s AND transaction_date < %s""",
+            rows = conn.execute(
+                """SELECT category, COUNT(*) AS seen, SUM(amount) AS total FROM transactions
+                   WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date >= %s AND transaction_date < %s
+                   GROUP BY category""",
                 (workspace_id, start, end),
-            ).fetchone()
-            if int(row["rows_seen"] or 0) >= OWNER_LIVED_MIN_ROWS:
-                months.append(max(_f(row["total"]) - fixed_monthly, 0.0))
-    return statistics.median(months) if len(months) >= 2 else None
+            ).fetchall()
+            end = start
+            if sum(int(row["seen"] or 0) for row in rows) < OWNER_LIVED_MIN_ROWS:
+                continue
+            lived = necessary = 0.0
+            for row in rows:
+                category = str(row["category"] or "")
+                if category.lower() in fixed_categories or expense_type_for_category(category, owner=True) == "fixed":
+                    continue
+                lived += _f(row["total"])
+                if category in OWNER_NECESSARY_CATEGORIES:
+                    necessary += _f(row["total"])
+            months.append((lived, necessary))
+    if len(months) < 2:
+        return None, None
+    return statistics.median(m[0] for m in months), statistics.median(m[1] for m in months)
 
 
-def _owner_usual_month(workspace_id: str, recurring_income: float, installments: float, fixed_monthly: float,
+def _owner_usual_month(workspace_id: str, recurring_income: float, installments: float, living: dict[str, Any],
                        spent_this_cycle: float) -> owner_analysis.OwnerMonth:
     """His usual month, from what the app already has: the salary of his closed months (with what
     extra hours really added), or the projection from his hours; installments; fixed expenses; living costs."""
@@ -359,10 +372,11 @@ def _owner_usual_month(workspace_id: str, recurring_income: float, installments:
     average, _estimated = average_income(workspace_id, today)
     plan = dividend_plan.normalize(get_preference(dividend_plan.PREFERENCE_KEY, {}))
     net_yield = dividend_plan.calculate(plan, None, {"open": False, "blockers": []})["net_yield_pct"]
+    fixed_categories = {str(item.get("category") or "").lower() for item in living.get("included_fixed") or []}
+    lived, necessary = _owner_lived_spending(workspace_id, fixed_categories, today)
     return owner_analysis.OwnerMonth(
-        income=average or recurring_income, installments=installments, fixed_expenses=fixed_monthly,
-        lived_variable=_owner_lived_variable(workspace_id, fixed_monthly, today),
-        spent_this_cycle=spent_this_cycle, net_dividend_yield=net_yield,
+        income=average or recurring_income, installments=installments, fixed_expenses=_f(living.get("fixed_living_total")),
+        lived_variable=lived, lived_necessary=necessary, spent_this_cycle=spent_this_cycle, net_dividend_yield=net_yield,
     )
 
 
@@ -1371,8 +1385,7 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
 
     investment_portfolio = _fetch_investment_portfolio(workspace_id, True)
 
-    owner_month = _owner_usual_month(workspace_id, recurring_monthly_income, configured_debt_payments,
-                                     recurring_living_expenses, committed_spending)
+    owner_month = _owner_usual_month(workspace_id, recurring_monthly_income, configured_debt_payments, living, committed_spending)
     director = _build_dynamic_director_allocation(
         available_before_allocation=max(current_before_allocation, 0.0),
         debts=debts,
