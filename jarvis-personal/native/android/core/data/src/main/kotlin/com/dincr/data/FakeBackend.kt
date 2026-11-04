@@ -863,18 +863,21 @@ class FakeBackend(
     }
 
     private fun pendingTotals(rows: List<Movement>) = rows.groupBy { it.originalCurrency!! }.toSortedMap()
-        .map { (currency, list) -> PendingConversion.Total(currency, list.sumOf { it.originalAmount!! }, list.size) }
+        .map { (currency, list) ->
+            val amount = list.sumOf { it.originalAmount!! }
+            PendingConversion.Total(currency, amount, list.size, amount * FIXTURE_DOLLAR_RATE)
+        }
 
     private fun pendingConversion(): PendingConversion {
         val waiting = movements.filter { it.isPendingConversion }.sortedByDescending { it.transactionDate }
         val items = waiting.map {
             PendingConversion.Item(it.movementId, it.sourceId ?: 0, it.transactionDate.orEmpty(), it.description.orEmpty(), it.category,
-                it.originalAmount!!, it.originalCurrency!!, it.financialAccountId, pendingPeriod(it).key)
+                it.originalAmount!!, it.originalCurrency!!, it.financialAccountId, pendingPeriod(it).key, it.originalAmount!! * FIXTURE_DOLLAR_RATE)
         }
         val periods = waiting.groupBy { pendingPeriod(it).key }.values
             .map { rows -> pendingPeriod(rows.first()).copy(totals = pendingTotals(rows), count = rows.size) }
             .sortedBy { it.end }
-        return PendingConversion(true, items, pendingTotals(waiting), periods)
+        return PendingConversion(true, items, pendingTotals(waiting), periods, autoClose = true)
     }
 
     /** The close: one rate converts every row still waiting in the period, once it has ended. */
@@ -1148,3 +1151,6 @@ class FakeBackend(
         } + """,{"flag_key":"store_billing","enabled":false,"disabled_message_es":"Las compras en la tienda estarán disponibles pronto."}],"cache_seconds":30}"""
     }
 }
+
+/** An invented rate: the fixtures' estimate of a waiting dollar expense. */
+private val FIXTURE_DOLLAR_RATE = java.math.BigDecimal(500)

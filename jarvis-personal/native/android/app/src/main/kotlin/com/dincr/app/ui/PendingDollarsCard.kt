@@ -58,6 +58,10 @@ fun PendingDollarsCard(model: AppModel, onOpen: () -> Unit) {
                     val amount = Dincr.money.copy(currency = total.currency).format(total.amount)
                     Text(if (total.count == 1) tx("$amount · 1 gasto", "$amount · 1 expense") else tx("$amount · ${total.count} gastos", "$amount · ${total.count} expenses"),
                         style = MaterialTheme.typography.titleSmall.merge(TabularNums), color = Dincr.colors.text)
+                    total.estimatedAmount?.let { estimate ->
+                        val colones = Dincr.money.format(estimate)
+                        Text(tx("≈ $colones estimado", "≈ $colones estimated"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                    }
                 }
             }
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Dincr.colors.textMuted)

@@ -52,7 +52,9 @@ struct MovementsView: View {
             }
             if case .loaded(let rows) = state {
                 let shown = visibleRows(rows)
-                if !shown.isEmpty { totalsSection(MovementTotals(shown)) }
+                // The dollars waiting for their close count in Gastos as an estimate, and the footer says so.
+                let estimate = filter == .income ? PendingEstimate(sum: nil, withoutEstimate: 0) : pending.estimate(month: month, query: query)
+                if !shown.isEmpty || estimate.sum != nil { totalsSection(MovementTotals(shown).addingEstimate(estimate.sum), estimate: estimate) }
             }
             // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
             Section {
@@ -214,8 +216,13 @@ struct MovementsView: View {
                     } footer: {
                         VStack(alignment: .leading, spacing: 2) {
                             if !period.closable {
-                                Text(tx("Se convierte desde el \(DayLabel.format(period.end)), con un solo tipo de cambio.",
-                                        "It converts from \(DayLabel.format(period.end)), with one rate."))
+                                Text(pending.autoClose
+                                     ? tx("Se convierte solo el \(DayLabel.format(period.end)), con el dólar de ese día.",
+                                          "It converts by itself on \(DayLabel.format(period.end)), at that day’s dollar rate.")
+                                     : tx("Se convierte desde el \(DayLabel.format(period.end)), con un solo tipo de cambio.",
+                                          "It converts from \(DayLabel.format(period.end)), with one rate."))
+                            } else if pending.autoClose {
+                                Text(tx("Se convierte solo en la próxima actualización, o hacelo ahora.", "It converts by itself at the next update, or do it now."))
                             }
                             if period.cutDayMissing {
                                 Text(tx("Una tarjeta no tiene día de corte: se cierra a fin de mes. Declaralo en Cuentas para cerrarla por su corte.",
@@ -232,7 +239,13 @@ struct MovementsView: View {
         HStack {
             Text(tx("Total por convertir", "Total to convert")).font(DincrFont.body.weight(.semibold))
             Spacer()
-            Text(model.moneyFormat.string(total.amount, currency: total.currency)).font(DincrFont.amount)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(model.moneyFormat.string(total.amount, currency: total.currency)).font(DincrFont.amount)
+                if let estimate = total.estimatedAmount {
+                    Text(tx("≈ \(model.moneyFormat.string(estimate)) estimado", "≈ \(model.moneyFormat.string(estimate)) estimated"))
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                }
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("movements.pending.total.\(total.currency)")
@@ -241,7 +254,8 @@ struct MovementsView: View {
     private func pendingRow(_ item: PendingConversion.Item) -> some View {
         Button { editor = .edit(item.movement) } label: {
             MoneyRow(title: item.description.isEmpty ? CategoryStyle.label(item.category) : item.description,
-                     subtitle: [CategoryStyle.label(item.category), DayLabel.format(item.entryDate)].joined(separator: " · "),
+                     subtitle: [CategoryStyle.label(item.category), DayLabel.format(item.entryDate),
+                                item.estimatedAmount.map { "≈ \(model.moneyFormat.string($0))" }].compactMap { $0 }.joined(separator: " · "),
                      amount: item.originalAmount, kind: .expense,
                      symbol: CategoryStyle.symbol(for: item.category, kind: .expense), currency: item.originalCurrency)
         }
@@ -275,7 +289,7 @@ struct MovementsView: View {
 
     /// What the rows on screen add up to, on one line so the list stays on screen: both sides and the
     /// result, or the one the filter asks for.
-    private func totalsSection(_ totals: MovementTotals) -> some View {
+    private func totalsSection(_ totals: MovementTotals, estimate: PendingEstimate) -> some View {
         Section {
             // Stacks instead of splitting a word when the text is large.
             ViewThatFits(in: .horizontal) {
@@ -285,8 +299,17 @@ struct MovementsView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("movements.totals")
         } footer: {
-            if filter != .income, !pending.items.isEmpty {
-                Text(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
+            VStack(alignment: .leading, spacing: 2) {
+                if let sum = estimate.sum {
+                    Text(tx("Incluye ≈ \(model.moneyFormat.string(sum)) estimado de gastos en dólares. El monto final sale con el dólar del corte.",
+                            "Includes ≈ \(model.moneyFormat.string(sum)) estimated from dollar expenses. The final amount uses the dollar rate at the cut."))
+                        .accessibilityIdentifier("movements.totals.estimate")
+                }
+                if estimate.withoutEstimate > 0 {
+                    Text(tx("Sin contar \(estimate.withoutEstimate) en dólares, todavía sin tipo de cambio.",
+                            "Not counting \(estimate.withoutEstimate) in dollars, still without a rate."))
+                        .accessibilityIdentifier("movements.totals.noEstimate")
+                }
             }
         }
     }
