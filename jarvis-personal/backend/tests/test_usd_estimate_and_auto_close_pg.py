@@ -212,3 +212,31 @@ def test_the_migration_is_idempotent_and_rolls_back(rated):
         cur.execute("SELECT to_regclass('public.market_exchange_rates')")
         assert cur.fetchone()[0] is None
         cur.execute(RATE_MIGRATION)
+
+
+def _cron(monkeypatch, today, history, current):
+    from backend.integrations import bccr_rates as br
+
+    monkeypatch.setenv("EMAIL_MONITOR_CRON_SECRET", "synthetic")
+    monkeypatch.delenv("IBKR_FLEX_CRON_SECRET", raising=False)
+    monkeypatch.setattr(br, "costa_rica_today", lambda: today)
+    monkeypatch.setattr(br, "fetch_history", lambda *_: history)
+    monkeypatch.setattr(br, "fetch_today", lambda: current)
+    return br.sync_rates_cron("synthetic")
+
+
+def test_the_cron_stores_rates_and_closes_through_the_real_connection(rated, monkeypatch):
+    """The whole command on the application's own connection, which rewrites some statements."""
+    expense = _pending(rated, A, "Compra", 10, "2026-10-05")
+    answer = _cron(monkeypatch, date(2026, 11, 4), [(date(2026, 10, 31), Decimal("450"))], [(date(2026, 11, 4), Decimal("454.65"))])
+    assert answer["rates"] == 2 and answer["converted"] == 1 and answer["failed_workspaces"] == 0
+    assert Decimal(str(_row(rated, expense)[1])) == Decimal("450")
+    assert _query(rated, "SELECT rate_date::text, source FROM market_exchange_rates ORDER BY rate_date") == [
+        ("2026-10-31", "frankfurter_bccr"), ("2026-11-04", "hacienda")]
+
+
+def test_a_second_run_updates_a_rate_instead_of_failing(rated, monkeypatch):
+    day = date(2026, 11, 4)
+    _cron(monkeypatch, day, [(day, Decimal("450"))], [])
+    _cron(monkeypatch, day, [], [(day, Decimal("454.65"))])
+    assert _query(rated, "SELECT rate::numeric(8,2)::text, source FROM market_exchange_rates") == [("454.65", "hacienda")]

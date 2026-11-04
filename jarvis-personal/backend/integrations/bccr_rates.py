@@ -108,7 +108,8 @@ def store(conn, rows: list[tuple[date, Decimal]], source: str) -> None:
         conn.execute(
             """INSERT INTO market_exchange_rates (rate_date, currency, rate_type, rate, source) VALUES (%s,%s,%s,%s,%s)
                ON CONFLICT (rate_date, currency, rate_type) DO UPDATE
-               SET rate=EXCLUDED.rate, source=EXCLUDED.source, updated_at=NOW()""",
+               SET rate=EXCLUDED.rate, source=EXCLUDED.source, updated_at=NOW()
+               RETURNING rate_date""",  # The connection adds `RETURNING id` otherwise, and this table has no id.
             (day, CURRENCY, RATE_TYPE, rate, source),
         )
 
