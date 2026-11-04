@@ -38,7 +38,8 @@ extension FixtureBackend {
             return ok(["wants_investing": wanted])
         case ("GET", "/user-product/vip/retirement"):
             if let denied = needs(.vip) { return denied }
-            return ok(["config": retirement])
+            // The Owner's statement (owner_pensions.py): invented figures.
+            return ok(["config": isOwnerRole ? retirement.merging(["fcl_balance": 150_000, "pensions_as_of": "2026-09"]) { _, new in new } : retirement])
         case ("PUT", "/user-product/vip/retirement"):
             if let denied = needs(.vip) { return denied }
             for key in ["rop_balance", "voluntary_balance", "birth_year", "retire_age"] where body.keys.contains(key) { retirement[key] = body[key] }

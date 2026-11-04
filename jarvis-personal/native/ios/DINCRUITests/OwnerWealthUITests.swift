@@ -61,6 +61,15 @@ final class OwnerWealthUITests: XCTestCase {
         XCTAssertTrue(text("Todavía no te toca comprar más", in: app).exists)
     }
 
+    /// His pension statement keeps the ROP and the FCL in Retiro by themselves.
+    func testRetiroShowsThePensionsFromTheStatement() {
+        let app = launchOwner()
+        app.tabBars.buttons["Plan"].tap()
+        tap("plan.retirement", in: app)
+        XCTAssertTrue(element("retirement.pensions", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("FCL (Fondo de Capitalización Laboral)", in: app).exists)
+    }
+
     func testTheOwnerSeesThePortfolioAndItsPositions() {
         let app = launchOwner()
         openWealth(app)

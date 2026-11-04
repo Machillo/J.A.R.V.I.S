@@ -72,6 +72,16 @@ private fun RetirementContent(model: AppModel, retirement: Retirement, income: B
             }
         }
     }
+    // The Owner's pension statement keeps these by itself.
+    config.pensionsAsOf?.let { asOf ->
+        DincrCard(Modifier.testTag("retirement.pensions")) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+                AmountLine(tx("ROP", "ROP"), config.ropBalance)
+                AmountLine(tx("FCL (Fondo de Capitalización Laboral)", "FCL (labor capitalization fund)"), config.fclBalance)
+                Caption(tx("Se actualizan solos con tu estado de cuenta de BAC Pensiones ($asOf).", "They update by themselves from your BAC Pensiones statement ($asOf)."))
+            }
+        }
+    }
     Section(tx("Tus datos", "Your details")) {
         MoneyField(tx("Saldo del ROP", "ROP balance"), rop, { rop = it }, modifier = Modifier.testTag("retirement.rop"))
         MoneyField(tx("Pensión voluntaria (si tenés)", "Voluntary pension (if any)"), voluntary, { voluntary = it }, modifier = Modifier.testTag("retirement.voluntary"))

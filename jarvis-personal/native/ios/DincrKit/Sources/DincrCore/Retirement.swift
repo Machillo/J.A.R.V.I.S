@@ -13,9 +13,13 @@ public struct Retirement: Decodable, Sendable, Equatable {
         public let voluntaryBalance: Decimal?
         public let birthYear: Int?
         public let retireAge: Int?
+        /// From the Owner's monthly pension statement; nobody else has them.
+        public let fclBalance: Decimal?
+        public let pensionsAsOf: String?
 
-        public init(ropBalance: Decimal?, voluntaryBalance: Decimal?, birthYear: Int?, retireAge: Int?) {
+        public init(ropBalance: Decimal?, voluntaryBalance: Decimal?, birthYear: Int?, retireAge: Int?, fclBalance: Decimal? = nil, pensionsAsOf: String? = nil) {
             self.ropBalance = ropBalance; self.voluntaryBalance = voluntaryBalance; self.birthYear = birthYear; self.retireAge = retireAge
+            self.fclBalance = fclBalance; self.pensionsAsOf = pensionsAsOf
         }
     }
     public let config: Config

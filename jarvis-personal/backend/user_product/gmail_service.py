@@ -42,7 +42,7 @@ from backend.user_product.capture_dedupe import apply_capture_resolution
 from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.mail_sync_analytics import observe_mail_sync
 from backend.user_product.legacy_owner_mail import legacy_transaction_for_message, mark_legacy_duplicate
-from backend.user_product import mail_oauth, owner_mail_automation, pending_conversion
+from backend.user_product import mail_oauth, owner_mail_automation, owner_pensions, pending_conversion
 from backend.user_product.mail_copy import localized_parse_reason
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
@@ -1193,6 +1193,14 @@ def _ingest_message_once(
             if email_row is None:
                 # A concurrent sync (push + manual) stored this message first.
                 return "duplicate"
+
+        # The Owner's monthly pension statement fills Retiro by itself: only the balances are kept.
+        pension_statement = (owner_pensions.parse_statement(subject, sender, attachment_text, attachment_names, received_at)
+                             if owner else None)
+        if pension_statement:
+            owner_pensions.apply_statement(conn, connection["workspace_id"], pension_statement)
+            conn.execute("UPDATE finva_email_messages SET parse_reason=%s WHERE id=%s",
+                         (f"Estado de pensiones {pension_statement['month']} procesado.", int(email_row["id"])))
 
         if payroll_report:
             conn.execute(
