@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
 
 from backend.auth.current_user import get_current_workspace_id
+from backend.ai.preferences import get_preference, set_preference
 from backend.core.database import get_connection, serialize_row, serialize_rows
+from backend.finance import dividend_plan
 from backend.integrations.ibkr_readonly import flex_is_configured, sync_flex_snapshot
 
 router = APIRouter(prefix="/finance/investment-center", tags=["finance-investments"])
@@ -126,6 +128,46 @@ def _summary(workspace_id: str):
 @router.get("")
 def get_center():
     return _summary(get_current_workspace_id())
+
+
+def _dividend_plan_answer(config: dict) -> dict:
+    # Imported here: the strategy's own modules import the finance package at start-up.
+    from backend.finance.emergency_fund import get_salvavidas_state
+    from backend.finance.service import get_debts
+
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        snap = conn.execute(
+            """
+            SELECT id FROM investment_portfolio_snapshots
+            WHERE workspace_id=%s ORDER BY snapshot_date DESC, id DESC LIMIT 1
+            """,
+            (workspace_id,),
+        ).fetchone()
+        positions = conn.execute(
+            "SELECT symbol, currency, market_value FROM investment_position_snapshots WHERE portfolio_snapshot_id=%s",
+            (snap["id"],),
+        ).fetchall() if snap else None
+    positions = serialize_rows(positions) if positions is not None else None
+    gate = dividend_plan.stock_gate(get_debts() or [], get_salvavidas_state() or {})
+    return {
+        "config": config,
+        "held_symbols": sorted({str(row.get("symbol")) for row in positions or [] if row.get("symbol")}),
+        "gate": gate,
+        "result": dividend_plan.calculate(config, positions, gate),
+    }
+
+
+@router.get("/dividend-plan")
+def get_dividend_plan():
+    return _dividend_plan_answer(dividend_plan.normalize(get_preference(dividend_plan.PREFERENCE_KEY, {})))
+
+
+@router.put("/dividend-plan")
+def update_dividend_plan(payload: dict):
+    config = dividend_plan.validated(payload)
+    set_preference(dividend_plan.PREFERENCE_KEY, config)
+    return _dividend_plan_answer(config)
 
 
 @router.post("/sync-ibkr")

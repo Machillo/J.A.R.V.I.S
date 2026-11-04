@@ -43,6 +43,26 @@ final class OwnerWealthUITests: XCTestCase {
         tap("jarvis.section.wealth", in: app)
     }
 
+    /// Plan de dividendos: invites to set it up, prefills the stock held, shows the capital needed,
+    /// and with the gate closed it says why instead of saying what to buy.
+    func testTheDividendPlanSaysWhatTheGoalNeedsAndNeverSaysBuyWithTheGateClosed() {
+        let app = launchOwner()
+        openWealth(app)
+        XCTAssertTrue(text("Elegí tus acciones y tu meta", in: app).waitForExistence(timeout: 10))
+        tap("wealth.dividends.edit", in: app)
+        XCTAssertEqual(element("wealth.dividends.symbolA", in: app).waitForExistence(timeout: 5) ? element("wealth.dividends.symbolA", in: app).value as? String : nil, "ACME")
+        tap("wealth.dividends.save", in: app)
+        XCTAssertTrue(element("wealth.dividends.incomplete", in: app).waitForExistence(timeout: 10), "no yield, no capital figure")
+        tap("wealth.dividends.edit", in: app)
+        type("4", into: "wealth.dividends.yieldA", in: app)
+        tap("wealth.dividends.save", in: app)
+        XCTAssertTrue(text("Capital que necesitás", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("En 10 años", in: app).exists)
+        XCTAssertTrue(text("Todavía no te toca comprar más", in: app).exists)
+        XCTAssertTrue(text("Tenés deuda con tasa anual de 10% o más.", in: app).exists)
+        XCTAssertFalse(text("Este mes comprá", in: app).exists)
+    }
+
     func testTheOwnerSeesThePortfolioAndItsPositions() {
         let app = launchOwner()
         openWealth(app)

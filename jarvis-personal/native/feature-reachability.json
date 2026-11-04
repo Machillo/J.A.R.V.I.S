@@ -1971,6 +1971,18 @@
      "used_by": []
     },
     {
+     "method": "GET",
+     "path": "/finance/investment-center/dividend-plan",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "PUT",
+     "path": "/finance/investment-center/dividend-plan",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
      "method": "POST",
      "path": "/finance/investment-center/sync-ibkr",
      "gate": "internal_only",

@@ -33,6 +33,33 @@ internal class FakeWealth(private val today: java.time.LocalDate, private val ne
         return IbkrSyncResult("OK", 2)
     }
 
+    private var dividendConfig = DividendPlan.Config(goalMonthlyUsd = BigDecimal(1_000), withholdingPct = BigDecimal(30))
+
+    /**
+     * Invented fixed figures: the calculation itself is the backend's (`finance/dividend_plan.py`),
+     * tested there. The stock gate is closed, as for an Owner with expensive debt.
+     */
+    fun dividendPlan(): DividendPlan {
+        val ready = dividendConfig.stocks.isNotEmpty() && dividendConfig.stocks.all { it.yieldPct != null }
+        return DividendPlan(
+            config = dividendConfig,
+            heldSymbols = listOf("ACME"),
+            gate = DividendPlan.Gate(false, listOf(DividendPlan.Gate.Blocker("expensive_debt"), DividendPlan.Gate.Blocker("salvavidas_short"))),
+            result = if (!ready) DividendPlan.Result(currentValueUsd = BigDecimal(500)) else DividendPlan.Result(
+                ready = true, netYieldPct = BigDecimal("2.8"), capitalNeededUsd = BigDecimal("428571.43"), currentValueUsd = BigDecimal(500),
+                missingUsd = BigDecimal("428071.43"), netMonthlyDividendNowUsd = BigDecimal("1.17"), monthsToGoal = dividendConfig.monthlyAmountUsd?.let { 310 },
+                monthlyNeeded = listOf(10 to 3_050, 15 to 1_850, 20 to 1_250).map { (years, amount) -> DividendPlan.Result.Horizon(years, BigDecimal(amount)) },
+            ),
+        )
+    }
+
+    /** Null when the request is invalid (the caller answers 422). */
+    fun saveDividendPlan(update: DividendPlanUpdate): DividendPlan? {
+        if (update.stocks.isEmpty() || update.stocks.fold(BigDecimal.ZERO) { sum, stock -> sum + stock.sharePct }.compareTo(BigDecimal(100)) != 0) return null
+        dividendConfig = DividendPlan.Config(update.stocks, update.goalMonthlyUsd, update.monthlyAmountUsd, update.withholdingPct)
+        return dividendPlan()
+    }
+
     fun businessCenter(): BusinessCenter {
         fun total(type: String) = movements.filter { it.movementType == type }.fold(BigDecimal.ZERO) { sum, m -> sum + (m.amount ?: BigDecimal.ZERO) }
         val income = total("income")

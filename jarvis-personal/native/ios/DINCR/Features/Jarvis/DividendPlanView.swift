@@ -1,0 +1,225 @@
+import DincrCore
+import DincrDesign
+import SwiftUI
+
+/// JARVIS → Patrimonio → Inversiones: "Plan de dividendos". Says how much capital the monthly goal
+/// needs with the stocks the Owner picked, and what to buy this month only when the plan allows it
+/// (no debt at 10% a year or more, 3 months of Salvavidas). Opening it only reads. The app has no
+/// market data: the yield is what the Owner typed. Android: `DividendPlanCard`.
+struct DividendPlanCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var editing: DividendPlan?
+    @State private var reloadToken = 0
+
+    var body: some View {
+        AsyncContent(fallback: tx("No pudimos cargar tu plan de dividendos.", "We couldn’t load your dividend plan."),
+                     load: { try await model.service.dividendPlan() }) { plan, _ in
+            content(plan)
+                .sheet(item: Binding(get: { editing.map(EditingPlan.init) }, set: { editing = $0?.plan })) { item in
+                    DividendPlanSheet(plan: item.plan) { reloadToken += 1 }
+                }
+        }
+        .id(reloadToken)
+    }
+
+    private struct EditingPlan: Identifiable {
+        let plan: DividendPlan
+        var id: String { "dividend-plan" }
+    }
+
+    private func content(_ plan: DividendPlan) -> some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+            Text(tx("Plan de dividendos", "Dividend plan")).font(DincrFont.label).foregroundStyle(.dincrText2)
+            if !plan.isConfigured {
+                Text(tx("Elegí tus acciones y tu meta para saber cuánto necesitás.", "Pick your stocks and your goal to see how much you need."))
+                    .font(DincrFont.bodySmall)
+            } else if !plan.result.ready {
+                Text(tx("Falta el dividendo anual de tus acciones para poder calcular.", "Your stocks’ yearly dividend is missing, so it can’t be calculated yet."))
+                    .font(DincrFont.bodySmall)
+                    .accessibilityIdentifier("wealth.dividends.incomplete")
+            } else {
+                figures(plan)
+            }
+            Button(plan.isConfigured ? tx("Editar", "Edit") : tx("Configurar", "Set up")) { editing = plan }
+                .buttonStyle(.dincrSecondary)
+                .accessibilityIdentifier("wealth.dividends.edit")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("wealth.dividends")
+    }
+
+    @ViewBuilder private func figures(_ plan: DividendPlan) -> some View {
+        let result = plan.result
+        FigureRow(label: tx("Tu meta al mes", "Your monthly goal"), amount: plan.config.goalMonthlyUsd, currency: "USD")
+        FigureRow(label: tx("Capital que necesitás", "Capital you need"), amount: result.capitalNeededUsd, currency: "USD", emphasized: true)
+        FigureRow(label: tx("Tenés en estas acciones", "You hold in these stocks"), amount: result.currentValueUsd, currency: "USD")
+        FigureRow(label: tx("Te falta", "Still missing"), amount: result.missingUsd, currency: "USD")
+        FigureRow(label: tx("Hoy te daría al mes", "It would pay you monthly today"), amount: result.netMonthlyDividendNowUsd, currency: "USD")
+        if !result.monthlyNeeded.isEmpty {
+            Text(tx("Cuánto comprar al mes para llegar", "How much to buy monthly to get there")).font(DincrFont.label).foregroundStyle(.dincrText2)
+            ForEach(result.monthlyNeeded, id: \.years) { horizon in
+                FigureRow(label: tx("En \(horizon.years) años", "In \(horizon.years) years"), amount: horizon.amountUsd, currency: "USD")
+            }
+        }
+        if let line = Self.pace(result.monthsToGoal, amount: plan.config.monthlyAmountUsd) {
+            Text(line).font(DincrFont.bodySmall).accessibilityIdentifier("wealth.dividends.pace")
+        }
+        if plan.gate.open {
+            if !result.buyThisMonth.isEmpty {
+                Text(tx("Este mes comprá", "This month, buy")).font(DincrFont.label).foregroundStyle(.dincrText2)
+                ForEach(result.buyThisMonth, id: \.symbol) { FigureRow(label: $0.symbol, amount: $0.amountUsd, currency: "USD") }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: DincrSpacing.s1) {
+                Text(tx("Todavía no te toca comprar más", "It’s not time to buy more yet")).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.warning)
+                ForEach(plan.gate.blockers, id: \.code) { Text(Self.blocker($0.code)).font(DincrFont.bodySmall) }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("wealth.dividends.gate")
+        }
+        Text(tx("Es un cálculo con el dividendo que escribiste, después de la retención, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
+                "It’s a calculation with the dividend you typed, after withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
+            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+    }
+
+    private static func pace(_ months: Int?, amount: Decimal?) -> String? {
+        guard let months else { return nil }
+        if months == 0 { return tx("Ya llegaste a tu meta.", "You’ve reached your goal.") }
+        let years = months / 12, rest = months % 12
+        let time = switch (years, rest) {
+        case (0, _): tx("\(rest) meses", "\(rest) months")
+        case (_, 0): tx("\(years) años", "\(years) years")
+        default: tx("\(years) años y \(rest) meses", "\(years) years and \(rest) months")
+        }
+        return (amount ?? 0) > 0 ? tx("Con tu aporte mensual llegás en \(time).", "With your monthly amount you get there in \(time).")
+            : tx("Sin aportar más llegás en \(time).", "Without adding more you get there in \(time).")
+    }
+
+    private static func blocker(_ code: String) -> String {
+        switch code {
+        case "expensive_debt": tx("Tenés deuda con tasa anual de 10% o más.", "You have debt at 10% a year or more.")
+        case "debt_rate_unknown": tx("Falta la tasa de interés de una deuda.", "A debt’s interest rate is missing.")
+        case "salvavidas_short": tx("El Salvavidas todavía no cubre 3 meses.", "The emergency fund doesn’t cover 3 months yet.")
+        case "salvavidas_unknown": tx("Falta el saldo o el costo mensual del Salvavidas.", "The emergency fund’s balance or monthly cost is missing.")
+        default: tx("Falta un dato para decidirlo.", "Some information is missing to decide.")
+        }
+    }
+}
+
+/// The plan's form. Saving only stores the plan: it buys nothing. Sent once, never retried.
+private struct DividendPlanSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let plan: DividendPlan
+    let onSaved: () -> Void
+    @State private var symbolA = ""
+    @State private var shareA = "100"
+    @State private var yieldA = ""
+    @State private var symbolB = ""
+    @State private var shareB = ""
+    @State private var yieldB = ""
+    @State private var goal = ""
+    @State private var monthly = ""
+    @State private var withholding = ""
+    @State private var error: String?
+    @State private var saving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(tx("Primera acción", "First stock")) {
+                    field(tx("Símbolo", "Symbol"), $symbolA, id: "wealth.dividends.symbolA").textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    field(tx("Parte de lo que comprás (%)", "Share of what you buy (%)"), $shareA, id: "wealth.dividends.shareA").keyboardType(.decimalPad)
+                    field(tx("Dividendo anual (%)", "Yearly dividend (%)"), $yieldA, id: "wealth.dividends.yieldA").keyboardType(.decimalPad)
+                }
+                Section(tx("Segunda acción (opcional)", "Second stock (optional)")) {
+                    field(tx("Símbolo", "Symbol"), $symbolB, id: "wealth.dividends.symbolB").textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    field(tx("Parte de lo que comprás (%)", "Share of what you buy (%)"), $shareB, id: "wealth.dividends.shareB").keyboardType(.decimalPad)
+                    field(tx("Dividendo anual (%)", "Yearly dividend (%)"), $yieldB, id: "wealth.dividends.yieldB").keyboardType(.decimalPad)
+                }
+                Section {
+                    field(tx("Meta de dividendos al mes (US$)", "Monthly dividend goal (US$)"), $goal, id: "wealth.dividends.goal").keyboardType(.decimalPad)
+                    field(tx("Cuánto comprarías al mes (US$)", "How much you’d buy monthly (US$)"), $monthly, id: "wealth.dividends.monthly").keyboardType(.decimalPad)
+                    field(tx("Retención de impuestos (%)", "Tax withholding (%)"), $withholding, id: "wealth.dividends.withholding").keyboardType(.decimalPad)
+                } footer: {
+                    Text(tx("El dividendo anual lo ves en tu bróker. La retención suele ser 30% en acciones de EE. UU.; confirmala con tu bróker.",
+                            "You’ll find the yearly dividend at your broker. Withholding is usually 30% on US stocks; confirm it with your broker."))
+                }
+                if let error {
+                    Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative).accessibilityIdentifier("wealth.dividends.error")
+                }
+            }
+            .navigationTitle(tx("Plan de dividendos", "Dividend plan"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(tx("Cancelar", "Cancel")) { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(tx("Guardar", "Save")) { Task { await save() } }.disabled(saving).accessibilityIdentifier("wealth.dividends.save")
+                }
+            }
+            .onAppear(perform: prefill)
+        }
+        .interactiveDismissDisabled(saving)
+    }
+
+    /// The label stays above the field once it has a value ("100" or "30" alone say nothing).
+    private func field(_ label: String, _ text: Binding<String>, id: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(DincrFont.caption).foregroundStyle(.dincrText2).accessibilityHidden(true)
+            TextField(label, text: text, prompt: Text("")).accessibilityIdentifier(id)
+        }
+    }
+
+    private func prefill() {
+        let stocks = plan.config.stocks
+        // First time: the stock already held in the portfolio, so it isn't typed again.
+        symbolA = stocks.first?.symbol ?? plan.heldSymbols.first ?? ""
+        shareA = stocks.first.map { plain($0.sharePct) } ?? "100"
+        yieldA = stocks.first?.yieldPct.map(plain) ?? ""
+        if stocks.count > 1 {
+            symbolB = stocks[1].symbol; shareB = plain(stocks[1].sharePct); yieldB = stocks[1].yieldPct.map(plain) ?? ""
+        }
+        goal = plan.config.goalMonthlyUsd.map(model.moneyFormat.inputText) ?? ""
+        monthly = plan.config.monthlyAmountUsd.map(model.moneyFormat.inputText) ?? ""
+        withholding = plan.config.withholdingPct.map(plain) ?? ""
+    }
+
+    private func plain(_ value: Decimal) -> String { "\(value)" }
+
+    private func number(_ text: String) -> Decimal? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        return Decimal(string: trimmed, locale: Locale(identifier: "en_US_POSIX"))
+    }
+
+    private func save() async {
+        guard !saving else { return }
+        let first = symbolA.trimmingCharacters(in: .whitespaces), second = symbolB.trimmingCharacters(in: .whitespaces)
+        guard !first.isEmpty else { error = tx("Escribí el símbolo de tu acción.", "Enter your stock’s symbol."); return }
+        var stocks: [DividendPlan.Stock] = []
+        for (symbol, share, yield) in [(first, shareA, yieldA), (second, shareB, yieldB)] where !symbol.isEmpty {
+            guard let shareValue = number(share), yield.isEmpty || number(yield) != nil else {
+                error = tx("Revisá los porcentajes.", "Check the percentages."); return
+            }
+            stocks.append(.init(symbol: symbol.uppercased(), sharePct: shareValue, yieldPct: yield.isEmpty ? nil : number(yield)))
+        }
+        // Amounts in the user's separators ("1.000" is a thousand); 0 is a valid monthly amount.
+        let separators = model.moneyFormat.separators
+        let goalValue = goal.isEmpty ? nil : CorrectionInput.amount(goal, separators: separators)
+        let monthlyValue = monthly.isEmpty ? nil : CorrectionInput.amountZeroOrMore(monthly, separators: separators)
+        guard (goal.isEmpty || goalValue != nil), (monthly.isEmpty || monthlyValue != nil), (withholding.isEmpty || number(withholding) != nil) else {
+            error = tx("Revisá los montos.", "Check the amounts."); return
+        }
+        saving = true; error = nil
+        defer { saving = false }
+        let epoch = model.currentEpoch
+        do {
+            _ = try await model.service.updateDividendPlan(DividendPlanUpdate(stocks: stocks, goalMonthlyUsd: goalValue, monthlyAmountUsd: monthlyValue, withholdingPct: number(withholding)))
+            onSaved()
+            dismiss()
+        } catch {
+            self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar.", "We couldn’t save."))
+        }
+    }
+}

@@ -687,6 +687,21 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/finance/investment-center/dividend-plan",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/investment-center/dividend-plan",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
   "method": "POST",
   "path": "/finance/investment-center/snapshots",
   "gates": [
