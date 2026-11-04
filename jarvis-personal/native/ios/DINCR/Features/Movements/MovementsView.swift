@@ -277,12 +277,10 @@ struct MovementsView: View {
     /// result, or the one the filter asks for.
     private func totalsSection(_ totals: MovementTotals) -> some View {
         Section {
-            HStack(alignment: .top, spacing: DincrSpacing.s4) {
-                if filter != .expense { totalFact(tx("Ingresos", "Income"), totals.income, sign: .income, id: "income") }
-                if filter != .income { totalFact(tx("Gastos", "Expenses"), totals.expenses, sign: .expense, id: "expenses") }
-                if filter != .income, let paid = totals.debtPaid { totalFact(tx("A deudas", "To debts"), paid, sign: .expense, id: "debtPaid") }
-                if filter == .all, let result = totals.result { totalFact(tx("Resultado", "Result"), result, sign: .none, id: "result") }
-                Spacer(minLength: 0)
+            // Stacks instead of splitting a word when the text is large.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: DincrSpacing.s4) { totalFacts(totals); Spacer(minLength: 0) }
+                VStack(alignment: .leading, spacing: DincrSpacing.s2) { totalFacts(totals) }
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("movements.totals")
@@ -291,6 +289,13 @@ struct MovementsView: View {
                 Text(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
             }
         }
+    }
+
+    @ViewBuilder private func totalFacts(_ totals: MovementTotals) -> some View {
+        if filter != .expense { totalFact(tx("Ingresos", "Income"), totals.income, sign: .income, id: "income") }
+        if filter != .income { totalFact(tx("Gastos", "Expenses"), totals.expenses, sign: .expense, id: "expenses") }
+        if filter != .income, let paid = totals.debtPaid { totalFact(tx("A deudas", "To debts"), paid, sign: .expense, id: "debtPaid") }
+        if filter == .all, let result = totals.result { totalFact(tx("Resultado", "Result"), result, sign: .none, id: "result") }
     }
 
     private func totalFact(_ label: String, _ amount: Decimal?, sign: MoneyFormat.Sign, id: String) -> some View {

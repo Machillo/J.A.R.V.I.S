@@ -139,7 +139,7 @@ fun DebtScenarioForm(model: AppModel, choice: ScenarioChoice) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth().testTag("scenario.new.term"))
         } else {
             when (val list = debts) {
-                null -> Caption(tx("Cargando tus deudas…", "Loading your debts…"))
+                null -> com.dincr.design.SkeletonBlock(rows = 2, showsFigure = false)
                 emptyList<Debt>() -> Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."), color = Dincr.colors.text)
                 else -> if (choice == ScenarioChoice.CONSOLIDATE) {
                     list.forEach { debt ->

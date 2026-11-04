@@ -52,14 +52,20 @@ struct HomeHero: View {
                         .accessibilityIdentifier("\(idPrefix).status.cycle")
                 }
             }
-            HStack(alignment: .top, spacing: DincrSpacing.s4) {
-                fact(tx("Ingresos", "Income"), status.income, sign: .income, unknown: tx("Sin registrar", "Not recorded"))
-                fact(tx("Gastos", "Expenses"), status.expenses, sign: .expense, unknown: tx("Sin registrar", "Not recorded"))
-                if status.headline == .safeToSpend {
-                    fact(status.cycle == nil ? tx("Resultado del mes", "Month result") : tx("Resultado del corte", "Statement result"), status.result, sign: .none, unknown: "—")
-                }
+            // Stacks instead of splitting a word when the text is large.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: DincrSpacing.s4) { facts(status) }
+                VStack(alignment: .leading, spacing: DincrSpacing.s2) { facts(status) }
             }
             .accessibilityIdentifier("\(idPrefix).status.facts")
+        }
+    }
+
+    @ViewBuilder private func facts(_ status: HomeStatus) -> some View {
+        fact(tx("Ingresos", "Income"), status.income, sign: .income, unknown: tx("Sin registrar", "Not recorded"))
+        fact(tx("Gastos", "Expenses"), status.expenses, sign: .expense, unknown: tx("Sin registrar", "Not recorded"))
+        if status.headline == .safeToSpend {
+            fact(status.cycle == nil ? tx("Resultado del mes", "Month result") : tx("Resultado del corte", "Statement result"), status.result, sign: .none, unknown: "—")
         }
     }
 
@@ -120,7 +126,8 @@ struct HomeHeroScreen<Hero: View, Sheet: View>: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                hero
+                // Its own color too: at a large text size it is taller than the fixed color behind it.
+                hero.background(OwnerColor.hero)
                 VStack(alignment: .leading, spacing: DincrSpacing.s4) { sheet }
                     .padding(.horizontal, DincrSpacing.s4)
                     .padding(.top, DincrSpacing.s2)
@@ -128,6 +135,8 @@ struct HomeHeroScreen<Hero: View, Sheet: View>: View {
                     .frame(maxWidth: 640)
                     .frame(maxWidth: .infinity)
                     .background(OwnerColor.backgroundMiddle, in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous))
+                    // The sheet's rounded corners keep the hero's color behind them at any height.
+                    .background(alignment: .top) { OwnerColor.hero.frame(height: 24) }
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier(id)
