@@ -15,6 +15,9 @@ final class ClosePeriodUITests: XCTestCase {
 
         let close = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "movements.pending.close.month:")).firstMatch
         XCTAssertTrue(close.waitForExistence(timeout: 10))
+        // While it waits: an estimate, labeled as one, and the promise that it converts by itself.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ENDSWITH %@", "estimado")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Se convierte solo")).firstMatch.exists)
         close.tap()
 
         let rate = app.textFields["close.rate"]

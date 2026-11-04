@@ -112,7 +112,7 @@ struct DebtScenarioForm: View {
                 .accessibilityIdentifier("scenario.debt")
             }
         } else {
-            ProgressView()
+            SkeletonView(rows: 2, showsFigure: false)
         }
     }
 
@@ -137,7 +137,7 @@ struct DebtScenarioForm: View {
                 }
             }
         } else {
-            ProgressView()
+            SkeletonView(rows: 2, showsFigure: false)
         }
     }
 

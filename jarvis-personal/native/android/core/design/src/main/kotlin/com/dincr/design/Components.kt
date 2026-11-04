@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -117,6 +118,9 @@ fun MoneyText(amount: BigDecimal?, modifier: Modifier = Modifier, sign: MoneyFor
 @Composable
 fun MoneyRow(title: String, subtitle: String, amount: BigDecimal, kind: MovementKind, icon: ImageVector, readOnly: Boolean, modifier: Modifier = Modifier, currency: String? = null) {
     val colors = Dincr.colors
+    // Under the name at a large text size: beside it, the amount would split the name's words.
+    val amountBelow = LocalDensity.current.fontScale >= 1.5f
+    val rowAmount = @Composable { MoneyText(amount, sign = if (kind == MovementKind.INCOME) MoneyFormat.Sign.INCOME else MoneyFormat.Sign.EXPENSE, currency = currency) }
     Row(modifier.fillMaxWidth().heightIn(min = Dincr.look.rowMin).padding(vertical = DincrSpacing.s2), verticalAlignment = Alignment.CenterVertically) {
         val income = kind == MovementKind.INCOME
         Box(Modifier.size(42.dp).background(if (income) colors.positiveContainer else colors.surface2, RoundedCornerShape(Dincr.look.controlRadius)), contentAlignment = Alignment.Center) {
@@ -128,8 +132,9 @@ fun MoneyRow(title: String, subtitle: String, amount: BigDecimal, kind: Movement
                 if (readOnly) Icon(Icons.Rounded.Lock, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp).padding(end = 2.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textMuted)
             }
+            if (amountBelow) rowAmount()
         }
-        MoneyText(amount, sign = if (kind == MovementKind.INCOME) MoneyFormat.Sign.INCOME else MoneyFormat.Sign.EXPENSE, currency = currency)
+        if (!amountBelow) rowAmount()
     }
 }
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import statistics
 from time import perf_counter
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -10,13 +11,16 @@ from backend.auth.current_user import get_current_account_id, get_current_user, 
 from backend.core.database import get_connection
 from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
+from backend.finance import dividend_plan
 from backend.finance.emergency_fund import get_salvavidas_state
-from backend.ai import owner_commitments, owner_debt_block_store
+from backend.ai import owner_analysis, owner_commitments, owner_debt_block_store
+from backend.ai.preferences import get_preference
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
 from backend.user_product.debt_payments import with_known_payments
 from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import load_income_baseline
+from backend.user_product.investment_choice import PREFERENCE_KEY as INVESTMENT_CHOICE
 from backend.user_product.strategy_engine import missing_rates_warning
 
 # The Owner boundary. The personal JARVIS strategy (payroll/OT/bonus income, the pay
@@ -319,6 +323,62 @@ def _salvavidas_next_stage(
 PENSION_MAX_DEBT_APR = 20.0
 PENSION_SHARE_WITH_DEBT = 0.05
 PENSION_SHARE = 0.10
+# A month with fewer expense rows than this has no real activity to read living costs from.
+OWNER_LIVED_MIN_ROWS = 10
+# What he can't stop spending on; the rest (trips, purchases, restaurants) is a choice.
+OWNER_NECESSARY_CATEGORIES = {"Comida", "Transporte", "Gasolina", "Salud"}
+
+
+def _owner_lived_spending(workspace_id: str, fixed_categories: set[str], today: date) -> tuple[float | None, float | None]:
+    """What his closed months spent beyond fixed expenses and debts, and how much of it was necessary:
+    the median of each, so one trip doesn't set them. By category, because a fixed expense isn't always
+    recorded as a movement. Fewer than two months with real activity: unknown, never 0."""
+    from backend.finance.category_catalog import expense_type_for_category  # no cycle: only here
+
+    months: list[tuple[float, float]] = []
+    end = today.replace(day=1)
+    with get_connection() as conn:
+        for _ in range(3):
+            start = (end - timedelta(days=1)).replace(day=1)
+            rows = conn.execute(
+                """SELECT category, COUNT(*) AS seen, SUM(amount) AS total FROM transactions
+                   WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date >= %s AND transaction_date < %s
+                   GROUP BY category""",
+                (workspace_id, start, end),
+            ).fetchall()
+            end = start
+            if sum(int(row["seen"] or 0) for row in rows) < OWNER_LIVED_MIN_ROWS:
+                continue
+            lived = necessary = 0.0
+            for row in rows:
+                category = str(row["category"] or "")
+                if category.lower() in fixed_categories or expense_type_for_category(category, owner=True) == "fixed":
+                    continue
+                lived += _f(row["total"])
+                if category in OWNER_NECESSARY_CATEGORIES:
+                    necessary += _f(row["total"])
+            months.append((lived, necessary))
+    if len(months) < 2:
+        return None, None
+    return statistics.median(m[0] for m in months), statistics.median(m[1] for m in months)
+
+
+def _owner_usual_month(workspace_id: str, recurring_income: float, installments: float, living: dict[str, Any],
+                       spent_this_cycle: float) -> owner_analysis.OwnerMonth:
+    """His usual month, from what the app already has: the salary of his closed months (with what
+    extra hours really added), or the projection from his hours; installments; fixed expenses; living costs."""
+    from backend.ai.owner_debt_blocks import average_income  # imports this module
+
+    today = date.today()
+    average, _estimated = average_income(workspace_id, today)
+    plan = dividend_plan.normalize(get_preference(dividend_plan.PREFERENCE_KEY, {}))
+    net_yield = dividend_plan.calculate(plan, None, {"open": False, "blockers": []})["net_yield_pct"]
+    fixed_categories = {str(item.get("category") or "").lower() for item in living.get("included_fixed") or []}
+    lived, necessary = _owner_lived_spending(workspace_id, fixed_categories, today)
+    return owner_analysis.OwnerMonth(
+        income=average or recurring_income, installments=installments, fixed_expenses=_f(living.get("fixed_living_total")),
+        lived_variable=lived, lived_necessary=necessary, spent_this_cycle=spent_this_cycle, net_dividend_yield=net_yield,
+    )
 
 
 def _build_dynamic_director_allocation(
@@ -329,6 +389,8 @@ def _build_dynamic_director_allocation(
     savings_total: float,
     emergency_monthly_base: float,
     rates_known: bool = True,
+    owner_month: Any = None,
+    investing_wanted: bool = True,
     split_every_cent: bool = False,
     salvavidas_target_months: int | None = None,
 ) -> dict[str, Any]:
@@ -341,6 +403,12 @@ def _build_dynamic_director_allocation(
     `split_every_cent` (the Owner's exact amount only): a single cent is still split and no
     fraction of a cent is left unassigned, so the items add up to the typed amount exactly.
     Estimates (Owner and Users) keep their 1-cent thresholds.
+
+    `owner_month` (Owner only, `owner_analysis.OwnerMonth`): what is left to split follows the analysis
+    of his month instead of the mode's fixed percentages. Users never pass it.
+
+    `investing_wanted` False (Users who didn't choose it, `user_product/investment_choice.py`): no share
+    goes to investing, whatever else allows it; that money protects the Salvavidas.
 
     `rates_known` False (Users, a debt without a known rate): the highest rate is unknown, so the
     "10% or more" rule is neither assumed true nor false (never computed from a missing rate as 0%).
@@ -387,6 +455,7 @@ def _build_dynamic_director_allocation(
         and highest_debt_apr is not None
         and highest_debt_apr < 10.0
     )
+    investment_allowed = investment_allowed and investing_wanted
     goal_portfolio = build_goal_portfolio(
         goal_items,
         available=base,
@@ -440,6 +509,14 @@ def _build_dynamic_director_allocation(
             "life": 0.15,
             "investment": 0.55 if investment_allowed else 0.0,
         }
+
+    owner_decision = None
+    if owner_month is not None and mode != "cash_protection":
+        owner_decision = owner_analysis.decide(remaining, owner_month, debts, savings_total, monthly_base,
+                                               salvavidas_target_months, mini_fund_target, highest_debt_apr)
+        remaining_weights = owner_decision["weights"]
+        investment_allowed = owner_decision["investment_allowed"]
+        mode_reason = owner_decision["reason"]
 
     emergency_raw = remaining * remaining_weights["emergency"]
     # No mandar más al fondo mini de lo necesario cuando el modo está intentando
@@ -552,6 +629,7 @@ def _build_dynamic_director_allocation(
         "investment_recommended": round(investment_amount, 2),
         "investment_target": round(investment_amount, 2),
         "investment_allowed": investment_allowed,
+        "owner_analysis": owner_decision["analysis"] if owner_decision else None,
         "pension_allowed": pension_allowed,
         "pension_recommended": round(pension_amount, 2),
         "pension_blockers": [
@@ -977,6 +1055,7 @@ def _simulate_debt_cascade(
     recurring_monthly_extra: float,
     first_month_extra: float = 0.0,
     owner_rules: bool = False,
+    order_ids: list[Any] | None = None,
 ) -> tuple[list[dict[str, Any]], int, float]:
     """Simulate an active-debt cascade without keeping cancelled/paid rows in the route."""
     candidates = [debt for debt in debts if _f(debt.get("remaining_amount")) > 0.01]
@@ -988,6 +1067,9 @@ def _simulate_debt_cascade(
     # small Render instance and caused the browser's 20s timeout. Keep the
     # exhaustive simulator for the explicit debt-strategy tool, not this hot path.
     ordered_active = _sort_debts_for_director(candidates, owner_rules)
+    if order_ids:  # The Owner's analysis says which debt comes first.
+        position = {debt_id: index for index, debt_id in enumerate(order_ids)}
+        ordered_active = sorted(ordered_active, key=lambda debt: position.get(debt.get("id"), len(position)))
     active: list[dict[str, Any]] = []
     for debt in ordered_active:
         balance = _f(debt.get("remaining_amount"))
@@ -1309,6 +1391,7 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
 
     investment_portfolio = _fetch_investment_portfolio(workspace_id, True)
 
+    owner_month = _owner_usual_month(workspace_id, recurring_monthly_income, configured_debt_payments, living, committed_spending)
     director = _build_dynamic_director_allocation(
         available_before_allocation=max(current_before_allocation, 0.0),
         debts=debts,
@@ -1317,6 +1400,7 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         emergency_monthly_base=emergency_monthly_base,
         split_every_cent=manual_available is not None,
         salvavidas_target_months=int(_f(salvavidas.get("target_months"))) or None,
+        owner_month=owner_month,
     )
     # The Salvavidas automatic contributions and the locked savings blocks' contributions still to
     # come go by themselves: the distribution says only what to move on top of them
@@ -1360,16 +1444,20 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         goal_reserves=goal_reserves,
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
+        salvavidas_target_months=int(_f(salvavidas.get("target_months"))) or None,
+        owner_month=owner_month,
     )
     recurring_debt_attack_extra = _f(
         (recurring_director.get("allocation_amounts") or {}).get("ataque_de_deuda")
     )
 
+    analysis_order = (director.get("owner_analysis") or {}).get("debt_order")
     base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
         debts,
         recurring_monthly_extra=recurring_debt_attack_extra,
         first_month_extra=0.0,
         owner_rules=True,
+        order_ids=analysis_order,
     )
     first_month_adjustment = current_debt_attack_extra - recurring_debt_attack_extra
     timeline, total_months, payment_pool = _simulate_debt_cascade(
@@ -1377,6 +1465,7 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         recurring_monthly_extra=recurring_debt_attack_extra,
         first_month_extra=first_month_adjustment,
         owner_rules=True,
+        order_ids=analysis_order,
     )
     primary_debt_name = timeline[0].get("name") if timeline else None
     for item in allocation_items:
@@ -1433,6 +1522,7 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         "mode": mode,
         "mode_label": mode_label,
         "mode_reason": director.get("mode_reason"),
+        "owner_analysis": director.get("owner_analysis"),
         "objective": objective,
         "priority": priority,
         "monthly_income": round(current_month_income, 2),
@@ -1543,6 +1633,10 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
 
     month_start = today.replace(day=1)
     with get_connection() as conn:
+        choice = conn.execute("SELECT preference_value FROM user_preferences WHERE workspace_id=%s AND preference_key=%s",
+                              (workspace_id, INVESTMENT_CHOICE)).fetchone()
+        stored_choice = (choice or {}).get("preference_value")
+        wants_investing = isinstance(stored_choice, dict) and stored_choice.get("wants_investing") is True
         # Debts as the user stored them (no import repair), active and paid off (for progress).
         debts = [dict(row) for row in conn.execute(
             """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,monthly_payment_known,interest_rate,interest_rate_known
@@ -1569,6 +1663,7 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
         "period": {"start": month_start.isoformat(), "end": (_next_month(month_start) - timedelta(days=1)).isoformat()},
         "recurring_expense_monthly": round(sum(item["monthly_amount"] for item in recurring_items), 2),
         "recurring_items": recurring_items,
+        "wants_investing": wants_investing,
     }
 
 
@@ -1632,7 +1727,9 @@ def _users_blueprint_from_inputs(
 
     # A debt without a known rate: no decision that compares rates is made from it (UNKNOWN ≠ 0%).
     missing_rates = unknown_rate_count(debts)
+    investing_wanted = inputs.get("wants_investing") is True  # Not chosen: off (investment_choice.py).
     director = _build_dynamic_director_allocation(
+        investing_wanted=investing_wanted,
         available_before_allocation=max(current_before_allocation, 0.0),
         debts=debts,
         goal_reserves=goal_reserves,
@@ -1651,6 +1748,7 @@ def _users_blueprint_from_inputs(
     current_debt_attack_extra = _f(allocation_amounts.get("ataque_de_deuda"))
 
     recurring_director = _build_dynamic_director_allocation(
+        investing_wanted=investing_wanted,
         available_before_allocation=max(monthly_income - recurring_expense_monthly - configured_debt_payments, 0.0),
         debts=debts,
         goal_reserves=goal_reserves,

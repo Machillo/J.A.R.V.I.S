@@ -16,6 +16,8 @@ struct FixtureWealth {
     ]
     /// Seconds since the snapshot: a few hours old until the Owner refreshes it from IBKR.
     var snapshotAgeSeconds = 5 * 3600
+    /// The saved dividend plan (`PUT .../dividend-plan`); none until the Owner sets it up.
+    var dividendPlan: [String: Any]?
 }
 
 extension FixtureBackend {
@@ -28,6 +30,22 @@ extension FixtureBackend {
         case ("POST", "/finance/investment-center/sync-ibkr"):
             ownerWealth.snapshotAgeSeconds = 0
             return ok(["status": "OK", "snapshot_id": 9001, "positions": 2, "read_only": true, "sync_method": "flex"])
+        case ("POST", "/finance/investment-center/dividend-yield"):
+            guard (body["symbol"] as? String ?? "") == "ACME" else { return error(502, "No pudimos traer el dividendo de esa acción. Podés escribirlo vos.") }
+            return ok(["symbol": "ACME", "yield_pct": 4, "annual_dividend_usd": 4, "price_usd": 100, "payments": 4, "source": "fixture"])
+        case ("GET", "/finance/investment-center/dividend-plan"):
+            return ok(dividendPlanAnswer())
+        case ("PUT", "/finance/investment-center/dividend-plan"):
+            var body = body
+            if body["from_holdings"] as? Bool == true {
+                guard let goal = decimal(body["goal_monthly_usd"]), goal > 0 else { return error(422, "Escribí cuánto querés ganar al mes.") }
+                body = ["stocks": [["symbol": "ACME", "share_pct": 100, "yield_pct": 4]], "goal_monthly_usd": number(goal), "withholding_pct": 30]
+            }
+            let stocks = body["stocks"] as? [[String: Any]] ?? []
+            guard !stocks.isEmpty, stocks.count <= 2 else { return error(422, "Elegí una o dos acciones.") }
+            guard stocks.reduce(Decimal(0), { $0 + (decimal($1["share_pct"]) ?? 0) }) == 100 else { return error(422, "Los porcentajes tienen que sumar 100.") }
+            ownerWealth.dividendPlan = body
+            return ok(dividendPlanAnswer())
         case ("GET", "/finance/business-center"):
             return ok(businessCenter())
         case ("POST", "/finance/business-center/businesses"):
@@ -64,7 +82,31 @@ extension FixtureBackend {
                               "currency": "USD", "source": "ibkr_readonly", "sync_method": "flex", "snapshot_at": "2026-10-20T12:00:00+00:00"],
                 "flows": [Any](), "reserved_to_invest_crc": 100_000, "gross_pnl": 150, "net_pnl": 150, "return_pct": 11.11,
                 "positions": positions, "sync_status": "current", "snapshot_age_seconds": ownerWealth.snapshotAgeSeconds,
-                "read_only": true, "sync_method": "flex", "flex_configured": true, "included_in_net_worth": true]
+                "read_only": true, "sync_method": "flex", "flex_configured": true, "included_in_net_worth": true,
+                "net_worth_rate": ["rate": 500, "date": "2026-10-20"]]
+    }
+
+    /// Invented fixed figures: the calculation itself is the backend's (`finance/dividend_plan.py`),
+    /// tested there. The stock gate is closed, as for an Owner with expensive debt.
+    private func dividendPlanAnswer() -> [String: Any] {
+        let gate: [String: Any] = ["open": false, "blockers": [["code": "expensive_debt"], ["code": "salvavidas_short"]]]
+        let empty: [String: Any] = ["ready": false, "current_value_usd": 500, "monthly_needed": [Any](), "buy_this_month": [Any]()]
+        guard let saved = ownerWealth.dividendPlan else {
+            return ["config": ["stocks": [Any](), "goal_monthly_usd": 1_000, "withholding_pct": 30], "held_symbols": ["ACME"], "gate": gate, "result": empty]
+        }
+        let stocks = saved["stocks"] as? [[String: Any]] ?? []
+        guard stocks.allSatisfy({ decimal($0["yield_pct"]) != nil }) else {
+            return ["config": saved, "held_symbols": ["ACME"], "gate": gate, "result": empty]
+        }
+        // Without a monthly amount the backend gives no date.
+        let months: Any = decimal(saved["monthly_amount_usd"]) == nil ? NSNull() : 310
+        let result: [String: Any] = [
+            "ready": true, "blended_yield_pct": 4, "net_yield_pct": 2.8, "capital_needed_usd": 428_571.43, "current_value_usd": 500, "missing_usd": 428_071.43,
+            "net_monthly_dividend_now_usd": 1.17, "months_to_goal": months,
+            "monthly_needed": [["years": 10, "amount_usd": 3_050], ["years": 15, "amount_usd": 1_850], ["years": 20, "amount_usd": 1_250]],
+            "buy_this_month": [Any](),
+        ]
+        return ["config": saved, "held_symbols": ["ACME"], "gate": gate, "result": result]
     }
 
     private func businessCenter() -> [String: Any] {

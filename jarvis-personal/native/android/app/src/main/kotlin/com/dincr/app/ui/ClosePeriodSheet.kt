@@ -60,7 +60,7 @@ fun pendingPeriodTitle(period: PendingConversion.Period): String {
 
 /** The header of one close in Movimientos: its name, totals, and the conversion once it has ended. */
 @Composable
-fun PendingHeader(period: PendingConversion.Period?, totals: List<PendingConversion.Total>, onClose: (PendingConversion.Period) -> Unit) {
+fun PendingHeader(period: PendingConversion.Period?, totals: List<PendingConversion.Total>, autoClose: Boolean, onClose: (PendingConversion.Period) -> Unit) {
     Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s5, bottom = DincrSpacing.s1)) {
         val title = period?.let { tx("En dólares · ${pendingPeriodTitle(it)}", "In dollars · ${pendingPeriodTitle(it)}") }
             ?: tx("En dólares · se convierten al cierre", "In dollars · converted at the close")
@@ -68,17 +68,28 @@ fun PendingHeader(period: PendingConversion.Period?, totals: List<PendingConvers
         totals.forEach { total ->
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("movements.pending.total.${total.currency}"), verticalAlignment = Alignment.CenterVertically) {
                 Text(tx("Total por convertir", "Total to convert"), style = MaterialTheme.typography.titleSmall, color = Dincr.colors.text, modifier = Modifier.weight(1f))
-                Text(Dincr.money.copy(currency = total.currency).format(total.amount), style = MaterialTheme.typography.titleSmall.merge(TabularNums), color = Dincr.colors.text)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(Dincr.money.copy(currency = total.currency).format(total.amount), style = MaterialTheme.typography.titleSmall.merge(TabularNums), color = Dincr.colors.text)
+                    total.estimatedAmount?.let { estimate ->
+                        val amount = Dincr.money.format(estimate)
+                        Text(tx("≈ $amount estimado", "≈ $amount estimated"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                    }
+                }
             }
         }
         when {
             period == null -> Text(tx("No suman en colones hasta el cierre: el corte de la tarjeta, o fin de mes sin tarjeta.",
                 "They don’t add up in colones until the close: the card’s statement cut, or month end without a card."),
                 style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
-            period.closable -> TextButton({ onClose(period) }, Modifier.heightIn(min = 48.dp).testTag("movements.pending.close.${period.key}")) {
-                Text(tx("Convertir a colones", "Convert to colones"), color = Dincr.colors.tint)
+            period.closable -> {
+                if (autoClose) Text(tx("Se convierte solo en la próxima actualización, o hacelo ahora.", "It converts by itself at the next update, or do it now."),
+                    style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                TextButton({ onClose(period) }, Modifier.heightIn(min = 48.dp).testTag("movements.pending.close.${period.key}")) {
+                    Text(tx("Convertir a colones", "Convert to colones"), color = Dincr.colors.tint)
+                }
             }
-            else -> Text(tx("Se convierte desde el ${dayLabel(period.end)}, con un solo tipo de cambio.", "It converts from ${dayLabel(period.end)}, with one rate."),
+            else -> Text(if (autoClose) tx("Se convierte solo el ${dayLabel(period.end)}, con el dólar de ese día.", "It converts by itself on ${dayLabel(period.end)}, at that day’s dollar rate.")
+                else tx("Se convierte desde el ${dayLabel(period.end)}, con un solo tipo de cambio.", "It converts from ${dayLabel(period.end)}, with one rate."),
                 style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
         }
         if (period?.cutDayMissing == true) {

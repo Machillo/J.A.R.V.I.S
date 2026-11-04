@@ -144,6 +144,11 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
             model.noteDataChanged()
         }, onDelete = {}, initialKind = MovementKind.EXPENSE)
     }
+    // Text shared into DINCR: the editor of a new expense, prefilled; only saving records it.
+    val shared by model.pendingShared.collectAsStateWithLifecycle()
+    shared?.let { proposal ->
+        MovementEditorSheet(model, EditorMode.Create, onDismiss = model::consumeShared, onSaved = { model.consumeShared() }, onDelete = {}, initialKind = MovementKind.EXPENSE, shared = proposal)
+    }
     if (offerLock) AppLockOffer(model) { offerLock = false }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val expanded = maxWidth >= 600.dp
@@ -205,6 +210,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("declaredSavings") { DeclaredSavingsScreen(model, nav) }
                             composable("settings") { SettingsScreen(model, nav, appearance, onAppearance) }
                             // APP-1: the Owner's personal appearance; the screen checks the role again.
+                            composable("colorStyle") { ColorStyleScreen(model, nav) }
                             composable("appearance") { PersonalizationScreen(model, nav) }
                             composable("plans") { PlanSettingsScreen(model, nav) }
                             composable("security") { SecurityScreen(model, nav) }

@@ -43,7 +43,7 @@ import Testing
         #expect(try await service.movements() == colones)  // never a ₡0 row
         let pending = try await service.pendingConversion()
         #expect(pending.items.count == 2)
-        #expect(pending.totals == [PendingConversion.Total(currency: "USD", amount: Decimal(string: "150.5")!, count: 2)])
+        #expect(pending.totals == [PendingConversion.Total(currency: "USD", amount: Decimal(string: "150.5")!, count: 2, estimatedAmount: 75_250)])
         // The user converts one with their own rate: it joins the colones list and leaves the pending one.
         let first = try #require(pending.items.first)
         try await service.update(movementID: first.movementId, MovementUpdate(transactionDate: first.entryDate, description: "Hotel", amount: first.originalAmount,
@@ -103,5 +103,61 @@ import Testing
     @Test func aServerWithoutTheCloseSendsNoPeriods() throws {
         let body = #"{"status":"ok","available":true,"items":[],"totals":[]}"#
         #expect(try APIClient.decoder.decode(PendingConversion.self, from: Data(body.utf8)).periods.isEmpty)
+    }
+}
+
+/// The estimate of the waiting dollars: what Gastos adds on screen. Synthetic data only.
+struct PendingEstimateTests {
+    private func item(_ id: Int, _ day: String, _ text: String, estimate: Decimal?) -> PendingConversion.Item {
+        .init(movementId: "expense:\(id)", id: id, entryDate: day, description: text, category: nil, originalAmount: 10,
+              originalCurrency: "USD", financialAccountId: nil, estimatedAmount: estimate)
+    }
+
+    private var pending: PendingConversion {
+        PendingConversion(available: true, items: [item(1, "2026-11-02", "Café", estimate: 5_000), item(2, "2026-11-20", "Libro", estimate: 6_000),
+                                                   item(3, "2026-10-05", "Viaje", estimate: 7_000), item(4, "2026-11-25", "Sin tasa", estimate: nil)], totals: [])
+    }
+
+    @Test func onlyTheMonthOnScreenCounts() {
+        #expect(pending.estimate(month: "2026-11", query: "") == PendingEstimate(sum: 11_000, withoutEstimate: 1))
+        #expect(pending.estimate(month: "2026-10", query: "") == PendingEstimate(sum: 7_000, withoutEstimate: 0))
+    }
+
+    @Test func aSearchLooksThroughEveryMonth() {
+        #expect(pending.estimate(month: "2026-11", query: "viaje") == PendingEstimate(sum: 7_000, withoutEstimate: 0))
+    }
+
+    @Test func noEstimateIsUnknownNotZero() {
+        #expect(pending.estimate(month: "2026-09", query: "") == PendingEstimate(sum: nil, withoutEstimate: 0))
+        #expect(pending.estimate(month: "2026-11", query: "sin tasa") == PendingEstimate(sum: nil, withoutEstimate: 1))
+        let none = MovementTotals(income: 5, expenses: nil, debtPaid: nil)
+        #expect(none.addingEstimate(nil).expenses == nil, "nothing to add keeps an unknown side unknown")
+    }
+
+    @Test func theEstimateCountsInExpensesAndTheResult() {
+        let totals = MovementTotals(income: 100, expenses: 30, debtPaid: nil).addingEstimate(20)
+        #expect(totals.expenses == 50 && totals.result == 50)
+        #expect(MovementTotals(income: nil, expenses: nil, debtPaid: nil).addingEstimate(20).expenses == 20)
+    }
+
+    @Test func oneExpenseWithoutARateDoesNotHideTheOthersOnHoy() {
+        #expect(pending.estimateOfAll == PendingEstimate(sum: 18_000, withoutEstimate: 1))
+    }
+
+    @Test func aReadOnlySalaryRowDecodesAndCannotBeEdited() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let row = try decoder.decode(Movement.self, from: Data(#"{"movement_id":"salary_estimate:2026-11","source_id":null,"origin":"salary_estimate","transaction_date":"2026-11-01","description":"Salario del mes (estimado)","amount":400000,"transaction_type":"income","category":"Salario","editable":false,"counts_in":"income"}"#.utf8))
+        #expect(row.transactionType == .income && !row.canEdit(entryCurrencies: ["USD"]))
+        #expect(MovementTotals([row]).income == 400_000)
+    }
+
+    @Test func anOlderServerPromisesNothing() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let old = try decoder.decode(PendingConversion.self, from: Data(#"{"available":true,"items":[],"totals":[{"currency":"USD","amount":5,"count":1}]}"#.utf8))
+        #expect(!old.autoClose && old.totals[0].estimatedAmount == nil)
+        let new = try decoder.decode(PendingConversion.self, from: Data(#"{"available":true,"items":[],"totals":[{"currency":"USD","amount":5,"count":1,"estimated_amount":2500}],"auto_close":true}"#.utf8))
+        #expect(new.autoClose && new.totals[0].estimatedAmount == 2_500)
     }
 }

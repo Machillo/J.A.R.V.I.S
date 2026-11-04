@@ -476,6 +476,22 @@
      "used_by": [
       "vip"
      ]
+    },
+    {
+     "method": "GET",
+     "path": "/user-product/vip/investment-choice",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "PUT",
+     "path": "/user-product/vip/investment-choice",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
     }
    ],
    "ios": {
@@ -1200,6 +1216,36 @@
      "tab": "Profile",
      "text": "Mail connections",
      "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "wealth.investments",
+   "name": "Patrimonio → Inversiones (Owner, IBKR connected): the portfolio's value and what it holds; opens JARVIS → Patrimonio's investments and dividend plan",
+   "decision": "OW-1",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/finance/investment-center",
+     "gate": "internal_only",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "wealth",
+    "id": "wealth.investments"
+   },
+   "android": {
+    "tab": "Patrimonio",
+    "tag": "wealth.investments",
+    "en": {
+     "tab": "Wealth"
     }
    }
   },
@@ -1967,6 +2013,24 @@
     {
      "method": "GET",
      "path": "/finance/investment-center",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/investment-center/dividend-plan",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "PUT",
+     "path": "/finance/investment-center/dividend-plan",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "POST",
+     "path": "/finance/investment-center/dividend-yield",
      "gate": "internal_only",
      "used_by": []
     },

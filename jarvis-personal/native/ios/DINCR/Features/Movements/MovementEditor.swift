@@ -30,6 +30,7 @@ struct MovementEditor: View {
     let onSaved: (String) -> Void
 
     @State private var kind: Movement.Kind = .expense
+    @State private var review: MovementReviewSummary?
     @State private var amountText = ""
     @State private var prefilledAmountText = ""
     /// The currency the amount is typed in (#269): the base, or another entry currency with the user's rate.
@@ -104,15 +105,18 @@ struct MovementEditor: View {
                         .pickerStyle(.segmented)
                         .accessibilityIdentifier("editor.currency")
                     }
-                    VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                    // The amount is what this screen is about: large and centered.
+                    VStack(spacing: DincrSpacing.s1) {
                         Text(tx("Monto", "Amount")).font(DincrFont.label).foregroundStyle(.dincrText2)
-                        HStack(spacing: DincrSpacing.s2) {
-                            Text(MoneyFormat(currency: currency.isEmpty ? base : currency).symbol).font(DincrFont.title1).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
+                        HStack(spacing: DincrSpacing.s1) {
+                            Text(MoneyFormat(currency: currency.isEmpty ? base : currency).symbol).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
                             TextField(tx("Monto", "Amount"), text: $amountText, prompt: Text("0"))
-                                .font(DincrFont.title1.monospacedDigit())
                                 .keyboardType(.decimalPad)
+                                .fixedSize()
                                 .accessibilityIdentifier("editor.amount")
                         }
+                        .font(Self.bigAmount)
+                        .frame(maxWidth: .infinity, minHeight: 64)
                         if let error = fieldErrors[.amount] { fieldError(error) }
                     }
                     if offersWaitForClose {
@@ -182,13 +186,19 @@ struct MovementEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if saving { ProgressView() } else {
-                        Button(tx("Guardar", "Save")) { Task { await save() } }
+                        Button(tx("Guardar", "Save")) { requestSave() }
                             .fontWeight(.semibold)
                             .accessibilityIdentifier("editor.save")
                     }
                 }
             }
             .interactiveDismissDisabled(saving || hasChanges)
+            .sheet(item: $review) { summary in
+                MovementReviewSheet(summary: summary) {
+                    review = nil
+                    Task { await save() }
+                }
+            }
             .onChange(of: kind) { _, _ in if !categories.contains(category) { category = categories[0] } }
             .onChange(of: currency) { oldValue, newValue in
                 // Switching currency on an edit never reinterprets the typed number (US$10 is not ₡10):
@@ -330,6 +340,22 @@ struct MovementEditor: View {
         return (amount, rate)
     }
 
+    /// Save, or first show the review where a slip costs more (`MovementReview`). Only a new movement:
+    /// an edit is already a second look.
+    private func requestSave() {
+        guard !saving, let validated = validate() else { return }
+        let code = isForeign ? currency : base
+        guard !isEditing, MovementReview.isNeeded(amount: validated.amount, currency: code, convertsNow: isForeign && !waits) else {
+            Task { await save() }
+            return
+        }
+        let converted = isForeign && !waits ? ConversionPreview.baseAmount(typed: validated.amount, currency: currency, base: base, rate: validated.rate) : nil
+        review = MovementReviewSummary(
+            kind: kind, amount: format.string(validated.amount, currency: code), converted: converted.map { format.string($0) },
+            rate: isForeign && !waits ? validated.rate.map { format.inputText($0) } : nil,
+            waitsForClose: waits, description: description.trimmingCharacters(in: .whitespaces), category: category, day: Self.dayFormatter.string(from: date))
+    }
+
     private func save() async {
         guard !saving, let validated = validate() else { return }
         let amount = validated.amount, rate = validated.rate
@@ -374,6 +400,8 @@ struct MovementEditor: View {
         }
     }
 
+    private static let bigAmount = Font.system(size: 44, weight: .bold, design: .rounded).monospacedDigit()
+
     static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -382,4 +410,64 @@ struct MovementEditor: View {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+}
+
+/// What a new movement will save, in the user's words.
+struct MovementReviewSummary: Identifiable {
+    let kind: Movement.Kind
+    let amount: String
+    let converted: String?
+    let rate: String?
+    let waitsForClose: Bool
+    let description: String
+    let category: String
+    let day: String
+    var id: String { "\(amount)|\(description)|\(day)" }
+}
+
+/// The review before saving: confirm, or go back to the form with everything still typed.
+private struct MovementReviewSheet: View {
+    let summary: MovementReviewSummary
+    let confirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: DincrSpacing.s4) {
+            VStack(spacing: DincrSpacing.s1) {
+                Text(summary.kind == .income ? tx("Ingreso", "Income") : tx("Gasto", "Expense"))
+                    .font(DincrFont.label).foregroundStyle(.dincrText2)
+                Text(summary.amount).font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.dincrText).minimumScaleFactor(0.5).lineLimit(1)
+                    .accessibilityIdentifier("editor.review.amount")
+            }
+            .accessibilityElement(children: .combine)
+            VStack(spacing: DincrSpacing.s2) {
+                if let converted = summary.converted { line(tx("Se guardará como", "Saved as"), converted) }
+                if let rate = summary.rate { line(tx("Tipo de cambio", "Exchange rate"), rate) }
+                if summary.waitsForClose { line(tx("Conversión", "Conversion"), tx("Al cierre", "At the close")) }
+                line(tx("Descripción", "Description"), summary.description)
+                line(tx("Categoría", "Category"), summary.category)
+                line(tx("Fecha", "Date"), Day.label(summary.day))
+            }
+            Spacer(minLength: 0)
+            Button(tx("Confirmar", "Confirm"), action: confirm)
+                .buttonStyle(.dincrPrimary)
+                .accessibilityIdentifier("editor.review.confirm")
+            Button(tx("Editar", "Edit")) { dismiss() }
+                .buttonStyle(.dincrSecondary)
+                .accessibilityIdentifier("editor.review.edit")
+        }
+        .padding(DincrSpacing.s4)
+        .dincrScreenBackground()
+        .presentationDetents([.medium, .large])
+    }
+
+    private func line(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: DincrSpacing.s3) {
+            Text(label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
+            Spacer(minLength: 0)
+            Text(value).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText).multilineTextAlignment(.trailing)
+        }
+        .accessibilityElement(children: .combine)
+    }
 }

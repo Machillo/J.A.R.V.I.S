@@ -48,6 +48,8 @@ def owner_inputs(monkeypatch):
         raise AssertionError("the distribution must not touch the database")
 
     monkeypatch.setattr(sd, "get_connection", no_database)
+    # This file proves where the base comes from; how his month splits it: test_owner_analysis.py.
+    monkeypatch.setattr(sd, "_owner_usual_month", lambda *_a: None)
     monkeypatch.setattr(sd, "get_debts", lambda: [dict(d) for d in state["debts"]])
     monkeypatch.setattr(sd, "get_financial_summary", lambda: {})
     monkeypatch.setattr(sd, "calculate_monthly_salary_projection",

@@ -52,6 +52,10 @@ final class PendingConversionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Hotel en dólares"].exists)
         // One section per close: "En dólares · Octubre 2026" (the header may be shown in capitals).
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "En dólares ·")).firstMatch.exists)
+        // It counts in Gastos as an estimate, here and on Hoy, and says so.
+        XCTAssertTrue(app.descendants(matching: .any)["movements.totals.estimate"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Hoy"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["home.status.dollars"].waitForExistence(timeout: 10), "Hoy's Gastos include the estimate")
     }
 
     func testTurningItOffAsksForTheRate() {

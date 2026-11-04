@@ -687,6 +687,28 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/finance/investment-center/dividend-plan",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/investment-center/dividend-plan",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/investment-center/dividend-yield",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
   "method": "POST",
   "path": "/finance/investment-center/snapshots",
   "gates": [
@@ -1119,6 +1141,13 @@
   "path": "/imports/bac-pdf/preview",
   "gates": [
    "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/integrations/exchange-rates/cron",
+  "gates": [
+   "public"
   ]
  },
  {
@@ -2356,6 +2385,21 @@
   "gates": [
    "feature:gmail_automation",
    "mail_reading:verified_owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/investment-choice",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/vip/investment-choice",
+  "gates": [
+   "feature:strategy_vip"
   ]
  },
  {

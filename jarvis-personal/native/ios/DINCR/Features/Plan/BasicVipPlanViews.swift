@@ -184,7 +184,7 @@ private struct CalendarContent: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.name ?? "").font(DincrFont.body.weight(.semibold))
-                    Text(Day.label(event.date)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                    Text(Day.labelWithDistance(event.date)).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
                 Spacer()
                 MoneyText(event.amount, sign: event.kind == "income" ? .income : .expense)

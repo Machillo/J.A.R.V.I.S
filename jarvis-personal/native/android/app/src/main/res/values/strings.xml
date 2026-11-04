@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quick_expense_title">Añadir gasto</string>
+    <string name="quick_expense_widget_description">Abre DINCR para añadir un gasto</string>
+    <string name="share_to_dincr">Añadir gasto en DINCR</string>
+</resources>

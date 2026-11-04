@@ -1,6 +1,7 @@
 // Tests for generate.mjs: node --test jarvis-personal/native/design-tokens/generate.test.mjs
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { colorStyleFailures, parseColorStyles } from "./color-styles.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,6 +21,8 @@ const outputs = {
   swiftCatalog: "jarvis-personal/native/ios/DincrKit/Sources/DincrCore/Generated/AppearanceCatalog.swift",
   kotlinAppearance: "jarvis-personal/native/android/core/design/src/main/kotlin/com/dincr/design/generated/DincrAppearanceTokens.kt",
   kotlinCatalog: "jarvis-personal/native/android/core/data/src/main/kotlin/com/dincr/data/generated/AppearanceCatalog.kt",
+  swiftColorStyles: "jarvis-personal/native/ios/DincrKit/Sources/DincrDesign/Generated/DincrColorStyles.swift",
+  kotlinColorStyles: "jarvis-personal/native/android/core/design/src/main/kotlin/com/dincr/design/generated/DincrColorStyles.kt",
 };
 const edit = (from, to) => {
   assert.ok(design.includes(from), `fixture edit not applicable: ${from}`);
@@ -75,7 +78,7 @@ test("--check reports drift and never writes; the generator fixes it", () => {
       fs.copyFileSync(path.join(repoRoot, relative), path.join(sandbox, relative));
     };
     const script = "jarvis-personal/native/design-tokens/generate.mjs";
-    const companions = ["jarvis-personal/native/design-tokens/appearance.mjs", "jarvis-personal/native/design-tokens/appearance.json"];
+    const companions = ["jarvis-personal/native/design-tokens/appearance.mjs", "jarvis-personal/native/design-tokens/appearance.json", "jarvis-personal/native/design-tokens/color-styles.mjs", "jarvis-personal/native/design-tokens/color-styles.json"];
     [script, ...companions, "DESIGN.md", ...Object.values(outputs)].forEach(copy);
     const run = (...args) => spawnSync(process.execPath, [path.join(sandbox, script), ...args], { encoding: "utf8" });
     const snapshot = () => Object.values(outputs).map((file) => fs.readFileSync(path.join(sandbox, file), "utf8"));
@@ -160,6 +163,20 @@ test("the app's screens use the shared scene, so the old teal can't come back in
   const swift = fs.readdirSync(dir, { recursive: true }).filter((f) => f.endsWith(".swift"));
   const offenders = swift.filter((f) => /DincrColor\.(tint|tintContainer|onTint|onTintContainer|tintPressed)\b/.test(fs.readFileSync(path.join(dir, f), "utf8")));
   assert.deepEqual(offenders, []);
+});
+
+test("every color style keeps the contrast rules, and a weak one is caught", () => {
+  const raw = fs.readFileSync(path.join(here, "color-styles.json"), "utf8");
+  const base = colorMap(tokens);
+  assert.deepEqual(colorStyleFailures(parseColorStyles(raw), base), []);
+  const weak = JSON.parse(raw);
+  weak.styles.rosa.light.tint = "#EC4899"; // the swatch itself: too light for text on white
+  weak.styles.oliva.dark.tint = "#3D4337"; // the swatch itself: too dark on its surfaces
+  weak.styles.bosque["on-hero-2"] = "#3E5A3F";
+  const failures = colorStyleFailures(parseColorStyles(JSON.stringify(weak)), base);
+  assert.ok(failures.some((f) => f.startsWith("rosa+rosa.light tint/surface")), failures.join("; "));
+  assert.ok(failures.some((f) => f.startsWith("oliva+oliva.dark tint/surface")), failures.join("; "));
+  assert.ok(failures.some((f) => f.startsWith("bosque on-hero-2/hero")), failures.join("; "));
 });
 
 test("malformed appearance.json fails instead of dropping options", () => {

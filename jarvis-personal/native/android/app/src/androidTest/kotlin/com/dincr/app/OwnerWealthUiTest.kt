@@ -99,6 +99,37 @@ class OwnerWealthUiTest {
         waitForTag("wealth.investments")
     }
 
+    /** Plan de dividendos: one field, the goal. It answers with the stock held and its dividend, and with the gate closed says why instead of what to buy. */
+    @Test fun oneNumberAnswersHowMuchMoreToBuy() {
+        launchOwner()
+        openWealth()
+        waitForTag("wealth.dividends.goal")
+        tapTag("wealth.dividends.calculate")
+        waitForText(tx("Te falta comprar", "Still to buy"))
+        waitForText(tx("Necesitás tener invertido", "You need invested"))
+        waitForText("ACME", substring = true)
+        waitForText(tx("Todavía no te toca comprar más", "It’s not time to buy more yet"))
+        assertTrue("never says buy with the gate closed", !present(tx("Este mes comprá", "This month, buy")))
+    }
+
+    /** IBKR connected: Patrimonio says what the investments are worth and opening it shows what they hold. */
+    @Test fun theOwnerSeesHisInvestmentsInPatrimonioAndOpensThem() {
+        launchOwner()
+        click(tx("Patrimonio", "Wealth"))
+        waitForTag("wealth.investments")
+        waitForText("ETF de ejemplo", substring = true)
+        tapTag("wealth.investments")
+        waitForTag("wealth.positions")
+    }
+
+    /** The salary the app already knows is in Movimientos, and it counts in Ingresos. */
+    @Test fun theOwnerSeesHisSalaryInMovements() {
+        launchOwner()
+        click(tx("Movimientos", "Transactions"))
+        waitForText(tx("Salario del mes (estimado)", "Salario del mes (estimado)"))
+        waitForTag("movements.totals.income")
+    }
+
     @Test fun theOwnerSeesThePortfolioAndItsPositions() {
         launchOwner()
         openWealth()
@@ -106,6 +137,7 @@ class OwnerWealthUiTest {
         waitForText(tx("Valor de mercado", "Market value"))
         waitForText(tx("Rendimiento", "Return"))
         waitForText(tx("Actualizado hace 5 h", "Updated 5 h ago"))
+        waitForTag("wealth.rate")
         assertTrue("a known portfolio is not 'no data'", !present(tx("Todavía no hay datos de tu portafolio", "There’s no portfolio data yet")))
         waitForText("ETF de ejemplo")
         waitForText("Acción de ejemplo")

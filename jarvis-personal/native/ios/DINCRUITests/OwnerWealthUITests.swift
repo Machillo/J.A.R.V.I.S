@@ -43,6 +43,24 @@ final class OwnerWealthUITests: XCTestCase {
         tap("jarvis.section.wealth", in: app)
     }
 
+    /// Plan de dividendos: one field, the goal. It answers with the stock held and its dividend,
+    /// and with the gate closed it says why instead of saying what to buy.
+    func testOneNumberAnswersHowMuchMoreToBuy() {
+        let app = launchOwner()
+        openWealth(app)
+        XCTAssertTrue(element("wealth.dividends.goal", in: app).waitForExistence(timeout: 10))
+        let goal = element("wealth.dividends.goal", in: app)
+        for _ in 0..<6 where !goal.isHittable || goal.frame.maxY > app.frame.maxY - 160 { app.swipeUp() }
+        XCTAssertEqual(goal.value as? String, "1.000", "it starts with a goal")
+        tap("wealth.dividends.calculate", in: app)
+        XCTAssertTrue(text("Te falta comprar", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Necesitás tener invertido", in: app).exists)
+        XCTAssertTrue(text("ACME paga cerca de 4", in: app).exists, "the stock held and its dividend")
+        XCTAssertTrue(text("Para llegar en 10 años", in: app).exists)
+        XCTAssertFalse(text("Este mes comprá", in: app).exists)
+        XCTAssertTrue(text("Todavía no te toca comprar más", in: app).exists)
+    }
+
     func testTheOwnerSeesThePortfolioAndItsPositions() {
         let app = launchOwner()
         openWealth(app)
@@ -51,6 +69,7 @@ final class OwnerWealthUITests: XCTestCase {
         XCTAssertTrue(text("Valor de mercado", in: app).exists)
         XCTAssertTrue(text("Rendimiento", in: app).exists)
         XCTAssertTrue(text("Actualizado hace 5 h", in: app).exists)
+        XCTAssertTrue(text("el último tipo de cambio guardado", in: app).exists, "the rate is shown with its date")
         XCTAssertFalse(text("Todavía no hay datos de tu portafolio", in: app).exists)
         XCTAssertTrue(text("ETF de ejemplo", in: app).exists)
         XCTAssertTrue(text("Acción de ejemplo", in: app).exists)

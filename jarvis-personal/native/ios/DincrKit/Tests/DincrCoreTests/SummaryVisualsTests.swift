@@ -92,6 +92,31 @@ import Testing
         #expect(outflows.total == 450_000)
     }
 
+    @Test func pastSixPartsTheSmallestBecomeOtros() throws {
+        let rows = (1...7).map { #"{"category":"C\#($0)","amount":\#($0 * 100)}"# }.joined(separator: ",")
+        let summary = try summary(#"{"income":9000,"expenses":2800,"debt_paid":500,"categories":[\#(rows),{"category":"Otros","amount":50}],"saved":{"total":250}}"#)
+        let bar = SummaryVisuals.outflows(summary, language: .spanish)
+        #expect(bar.segments.map(\.label) == ["C7", "C6", "C5", "Pagos de deudas", "Ahorro", "Otros"])
+        #expect(bar.total == 3600)
+        let others = try #require(bar.segments.last)
+        #expect(others.value == 1050 && others.parts.map(\.label) == ["C4", "C3", "C2", "C1", "Otros"])
+    }
+
+    @Test func upToSixPartsNothingIsGrouped() throws {
+        let rows = (1...4).map { #"{"category":"C\#($0)","amount":\#($0 * 100)}"# }.joined(separator: ",")
+        let summary = try summary(#"{"income":9000,"expenses":1000,"debt_paid":500,"categories":[\#(rows)],"saved":{"total":250}}"#)
+        let bar = SummaryVisuals.outflows(summary, language: .spanish)
+        #expect(bar.segments.map(\.label) == ["C1", "C2", "C3", "C4", "Pagos de deudas", "Ahorro"])
+        #expect(bar.segments.filter { !$0.parts.isEmpty }.isEmpty)
+    }
+
+    @Test func anUnknownAmountIsNeverSummedIntoOtros() throws {
+        let rows = (1...7).map { #"{"category":"C\#($0)","amount":\#($0 * 100)}"# }.joined(separator: ",")
+        let summary = try summary(#"{"income":9000,"expenses":2800,"categories":[\#(rows),{"category":"Sin monto","amount":null}]}"#)
+        let bar = SummaryVisuals.outflows(summary, language: .spanish)
+        #expect(bar.status == .partial && bar.segments.count == 7 && bar.unknown.map(\.label) == ["Sin monto"])
+    }
+
     @Test func nothingSavedOrPaidAddsNoSlice() throws {
         let summary = try summary(#"{"income":1000,"expenses":400,"debt_paid":0,"categories":[{"category":"Comida","amount":400}],"saved":{"total":0}}"#)
         #expect(SummaryVisuals.outflows(summary, language: .spanish).segments.map(\.label) == ["Comida"])

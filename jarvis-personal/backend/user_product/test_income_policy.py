@@ -121,7 +121,7 @@ class ScopedConn:
             rows = [{"month": k, "total": v} for k, v in totals.items()]
         elif "to_regclass('public.' || t) IS NULL" in q:
             rows = [{"missing": None}]
-        elif "FROM finva_recurring_items" in q:
+        elif "FROM finva_recurring_items" in q or "FROM user_preferences" in q:
             rows = []
         else:
             raise AssertionError(q[:80])
@@ -149,6 +149,7 @@ def _strategy(monkeypatch, db, role="user", **overrides):
         "_fetch_post_cut_expenses": lambda *_a: {"total": 0}, "_pending_mandatory_fixed_expenses": lambda *_a: {"total": 0},
         "_fetch_distributable_cash": lambda *_a: 0.0, "_fetch_active_financial_goals": lambda *_a: [],
         "_fetch_investment_portfolio": lambda *_a: {},
+        "_owner_usual_month": lambda *_a: None,
     }
     for name, value in {**stubs, **overrides}.items():
         monkeypatch.setattr(strategy_dashboard, name, value)

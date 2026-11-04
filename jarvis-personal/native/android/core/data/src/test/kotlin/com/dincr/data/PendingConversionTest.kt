@@ -43,7 +43,8 @@ class PendingConversionTest {
         assertEquals("never a ₡0 row", colones, api.movements())
         val pending = api.pendingConversion()
         assertEquals(2, pending.items.size)
-        assertEquals(listOf(PendingConversion.Total("USD", BigDecimal("150.5"), 2)), pending.totals)
+        assertEquals(listOf(PendingConversion.Total("USD", BigDecimal("150.5"), 2)), pending.totals.map { it.copy(estimatedAmount = null) })
+        assertEquals(0, BigDecimal(75_250).compareTo(pending.totals.single().estimatedAmount))
         assertTrue(pending.items.all { it.movement.isPendingConversion })
 
         // The user converts one with their own rate: it joins the colones list and leaves the pending one.

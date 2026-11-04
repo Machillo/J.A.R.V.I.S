@@ -49,6 +49,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.dincr.data.AppLanguage
 import com.dincr.data.Composition
@@ -82,15 +87,27 @@ import kotlin.math.min
 @Composable
 fun CompositionDonut(
     title: String, composition: Composition, color: Color = Dincr.colors.chartExpense, showsLegend: Boolean = true, showsTotal: Boolean = true,
+    asBar: Boolean = false,
 ) {
     var selectedId by remember(composition) { mutableStateOf<String?>(null) }
     val format = Dincr.money
     val parts = composition.spokenParts(format)
+    val barColors = if (Dincr.colors.bg.luminance() < 0.5f) BAR_COLORS_DARK else BAR_COLORS_LIGHT
     fun shade(index: Int, id: String): Color =
-        if (selectedId != null) color.copy(alpha = if (id == selectedId) 1f else 0.4f) else color.copy(alpha = visualShade(index))
+        if (asBar) barColors[index % barColors.size].let { if (selectedId == null || id == selectedId) it else it.copy(alpha = 0.3f) }
+        else if (selectedId != null) color.copy(alpha = if (id == selectedId) 1f else 0.4f) else color.copy(alpha = visualShade(index))
 
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
-        if (composition.isDrawable) {
+        if (composition.isDrawable && asBar) {
+            // One stacked bar, one color per part (the legend names them). iOS: `CompositionDonut.bar`.
+            Row(Modifier.fillMaxWidth().height(20.dp).clip(CircleShape).clearAndSetSemantics { if (!showsLegend) contentDescription = "$title. ${parts.joinToString("; ")}" },
+                horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                composition.segments.forEachIndexed { index, segment ->
+                    val share = segment.share ?: 0.0
+                    if (share > 0) Box(Modifier.weight(share.toFloat()).fillMaxHeight().background(shade(index, segment.id)))
+                }
+            }
+        } else if (composition.isDrawable) {
             Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                 Canvas(
                     Modifier.size(200.dp)
@@ -145,11 +162,25 @@ fun CompositionDonut(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (composition.isDrawable) Box(Modifier.size(10.dp).background(shade(index, segment.id), CircleShape))
-                        Text(segment.label, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text,
-                            modifier = Modifier.weight(1f).padding(start = if (composition.isDrawable) DincrSpacing.s3 else 0.dp, end = DincrSpacing.s2))
+                        Column(Modifier.weight(1f).padding(start = if (composition.isDrawable) DincrSpacing.s3 else 0.dp, end = DincrSpacing.s2)) {
+                            Text(segment.label, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text)
+                            if (segment.parts.isNotEmpty()) {
+                                Text(AppLanguage.current().pick("${segment.parts.size} categorías · tocá para verlas", "${segment.parts.size} categories · tap to see them"),
+                                    style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2)
+                            }
+                        }
                         Column(horizontalAlignment = Alignment.End) {
                             MoneyText(segment.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), currency = composition.currency)
                             segment.share?.let { Text(VisualText.percent(it), style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2) }
+                        }
+                    }
+                    // What a grouped part holds, under its row while it is selected.
+                    if (selectedId == segment.id) segment.parts.forEach { part ->
+                        Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).padding(start = DincrSpacing.s6).semantics(mergeDescendants = true) { },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(part.label, style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2,
+                                modifier = Modifier.weight(1f).padding(end = DincrSpacing.s2))
+                            part.value?.let { MoneyText(it, style = MaterialTheme.typography.labelMedium, currency = composition.currency) }
                         }
                     }
                 }
@@ -163,6 +194,10 @@ fun CompositionDonut(
         }
     }
 }
+
+/** The parts of a stacked bar, told apart by color and always named in the legend (iOS: `VisualShade.barColors`). */
+private val BAR_COLORS_LIGHT = listOf(Color(0xFF08734F), Color(0xFFB4501F), Color(0xFF0A6E9E), Color(0xFFB0307A), Color(0xFF4A4FD9), Color(0xFF6B6B76))
+private val BAR_COLORS_DARK = listOf(Color(0xFF30D158), Color(0xFFFF855C), Color(0xFF5AC8FA), Color(0xFFFF7EB6), Color(0xFF8F95FF), Color(0xFFA3A5BD))
 
 /** Opacity steps for the parts of one hue: strong first, never fainter than readable. */
 internal fun visualShade(index: Int): Float = max(0.3f, 1f - index * 0.17f)
@@ -375,17 +410,29 @@ fun DincrProgressBar(progress: ProgressValue, overMeaning: TrendMeaning = TrendM
         Text(VisualText.noData().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelMedium, color = c.textMuted)
         return
     }
-    val fill = if (!progress.isOver) c.tint else when (overMeaning) {
-        TrendMeaning.FAVORABLE -> c.positive
-        TrendMeaning.UNFAVORABLE -> c.negative
-        TrendMeaning.NEUTRAL -> c.tint
-    }
+    val fill = if (progress.isOver && overMeaning == TrendMeaning.UNFAVORABLE) c.negative else c.positive
     Box(Modifier.fillMaxWidth().height(8.dp).background(c.surface2, CircleShape).clearAndSetSemantics { }) {
         if (fraction > 0) Box(Modifier.fillMaxWidth(fraction.toFloat()).widthIn(min = 6.dp).height(8.dp).background(fill, CircleShape))
     }
 }
 
 // endregion
+
+/** Progress as a ring, with what it means in the middle. Green, like the bars; the caller says the figure in words. iOS: `DincrProgressRing`. */
+@Composable
+fun DincrProgressRing(fraction: Double, modifier: Modifier = Modifier, size: Dp = 180.dp, center: @Composable () -> Unit) {
+    val track = Dincr.colors.surface2
+    val fill = Dincr.colors.positive
+    val sweep = 360f * fraction.coerceIn(0.0, 1.0).toFloat()
+    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(size * 0.05f).clearAndSetSemantics { }) {
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = this.size.width * 0.1f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawArc(track, 0f, 360f, false, style = stroke)
+            drawArc(fill, -90f, maxOf(sweep, 1f), false, style = stroke)
+        }
+        center()
+    }
+}
 
 /** Why a chart isn't drawn, in words; TalkBack hears which chart it is about. */
 @Composable

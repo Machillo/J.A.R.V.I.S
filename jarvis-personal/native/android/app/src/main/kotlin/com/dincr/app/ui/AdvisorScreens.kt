@@ -1,6 +1,8 @@
 package com.dincr.app.ui
 
 import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import com.dincr.design.CompositionDonut
 import com.dincr.data.Debt
@@ -100,7 +102,6 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
         // WE-2: what you have minus what you owe (VIP and the Owner; locked below VIP).
         if (plan == PlanTier.VIP) NetWorthCard(model)
         else DincrCard { Column(Modifier.testTag("wealth.netWorth")) { LockedRow(Icons.Rounded.AccountBalanceWallet, tx("Patrimonio neto", "Net worth"), PlanTier.VIP, nav) } }
-        SectionTitle(tx("Cuentas", "Accounts"))
         DincrCard {
             Column {
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
@@ -111,7 +112,8 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
                 }
             }
         }
-        SectionTitle(tx("Deudas", "Debts"))
+        // IBKR connected: what the investments are worth; opening it shows what they hold and the dividend plan.
+        if (profile?.isOwner == true) WealthInvestmentsCard(model, nav)
         WealthDebtsCard(debts, nav)
     }
 }
@@ -122,19 +124,57 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
  */
 @Composable
 private fun WealthDebtsCard(debts: LoadHandle<List<Debt>>, nav: Navigator) {
+    // Closed until asked for: only what is owed, by debt, opens here.
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     DincrCard {
         Column(Modifier.testTag("wealth.debts")) {
-            LoadContent(debts) { list ->
-                val composition = DebtComposition.of(list)
-                if (composition.status == Composition.Status.EMPTY) {
-                    Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."), style = MaterialTheme.typography.bodyMedium,
-                        color = Dincr.colors.text2, modifier = Modifier.testTag("wealth.debts.none"))
-                } else {
-                    Column(Modifier.testTag("wealth.debts.composition")) { CompositionDonut(tx("Lo que debés, por deuda", "What you owe, by debt"), composition) }
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { open = !open }.testTag("wealth.debts.toggle"),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(tx("Deudas", "Debts"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, modifier = Modifier.weight(1f))
+                Text(if (open) "▲" else "▼", color = Dincr.colors.textMuted)
+            }
+            if (open) {
+                LoadContent(debts) { list ->
+                    val composition = DebtComposition.of(list)
+                    if (composition.status == Composition.Status.EMPTY) {
+                        Text(tx("No tenés deudas activas registradas.", "You have no active debts recorded."), style = MaterialTheme.typography.bodyMedium,
+                            color = Dincr.colors.text2, modifier = Modifier.testTag("wealth.debts.none"))
+                    } else {
+                        Column(Modifier.testTag("wealth.debts.composition")) { CompositionDonut(tx("Lo que debés, por deuda", "What you owe, by debt"), composition) }
+                    }
+                }
+                TextButton({ nav.open("debts") }, Modifier.heightIn(min = 48.dp).testTag("wealth.debts.manage")) {
+                    Text(tx("Administrar en Plan › Deudas", "Manage in Plan › Debts"), color = Dincr.colors.tint)
                 }
             }
-            TextButton({ nav.open("debts") }, Modifier.heightIn(min = 48.dp).testTag("wealth.debts.manage")) {
-                Text(tx("Administrar en Plan › Deudas", "Manage in Plan › Debts"), color = Dincr.colors.tint)
+        }
+    }
+}
+
+/**
+ * Patrimonio → Inversiones (Owner): what the portfolio is worth and how fresh that is. Opening it shows
+ * what it holds and the dividend plan. Unknown stays said: without a snapshot it never reads as $0.
+ */
+@Composable
+private fun WealthInvestmentsCard(model: AppModel, nav: Navigator) {
+    val data = rememberLoad(model, fallback = tx("No pudimos cargar tus inversiones.", "We couldn’t load your investments.")) { model.api.investmentCenter() }
+    LoadContent(data) { center ->
+        DincrCard(Modifier.clickable { nav.open("jarvis/wealth") }.testTag("wealth.investments")) {
+            Column(Modifier.fillMaxWidth()) {
+                Text(tx("Inversiones", "Investments"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
+                val figures = center.figures
+                if (figures != null) {
+                    com.dincr.design.MoneyText(figures.marketValue, currency = figures.currency, style = MaterialTheme.typography.headlineSmall)
+                    val holdings = center.positions.mapNotNull { it.symbol }.joinToString(", ").ifEmpty { tx("Sin posiciones", "No positions") }
+                    val age = center.ageHours?.let { hours ->
+                        if (hours < 24) tx("actualizado hace $hours h", "updated $hours h ago") else tx("actualizado hace ${hours / 24} d", "updated ${hours / 24} d ago")
+                    }
+                    Caption(listOfNotNull(holdings, age).joinToString(" · "))
+                } else {
+                    Text(tx("Todavía no hay datos de tu portafolio", "There’s no portfolio data yet"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
+                }
             }
         }
     }

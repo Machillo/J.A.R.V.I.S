@@ -386,7 +386,7 @@ private struct HomeNextCard: View {
         switch next.kind {
         case .recommendation: next.detail
         case .needsInformation: nil
-        case .commitment: next.date.flatMap(Self.day)
+        case .commitment: next.date.map(Day.labelWithDistance)
         case .registerIncome: tx("Con tu salario o boleta de pago registrados, DINCR puede mostrarte el resultado del mes.",
                                  "With your salary or pay stub recorded, DINCR can show you this month’s result.")
         case .registerMovement: tx("Registrá tus gastos e ingresos para ver tu mes completo.", "Record your expenses and income to see your whole month.")
@@ -401,15 +401,6 @@ private struct HomeNextCard: View {
         case .registerIncome: tx("Registrar ingreso", "Record income")
         case .registerMovement: tx("Registrar movimiento", "Record a transaction")
         }
-    }
-
-    private static func day(_ key: String) -> String? {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: key) else { return nil }
-        return JarvisAgendaLabel.day(date, fallback: key)
     }
 }
 

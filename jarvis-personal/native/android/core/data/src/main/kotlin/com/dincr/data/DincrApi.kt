@@ -158,6 +158,8 @@ class DincrApi(private val client: ApiClient) {
     /** WE-2: VIP and the Owner. A read: it never writes. */
     suspend fun wealth(): Wealth = client.get("/user-product/vip/wealth")
     /** RT-1: VIP and the Owner. */
+    suspend fun investmentChoice(): InvestmentChoice = client.get("/user-product/vip/investment-choice")
+    suspend fun updateInvestmentChoice(choice: InvestmentChoice): InvestmentChoice = client.send("PUT", "/user-product/vip/investment-choice", choice)
     suspend fun retirement(): Retirement = client.get("/user-product/vip/retirement")
     suspend fun updateRetirement(update: RetirementUpdate): Retirement = client.send("PUT", "/user-product/vip/retirement", update)
     suspend fun salvavidas(): Salvavidas = client.get("/user-product/vip/salvavidas")
@@ -251,6 +253,13 @@ class DincrApi(private val client: ApiClient) {
     suspend fun investmentCenter(): InvestmentCenter = client.get("/finance/investment-center")
     /** Asks the server to refresh the snapshot from IBKR (an external call that can fail). */
     suspend fun syncIbkr(): IbkrSyncResult = client.send("POST", "/finance/investment-center/sync-ibkr")
+    /** Looks the stock's yield up (an outside service that can fail; then it is typed by hand). */
+    suspend fun dividendYield(symbol: String): DividendYield = client.send("POST", "/finance/investment-center/dividend-yield", DividendYieldRequest(symbol))
+    /** Calculates what the goal needs with the stocks already held. */
+    suspend fun calculateDividendGoal(goal: Money): DividendPlan = client.send("PUT", "/finance/investment-center/dividend-plan", DividendGoalUpdate(goal))
+    /** A read: it only calculates, and never buys or moves anything. */
+    suspend fun dividendPlan(): DividendPlan = client.get("/finance/investment-center/dividend-plan")
+    suspend fun updateDividendPlan(update: DividendPlanUpdate): DividendPlan = client.send("PUT", "/finance/investment-center/dividend-plan", update)
     suspend fun businessCenter(): BusinessCenter = client.get("/finance/business-center")
     suspend fun createBusiness(request: BusinessCreateRequest): BusinessWriteResult =
         client.send("POST", "/finance/business-center/businesses", request)

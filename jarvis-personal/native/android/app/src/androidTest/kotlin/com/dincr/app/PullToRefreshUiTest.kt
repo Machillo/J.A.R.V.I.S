@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
@@ -87,6 +89,12 @@ class PullToRefreshUiTest {
     }
 
     /** The gesture itself: a swipe down on the tab. */
+    /** Opens the closed Deudas, then goes back to the top: a pull only refreshes from there. */
+    private fun openDebts() {
+        compose.onNodeWithTag("wealth.debts.toggle").performScrollTo().performClick()
+        compose.onNodeWithTag("wealth.netWorth").performScrollTo()
+    }
+
     private fun pull() {
         waitUntil("the refreshable tab") { tagged("tab.refresh") }
         compose.onAllNodes(hasTestTag("tab.refresh")).onFirst().performTouchInput { swipeDown() }
@@ -121,7 +129,9 @@ class PullToRefreshUiTest {
             assertEquals("$context: still on Plan", planTab, selectedTab())
 
             tab(wealthTab)
-            waitUntil("$context: debts") { tagged("wealth.debts.composition") }
+            waitUntil("$context: debts") { tagged("wealth.debts.toggle") }
+            openDebts()
+            waitUntil("$context: debts open") { tagged("wealth.debts.composition") }
             assertEquals("$context: Cuentas", plan != "vip", present(locks[1]))
             val debts = reads("/user-product/finance/debts")
             pullKeeping(listOf(tx("Cuentas", "Accounts")), locks, "$context Patrimonio")
@@ -137,7 +147,9 @@ class PullToRefreshUiTest {
     @Test fun aFailedRefreshKeepsTheScreenAndSaysSoInTheNotice() {
         launch("vip", refreshFails = true)
         tab(wealthTab)
-        waitUntil("debts") { tagged("wealth.debts.composition") }
+        waitUntil("debts") { tagged("wealth.debts.toggle") }
+        openDebts()
+        waitUntil("debts open") { tagged("wealth.debts.composition") }
         pull()
         waitUntil("the failure notice") { present(failureNotice) }
         assertTrue("the debts stay", tagged("wealth.debts.composition"))
@@ -171,7 +183,9 @@ class PullToRefreshUiTest {
     @Test fun talkBackRefreshesFromTheTitleAndEachSourceIsReadOnce() {
         launch("vip")
         tab(wealthTab)
-        waitUntil("debts") { tagged("wealth.debts.composition") }
+        waitUntil("debts") { tagged("wealth.debts.toggle") }
+        openDebts()
+        waitUntil("debts open") { tagged("wealth.debts.composition") }
         val action = SemanticsMatcher("has the refresh action") { node ->
             node.config.getOrNull(SemanticsActions.CustomActions)?.any { it.label == refreshAction } == true
         }

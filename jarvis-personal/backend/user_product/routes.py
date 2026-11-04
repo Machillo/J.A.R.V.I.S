@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Header, HTTPException, Query
 from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.saas import require_feature
@@ -31,6 +31,7 @@ from backend.user_product.vip_service import get_vip_command_center
 from backend.user_product.debt_scenarios import simulate_debt_scenario
 from backend.user_product.financial_analysis import get_financial_analysis
 from backend.user_product.wealth import get_wealth
+from backend.user_product.investment_choice import get_choice, update_choice
 from backend.user_product.retirement import get_retirement, update_retirement
 from backend.ai.strategy_dashboard import get_premium_strategy_dashboard
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
@@ -279,6 +280,16 @@ def vip_financial_analysis():
 @router.get("/vip/wealth")
 def vip_wealth():
     require_feature("strategy_vip"); return get_wealth()
+
+@router.get("/vip/investment-choice")
+def vip_investment_choice():
+    require_feature("strategy_vip"); return get_choice()
+
+
+@router.put("/vip/investment-choice")
+def vip_investment_choice_update(payload: dict = Body(...)):
+    require_feature("strategy_vip"); return update_choice(payload)
+
 
 @router.get("/vip/retirement")
 def vip_retirement():

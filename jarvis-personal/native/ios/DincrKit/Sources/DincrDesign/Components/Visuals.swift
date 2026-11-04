@@ -20,26 +20,48 @@ public struct CompositionDonut: View {
     let color: Color
     let showsLegend: Bool
     let showsTotal: Bool
+    let asBar: Bool
     @Environment(\.moneyFormat) private var format
     @State private var selectedID: String?
 
     /// `showsTotal: false` when the caller has its own total and the sum of the parts must not be
-    /// shown as one (the center then shows only a selected part).
+    /// shown as one (the center then shows only a selected part). `asBar`: one stacked bar with one
+    /// color per part instead of the ring, for many parts of a whole (the legend still names them).
     public init(title: String, composition: Composition, color: Color = DincrColor.chartExpense, showsLegend: Bool = true,
-                showsTotal: Bool = true) {
+                showsTotal: Bool = true, asBar: Bool = false) {
         self.title = title; self.composition = composition; self.color = color; self.showsLegend = showsLegend
-        self.showsTotal = showsTotal
+        self.showsTotal = showsTotal; self.asBar = asBar
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             if composition.isDrawable {
-                chart
+                if asBar { bar } else { chart }
             } else {
                 VisualNotice(text: notice).accessibilityLabel("\(title). \(notice)")
             }
             if showsLegend { legend }
         }
+    }
+
+    private var bar: some View {
+        GeometryReader { proxy in
+            let parts = composition.segments.filter { ($0.share ?? 0) > 0 }
+            let gaps = CGFloat(max(parts.count - 1, 0)) * 2
+            HStack(spacing: 2) {
+                ForEach(parts) { segment in
+                    Rectangle().fill(shade(for: segment.id))
+                        .frame(width: max((proxy.size.width - gaps) * (segment.share ?? 0), 3))
+                }
+            }
+            .frame(width: proxy.size.width, alignment: .leading)
+            .clipShape(Capsule())
+        }
+        .frame(height: 20)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(composition.spokenParts(format: format).joined(separator: "; "))
+        .accessibilityHidden(showsLegend)
     }
 
     private var chart: some View {
@@ -100,7 +122,14 @@ public struct CompositionDonut: View {
                     if composition.isDrawable {
                         Circle().fill(shade(for: segment.id)).frame(width: 10, height: 10).accessibilityHidden(true)
                     }
-                    Text(segment.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(segment.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
+                        if !segment.parts.isEmpty {
+                            Text(AppLanguage.current.pick("\(segment.parts.count) categorías · tocá para verlas",
+                                                          "\(segment.parts.count) categories · tap to see them"))
+                                .font(DincrFont.caption).foregroundStyle(.dincrText2)
+                        }
+                    }
                     Spacer(minLength: DincrSpacing.s2)
                     VStack(alignment: .trailing, spacing: 0) {
                         MoneyText(segment.value, currency: composition.currency, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
@@ -124,6 +153,7 @@ public struct CompositionDonut: View {
                 .accessibilityLabel(composition.spokenParts(format: format)[index])
                 .accessibilityAddTraits(composition.isDrawable ? .isButton : [])
                 .accessibilityAddTraits(selectedID == segment.id ? .isSelected : [])
+                if selectedID == segment.id { partsOf(segment) }
             }
             ForEach(composition.unknown) { item in
                 HStack {
@@ -137,10 +167,30 @@ public struct CompositionDonut: View {
         }
     }
 
+    /// What a grouped part holds, shown under its row while it is selected.
+    private func partsOf(_ segment: Composition.Segment) -> some View {
+        ForEach(segment.parts) { part in
+            HStack(spacing: DincrSpacing.s3) {
+                Text(part.label).font(DincrFont.caption).foregroundStyle(.dincrText2).multilineTextAlignment(.leading)
+                Spacer(minLength: DincrSpacing.s2)
+                if let value = part.value {
+                    MoneyText(value, currency: composition.currency, font: DincrFont.caption.monospacedDigit())
+                }
+            }
+            .padding(.leading, DincrSpacing.s6)
+            .frame(minHeight: 32)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
     /// One hue in steps of decreasing strength, in the caller's order; a selection keeps its part
     /// strong and quiets the rest.
     private func shade(for id: String) -> Color {
         guard let index = composition.segments.firstIndex(where: { $0.id == id }) else { return color }
+        if asBar {
+            let part = VisualShade.barColors[index % VisualShade.barColors.count]
+            return selectedID == nil || id == selectedID ? part : part.opacity(0.3)
+        }
         if let selectedID { return color.opacity(id == selectedID ? 1 : 0.4) }
         return color.opacity(VisualShade.opacity(at: index))
     }
@@ -161,6 +211,12 @@ public struct CompositionDonut: View {
 /// Opacity steps for the parts of one hue: strong first, never fainter than readable.
 enum VisualShade {
     static func opacity(at index: Int) -> Double { max(0.3, 1 - Double(index) * 0.17) }
+
+    /// The parts of a stacked bar, told apart by color and always named in the legend.
+    static let barColors: [Color] = [
+        Color(light: 0x08734F, dark: 0x30D158), Color(light: 0xB4501F, dark: 0xFF855C), Color(light: 0x0A6E9E, dark: 0x5AC8FA),
+        Color(light: 0xB0307A, dark: 0xFF7EB6), Color(light: 0x4A4FD9, dark: 0x8F95FF), Color(light: 0x6B6B76, dark: 0xA3A5BD),
+    ]
 }
 
 // MARK: - Line

@@ -89,9 +89,9 @@ def _items_in_cents(items: list[dict[str, Any]]) -> dict[str, int]:
     return {str(item.get("key")): _cents(item.get("amount")) for item in items if _cents(item.get("amount")) > 0}
 
 
-def debt_attack_targets(debts: list[dict[str, Any]], amount: Any) -> tuple[list[dict[str, Any]], int]:
-    """The debt part split in the strategy's own debt order (``_sort_debts_for_director``, Owner
-    rules): each debt receives at most what it owes. Returns the targets and the cents no debt
+def debt_attack_targets(debts: list[dict[str, Any]], amount: Any, order_ids: list[Any] | None = None) -> tuple[list[dict[str, Any]], int]:
+    """The debt part split in the order of his analysis (`order_ids`), or the strategy's own debt
+    order (``_sort_debts_for_director``, Owner rules): each debt receives at most what it owes. Returns the targets and the cents no debt
     could take (more than all the debts owe)."""
     from backend.ai.strategy_dashboard import _sort_debts_for_director
 
@@ -100,7 +100,11 @@ def debt_attack_targets(debts: list[dict[str, Any]], amount: Any) -> tuple[list[
     # Sorted by id first: debts that tie on every strategy key get the same order in the preview
     # and in the confirmation, whatever order they were read in.
     active = sorted((debt for debt in debts if _cents(debt.get("remaining_amount")) > 0), key=lambda d: int(d.get("id") or 0))
-    for debt in _sort_debts_for_director(active, owner_rules=True):
+    ordered = _sort_debts_for_director(active, owner_rules=True)
+    if order_ids:
+        position = {debt_id: index for index, debt_id in enumerate(order_ids)}
+        ordered = sorted(ordered, key=lambda debt: position.get(debt.get("id"), len(position)))
+    for debt in ordered:
         if left <= 0:
             break
         take = min(left, _cents(debt.get("remaining_amount")))
@@ -117,7 +121,7 @@ def confirmation_plan(strategy: dict[str, Any], debts: list[dict[str, Any]]) -> 
     for item in strategy.get("allocation_items") or []:
         key, amount = item.get("key"), item.get("amount")
         if key == DEBT:
-            targets, left = debt_attack_targets(debts, amount)
+            targets, left = debt_attack_targets(debts, amount, (strategy.get("owner_analysis") or {}).get("debt_order"))
             steps.append({"key": key, "amount": amount, "action": "debt_extra_payment", "targets": targets})
             if left > 0:
                 blocking.append(tx("La parte para deudas es mayor que lo que se debe.", "The debt share is more than what is owed."))

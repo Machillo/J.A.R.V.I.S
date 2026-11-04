@@ -132,6 +132,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     /** One-time message for the main screen (mail connected, plan changed…). */
     val notice: StateFlow<String?> = _notice.asStateFlow()
     private val _pendingRoute = MutableStateFlow<String?>(null)
+    private val _pendingShared = MutableStateFlow<com.dincr.data.SharedExpense?>(null)
+    val pendingShared: StateFlow<com.dincr.data.SharedExpense?> = _pendingShared.asStateFlow()
     /** A screen the app should open next (e.g. mail after a connection returns). */
     val pendingRoute: StateFlow<String?> = _pendingRoute.asStateFlow()
 
@@ -192,6 +194,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     fun consumeRoute() { _pendingRoute.value = null }
     /** A launcher shortcut asked for a screen; the signed-in, unlocked shell opens it (it never writes). */
     fun requestQuickAction(action: QuickAction) { _pendingRoute.value = action.route }
+    /** Text shared into DINCR; the signed-in, unlocked shell opens the editor with it (it never writes). */
+    fun requestSharedExpense(shared: com.dincr.data.SharedExpense) { _pendingShared.value = shared }
+    fun consumeShared() { _pendingShared.value = null }
     fun showNotice(message: String) { _notice.value = message }
 
     /**
@@ -530,6 +535,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         _flags.value = FeatureFlags()
         _notice.value = null
         _pendingRoute.value = null
+        _pendingShared.value = null
         ReminderScheduler.clear(getApplication())
         _phase.value = Phase.SignedOut
     }
