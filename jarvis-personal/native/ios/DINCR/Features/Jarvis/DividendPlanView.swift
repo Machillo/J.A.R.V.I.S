@@ -2,8 +2,8 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// JARVIS → Patrimonio → Inversiones: "Plan de dividendos". Says how much capital the monthly goal
-/// needs with the stocks the Owner picked, and what to buy this month only when the plan allows it
+/// JARVIS → Patrimonio → Inversiones: "Plan de dividendos". One field, the monthly goal: it answers how
+/// much more to buy of the stocks already held, with net dividends reinvested, and what to buy this month only when the plan allows it
 /// (no debt at 10% a year or more, 3 months of Salvavidas). Opening it only reads. The form brings the
 /// stock's yield from an outside service, and it can be typed when that fails. Android: `DividendPlanCard`.
 struct DividendPlanCard: View {
@@ -29,19 +29,18 @@ struct DividendPlanCard: View {
 
     private func content(_ plan: DividendPlan) -> some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(tx("Plan de dividendos", "Dividend plan")).font(DincrFont.label).foregroundStyle(.dincrText2)
-            if !plan.isConfigured {
-                Text(tx("Elegí tus acciones y tu meta para saber cuánto necesitás.", "Pick your stocks and your goal to see how much you need."))
-                    .font(DincrFont.bodySmall)
-            } else if !plan.result.ready {
-                Text(tx("Falta el dividendo anual de tus acciones para poder calcular.", "Your stocks’ yearly dividend is missing, so it can’t be calculated yet."))
+            Text(tx("¿Cuánto querés ganar al mes en dividendos?", "How much do you want to earn monthly in dividends?"))
+                .font(DincrFont.body.weight(.semibold))
+            GoalField(plan: plan) { reloadToken += 1 }
+            if plan.isConfigured, !plan.result.ready {
+                Text(tx("No pudimos traer el dividendo de tu acción. Escribilo en Cambiar acciones.", "We couldn’t bring your stock’s dividend. Type it in Change stocks."))
                     .font(DincrFont.bodySmall)
                     .accessibilityIdentifier("wealth.dividends.incomplete")
-            } else {
+            } else if plan.isConfigured {
                 figures(plan)
             }
-            Button(plan.isConfigured ? tx("Editar", "Edit") : tx("Configurar", "Set up")) { editing = plan }
-                .buttonStyle(.dincrSecondary)
+            Button(tx("Cambiar acciones", "Change stocks")) { editing = plan }
+                .font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrTint).frame(minHeight: 44)
                 .accessibilityIdentifier("wealth.dividends.edit")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -50,17 +49,63 @@ struct DividendPlanCard: View {
         .accessibilityIdentifier("wealth.dividends")
     }
 
+    /// One number, one answer: reads what is held and calculates. Stores only the goal and those stocks.
+    private struct GoalField: View {
+        @Environment(AppModel.self) private var model
+        let plan: DividendPlan
+        let done: () -> Void
+        @State private var text = ""
+        @State private var error: String?
+        @State private var working = false
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                HStack(spacing: DincrSpacing.s2) {
+                    Text("US$").foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
+                    TextField(tx("Tu meta al mes", "Your monthly goal"), text: $text)
+                        .keyboardType(.decimalPad).font(DincrFont.body.monospacedDigit())
+                        .accessibilityIdentifier("wealth.dividends.goal")
+                    Button(tx("Calcular", "Calculate")) { Task { await calculate() } }
+                        .buttonStyle(.dincrPrimary(loading: working)).disabled(working).fixedSize()
+                        .accessibilityIdentifier("wealth.dividends.calculate")
+                }
+                if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative).accessibilityIdentifier("wealth.dividends.error") }
+            }
+            .onAppear { if text.isEmpty { text = plan.config.goalMonthlyUsd.map(model.moneyFormat.inputText) ?? "" } }
+        }
+
+        private func calculate() async {
+            guard let goal = CorrectionInput.amount(text, separators: model.moneyFormat.separators) else {
+                error = tx("Escribí cuánto querés ganar al mes.", "Enter how much you want to earn monthly."); return
+            }
+            working = true; error = nil
+            defer { working = false }
+            let epoch = model.currentEpoch
+            do {
+                _ = try await model.service.calculateDividendGoal(goal)
+                done()
+            } catch {
+                self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos calcular.", "We couldn’t calculate."))
+            }
+        }
+    }
+
     @ViewBuilder private func figures(_ plan: DividendPlan) -> some View {
         let result = plan.result
-        FigureRow(label: tx("Tu meta al mes", "Your monthly goal"), amount: plan.config.goalMonthlyUsd, currency: "USD")
-        FigureRow(label: tx("Capital que necesitás", "Capital you need"), amount: result.capitalNeededUsd, currency: "USD", emphasized: true)
-        FigureRow(label: tx("Tenés en estas acciones", "You hold in these stocks"), amount: result.currentValueUsd, currency: "USD")
-        FigureRow(label: tx("Te falta", "Still missing"), amount: result.missingUsd, currency: "USD")
+        ForEach(plan.config.stocks, id: \.symbol) { stock in
+            if let yield = stock.yieldPct {
+                Text(tx("\(stock.symbol) paga cerca de \(yield) % al año", "\(stock.symbol) pays about \(yield) % a year"))
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
+            }
+        }
+        FigureRow(label: tx("Necesitás tener invertido", "You need invested"), amount: result.capitalNeededUsd, currency: "USD")
+        FigureRow(label: tx("Ya tenés", "You already have"), amount: result.currentValueUsd, currency: "USD")
+        FigureRow(label: tx("Te falta comprar", "Still to buy"), amount: result.missingUsd, currency: "USD", emphasized: true)
         FigureRow(label: tx("Hoy te daría al mes", "It would pay you monthly today"), amount: result.netMonthlyDividendNowUsd, currency: "USD")
         if !result.monthlyNeeded.isEmpty {
-            Text(tx("Cuánto comprar al mes para llegar", "How much to buy monthly to get there")).font(DincrFont.label).foregroundStyle(.dincrText2)
+            Text(tx("Con los dividendos reinvertidos, comprando cada mes:", "With dividends reinvested, buying every month:")).font(DincrFont.label).foregroundStyle(.dincrText2)
             ForEach(result.monthlyNeeded, id: \.years) { horizon in
-                FigureRow(label: tx("En \(horizon.years) años", "In \(horizon.years) years"), amount: horizon.amountUsd, currency: "USD")
+                FigureRow(label: tx("Para llegar en \(horizon.years) años", "To get there in \(horizon.years) years"), amount: horizon.amountUsd, currency: "USD")
             }
         }
         if let line = Self.pace(result.monthsToGoal, amount: plan.config.monthlyAmountUsd) {
@@ -79,8 +124,8 @@ struct DividendPlanCard: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("wealth.dividends.gate")
         }
-        Text(tx("Es un cálculo con ese dividendo, después de la retención, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
-                "It’s a calculation with that dividend, after withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
+        Text(tx("Es un cálculo con el dividendo del último año, después de la retención del 30%, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
+                "It’s a calculation with last year’s dividend, after the 30% withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
             .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
     }
 

@@ -383,7 +383,8 @@ class FakeBackend(
                     else error(502, "No pudimos traer el dividendo de esa acción. Podés escribirlo vos.")
                 method == "GET" && path == "/finance/investment-center/dividend-plan" -> ok(wealth.dividendPlan())
                 method == "PUT" && path == "/finance/investment-center/dividend-plan" ->
-                    wealth.saveDividendPlan(json.decodeFromJsonElement(DividendPlanUpdate.serializer(), body!!))?.let { ok(it) } ?: error(422, "Los porcentajes tienen que sumar 100.")
+                    (if (body?.get("from_holdings") != null) money("goal_monthly_usd")?.takeIf { it.signum() > 0 }?.let { wealth.saveDividendPlan(DividendPlanUpdate(listOf(DividendPlan.Stock("ACME", BigDecimal(100), BigDecimal(4))), it, null, BigDecimal(30))) }
+                    else wealth.saveDividendPlan(json.decodeFromJsonElement(DividendPlanUpdate.serializer(), body!!)))?.let { ok(it) } ?: error(422, "Los porcentajes tienen que sumar 100.")
                 method == "GET" && path == "/finance/business-center" -> ok(wealth.businessCenter())
                 method == "POST" && path == "/finance/business-center/businesses" ->
                     wealth.createBusiness(text("name"), text("description"), money("ownership_pct"))?.let { ok(it) } ?: error(422, "Datos inválidos.")

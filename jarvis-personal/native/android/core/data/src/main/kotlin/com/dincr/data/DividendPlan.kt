@@ -58,6 +58,14 @@ data class DividendPlan(
     val isConfigured: Boolean get() = config.stocks.isNotEmpty()
 }
 
+/** One number is enough: the monthly goal. The stocks and their yields come from what is held. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+data class DividendGoalUpdate(
+    @SerialName("goal_monthly_usd") val goalMonthlyUsd: Money,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) @SerialName("from_holdings") val fromHoldings: Boolean = true,
+)
+
 /** `POST /finance/investment-center/dividend-yield`: a stock's last year of dividends over its price. */
 @Serializable
 data class DividendYield(

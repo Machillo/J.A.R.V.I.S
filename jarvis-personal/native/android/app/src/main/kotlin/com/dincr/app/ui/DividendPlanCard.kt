@@ -34,8 +34,8 @@ import java.math.BigDecimal
 import kotlinx.coroutines.launch
 
 /**
- * JARVIS → Patrimonio → Inversiones: "Plan de dividendos". Says how much capital the monthly goal
- * needs with the stocks the Owner picked, and what to buy this month only when the plan allows it
+ * JARVIS → Patrimonio → Inversiones: "Plan de dividendos". One field, the monthly goal: it answers how
+ * much more to buy of the stocks already held, with net dividends reinvested, and what to buy this month only when the plan allows it
  * (no debt at 10% a year or more, 3 months of Salvavidas). Opening it only reads. The form brings the
  * stock's yield from an outside service, and it can be typed when that fails. iOS: `DividendPlanCard`.
  */
@@ -46,16 +46,16 @@ fun DividendPlanCard(model: AppModel) {
     LoadContent(data) { plan ->
         DincrCard(Modifier.testTag("wealth.dividends")) {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
-                Caption(tx("Plan de dividendos", "Dividend plan"))
+                Text(tx("¿Cuánto querés ganar al mes en dividendos?", "How much do you want to earn monthly in dividends?"),
+                    style = MaterialTheme.typography.titleSmall, color = Dincr.colors.text)
+                GoalField(model, plan) { data.reload() }
                 when {
-                    !plan.isConfigured -> Text(tx("Elegí tus acciones y tu meta para saber cuánto necesitás.", "Pick your stocks and your goal to see how much you need."),
-                        style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text)
-                    !plan.result.ready -> Text(tx("Falta el dividendo anual de tus acciones para poder calcular.", "Your stocks’ yearly dividend is missing, so it can’t be calculated yet."),
+                    plan.isConfigured && !plan.result.ready -> Text(tx("No pudimos traer el dividendo de tu acción. Escribilo en Cambiar acciones.", "We couldn’t bring your stock’s dividend. Type it in Change stocks."),
                         style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text, modifier = Modifier.testTag("wealth.dividends.incomplete"))
-                    else -> Figures(plan)
+                    plan.isConfigured -> Figures(plan)
                 }
                 TextButton({ editing = plan }, modifier = Modifier.heightIn(min = 48.dp).testTag("wealth.dividends.edit")) {
-                    Text(if (plan.isConfigured) tx("Editar", "Edit") else tx("Configurar", "Set up"), color = Dincr.colors.tint)
+                    Text(tx("Cambiar acciones", "Change stocks"), color = Dincr.colors.tint)
                 }
             }
         }
@@ -65,17 +65,43 @@ fun DividendPlanCard(model: AppModel) {
     }
 }
 
+/** One number, one answer: reads what is held and calculates. Stores only the goal and those stocks. */
+@Composable
+private fun GoalField(model: AppModel, plan: DividendPlan, done: () -> Unit) {
+    val format = Dincr.money
+    var text by remember { mutableStateOf(plan.config.goalMonthlyUsd?.let(format::inputText).orEmpty()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    FormField(tx("Tu meta al mes (US$)", "Your monthly goal (US$)"), text, { text = it; error = null }, keyboard = KeyboardType.Decimal, modifier = Modifier.testTag("wealth.dividends.goal"))
+    error?.let { Text(it, color = Dincr.colors.negative, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("wealth.dividends.error")) }
+    com.dincr.design.DincrPrimaryButton(tx("Calcular", "Calculate"), loading = busy, modifier = Modifier.testTag("wealth.dividends.calculate"), onClick = {
+        val goal = CorrectionInput.amount(text, format.separators)
+        if (goal == null) error = tx("Escribí cuánto querés ganar al mes.", "Enter how much you want to earn monthly.")
+        else {
+            busy = true
+            scope.launch {
+                model.load(tx("No pudimos calcular.", "We couldn’t calculate.")) { model.api.calculateDividendGoal(goal) }
+                    .fold({ done() }, { if (it !is AuthException.SignedOut) error = it.message })
+                busy = false
+            }
+        }
+    })
+}
+
 @Composable
 private fun Figures(plan: DividendPlan) {
     val result = plan.result
-    AmountLine(tx("Tu meta al mes", "Your monthly goal"), plan.config.goalMonthlyUsd, currency = "USD")
-    AmountLine(tx("Capital que necesitás", "Capital you need"), result.capitalNeededUsd, emphasize = true, currency = "USD")
-    AmountLine(tx("Tenés en estas acciones", "You hold in these stocks"), result.currentValueUsd, currency = "USD")
-    AmountLine(tx("Te falta", "Still missing"), result.missingUsd, currency = "USD")
+    plan.config.stocks.forEach { stock ->
+        stock.yieldPct?.let { yld -> Text(tx("${stock.symbol} paga cerca de ${yld.stripTrailingZeros().toPlainString()} % al año", "${stock.symbol} pays about ${yld.stripTrailingZeros().toPlainString()} % a year"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
+    }
+    AmountLine(tx("Necesitás tener invertido", "You need invested"), result.capitalNeededUsd, currency = "USD")
+    AmountLine(tx("Ya tenés", "You already have"), result.currentValueUsd, currency = "USD")
+    AmountLine(tx("Te falta comprar", "Still to buy"), result.missingUsd, emphasize = true, currency = "USD")
     AmountLine(tx("Hoy te daría al mes", "It would pay you monthly today"), result.netMonthlyDividendNowUsd, currency = "USD")
     if (result.monthlyNeeded.isNotEmpty()) {
-        Caption(tx("Cuánto comprar al mes para llegar", "How much to buy monthly to get there"))
-        result.monthlyNeeded.forEach { AmountLine(tx("En ${it.years} años", "In ${it.years} years"), it.amountUsd, currency = "USD") }
+        Caption(tx("Con los dividendos reinvertidos, comprando cada mes:", "With dividends reinvested, buying every month:"))
+        result.monthlyNeeded.forEach { AmountLine(tx("Para llegar en ${it.years} años", "To get there in ${it.years} years"), it.amountUsd, currency = "USD") }
     }
     pace(result.monthsToGoal, plan.config.monthlyAmountUsd)?.let {
         Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text, modifier = Modifier.testTag("wealth.dividends.pace"))
@@ -92,8 +118,8 @@ private fun Figures(plan: DividendPlan) {
             plan.gate.blockers.forEach { Text(blocker(it.code), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text) }
         }
     }
-    Caption(tx("Es un cálculo con ese dividendo, después de la retención, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
-        "It’s a calculation with that dividend, after withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
+    Caption(tx("Es un cálculo con el dividendo del último año, después de la retención del 30%, y con dividendos reinvertidos. Supone que el precio y el dividendo no cambian; pueden cambiar. No es asesoría de inversión.",
+        "It’s a calculation with last year’s dividend, after the 30% withholding, with dividends reinvested. It assumes price and dividend stay the same; they can change. This isn’t investment advice."))
 }
 
 private fun pace(months: Int?, amount: BigDecimal?): String? {
