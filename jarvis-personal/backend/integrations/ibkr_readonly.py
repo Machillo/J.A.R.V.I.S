@@ -295,7 +295,7 @@ def _persist_snapshot(payload: IbkrSnapshot, sync_method: str = "bridge") -> dic
             """,
             (workspace_id,),
         ).fetchone()
-        # The Banco Central's rate when there is one; the typed rows only had a rate when someone typed it.
+        # The published rate when there is one; the typed rows only had a rate when someone typed it.
         market_rate = bccr_rates.latest_rate(conn)
         exchange_rate_crc = payload.exchange_rate_crc or float(market_rate or (rate_row or {}).get("exchange_rate") or os.getenv("USD_CRC_FALLBACK", "495"))
         market_value_crc = payload.net_liquidation * exchange_rate_crc

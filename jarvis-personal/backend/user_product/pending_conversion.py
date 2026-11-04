@@ -16,7 +16,7 @@ cannot exist: the listing says "unavailable" and only a request that asks for it
 A mail or statement expense confirmed without a rate waits the same way (`candidate_waits`): it
 becomes a pending expense, with no transaction until there is a rate to give it a base amount.
 
-Dollars in a colones account also get, with the Banco Central's published selling rate
+Dollars in a colones account also get, with the published selling rate
 (`integrations/bccr_rates.py`):
 - an estimate while they wait, read-only and labeled as such, at the purchase day's rate;
 - their conversion when the close arrives (`close_due_periods`, a scheduled command), at the rate of

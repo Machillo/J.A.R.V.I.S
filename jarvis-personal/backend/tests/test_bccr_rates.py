@@ -1,4 +1,4 @@
-"""The Banco Central's dollar rate: what is read from an answer, how the token travels, which rate a
+"""The dollar's rate: what is read from each answer, which service wins, which rate a
 close uses, the cron's credential, and the scheduler. Invented figures, no network."""
 import json
 import re
@@ -17,28 +17,39 @@ from backend.integrations import bccr_rates as br
 WORKFLOW = (Path(__file__).resolve().parents[3] / ".github/workflows/exchange-rate-sync.yml").read_text(encoding="utf-8")
 
 
-def answer(*series, code="318", estado=True):
-    return {"estado": estado, "mensaje": "ok", "datos": [{"codigoIndicador": code, "series": list(series)}]}
+def today_answer(day="2026-11-04", value=454.65):
+    return {"venta": {"fecha": day, "valor": value}, "compra": {"fecha": day, "valor": 450.31}}
 
 
-def serie(day, value):
-    return {"fecha": day, "valorDatoPorPeriodo": value}
+def history_row(day, rate, quote="CRC"):
+    return {"date": day, "base": "USD", "quote": quote, "rate": rate}
 
 
-def test_it_reads_the_days_with_a_value_and_leaves_the_others_unknown():
-    rows = br.parse_series(answer(serie("2026-11-02", 512.34), serie("2026-11-03T00:00:00", "513.5"), serie("2026-11-04", None)))
-    assert rows == [(date(2026, 11, 2), Decimal("512.34")), (date(2026, 11, 3), Decimal("513.5"))]
+def test_today_reads_the_selling_rate_never_the_buying_one():
+    assert br.parse_today(today_answer()) == [(date(2026, 11, 4), Decimal("454.65"))]
 
 
-@pytest.mark.parametrize("value", [0, -5, 1, 99999, "abc", True, float("inf"), [], {}])
+def test_history_reads_dollars_in_colones_only():
+    rows = br.parse_history([history_row("2026-11-03", 455.1), history_row("2026-11-03", 0.9, quote="EUR"), history_row("2026-11-04", None)])
+    assert rows == [(date(2026, 11, 3), Decimal("455.1"))]
+
+
+@pytest.mark.parametrize("value", [0, -5, 1, 99999, "abc", True, float("inf"), [], {}, None])
 def test_a_value_that_cannot_be_this_rate_is_never_stored(value):
-    assert br.parse_series(answer(serie("2026-11-02", value))) == []
+    assert br.parse_today(today_answer(value=value)) == []
+    assert br.parse_history([history_row("2026-11-02", value)]) == []
 
 
-@pytest.mark.parametrize("payload", [None, [], {}, {"estado": False, "datos": []}, {"estado": True}, answer(serie("2026-11-02", 500), code="317")])
-def test_a_refused_or_foreign_answer_raises(payload):
+@pytest.mark.parametrize("payload", [None, [], {}, {"compra": {"fecha": "2026-11-04", "valor": 450}}, {"code": 503, "status": "Service unavailable"}])
+def test_a_refused_answer_from_hacienda_raises(payload):
     with pytest.raises(br.RateFeedError):
-        br.parse_series(payload)
+        br.parse_today(payload)
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"message": "not found"}])
+def test_a_refused_answer_from_the_history_raises(payload):
+    with pytest.raises(br.RateFeedError):
+        br.parse_history(payload)
 
 
 class Response:
@@ -49,35 +60,88 @@ class Response:
         return self.body
 
 
-def test_the_token_goes_in_the_header_and_the_range_is_all_that_goes_out(monkeypatch):
+def test_only_a_date_range_goes_out_with_no_credential(monkeypatch):
     seen = {}
 
     def get(url, params, headers, timeout):
         seen.update(url=url, params=params, headers=headers)
-        return Response(200, answer(serie("2026-11-02", 512)))
+        return Response(200, [history_row("2026-11-02", 512)])
 
-    monkeypatch.setenv(br.TOKEN_ENV, "synthetic-token")
     monkeypatch.setattr(br.requests, "get", get)
-    assert br.fetch_series(date(2026, 11, 1), date(2026, 11, 2)) == [(date(2026, 11, 2), Decimal("512"))]
-    assert seen["headers"]["Authorization"] == "Bearer synthetic-token"
-    assert "synthetic-token" not in seen["url"] and "synthetic-token" not in json.dumps(seen["params"])
-    assert seen["params"] == {"fechaInicio": "2026/11/01", "fechaFin": "2026/11/02", "idioma": "ES"}
-    assert "/indicadoresEconomicos/318/series" in seen["url"]
+    assert br.fetch_history(date(2026, 11, 1), date(2026, 11, 2)) == [(date(2026, 11, 2), Decimal("512"))]
+    assert seen["params"] == {"from": "2026-11-01", "to": "2026-11-02", "base": "USD", "quotes": "CRC", "providers": "BCCR"}
+    assert "Authorization" not in seen["headers"]
 
 
-def test_without_a_token_nothing_is_requested(monkeypatch):
-    monkeypatch.delenv(br.TOKEN_ENV, raising=False)
-    monkeypatch.setattr(br.requests, "get", lambda *a, **k: pytest.fail("no request without a token"))
+def test_an_error_answer_raises(monkeypatch):
+    monkeypatch.setattr(br.requests, "get", lambda *a, **k: Response(503))
     with pytest.raises(br.RateFeedError):
-        br.fetch_series(date(2026, 11, 1), date(2026, 11, 2))
+        br.fetch_today()
 
 
-def test_an_error_answer_never_carries_the_token(monkeypatch):
-    monkeypatch.setenv(br.TOKEN_ENV, "synthetic-token")
-    monkeypatch.setattr(br.requests, "get", lambda *a, **k: Response(401))
-    with pytest.raises(br.RateFeedError) as error:
-        br.fetch_series(date(2026, 11, 1), date(2026, 11, 2))
-    assert "synthetic-token" not in str(error.value)
+class FakeConn:
+    def __init__(self, log):
+        self.log = log
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def execute(self, sql, params=None):
+        self.log.append(params)
+
+    def commit(self):
+        pass
+
+
+@pytest.fixture
+def cron(monkeypatch):
+    from backend.user_product import pending_conversion
+
+    log = []
+    monkeypatch.setenv("EMAIL_MONITOR_CRON_SECRET", "synthetic")
+    monkeypatch.delenv("IBKR_FLEX_CRON_SECRET", raising=False)
+    monkeypatch.setattr(br, "get_connection", lambda: FakeConn(log))
+    monkeypatch.setattr(br, "costa_rica_today", lambda: date(2026, 11, 4))
+    monkeypatch.setattr(br.observability, "heartbeat", lambda *a, **k: None)
+    monkeypatch.setattr(pending_conversion, "close_due_periods", lambda today: {"converted": 1})
+    return log
+
+
+def test_todays_official_rate_is_stored_last_so_it_wins_on_its_day(cron, monkeypatch):
+    day = date(2026, 11, 4)
+    monkeypatch.setattr(br, "fetch_history", lambda *_: [(day, Decimal("450"))])
+    monkeypatch.setattr(br, "fetch_today", lambda: [(day, Decimal("454.65"))])
+    answer = br.sync_rates_cron("synthetic")
+    assert [row[-1] for row in cron] == [br.SOURCE_HISTORY, br.SOURCE_TODAY]
+    assert answer["rates"] == 1 and answer["failed_sources"] == 0 and answer["converted"] == 1
+
+
+def test_one_service_down_does_not_stop_the_other(cron, monkeypatch):
+    def down(*_):
+        raise br.RateFeedError("HTTP 503")
+
+    monkeypatch.setattr(br, "fetch_history", down)
+    monkeypatch.setattr(br, "fetch_today", lambda: [(date(2026, 11, 4), Decimal("454.65"))])
+    assert br.sync_rates_cron("synthetic")["failed_sources"] == 1
+    assert len(cron) == 1
+
+
+def test_both_down_still_closes_with_what_is_stored_and_fails_loudly(cron, monkeypatch):
+    from backend.user_product import pending_conversion
+
+    def down(*_):
+        raise br.RateFeedError("HTTP 503")
+
+    called = []
+    monkeypatch.setattr(pending_conversion, "close_due_periods", lambda today: called.append(today) or {})
+    monkeypatch.setattr(br, "fetch_history", down)
+    monkeypatch.setattr(br, "fetch_today", down)
+    with pytest.raises(HTTPException) as failed:
+        br.sync_rates_cron("synthetic")
+    assert failed.value.status_code == 502 and called == [date(2026, 11, 4)] and cron == []
 
 
 RATES = {date(2026, 11, 2): Decimal("510"), date(2026, 11, 5): Decimal("515")}
@@ -133,7 +197,7 @@ def _result_check():
 
 def test_the_result_check_logs_only_a_status_a_date_and_counts(tmp_path):
     body = {"status": "OK", "latest_rate_date": "2026-11-04", "rates": 45, "closed_periods": 1, "converted": 3,
-            "waiting_for_rate": 0, "failed_workspaces": 0, "workspace_id": "SECRET-WS", "amount": 98765}
+            "waiting_for_rate": 0, "failed_workspaces": 0, "failed_sources": 0, "workspace_id": "SECRET-WS", "amount": 98765}
     (tmp_path / "body.json").write_text(json.dumps(body), encoding="utf-8")
     run = subprocess.run([sys.executable, "-c", _result_check()], cwd=tmp_path, capture_output=True, text=True)
     assert run.returncode == 0, run.stderr

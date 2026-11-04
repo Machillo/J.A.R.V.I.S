@@ -1,13 +1,12 @@
 name: Exchange rate daily sync
 
-# Once a day the backend reads the dollar's selling rate from the Banco Central and converts the
+# Once a day the backend reads the dollar's selling rate (public services, no token) and converts the
 # dollar expenses whose close has arrived: POST /integrations/exchange-rates/cron
 # (backend/integrations/bccr_rates.py). The run is late enough for the day's rate to be published.
 #
 # Needs (a scheduled run without them fails, so a missing setting is never a green no-op):
 #   - repository variable DINCR_BACKEND_URL
 #   - repository secret   DINCR_IBKR_CRON_SECRET (the same one as the IBKR sync), or DINCR_CRON_SECRET
-#   - backend environment BCCR_API_TOKEN
 # The secret travels only in the X-Jarvis-Cron-Secret header and is never printed. Only a status, a
 # date and counts are logged: no amounts, no rates of a person, no account.
 on:
@@ -51,14 +50,14 @@ jobs:
               python3 - <<'PY'
           import json
           data = json.load(open("body.json"))
-          keys = ("status", "latest_rate_date", "rates", "closed_periods", "converted", "waiting_for_rate", "failed_workspaces")
+          keys = ("status", "latest_rate_date", "rates", "failed_sources", "closed_periods", "converted", "waiting_for_rate", "failed_workspaces")
           print({key: data.get(key) for key in keys})
           if data.get("failed_workspaces"):
               raise SystemExit("::error::some workspaces could not be closed; see the backend logs (error class only).")
           PY
               ;;
             403|503) echo "::error::HTTP ${code}: the cron secret does not match the backend's (or neither is set there)."; exit 1 ;;
-            502) echo "::error::HTTP 502: the Banco Central gave no usable rates (token missing or expired, or the service is down)."; exit 1 ;;
+            502) echo "::error::HTTP 502: no source gave a usable rate (the public services are down or changed their answer)."; exit 1 ;;
             *) echo "::error::HTTP ${code}"; exit 1 ;;
           esac
           rm -f body.json

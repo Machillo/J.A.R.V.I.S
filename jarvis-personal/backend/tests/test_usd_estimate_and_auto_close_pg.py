@@ -84,14 +84,15 @@ def test_the_listing_works_before_the_migration(db, monkeypatch):  # noqa: F811
     assert item["id"] == expense and item["estimated_amount"] is None
 
 
-def test_the_app_is_told_the_close_is_automatic_only_when_it_can_run(rated, monkeypatch):
+def test_the_app_is_told_the_close_is_automatic_only_when_it_is_running(rated, monkeypatch):
     from backend.integrations import bccr_rates
     from backend.user_product import pending_conversion as pc
 
     _today(monkeypatch, date(2026, 11, 20))
-    monkeypatch.delenv(bccr_rates.TOKEN_ENV, raising=False)
-    assert pc.list_pending()["auto_close"] is False
-    monkeypatch.setenv(bccr_rates.TOKEN_ENV, "synthetic")
+    monkeypatch.setattr(bccr_rates, "costa_rica_today", lambda: date(2026, 11, 20))
+    _rates(rated, d2026_11_01=500)
+    assert pc.list_pending()["auto_close"] is False, "the newest rate is too old: nothing is running"
+    _rates(rated, d2026_11_19=510)
     assert pc.list_pending()["auto_close"] is True
     with rated.cursor() as cur:
         cur.execute("UPDATE accounts SET base_currency='USD' WHERE id=%s", (A["account"],))
