@@ -73,8 +73,10 @@ fun OwnerWealthScreen(model: AppModel, nav: Navigator) {
     }
     DetailScaffold(tx("Patrimonio", "Wealth"), nav::back) {
         ChoiceChips(listOf("investments" to tx("Inversiones", "Investments"), "businesses" to tx("Negocios", "Businesses")), tab, { tab = it })
-        if (tab == "investments") LoadContent(investments) { InvestmentsContent(it, syncing, syncError, sync) }
-        else LoadContent(businesses) { BusinessesContent(it, add = { addingBusiness = true }, record = { business -> recording = business }) }
+        if (tab == "investments") {
+            LoadContent(investments) { InvestmentsContent(it, syncing, syncError, sync) }
+            DividendPlanCard(model)
+        } else LoadContent(businesses) { BusinessesContent(it, add = { addingBusiness = true }, record = { business -> recording = business }) }
         DincrCard(Modifier.testTag("wealth.netWorth")) {
             NavRow(Icons.Rounded.AccountBalance, tx("Ver patrimonio neto", "See net worth"), tx("En Análisis financiero", "In Financial analysis")) {
                 nav.push("jarvis/analysis")

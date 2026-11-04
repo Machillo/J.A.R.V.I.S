@@ -378,6 +378,9 @@ class FakeBackend(
                 !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
                 method == "GET" && path == "/finance/investment-center" -> ok(wealth.investmentCenter())
                 method == "POST" && path == "/finance/investment-center/sync-ibkr" -> ok(wealth.syncIbkr())
+                method == "GET" && path == "/finance/investment-center/dividend-plan" -> ok(wealth.dividendPlan())
+                method == "PUT" && path == "/finance/investment-center/dividend-plan" ->
+                    wealth.saveDividendPlan(json.decodeFromJsonElement(DividendPlanUpdate.serializer(), body!!))?.let { ok(it) } ?: error(422, "Los porcentajes tienen que sumar 100.")
                 method == "GET" && path == "/finance/business-center" -> ok(wealth.businessCenter())
                 method == "POST" && path == "/finance/business-center/businesses" ->
                     wealth.createBusiness(text("name"), text("description"), money("ownership_pct"))?.let { ok(it) } ?: error(422, "Datos inválidos.")

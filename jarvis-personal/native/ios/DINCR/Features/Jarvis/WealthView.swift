@@ -36,6 +36,7 @@ struct WealthView: View {
                     InvestmentsContent(center: center, syncing: syncing, syncError: syncError, sync: { Task { await sync() } })
                 }
                 .id(reloadToken)
+                DividendPlanCard()
             case .businesses:
                 AsyncContent(fallback: tx("No pudimos cargar tus negocios.", "We couldn’t load your businesses."),
                              load: { try await model.service.businessCenter() }) { center, _ in

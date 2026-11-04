@@ -251,6 +251,9 @@ class DincrApi(private val client: ApiClient) {
     suspend fun investmentCenter(): InvestmentCenter = client.get("/finance/investment-center")
     /** Asks the server to refresh the snapshot from IBKR (an external call that can fail). */
     suspend fun syncIbkr(): IbkrSyncResult = client.send("POST", "/finance/investment-center/sync-ibkr")
+    /** A read: it only calculates, and never buys or moves anything. */
+    suspend fun dividendPlan(): DividendPlan = client.get("/finance/investment-center/dividend-plan")
+    suspend fun updateDividendPlan(update: DividendPlanUpdate): DividendPlan = client.send("PUT", "/finance/investment-center/dividend-plan", update)
     suspend fun businessCenter(): BusinessCenter = client.get("/finance/business-center")
     suspend fun createBusiness(request: BusinessCreateRequest): BusinessWriteResult =
         client.send("POST", "/finance/business-center/businesses", request)
