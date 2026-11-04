@@ -74,7 +74,8 @@ extension FixtureBackend {
                               "currency": "USD", "source": "ibkr_readonly", "sync_method": "flex", "snapshot_at": "2026-10-20T12:00:00+00:00"],
                 "flows": [Any](), "reserved_to_invest_crc": 100_000, "gross_pnl": 150, "net_pnl": 150, "return_pct": 11.11,
                 "positions": positions, "sync_status": "current", "snapshot_age_seconds": ownerWealth.snapshotAgeSeconds,
-                "read_only": true, "sync_method": "flex", "flex_configured": true, "included_in_net_worth": true]
+                "read_only": true, "sync_method": "flex", "flex_configured": true, "included_in_net_worth": true,
+                "net_worth_rate": ["rate": 500, "date": "2026-10-20"]]
     }
 
     /// Invented fixed figures: the calculation itself is the backend's (`finance/dividend_plan.py`),

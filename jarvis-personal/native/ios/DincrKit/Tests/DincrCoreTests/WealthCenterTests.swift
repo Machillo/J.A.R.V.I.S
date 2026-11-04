@@ -50,6 +50,14 @@ struct WealthCenterTests {
         let center = try decode(InvestmentCenter.self, #"{"portfolio":{"market_value":200,"contributed_capital":0},"net_pnl":0,"return_pct":0}"#)
         #expect(center.hasPortfolio && center.figures?.marketValue == 200)
         #expect(center.figures?.returnPct == nil)
+        // IBKR never sends it and the column defaults to 0: that is unknown, not "you put in $0".
+        #expect(center.figures?.contributedCapital == nil)
+    }
+
+    @Test func theRateTheNetWorthUsesIsReadWithItsDate() throws {
+        let center = try decode(InvestmentCenter.self, #"{"portfolio":{"market_value":200},"net_worth_rate":{"rate":500.5,"date":"2026-08-16"}}"#)
+        #expect(center.netWorthRate?.rate == Decimal(string: "500.5") && center.netWorthRate?.date == "2026-08-16")
+        #expect(try decode(InvestmentCenter.self, #"{"portfolio":{},"net_worth_rate":null}"#).netWorthRate == nil)
     }
 
     @Test func theBusinessCenterReadsTheBusinessesTheirMovementsAndTotals() throws {

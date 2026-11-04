@@ -103,7 +103,9 @@ private struct InvestmentsContent: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             if let figures = center.figures {
                 FigureRow(label: tx("Valor de mercado", "Market value"), amount: figures.marketValue, currency: figures.currency)
-                FigureRow(label: tx("Capital aportado", "Contributed capital"), amount: figures.contributedCapital, currency: figures.currency)
+                if let capital = figures.contributedCapital {
+                    FigureRow(label: tx("Capital aportado", "Contributed capital"), amount: capital, currency: figures.currency)
+                }
                 FigureRow(label: tx("Ganancia neta", "Net gain"), amount: figures.netPnl, currency: figures.currency)
                 if let returnPct = figures.returnPct {
                     InfoRow(label: tx("Rendimiento", "Return"), value: percentLabel(returnPct))
@@ -116,6 +118,12 @@ private struct InvestmentsContent: View {
             }
             if let caption = syncCaption {
                 Text(caption).font(DincrFont.caption).foregroundStyle(center.syncState == .stale ? DincrColor.warning : OwnerColor.textMuted)
+            }
+            if let rate = center.netWorthRate, center.figures?.currency == "USD" {
+                Text(tx("En tu patrimonio neto se convierte con ₡\(rate.rate) (\(Day.label(rate.date))), el último tipo de cambio guardado.",
+                        "In your net worth it’s converted at ₡\(rate.rate) (\(Day.label(rate.date))), the last saved exchange rate."))
+                    .font(DincrFont.caption).foregroundStyle(OwnerColor.textMuted)
+                    .accessibilityIdentifier("wealth.rate")
             }
             FigureRow(label: tx("Reservado para invertir", "Reserved to invest"), amount: center.reservedToInvestCrc, currency: "CRC")
             if center.flexConfigured {

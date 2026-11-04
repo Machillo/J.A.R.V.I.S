@@ -67,6 +67,14 @@ def _summary(workspace_id: str):
             """,
             (workspace_id,),
         ).fetchall()
+        rate = conn.execute(
+            """
+            SELECT exchange_rate, rate_date FROM exchange_rates
+            WHERE workspace_id=%s AND currency='USD'
+            ORDER BY rate_date DESC, id DESC LIMIT 1
+            """,
+            (workspace_id,),
+        ).fetchone()
         reserve = conn.execute(
             """
             SELECT COALESCE(SUM(
@@ -122,6 +130,9 @@ def _summary(workspace_id: str):
         "sync_method": sync_method,
         "flex_configured": flex_is_configured(),
         "included_in_net_worth": bool(s.get("included_in_net_worth", True)),
+        # The rate the next snapshot converts with (ibkr_readonly._persist_snapshot), shown with its
+        # date: the table only gets a rate when one is typed, so it can be months old.
+        "net_worth_rate": {"rate": float(rate["exchange_rate"]), "date": str(rate["rate_date"])} if rate else None,
     }
 
 

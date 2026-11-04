@@ -71,6 +71,7 @@ final class OwnerWealthUITests: XCTestCase {
         XCTAssertTrue(text("Valor de mercado", in: app).exists)
         XCTAssertTrue(text("Rendimiento", in: app).exists)
         XCTAssertTrue(text("Actualizado hace 5 h", in: app).exists)
+        XCTAssertTrue(text("el último tipo de cambio guardado", in: app).exists, "the rate is shown with its date")
         XCTAssertFalse(text("Todavía no hay datos de tu portafolio", in: app).exists)
         XCTAssertTrue(text("ETF de ejemplo", in: app).exists)
         XCTAssertTrue(text("Acción de ejemplo", in: app).exists)

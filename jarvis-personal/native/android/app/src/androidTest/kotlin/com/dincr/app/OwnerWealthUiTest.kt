@@ -120,6 +120,7 @@ class OwnerWealthUiTest {
         waitForText(tx("Valor de mercado", "Market value"))
         waitForText(tx("Rendimiento", "Return"))
         waitForText(tx("Actualizado hace 5 h", "Updated 5 h ago"))
+        waitForTag("wealth.rate")
         assertTrue("a known portfolio is not 'no data'", !present(tx("Todavía no hay datos de tu portafolio", "There’s no portfolio data yet")))
         waitForText("ETF de ejemplo")
         waitForText("Acción de ejemplo")

@@ -26,6 +26,7 @@ internal class FakeWealth(private val today: java.time.LocalDate, private val ne
             InvestmentCenter.Position("Acción de ejemplo", "STK", "USD", BigDecimal(5), BigDecimal(100), BigDecimal(500), BigDecimal(30)),
         ),
         syncStatus = "current", snapshotAgeSeconds = snapshotAgeSeconds, syncMethod = "flex", flexConfigured = true, includedInNetWorth = true,
+        netWorthRate = InvestmentCenter.NetWorthRate(BigDecimal(500), "2026-10-20"),
     )
 
     fun syncIbkr(): IbkrSyncResult {
