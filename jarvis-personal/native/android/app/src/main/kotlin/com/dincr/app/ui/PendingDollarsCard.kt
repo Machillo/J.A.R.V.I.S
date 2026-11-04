@@ -59,6 +59,15 @@ fun PendingDollarsCard(model: AppModel, onOpen: () -> Unit) {
                     Text(if (total.count == 1) tx("$amount · 1 gasto", "$amount · 1 expense") else tx("$amount · ${total.count} gastos", "$amount · ${total.count} expenses"),
                         style = MaterialTheme.typography.titleSmall.merge(TabularNums), color = Dincr.colors.text)
                 }
+                // By expense: one without a rate is named, and doesn't hide the estimate of the others.
+                pending.estimateOfAll.sum?.let { sum ->
+                    val colones = Dincr.money.format(sum)
+                    Text(tx("≈ $colones estimado", "≈ $colones estimated"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                }
+                if (pending.estimateOfAll.withoutEstimate > 0) {
+                    val count = pending.estimateOfAll.withoutEstimate
+                    Text(tx("$count sin tipo de cambio", "$count without a rate"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                }
             }
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Dincr.colors.textMuted)
         }

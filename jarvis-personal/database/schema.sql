@@ -1223,3 +1223,15 @@ CREATE TABLE IF NOT EXISTS net_worth_snapshots (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(workspace_id, snapshot_date)
 );
+
+-- Published daily rates, no user data (20261104120000, backend/integrations/bccr_rates.py).
+CREATE TABLE IF NOT EXISTS market_exchange_rates (
+    rate_date DATE NOT NULL,
+    currency TEXT NOT NULL,
+    rate_type TEXT NOT NULL,
+    rate NUMERIC(14, 6) NOT NULL CHECK (rate > 0),
+    source TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (rate_date, currency, rate_type)
+);

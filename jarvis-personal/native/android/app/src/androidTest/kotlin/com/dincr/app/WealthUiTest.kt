@@ -77,6 +77,9 @@ class WealthUiTest {
     @Test fun freeAndBasicSeeTheirDebtsAndCuentasLocked() {
         for (plan in listOf("free", "basic")) {
             launch(plan)
+            waitUntil("debts closed ($plan)") { tagged("wealth.debts.toggle") }
+            assertFalse("closed until asked for", tagged("wealth.debts.composition"))
+            clickTag("wealth.debts.toggle")
             waitUntil("debts ($plan)") { tagged("wealth.debts.composition") && present("Tarjeta de ejemplo") }
             // Patrimonio neto (WE-2) and Cuentas: locked to VIP. Proyecciones and Escenarios live in Plan, Conexiones de correo in Perfil (WE-1).
             assertEquals("$plan: locked rows", 2, count(fromVip))
@@ -91,6 +94,8 @@ class WealthUiTest {
 
     @Test fun debtsAreManagedInPlan() {
         launch()
+        clickTag("wealth.debts.toggle")
+        waitUntil("the manage link") { tagged("wealth.debts.manage") }
         clickTag("wealth.debts.manage")
         // Plan → Deudas' own summary (not in Patrimonio).
         waitUntil("Deudas") { present(tx("Cuotas del mes", "Monthly payments")) }
@@ -106,7 +111,7 @@ class WealthUiTest {
         waitUntil("the banks") { present("BAC") }
         assertEquals(wealth, selectedTab())
         back()
-        waitUntil("debts") { tagged("wealth.debts.composition") }
+        waitUntil("debts") { tagged("wealth.debts.toggle") }
     }
 
     @Test fun theOwnerOpensCuentasAndKeepsJarvis() {

@@ -62,6 +62,15 @@ class WealthCenterTest {
         assertTrue(center.hasPortfolio)
         same(200, center.figures?.marketValue)
         assertNull(center.figures?.returnPct)
+        // IBKR never sends it and the column defaults to 0: that is unknown, not "you put in $0".
+        assertNull(center.figures?.contributedCapital)
+    }
+
+    @Test fun theRateTheNetWorthUsesIsReadWithItsDate() {
+        val center = json.decodeFromString(InvestmentCenter.serializer(), """{"portfolio":{"market_value":200},"net_worth_rate":{"rate":500,"date":"2026-08-16"}}""")
+        same(500, center.netWorthRate?.rate)
+        assertEquals("2026-08-16", center.netWorthRate?.date)
+        assertNull(json.decodeFromString(InvestmentCenter.serializer(), """{"portfolio":{},"net_worth_rate":null}""").netWorthRate)
     }
 
     @Test fun theBusinessCenterReadsTheBusinessesTheirMovementsAndTotals() {
@@ -106,5 +115,37 @@ class WealthCenterTest {
     private fun <T> assertNotNullAnd(value: T?): T {
         assertNotNull(value)
         return value!!
+    }
+
+    @Test fun theDividendPlanKeepsUnknownFiguresUnknown() {
+        val plan = json.decodeFromString(DividendPlan.serializer(), """
+            {"config":{"stocks":[],"goal_monthly_usd":1000,"monthly_amount_usd":null,"withholding_pct":30},"held_symbols":["AAA"],
+             "gate":{"open":false,"blockers":[{"code":"salvavidas_unknown"}]},
+             "result":{"ready":false,"capital_needed_usd":null,"current_value_usd":null,"months_to_goal":null,"monthly_needed":[],"buy_this_month":[]}}
+        """)
+        assertFalse(plan.isConfigured)
+        assertEquals(listOf("salvavidas_unknown"), plan.gate.blockers.map { it.code })
+        assertNull(plan.result.currentValueUsd)
+        assertNull(plan.result.capitalNeededUsd)
+        assertNull(plan.result.monthsToGoal)
+    }
+
+    @Test fun aReadyDividendPlanReadsItsFigures() {
+        val plan = json.decodeFromString(DividendPlan.serializer(), """
+            {"config":{"stocks":[{"symbol":"AAA","share_pct":100,"yield_pct":4}],"goal_monthly_usd":1000,"monthly_amount_usd":200,"withholding_pct":30},"held_symbols":[],
+             "gate":{"open":true,"blockers":[]},
+             "result":{"ready":true,"net_yield_pct":2.8,"capital_needed_usd":1000,"current_value_usd":0,"missing_usd":1000,"months_to_goal":5,
+                       "monthly_needed":[{"years":10,"amount_usd":7}],"buy_this_month":[{"symbol":"AAA","amount_usd":200}]}}
+        """)
+        assertTrue(plan.isConfigured && plan.result.ready)
+        same(0, plan.result.currentValueUsd)
+        assertEquals(5, plan.result.monthsToGoal)
+        assertEquals(10, plan.result.monthlyNeeded.first().years)
+        same(200, plan.result.buyThisMonth.first().amountUsd)
+    }
+
+    @Test fun aDividendPlanSaveSendsEveryFieldSoANullClearsIt() {
+        val sent = Json { explicitNulls = true }.encodeToString(DividendPlanUpdate.serializer(), DividendPlanUpdate(listOf(DividendPlan.Stock("AAA", BigDecimal(100)))))
+        assertTrue(sent, sent.contains("\"monthly_amount_usd\":null") && sent.contains("\"goal_monthly_usd\":null") && sent.contains("\"yield_pct\":null"))
     }
 }

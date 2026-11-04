@@ -47,14 +47,34 @@ public enum SummaryVisuals {
     /// "¿A dónde se fue?": spending by category, then debt payments and what was saved, each only
     /// when the backend sent it above zero (an unknown amount is never drawn as zero).
     public static func outflows(_ summary: MonthlySummary, language: AppLanguage = .current) -> Composition {
-        var items = categoryItems(summary, language: language)
+        var named: [CompositionItem] = []
         if let debt = summary.debtPaid, debt > 0 {
-            items.append(CompositionItem(id: "out-debts", label: language.pick("Pagos de deudas", "Debt payments"), value: debt))
+            named.append(CompositionItem(id: "out-debts", label: language.pick("Pagos de deudas", "Debt payments"), value: debt))
         }
         if let saved = summary.saved?.total, saved > 0 {
-            items.append(CompositionItem(id: "out-saved", label: language.pick("Ahorro", "Savings"), value: saved))
+            named.append(CompositionItem(id: "out-saved", label: language.pick("Ahorro", "Savings"), value: saved))
         }
-        return Composition(items)
+        return Composition(groupingSmallest(categoryItems(summary, language: language), alwaysNamed: named, language: language))
+    }
+
+    /// The most parts the stacked bar shows, one color each (`VisualShade.barColors`).
+    static let barParts = 6
+
+    /// Past `barParts`, the largest categories keep their name and the rest become one "Otros",
+    /// last so it takes the bar's gray; debts and savings are never hidden in it. A category the
+    /// backend already calls "Otros" joins it, so the legend never shows two. An unknown or negative
+    /// amount is not summed: the parts stay as they are and `Composition` says why it can't draw them.
+    private static func groupingSmallest(_ categories: [CompositionItem], alwaysNamed: [CompositionItem],
+                                         language: AppLanguage) -> [CompositionItem] {
+        guard categories.count + alwaysNamed.count > barParts,
+              categories.allSatisfy({ ($0.value ?? -1) >= 0 }) else { return categories + alwaysNamed }
+        let isOthers = { (item: CompositionItem) in ["otros", "otro", "others", "other"].contains(item.label.lowercased()) }
+        let largestFirst = categories.filter { !isOthers($0) }.sorted { ($0.value ?? 0) > ($1.value ?? 0) }
+        let kept = largestFirst.prefix(barParts - 1 - alwaysNamed.count)
+        let rest = largestFirst.dropFirst(kept.count) + categories.filter(isOthers)
+        let others = CompositionItem(id: "out-others", label: language.pick("Otros", "Other"),
+                                     value: rest.reduce(Decimal(0)) { $0 + ($1.value ?? 0) }, parts: Array(rest))
+        return Array(kept) + alwaysNamed + [others]
     }
 
     public static func flowNotice(_ flow: Flow, language: AppLanguage = .current) -> String? {

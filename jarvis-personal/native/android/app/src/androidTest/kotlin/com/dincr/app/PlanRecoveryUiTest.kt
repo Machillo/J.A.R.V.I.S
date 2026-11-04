@@ -263,6 +263,7 @@ class PlanRecoveryUiTest {
         waitForText("Tarjeta de ejemplo")
         // Opened from Plan, the screen keeps Plan selected.
         compose.onNode(hasText(tx("Plan", "Plan")) and isSelected()).assertExists()
+        click("Tarjeta de ejemplo")
         waitForText(tx("Registrar pago", "Record payment"))
         waitForText(tx("Eliminar", "Delete"))
         assertTrue("editing stays Basic+ (PUT is gated strategy_basic)", !present(tx("Editar", "Edit")))
@@ -276,6 +277,7 @@ class PlanRecoveryUiTest {
         click(tx("Plan", "Plan"))
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
+        click("Tarjeta de ejemplo")
         click(tx("Editar", "Edit"))
         waitForText(tx("Editar deuda", "Edit debt"))
     }
@@ -565,6 +567,7 @@ class PlanRecoveryUiTest {
                 waitForTag("debts.strategy.date")
                 waitForText(tx("Solo con las cuotas", "Installments only"))
             }
+            click("Tarjeta de ejemplo") // closed until tapped
             waitForText(tx("Terminás de pagar", "Paid off by"))
             waitForText(tx("cuotas", "instalments"), substring = true)
         }

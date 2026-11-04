@@ -1,3 +1,5 @@
+import DincrCore
+import Observation
 import SwiftUI
 
 /// DINCR's scene for every account (historical name: it began as the Owner's identity). Plans don't
@@ -8,41 +10,105 @@ import SwiftUI
 ///
 /// The app's root sets `dincrOwnerAppearance`, and the shared modifiers and components read it.
 public enum OwnerColor {
+    /// The default style's values (equal to appearance.json's default, checked by the token generator).
+    private enum Base {
+        static let backgroundCenter = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
+        static let backgroundMiddle = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
+        static let backgroundEdge = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
+        static let surface = Color(light: 0xFFFFFF, dark: 0x1C1E3A)
+        static let surface2 = Color(light: 0xEFEFF4, dark: 0x2A2D52)
+        static let fieldBorder = Color(light: 0x86868B, dark: 0x8A8DB0)
+        static let border = Color(light: 0xD1D1D6, dark: 0x33365C)
+        static let accent = Color(light: 0x4A4FD9, dark: 0x8F95FF)
+        static let accentActive = Color(light: 0x3B3FB8, dark: 0xB0B4FF)
+        static let onAccent = Color(light: 0xFFFFFF, dark: 0x0B0C2A)
+        static let accentContainer = Color(light: 0xE8E9FC, dark: 0x24275C)
+        static let onAccentContainer = Color(light: 0x2A2D8F, dark: 0xD6D8FF)
+        static let text = Color(light: 0x1C1C1E, dark: 0xF5F5F7)
+        static let text2 = Color(light: 0x4F4F55, dark: 0xB4B6CC)
+        static let textMuted = Color(light: 0x636366, dark: 0xA3A5BD)
+        static let hero = Color(light: 0x2A2E6E, dark: 0x2A2E6E)
+        static let onHero2 = Color(light: 0xD9DBF5, dark: 0xD9DBF5)
+        static let heroControl = Color(light: 0x3D4290, dark: 0x3D4290)
+    }
+
+
     /// The screen background: one flat color (the stops stay so both apps read the same tokens).
-    public static let backgroundCenter = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
-    public static let backgroundMiddle = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
-    public static let backgroundEdge = Color(light: 0xF2F2F7, dark: 0x0A0B1E)
+    public static var backgroundCenter: Color { DincrColorStyleStore.shared.colors?.bg ?? Base.backgroundCenter }
+    public static var backgroundMiddle: Color { DincrColorStyleStore.shared.colors?.bg ?? Base.backgroundMiddle }
+    public static var backgroundEdge: Color { DincrColorStyleStore.shared.colors?.bg ?? Base.backgroundEdge }
     /// Cards and grouped rows.
-    public static let surface = Color(light: 0xFFFFFF, dark: 0x1C1E3A)
+    public static var surface: Color { DincrColorStyleStore.shared.colors?.surface ?? Base.surface }
     /// Nested regions inside a surface: icon wells, fields.
-    public static let surface2 = Color(light: 0xEFEFF4, dark: 0x2A2D52)
+    public static var surface2: Color { DincrColorStyleStore.shared.colors?.surface2 ?? Base.surface2 }
     /// Hairline around Owner surfaces (decorative only; never the only boundary of a control).
     /// The boundary of a field (3:1 on its surface).
-    public static let fieldBorder = Color(light: 0x86868B, dark: 0x8A8DB0)
-    public static let border = Color(light: 0xD1D1D6, dark: 0x33365C)
+    public static var fieldBorder: Color { DincrColorStyleStore.shared.colors?.fieldBorder ?? Base.fieldBorder }
+    public static var border: Color { DincrColorStyleStore.shared.colors?.border ?? Base.border }
     /// The Owner accent: actions, links, selection, JARVIS.
-    public static let accent = Color(light: 0x4A4FD9, dark: 0x8F95FF)
+    public static var accent: Color { DincrColorStyleStore.shared.colors?.accent ?? Base.accent }
     /// Pressed / active state of the accent.
-    public static let accentActive = Color(light: 0x3B3FB8, dark: 0xB0B4FF)
-    public static let onAccent = Color(light: 0xFFFFFF, dark: 0x0B0C2A)
+    public static var accentActive: Color { DincrColorStyleStore.shared.colors?.accentActive ?? Base.accentActive }
+    public static var onAccent: Color { DincrColorStyleStore.shared.colors?.onAccent ?? Base.onAccent }
     /// Tonal container of the accent: secondary buttons, quick actions, icon wells.
-    public static let accentContainer = Color(light: 0xE8E9FC, dark: 0x24275C)
-    public static let onAccentContainer = Color(light: 0x2A2D8F, dark: 0xD6D8FF)
+    public static var accentContainer: Color { DincrColorStyleStore.shared.colors?.accentContainer ?? Base.accentContainer }
+    public static var onAccentContainer: Color { DincrColorStyleStore.shared.colors?.onAccentContainer ?? Base.onAccentContainer }
     public static let positive = Color(light: 0x08734F, dark: 0x30D158)
-    public static let text = Color(light: 0x1C1C1E, dark: 0xF5F5F7)
-    public static let text2 = Color(light: 0x4F4F55, dark: 0xB4B6CC)
-    public static let textMuted = Color(light: 0x636366, dark: 0xA3A5BD)
+    public static var text: Color { DincrColorStyleStore.shared.colors?.text ?? Base.text }
+    public static var text2: Color { DincrColorStyleStore.shared.colors?.text2 ?? Base.text2 }
+    public static var textMuted: Color { DincrColorStyleStore.shared.colors?.textMuted ?? Base.textMuted }
     /// The solid top of the Owner's Hoy, with its text: one color in both schemes, white stays AA on it.
-    public static let hero = Color(light: 0x2A2E6E, dark: 0x2A2E6E)
+    public static var hero: Color { DincrColorStyleStore.shared.colors?.hero ?? Base.hero }
     public static let onHero = Color(light: 0xFFFFFF, dark: 0xFFFFFF)
-    public static let onHero2 = Color(light: 0xD9DBF5, dark: 0xD9DBF5)
+    public static var onHero2: Color { DincrColorStyleStore.shared.colors?.onHero2 ?? Base.onHero2 }
     /// A secondary button on the hero.
-    public static let heroControl = Color(light: 0x3D4290, dark: 0x3D4290)
+    public static var heroControl: Color { DincrColorStyleStore.shared.colors?.heroControl ?? Base.heroControl }
     /// Chart series beyond income/expense. Color always repeats a meaning that is also in text.
     public static let chartCyan = Color(light: 0x4A4FD9, dark: 0x8F95FF)
     public static let chartGreen = Color(light: 0x08734F, dark: 0x30D158)
     public static let chartOrange = Color(light: 0xB4501F, dark: 0xFF855C)
     public static let chartPurple = Color(light: 0x7A45C2, dark: 0xB078F2)
+}
+
+/// One of the color styles a person may pick (`color-styles.json`). `colors` nil is the default scene.
+public struct DincrColorStyle: Sendable, Identifiable {
+    public struct Colors: Sendable {
+        let bg, surface, surface2, border, fieldBorder, text, text2, textMuted: Color
+        let accent, accentActive, onAccent, accentContainer, onAccentContainer: Color
+        let hero, heroControl, onHero2: Color
+    }
+
+    public let id: String
+    let nameEs: String
+    let nameEn: String
+    public let swatches: [UInt32]
+    let colors: Colors?
+
+    public var name: String { AppLanguage.current.pick(nameEs, nameEn) }
+    public func swatch(_ index: Int) -> Color { Color(light: swatches[index], dark: swatches[index]) }
+}
+
+/// The picked style, kept on this device. Observable, and read by `OwnerColor` while a view draws, so
+/// picking one repaints every screen in place. An unknown stored id is the default.
+@Observable
+public final class DincrColorStyleStore: @unchecked Sendable {
+    public static let shared = DincrColorStyleStore()
+    private static let key = "dincr.colorStyle"
+
+    public private(set) var id: String
+
+    private init() {
+        let stored = UserDefaults.standard.string(forKey: Self.key) ?? DincrColorStyles.defaultID
+        id = DincrColorStyles.all.contains { $0.id == stored } ? stored : DincrColorStyles.defaultID
+    }
+
+    var colors: DincrColorStyle.Colors? { DincrColorStyles.all.first { $0.id == id }?.colors }
+
+    public func select(_ next: String) {
+        guard DincrColorStyles.all.contains(where: { $0.id == next }) else { return }
+        id = next
+        UserDefaults.standard.set(next, forKey: Self.key)
+    }
 }
 
 /// A role of the shared screens that follows the root's appearance: the Owner's scene below the Owner

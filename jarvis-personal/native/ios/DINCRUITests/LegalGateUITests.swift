@@ -16,6 +16,7 @@ final class LegalGateUITests: XCTestCase {
 
     private func payTheCard(_ app: XCUIApplication) {
         tap("home.debts", in: app)
+        tap("debt.row.31", in: app)
         tap("debt.pay.31", in: app)
         let field = app.textFields["amount.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))

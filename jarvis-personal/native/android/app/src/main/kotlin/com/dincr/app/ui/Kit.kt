@@ -229,7 +229,8 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun AmountLine(label: String, amount: BigDecimal?, emphasize: Boolean = false, sign: MoneyFormat.Sign = MoneyFormat.Sign.NONE, currency: String? = null) {
     Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text2, modifier = Modifier.weight(1f))
+        Text(label, style = if (emphasize) MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold) else MaterialTheme.typography.bodyLarge,
+            color = if (emphasize) Dincr.colors.text else Dincr.colors.text2, modifier = Modifier.weight(1f))
         MoneyText(amount, sign = sign, currency = currency,
             style = (if (emphasize) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge).copy(fontWeight = FontWeight.SemiBold))
     }
@@ -246,16 +247,17 @@ fun InfoLine(label: String, value: String) {
 
 /** A tappable row leading to another screen (≥ 56 dp). */
 @Composable
-fun NavRow(icon: ImageVector, title: String, subtitle: String? = null, badge: String? = null, onClick: () -> Unit) {
+fun NavRow(icon: ImageVector, title: String, subtitle: String? = null, badge: String? = null, prominent: Boolean = false, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = Dincr.look.rowMin).clickable(onClick = onClick).padding(vertical = DincrSpacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).background(Dincr.colors.tintContainer, RoundedCornerShape(Dincr.look.controlRadius)), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = Dincr.colors.tint, modifier = Modifier.size(22.dp))
+        // `prominent`: the screen's main entry, which reads first among rows that otherwise weigh the same.
+        Box(Modifier.size(40.dp).background(if (prominent) Dincr.colors.tint else Dincr.colors.tintContainer, RoundedCornerShape(Dincr.look.controlRadius)), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = if (prominent) Dincr.colors.onTint else Dincr.colors.tint, modifier = Modifier.size(22.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = DincrSpacing.s3)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), color = Dincr.colors.text)
+            Text(title, style = if (prominent) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), color = Dincr.colors.text)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted) }
         }
         badge?.let { PlanBadge(it) }
@@ -280,7 +282,7 @@ fun PlanBadge(text: String) {
 fun ProgressLine(ratio: Double, label: String) {
     val clamped = ratio.coerceIn(0.0, 1.0).toFloat()
     Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = label }) {
-        LinearProgressIndicator(progress = { clamped }, modifier = Modifier.fillMaxWidth().height(8.dp), color = Dincr.colors.tint, trackColor = Dincr.colors.surface2, drawStopIndicator = {})
+        LinearProgressIndicator(progress = { clamped }, modifier = Modifier.fillMaxWidth().height(8.dp), color = Dincr.colors.positive, trackColor = Dincr.colors.surface2, drawStopIndicator = {})
         Text(label, style = MaterialTheme.typography.bodySmall, color = Dincr.colors.text2, modifier = Modifier.padding(top = DincrSpacing.s1))
     }
 }
@@ -351,6 +353,9 @@ fun DateField(label: String, value: LocalDate?, onChange: (LocalDate?) -> Unit, 
 
 fun dateLabel(date: LocalDate): String =
     java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.getDefault()).format(date)
+
+/** A coming payment's day and how far it is: "12 nov 2026 · En 9 días". */
+fun dateWithDistance(iso: String?): String = listOfNotNull(dateLabel(iso), com.dincr.data.DaysLeft.label(iso)).joinToString(" · ")
 
 fun dateLabel(iso: String?): String = iso?.take(10)?.let { runCatching { dateLabel(LocalDate.parse(it)) }.getOrNull() } ?: "—"
 

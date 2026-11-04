@@ -43,6 +43,23 @@ final class OwnerWealthUITests: XCTestCase {
         tap("jarvis.section.wealth", in: app)
     }
 
+    /// Plan de dividendos: invites to set it up, prefills the stock held, shows the capital needed,
+    /// and with the gate closed it says why instead of saying what to buy.
+    func testTheDividendPlanSaysWhatTheGoalNeedsAndNeverSaysBuyWithTheGateClosed() {
+        let app = launchOwner()
+        openWealth(app)
+        XCTAssertTrue(text("Elegí tus acciones y tu meta", in: app).waitForExistence(timeout: 10))
+        tap("wealth.dividends.edit", in: app)
+        XCTAssertEqual(element("wealth.dividends.symbolA", in: app).waitForExistence(timeout: 5) ? element("wealth.dividends.symbolA", in: app).value as? String : nil, "ACME")
+        XCTAssertTrue(element("wealth.dividends.yieldNote", in: app).waitForExistence(timeout: 10), "its dividend comes by itself")
+        tap("wealth.dividends.save", in: app)
+        XCTAssertTrue(text("Capital que necesitás", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("En 10 años", in: app).exists)
+        XCTAssertTrue(text("Todavía no te toca comprar más", in: app).exists)
+        XCTAssertTrue(text("Tenés deuda con tasa anual de 10% o más.", in: app).exists)
+        XCTAssertFalse(text("Este mes comprá", in: app).exists)
+    }
+
     func testTheOwnerSeesThePortfolioAndItsPositions() {
         let app = launchOwner()
         openWealth(app)
@@ -51,6 +68,7 @@ final class OwnerWealthUITests: XCTestCase {
         XCTAssertTrue(text("Valor de mercado", in: app).exists)
         XCTAssertTrue(text("Rendimiento", in: app).exists)
         XCTAssertTrue(text("Actualizado hace 5 h", in: app).exists)
+        XCTAssertTrue(text("el último tipo de cambio guardado", in: app).exists, "the rate is shown with its date")
         XCTAssertFalse(text("Todavía no hay datos de tu portafolio", in: app).exists)
         XCTAssertTrue(text("ETF de ejemplo", in: app).exists)
         XCTAssertTrue(text("Acción de ejemplo", in: app).exists)

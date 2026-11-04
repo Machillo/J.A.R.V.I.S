@@ -75,6 +75,7 @@ final class PlanAccountsUITests: XCTestCase {
         open("plan.debts", in: free)
         XCTAssertTrue(free.navigationBars["Deudas"].waitForExistence(timeout: 10))
         XCTAssertTrue(element("debts.add", in: free).exists, "Free records its debts")
+        open("debt.row.31", in: free)
         XCTAssertTrue(free.buttons["debt.pay.31"].waitForExistence(timeout: 10), "Free records a payment")
         free.buttons["Más acciones"].firstMatch.tap()
         XCTAssertTrue(free.buttons["Eliminar"].waitForExistence(timeout: 5), "Free deletes")
@@ -83,6 +84,7 @@ final class PlanAccountsUITests: XCTestCase {
 
         let basic = launch(plan: "basic", tab: "plan")
         open("plan.debts", in: basic)
+        open("debt.row.31", in: basic)
         XCTAssertTrue(basic.buttons["debt.pay.31"].waitForExistence(timeout: 10))
         basic.buttons["Más acciones"].firstMatch.tap()
         XCTAssertTrue(basic.buttons["Editar"].waitForExistence(timeout: 5), "Basic edits")

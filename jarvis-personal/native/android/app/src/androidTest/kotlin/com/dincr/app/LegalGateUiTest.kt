@@ -42,6 +42,7 @@ class LegalGateUiTest {
     }
     private fun payTheCard() {
         click(tx("Deudas", "Debts"))
+        click("Tarjeta de ejemplo")
         click(tx("Registrar pago", "Record payment"))
         waitUntil("the amount dialog") { present(tx("Pendiente:", "Outstanding:")) }
         compose.onAllNodes(hasText(tx("Monto", "Amount"))).onFirst().performTextInput("10.000")

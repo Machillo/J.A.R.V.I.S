@@ -82,7 +82,11 @@ struct MainTabView: View {
             NavigationStack { PlanHubView() }
                 .tabItem { Label(tx("Plan", "Plan"), systemImage: "target") }
                 .tag(Tab.plan)
-            NavigationStack { WealthHubView() }
+            NavigationStack {
+                WealthHubView()
+                    // Patrimonio → Inversiones opens JARVIS's investments, which link to the net worth.
+                    .navigationDestination(for: ProfileRoute.self) { route in ProfileRouteDestination(route: route) }
+            }
                 .tabItem { Label(tx("Patrimonio", "Wealth"), systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(Tab.wealth)
             NavigationStack(path: $profilePath) {

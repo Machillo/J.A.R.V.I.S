@@ -99,6 +99,37 @@ class OwnerWealthUiTest {
         waitForTag("wealth.investments")
     }
 
+    /** Plan de dividendos: prefills the stock held, shows the capital needed, and with the gate closed says why instead of what to buy. */
+    @Test fun theDividendPlanSaysWhatTheGoalNeedsAndNeverSaysBuyWithTheGateClosed() {
+        launchOwner()
+        openWealth()
+        tapTag("wealth.dividends.edit")
+        // The stock held is prefilled and its dividend comes by itself.
+        waitForTag("wealth.dividends.yieldNote")
+        tapTag("wealth.dividends.save")
+        waitForText(tx("Capital que necesitás", "Capital you need"))
+        waitForText(tx("Todavía no te toca comprar más", "It’s not time to buy more yet"))
+        waitForText(tx("Tenés deuda con tasa anual de 10% o más.", "You have debt at 10% a year or more."))
+        assertTrue("never says buy with the gate closed", !present(tx("Este mes comprá", "This month, buy")))
+    }
+
+    /** IBKR connected: Patrimonio says what the investments are worth and opening it shows what they hold. */
+    @Test fun theOwnerSeesHisInvestmentsInPatrimonioAndOpensThem() {
+        launchOwner()
+        click(tx("Patrimonio", "Wealth"))
+        waitForTag("wealth.investments")
+        waitForText("ETF de ejemplo", substring = true)
+        tapTag("wealth.investments")
+        waitForTag("wealth.positions")
+
+    /** The salary the app already knows is in Movimientos, and it counts in Ingresos. */
+    @Test fun theOwnerSeesHisSalaryInMovements() {
+        launchOwner()
+        click(tx("Movimientos", "Transactions"))
+        waitForText(tx("Salario del mes (estimado)", "Salario del mes (estimado)"))
+        waitForTag("movements.totals.income")
+    }
+
     @Test fun theOwnerSeesThePortfolioAndItsPositions() {
         launchOwner()
         openWealth()
@@ -106,6 +137,7 @@ class OwnerWealthUiTest {
         waitForText(tx("Valor de mercado", "Market value"))
         waitForText(tx("Rendimiento", "Return"))
         waitForText(tx("Actualizado hace 5 h", "Updated 5 h ago"))
+        waitForTag("wealth.rate")
         assertTrue("a known portfolio is not 'no data'", !present(tx("Todavía no hay datos de tu portafolio", "There’s no portfolio data yet")))
         waitForText("ETF de ejemplo")
         waitForText("Acción de ejemplo")

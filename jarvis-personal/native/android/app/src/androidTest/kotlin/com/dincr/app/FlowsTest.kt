@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -169,6 +170,9 @@ class FlowsTest {
         compose.onNodeWithTag("editor.rate").performTextInput("507,5")
         waitForText(tx("Se registra como ₡5.075", "Recorded as ₡5.075"), substring = true)
         compose.onNodeWithTag("editor.save").performScrollTo().performClick()
+        // A conversion is read twice before saving.
+        waitForTag("editor.review.confirm")
+        compose.onNodeWithTag("editor.review.confirm").performClick()
         waitForText("Libro en línea")
         waitForText(tx("TC 507,5", "Rate 507,5"), substring = true)
     }
@@ -265,6 +269,7 @@ class FlowsTest {
         // Debts live in Hoy.
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
+        click("Tarjeta de ejemplo")
         click(tx("Registrar pago", "Record payment"))
         waitForText(tx("Pendiente:", "Outstanding:"), substring = true)
         compose.onAllNodes(hasText(tx("Monto", "Amount"))).onFirst().performTextInput("10.000")
@@ -388,5 +393,42 @@ class FlowsTest {
         waitForText(tx("Sabé dónde estás", "Know where you stand"))
         compose.onNodeWithTag("welcome.skip", useUnmergedTree = true).performClick()
         waitForText(tx("¿Cómo querés que te llamemos?", "What should we call you?"))
+    }
+
+    @Test fun aLargeAmountIsReviewedBeforeSaving() {
+        launch()
+        openMovements()
+        compose.onNodeWithTag("movements.add").performClick()
+        waitForTag("editor.amount")
+        compose.onNodeWithTag("editor.amount").performTextInput("600000")
+        compose.onNodeWithTag("editor.description").performTextInput("Compra grande")
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
+        waitForTag("editor.review.confirm")
+        compose.onNodeWithTag("editor.review.edit").performClick()
+        waitForTag("editor.save")
+        compose.onNodeWithTag("editor.description").assert(hasText("Compra grande"))
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
+        waitForTag("editor.review.confirm")
+        compose.onNodeWithTag("editor.review.confirm").performClick()
+        waitForText("Compra grande")
+    }
+
+    @Test fun aColorStyleIsPickedAndStaysAfterRelaunching() {
+        val first = launch()
+        tab(tx("Perfil", "Profile"))
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
+        click(tx("Estilo de colores", "Color style"))
+        waitForTag("colorStyle.rosa")
+        compose.onNodeWithTag("colorStyle.rosa").performScrollTo().performClick()
+        compose.onNodeWithTag("colorStyle.rosa").assertIsSelected()
+        first.close()
+        launch()
+        tab(tx("Perfil", "Profile"))
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
+        click(tx("Estilo de colores", "Color style"))
+        waitForTag("colorStyle.rosa")
+        compose.onNodeWithTag("colorStyle.rosa").assertIsSelected()
+        // Back to the default, so other tests on this device start from it.
+        compose.onNodeWithTag("colorStyle.indigo").performScrollTo().performClick()
     }
 }

@@ -126,7 +126,7 @@ fun MonthlySummaryScreen(model: AppModel, nav: Navigator) {
             }
             Box(Modifier.testTag("summary.categories")) {
                 Section(tx("¿A dónde se fue?", "Where did it go?")) {
-                    CompositionDonut(tx("Gastos, deudas y ahorro", "Spending, debts and savings"), SummaryVisuals.outflows(s), showsTotal = false)
+                    CompositionDonut(tx("Gastos, deudas y ahorro", "Spending, debts and savings"), SummaryVisuals.outflows(s), showsTotal = false, asBar = true)
                 }
             }
         }
@@ -240,7 +240,7 @@ fun CalendarScreen(model: AppModel, nav: Navigator) {
             }
             if (c.events.isEmpty()) EmptyState(Icons.Rounded.CalendarMonth, tx("Nada programado", "Nothing scheduled"), tx("Tus pagos recurrentes, cuotas y metas aparecen acá.", "Your recurring payments, instalments and goals appear here."))
             c.events.groupBy { it.date.orEmpty() }.toSortedMap().forEach { (date, events) ->
-                SectionTitle(dateLabel(date))
+                SectionTitle(dateWithDistance(date))
                 DincrCard {
                     Column {
                         events.forEach { e -> AmountLine("${eventKind(e.kind)} · ${e.name.orEmpty()}", e.amount?.takeIf { it.signum() > 0 }, sign = if (e.kind == "income") com.dincr.data.MoneyFormat.Sign.INCOME else com.dincr.data.MoneyFormat.Sign.NONE) }

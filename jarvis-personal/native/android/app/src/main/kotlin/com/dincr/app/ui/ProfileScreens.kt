@@ -98,6 +98,9 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
             }
         }
         // APP-1: the personal appearance is an Owner-only experiment (the server refuses everyone else).
+        DincrCard(Modifier.testTag("profile.colorStyle")) {
+            NavRow(Icons.Rounded.Palette, tx("Estilo de colores", "Color style"), tx("Elegí los colores de tu app", "Pick your app’s colors")) { nav.open("colorStyle") }
+        }
         if (AppearancePolicy.isPersonalizable(profile)) DincrCard(Modifier.testTag("profile.appearance")) {
             NavRow(Icons.Rounded.Palette, tx("Personalización", "Personalization"), tx("Tema, colores, texto y densidad", "Theme, colors, text and density")) { nav.open("appearance") }
         }

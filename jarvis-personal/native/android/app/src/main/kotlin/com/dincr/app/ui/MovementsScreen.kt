@@ -71,6 +71,7 @@ import com.dincr.data.MovementTotals
 import com.dincr.data.SearchText
 import com.dincr.data.Movement
 import com.dincr.data.PendingConversion
+import com.dincr.data.PendingEstimate
 import kotlinx.coroutines.CancellationException
 import com.dincr.data.MovementKind
 import com.dincr.design.Dincr
@@ -90,7 +91,7 @@ enum class MovementFilter { ALL, INCOME, EXPENSE, DEBT }
 
 /** What the rows on screen add up to, on one line so the list stays on screen: both sides and the result, or the one the filter asks for. */
 @Composable
-private fun MovementTotalsRow(totals: MovementTotals, filter: MovementFilter, waiting: Boolean) {
+private fun MovementTotalsRow(totals: MovementTotals, filter: MovementFilter, estimate: PendingEstimate) {
     val income = filter == MovementFilter.INCOME
     val all = filter == MovementFilter.ALL
     Column(Modifier.fillMaxWidth().testTag("movements.totals"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
@@ -101,7 +102,16 @@ private fun MovementTotalsRow(totals: MovementTotals, filter: MovementFilter, wa
             if (!income) totals.debtPaid?.let { TotalFact(tx("A deudas", "To debts"), it, "debtPaid", MoneyFormat.Sign.EXPENSE) }
             if (all) totals.result?.let { TotalFact(tx("Resultado", "Result"), it, "result", MoneyFormat.Sign.NONE) }
         }
-        if (!income && waiting) Caption(tx("Sin contar los gastos en dólares por convertir.", "Not counting the dollar expenses waiting to convert."))
+        estimate.sum?.let { sum ->
+            val amount = Dincr.money.format(sum)
+            Text(tx("Incluye ≈ $amount estimado de gastos en dólares. El monto final sale con el dólar del corte.",
+                "Includes ≈ $amount estimated from dollar expenses. The final amount uses the dollar rate at the cut."),
+                style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted, modifier = Modifier.testTag("movements.totals.estimate"))
+        }
+        if (estimate.withoutEstimate > 0) {
+            Text(tx("Sin contar ${estimate.withoutEstimate} en dólares, todavía sin tipo de cambio.", "Not counting ${estimate.withoutEstimate} in dollars, still without a rate."),
+                style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted, modifier = Modifier.testTag("movements.totals.noEstimate"))
+        }
     }
 }
 
@@ -210,9 +220,11 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                             }
                             kindMatches && SearchText.matches(query, listOf(it.description, it.category))
                         }
-                        if (visible.isNotEmpty()) item {
+                        // The dollars waiting for their close count in Gastos as an estimate, and the row says so.
+                        val estimate = if (filter == MovementFilter.ALL || filter == MovementFilter.EXPENSE) pending.estimate(month, query) else PendingEstimate(null, 0)
+                        if (visible.isNotEmpty() || estimate.sum != null) item {
                             Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s2)) {
-                                MovementTotalsRow(MovementTotals.of(visible), filter, pending.items.isNotEmpty())
+                                MovementTotalsRow(MovementTotals.of(visible).addingEstimate(estimate.sum), filter, estimate)
                             }
                         }
                         if (visible.isEmpty()) item {
@@ -235,7 +247,7 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                 else pending.periods.map { period -> period to waiting.filter { it.periodKey == period.key } }.filter { it.second.isNotEmpty() }
                             groups.forEach { (period, items) ->
                                 item(key = "pending-header-${period?.key ?: "all"}") {
-                                    PendingHeader(period, period?.totals ?: pending.totals) { closing = it }
+                                    PendingHeader(period, period?.totals ?: pending.totals, pending.autoClose) { closing = it }
                                 }
                                 items(items, key = { "pending-${it.movementId}" }) { item ->
                                     val movement = item.movement
@@ -243,7 +255,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                     val delete = CustomAccessibilityAction(tx("Eliminar", "Delete")) { pendingDelete = movement; true }
                                     MoneyRow(
                                         title = item.description.takeIf { it.isNotBlank() } ?: item.category ?: tx("Gasto", "Expense"),
-                                        subtitle = listOfNotNull(item.category, dayLabel(item.entryDate)).joinToString(" · "),
+                                        subtitle = listOfNotNull(item.category, dayLabel(item.entryDate),
+                                            item.estimatedAmount?.let { "≈ ${Dincr.money.format(it)}" }).joinToString(" · "),
                                         amount = item.originalAmount, kind = MovementKind.EXPENSE, icon = iconFor(movement), readOnly = false,
                                         currency = item.originalCurrency,
                                         modifier = Modifier.widthIn(max = 600.dp).testTag("movements.pending.${item.id}")

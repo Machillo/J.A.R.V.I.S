@@ -33,6 +33,15 @@ struct PendingDollarsCard: View {
                 ForEach(pending.totals) { total in
                     Text(summary(total)).font(DincrFont.bodySmall.weight(.semibold).monospacedDigit()).foregroundStyle(.dincrText)
                 }
+                // By expense: one without a rate is named, and doesn't hide the estimate of the others.
+                if let sum = pending.estimateOfAll.sum {
+                    Text(tx("≈ \(model.moneyFormat.string(sum)) estimado", "≈ \(model.moneyFormat.string(sum)) estimated"))
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                }
+                if pending.estimateOfAll.withoutEstimate > 0 {
+                    Text(tx("\(pending.estimateOfAll.withoutEstimate) sin tipo de cambio", "\(pending.estimateOfAll.withoutEstimate) without a rate"))
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                }
             }
             Spacer(minLength: 0)
             if openMovements != nil { Image(systemName: "chevron.right").foregroundStyle(.dincrTextMuted).accessibilityHidden(true) }

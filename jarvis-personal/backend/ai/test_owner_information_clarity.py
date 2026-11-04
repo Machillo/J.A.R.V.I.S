@@ -46,6 +46,7 @@ def owner_strategy(monkeypatch):
     monkeypatch.setattr(sd, "_fetch_distributable_cash", lambda *_a: 0.0)
     monkeypatch.setattr(sd, "_fetch_active_financial_goals", lambda *_a: [])
     monkeypatch.setattr(sd, "_fetch_investment_portfolio", lambda *_a, **_k: {})
+    monkeypatch.setattr(sd, "_owner_usual_month", lambda *_a: None)
     return cycle
 
 

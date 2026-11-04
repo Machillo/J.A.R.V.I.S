@@ -20,6 +20,7 @@ SECRET_PROTECTED = {
     "/financial-history/cron",
     "/deployment-monitor/webhook/github", "/deployment-monitor/webhook/vercel", "/deployment-monitor/webhook/render",
     "/integrations/ibkr/snapshot", "/integrations/ibkr/flex/cron", "/internal/owner-bridge/verify",
+    "/integrations/exchange-rates/cron",
     # Store purchases: Apple's JWS signature, Google's OIDC token, the store cron secret.
     "/product-ops/billing/store/apple/notifications", "/product-ops/billing/store/google/notifications",
     "/product-ops/billing/store/cron",

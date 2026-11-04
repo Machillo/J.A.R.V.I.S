@@ -48,6 +48,7 @@ public struct MoneyRow: View {
     let isReadOnly: Bool
     let currency: String?
     @Environment(\.dincrOwnerAppearance) private var owner
+    @Environment(\.dynamicTypeSize) private var textSize
 
     public init(title: String, subtitle: String, amount: Decimal, kind: Movement.Kind, symbol: String, isReadOnly: Bool = false, currency: String? = nil) {
         self.title = title; self.subtitle = subtitle; self.amount = amount; self.kind = kind
@@ -82,13 +83,18 @@ public struct MoneyRow: View {
                 }
                 .font(DincrFont.caption)
                 .foregroundStyle(owner ? OwnerColor.textMuted : OwnerColor.textMuted)
+                // Under the name at a large text size: beside it, the amount would split the name's words.
+                if textSize.isAccessibilitySize { rowAmount }
             }
             Spacer(minLength: DincrSpacing.s2)
-            MoneyText(amount, sign: kind == .income ? .income : .expense, currency: currency)
-                .layoutPriority(1)
+            if !textSize.isAccessibilitySize { rowAmount.layoutPriority(1) }
         }
         .padding(.vertical, DincrSpacing.s2)
         .frame(minHeight: 56)
         .accessibilityElement(children: .combine)
+    }
+
+    private var rowAmount: some View {
+        MoneyText(amount, sign: kind == .income ? .income : .expense, currency: currency)
     }
 }

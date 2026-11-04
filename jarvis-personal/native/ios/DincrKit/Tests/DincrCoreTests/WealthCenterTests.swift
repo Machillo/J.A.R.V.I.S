@@ -50,6 +50,14 @@ struct WealthCenterTests {
         let center = try decode(InvestmentCenter.self, #"{"portfolio":{"market_value":200,"contributed_capital":0},"net_pnl":0,"return_pct":0}"#)
         #expect(center.hasPortfolio && center.figures?.marketValue == 200)
         #expect(center.figures?.returnPct == nil)
+        // IBKR never sends it and the column defaults to 0: that is unknown, not "you put in $0".
+        #expect(center.figures?.contributedCapital == nil)
+    }
+
+    @Test func theRateTheNetWorthUsesIsReadWithItsDate() throws {
+        let center = try decode(InvestmentCenter.self, #"{"portfolio":{"market_value":200},"net_worth_rate":{"rate":500.5,"date":"2026-08-16"}}"#)
+        #expect(center.netWorthRate?.rate == Decimal(string: "500.5") && center.netWorthRate?.date == "2026-08-16")
+        #expect(try decode(InvestmentCenter.self, #"{"portfolio":{},"net_worth_rate":null}"#).netWorthRate == nil)
     }
 
     @Test func theBusinessCenterReadsTheBusinessesTheirMovementsAndTotals() throws {
@@ -82,5 +90,52 @@ struct WealthCenterTests {
 
     @Test func wealthIsAnAvailableJarvisSection() {
         #expect(Jarvis.Section.wealth.isAvailable)
+    }
+}
+
+/// Plan de dividendos as the app reads and sends it. Synthetic data only.
+struct DividendPlanTests {
+    private func plan(_ text: String) throws -> DividendPlan {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(DividendPlan.self, from: Data(text.utf8))
+    }
+
+    @Test func unknownFiguresStayUnknown() throws {
+        let read = try plan("""
+        {"config":{"stocks":[],"goal_monthly_usd":1000,"monthly_amount_usd":null,"withholding_pct":30},"held_symbols":["AAA"],
+         "gate":{"open":false,"blockers":[{"code":"salvavidas_unknown"}]},
+         "result":{"ready":false,"capital_needed_usd":null,"current_value_usd":null,"missing_usd":null,"net_monthly_dividend_now_usd":null,
+                   "months_to_goal":null,"monthly_needed":[],"buy_this_month":[]}}
+        """)
+        #expect(!read.isConfigured && read.heldSymbols == ["AAA"] && read.gate.blockers.map(\.code) == ["salvavidas_unknown"])
+        #expect(read.result.currentValueUsd == nil && read.result.capitalNeededUsd == nil && read.result.monthsToGoal == nil)
+    }
+
+    @Test func aReadyPlanReadsItsFigures() throws {
+        let read = try plan("""
+        {"config":{"stocks":[{"symbol":"AAA","share_pct":100,"yield_pct":4}],"goal_monthly_usd":1000,"monthly_amount_usd":200,"withholding_pct":30},"held_symbols":[],
+         "gate":{"open":true,"blockers":[]},
+         "result":{"ready":true,"net_yield_pct":2.8,"capital_needed_usd":1000,"current_value_usd":0,"missing_usd":1000,"net_monthly_dividend_now_usd":0,
+                   "months_to_goal":5,"monthly_needed":[{"years":10,"amount_usd":7}],"buy_this_month":[{"symbol":"AAA","amount_usd":200}]}}
+        """)
+        #expect(read.isConfigured && read.result.ready && read.result.currentValueUsd == 0 && read.result.monthsToGoal == 5)
+        #expect(read.result.monthlyNeeded.first?.years == 10 && read.result.buyThisMonth.first?.amountUsd == 200)
+    }
+
+    @Test func aSaveSendsEveryFieldSoANullClearsIt() throws {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let body = try JSONSerialization.jsonObject(with: encoder.encode(DividendPlanUpdate(
+            stocks: [.init(symbol: "AAA", sharePct: 100, yieldPct: nil)], goalMonthlyUsd: nil, monthlyAmountUsd: nil, withholdingPct: nil))) as? [String: Any]
+        #expect(body?["monthly_amount_usd"] is NSNull && body?["goal_monthly_usd"] is NSNull)
+        #expect((body?["stocks"] as? [[String: Any]])?.first?["yield_pct"] is NSNull)
+    }
+
+    @Test func theYieldFoundIsRead() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let found = try decoder.decode(DividendYield.self, from: Data(#"{"symbol":"AAA","yield_pct":2.92,"annual_dividend_usd":1.055,"price_usd":36.1,"payments":4}"#.utf8))
+        #expect(found.symbol == "AAA" && found.yieldPct == Decimal(string: "2.92"))
     }
 }

@@ -74,9 +74,16 @@ public struct InvestmentCenter: Decodable, Sendable, Equatable {
     /// Whether the server can refresh the snapshot from IBKR (Flex credentials configured).
     public let flexConfigured: Bool
     public let includedInNetWorth: Bool?
+    /// The dollar rate the net worth converts this portfolio with, and its date (nil: none saved).
+    public let netWorthRate: NetWorthRate?
+
+    public struct NetWorthRate: Decodable, Sendable, Equatable {
+        public let rate: Decimal
+        public let date: String?
+    }
 
     enum CodingKeys: String, CodingKey {
-        case portfolio, reservedToInvestCrc, grossPnl, netPnl, returnPct, positions, syncStatus, snapshotAgeSeconds, syncMethod, flexConfigured, includedInNetWorth
+        case portfolio, reservedToInvestCrc, grossPnl, netPnl, returnPct, positions, syncStatus, snapshotAgeSeconds, syncMethod, flexConfigured, includedInNetWorth, netWorthRate
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -89,6 +96,7 @@ public struct InvestmentCenter: Decodable, Sendable, Equatable {
         syncMethod = c.lenient(String.self, .syncMethod)
         flexConfigured = c.lenient(Bool.self, .flexConfigured) ?? false
         includedInNetWorth = c.lenient(Bool.self, .includedInNetWorth)
+        netWorthRate = c.lenient(NetWorthRate.self, .netWorthRate)
     }
 
     /// Whether there is a portfolio snapshot at all. Without one the backend still answers
@@ -98,9 +106,11 @@ public struct InvestmentCenter: Decodable, Sendable, Equatable {
     /// The portfolio figures, or nil when there is no snapshot (never ₡0 / 0 %).
     public var figures: Figures? {
         guard hasPortfolio, let portfolio, let market = portfolio.marketValue else { return nil }
-        return Figures(marketValue: market, contributedCapital: portfolio.contributedCapital, netPnl: netPnl,
-                       // No contributed capital: the backend's 0 % return is unknown, not a result.
-                       returnPct: (portfolio.contributedCapital ?? 0) > 0 ? returnPct : nil, currency: portfolio.currency)
+        // No contributed capital (IBKR never sends it, the column defaults to 0): that amount and the
+        // backend's 0 % return are unknown, not a result.
+        let capital = portfolio.contributedCapital.flatMap { $0 > 0 ? $0 : nil }
+        return Figures(marketValue: market, contributedCapital: capital, netPnl: netPnl,
+                       returnPct: capital != nil ? returnPct : nil, currency: portfolio.currency)
     }
 
     public var syncState: SyncState {

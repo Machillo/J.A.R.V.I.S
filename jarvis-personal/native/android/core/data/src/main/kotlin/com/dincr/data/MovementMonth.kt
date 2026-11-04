@@ -24,6 +24,10 @@ data class MovementTotals(val income: BigDecimal?, val expenses: BigDecimal?, va
     /** Income minus expenses and debt payments; null while either side is unknown. */
     val result: BigDecimal? get() = if (income == null || expenses == null) null else income - expenses - (debtPaid ?: BigDecimal.ZERO)
 
+    /** With the estimate of the waiting dollars in the expenses. Nothing to add leaves them as they are. */
+    fun addingEstimate(estimate: BigDecimal?): MovementTotals =
+        if (estimate == null) this else copy(expenses = (expenses ?: BigDecimal.ZERO) + estimate)
+
     companion object {
         fun of(rows: List<Movement>): MovementTotals {
             var income: BigDecimal? = null

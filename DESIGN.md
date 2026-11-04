@@ -301,6 +301,10 @@ alone.
 dataviz six-checks validator in both modes (lightness band, chroma floor, CVD ΔE ≥ 13.7 deutan,
 normal-vision ΔE ≥ 19, ≥ 3:1 on surface). Single-series magnitude charts use `chart-expense` alone.
 
+"Where did it go?" (Análisis) is the one stacked bar with one color per part, by the Owner's decision of
+2026-11-03: a month has many categories, and the legend still names each with its amount and share, so color
+is never the only cue. Every other composition stays one hue.
+
 **Visualize information; do not invent information.** A chart draws values the caller already
 has; it never computes, approximates or fills them in. Unknown stays "sin dato" (never 0), a period
 without data is a gap (never 0 and never interpolated), a share exists only when the whole is known
@@ -465,6 +469,19 @@ category); trailing amount in tabular `body` weight 600 with sign (`+` in `posit
 `text`). Read-only rows show a lock caption, never a disabled look. Swipe actions (edit, delete)
 are shortcuts only: the same actions are always reachable from the row's detail screen or context
 menu, so no action is swipe-only.
+
+## Color styles
+
+Perfil → Estilo de colores lets every plan pick one of the styles in `design-tokens/color-styles.json`. It
+replaces neutrals, accent and hero in both schemes, applies at once and stays on the device. Status and chart
+colors keep their meaning. A palette's raw color may be adjusted so text keeps its contrast (the generator
+enforces the same rules as an appearance).
+
+## Progress
+
+Progress bars and rings are green (`positive`) in every plan, so the accent isn't everywhere; going over
+a budget stays red. A debt in the list shows only its name and bar; tapped, it opens with the ring and
+everything else about it.
 
 ## Welcome story
 

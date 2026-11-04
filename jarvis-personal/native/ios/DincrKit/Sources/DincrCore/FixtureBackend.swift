@@ -330,7 +330,13 @@ public actor FixtureBackend: HTTPTransport {
         case ("GET", "/user-product/free/monthly-summary"): return ok(monthlySummary(query["period"] ?? String(day(0).prefix(7))))
         case ("GET", "/user-product/free/movements"):
             // Expenses waiting for the close have no colones amount: listed apart, like the backend.
-            return ok(movements.filter { !isPending($0) }.sorted(by: Self.listOrder))
+            let listed = movements.filter { !isPending($0) }
+            // The Owner's salary the app already knows (owner_ledger.salary_estimate_rows): invented figure.
+            let salary: [[String: Any]] = profile["role"] as? String == "owner" ? [[
+                "movement_id": "salary_estimate:\(day(0).prefix(7))", "origin": "salary_estimate", "transaction_date": "\(day(0).prefix(7))-01",
+                "description": "Salario del mes (estimado)", "amount": 400_000, "transaction_type": "income", "category": "Salario",
+                "editable": false, "counts_in": "income"]] : []
+            return ok((listed + salary).sorted(by: Self.listOrder))
         case ("GET", "/user-product/finance/expenses/paid-with-options"): return ok(paidWithOptions())
         case ("GET", "/user-product/finance/expenses/pending-conversion"): return ok(pendingConversion())
         case ("POST", "/user-product/finance/expenses/pending-conversion/close"): return closePending(body)
