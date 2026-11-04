@@ -113,6 +113,14 @@ class OwnerWealthUiTest {
         assertTrue("never says buy with the gate closed", !present(tx("Este mes comprá", "This month, buy")))
     }
 
+    /** The salary the app already knows is in Movimientos, and it counts in Ingresos. */
+    @Test fun theOwnerSeesHisSalaryInMovements() {
+        launchOwner()
+        click(tx("Movimientos", "Transactions"))
+        waitForText(tx("Salario del mes (estimado)", "Salario del mes (estimado)"))
+        waitForTag("movements.totals.income")
+    }
+
     @Test fun theOwnerSeesThePortfolioAndItsPositions() {
         launchOwner()
         openWealth()

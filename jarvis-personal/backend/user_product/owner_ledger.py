@@ -334,6 +334,39 @@ def owner_salary(conn, workspace_id: str, start: date, end: date, tables: set[st
     return result
 
 
+def salary_estimate_rows(conn, workspace_id: str, rows: list[dict]) -> list[dict]:
+    """Movimientos' rows for the salary the app knows but no deposit shows yet: the month in course, and
+    a closed month without a deposit. What the salary rule counts (base and extra hours, net) minus the
+    deposits already listed, so the month's income adds up to the same in every screen; the extra hours
+    stay listed apart and count as accrued, not as income. Read-only rows: nothing is stored and they
+    can't be edited. SELECT only."""
+    tables = _existing_tables(conn)
+    current = costa_rica_today().replace(day=1)
+    inputs = _salary_inputs(conn, workspace_id, tables)
+    months = {current}
+    for row in rows:
+        day = str(row.get("transaction_date") or "")[:7]
+        if len(day) == 7:
+            months.add(date.fromisoformat(f"{day}-01"))
+    estimates = []
+    for month in sorted(item for item in months if item <= current):
+        salary = _period_salary(conn, workspace_id, month, _next_month(month), inputs, tables, is_open=month == current)
+        if not salary["estimated"]:
+            continue
+        prefix = month.isoformat()[:7]
+        amount = salary["salary"] - salary["received"]
+        if amount <= 0:
+            continue
+        estimates.append({
+            "movement_id": f"salary_estimate:{prefix}", "source_id": None, "origin": "salary_estimate",
+            "transaction_date": month, "description": "Salario del mes (estimado)", "amount": amount,
+            "transaction_type": "income", "ledger_type": "income", "category": "Salario", "notes": "",
+            "editable": False, "original_amount": None, "original_currency": None, "exchange_rate": None,
+            "financial_account_id": None,
+        })
+    return estimates
+
+
 def classify_movement(row: dict) -> dict:
     """A Movimientos row with its real kind and the concept it counts in (Owner list)."""
     kind = normalized_type(row.get("ledger_type") or row.get("transaction_type"))

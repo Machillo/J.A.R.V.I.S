@@ -147,6 +147,12 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
         OwnerHome.Greeting.EVENING -> tx("Buenas noches,", "Good evening,")
     }
     val status = (home.state as? Load.Ready)?.value?.status
+    // The dollars of this month still waiting for their close, as an estimate. Optional: Hoy never fails because of it.
+    var dollars by remember { mutableStateOf<java.math.BigDecimal?>(null) }
+    val dollarsGeneration by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(dollarsGeneration) {
+        dollars = try { model.api.pendingConversion().estimate(java.time.YearMonth.now().toString(), "").sum } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { dollars }
+    }
     // Light status bar icons over the hero, only while this screen is on.
     val view = LocalView.current
     DisposableEffect(view) {
@@ -158,7 +164,7 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
     Column(Modifier.fillMaxSize().imePadding().background(Dincr.colors.bg).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
         HomeHero(prefix, greeting, name, status, status?.cycle?.let(::cycleText),
             onExpense = { editor = MovementKind.EXPENSE }, onIncome = { editor = MovementKind.INCOME }, onJarvis = if (owner) ({ nav.open("jarvis") }) else null,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 0.dp))
+            modifier = Modifier.fillMaxWidth().padding(bottom = 0.dp), dollars = dollars)
         Box(Modifier.fillMaxWidth().height(24.dp).background(HomeHeroColor)) {
             Box(Modifier.fillMaxSize().background(Dincr.colors.bg, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)))
         }

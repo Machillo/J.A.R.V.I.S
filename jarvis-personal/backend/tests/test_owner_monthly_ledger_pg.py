@@ -190,7 +190,8 @@ def test_the_owner_list_says_what_each_row_is_and_keeps_the_old_type(db):
 
     token = _as("owner")
     try:
-        owner_rows = free_service.list_free_movements()
+        # The estimated salary has its own tests below; here, the rows both lists share.
+        owner_rows = [row for row in free_service.list_free_movements() if row["origin"] != "salary_estimate"]
     finally:
         reset_current_user(token)
     token = _as("user")
@@ -497,3 +498,55 @@ def test_a_statement_counts_its_own_days_and_the_cut_day_once(db):
     assert second["gross_expenses"] == 1000
     # One statement holds one month of salary, however many calendar months it touches.
     assert first["salary_estimated"] is True and first["income"] < 2 * 2000
+
+
+# Movimientos shows the salary the app already knows, so its income adds up to the same as Hoy.
+def _owner_list(db, monkeypatch, today):
+    from backend.user_product import free_service, owner_ledger
+
+    _today(monkeypatch, today)
+    monkeypatch.setattr(free_service, "get_current_account_id", lambda: "account-a")
+    monkeypatch.setattr(free_service, "get_current_workspace_id", lambda: WS_A)
+    monkeypatch.setattr(free_service, "owner_account_context", lambda *_: True)
+    return free_service.list_free_movements(), owner_ledger
+
+
+def test_the_month_in_course_lists_the_salary_and_adds_up_to_the_month_total(db, monkeypatch):
+    rows, _ = _owner_list(db, monkeypatch, date(2026, 11, 20))
+    november = [row for row in rows if str(row["transaction_date"]).startswith("2026-11")]
+    estimate = [row for row in november if row["origin"] == "salary_estimate"]
+    assert len(estimate) == 1 and estimate[0]["transaction_type"] == "income" and estimate[0]["counts_in"] == "income"
+    assert estimate[0]["editable"] is False and estimate[0]["amount"] > 0
+    assert "estimado" in estimate[0]["description"]
+    income = sum(float(row["amount"]) for row in november if row.get("counts_in") == "income")
+    assert income == pytest.approx(2040), "the same income as Hoy and the Resumen"
+
+
+def test_a_deposit_is_inside_the_estimate_and_never_counted_twice(db, monkeypatch):
+    with db.cursor() as cur:
+        cur.execute("INSERT INTO transactions(workspace_id,transaction_date,description,amount,transaction_type,category) VALUES(%s,'2026-11-05','Planilla',700,'income','Salario')", (WS_A,))
+    rows, _ = _owner_list(db, monkeypatch, date(2026, 11, 20))
+    november = [row for row in rows if str(row["transaction_date"]).startswith("2026-11")]
+    assert sum(float(row["amount"]) for row in november if row.get("counts_in") == "income") == pytest.approx(2040)
+    assert [float(row["amount"]) for row in november if row["origin"] == "salary_estimate"] == [pytest.approx(1340)]
+
+
+def test_a_closed_month_with_salary_received_lists_no_estimate(db, monkeypatch):
+    rows, _ = _owner_list(db, monkeypatch, date(2026, 11, 20))
+    assert not [row for row in rows if row["origin"] == "salary_estimate" and str(row["transaction_date"]).startswith("2026-10")]
+
+
+def test_a_regular_user_never_gets_an_estimated_salary(db, monkeypatch):
+    from backend.user_product import free_service
+
+    _today(monkeypatch, date(2026, 11, 20))
+    monkeypatch.setattr(free_service, "get_current_account_id", lambda: "account-a")
+    monkeypatch.setattr(free_service, "get_current_workspace_id", lambda: WS_A)
+    monkeypatch.setattr(free_service, "owner_account_context", lambda *_: False)
+    assert not [row for row in free_service.list_free_movements() if row["origin"] == "salary_estimate"]
+
+
+def test_the_estimated_row_never_writes(db, monkeypatch):
+    before = _row_counts(db)
+    _owner_list(db, monkeypatch, date(2026, 11, 20))
+    assert _row_counts(db) == before

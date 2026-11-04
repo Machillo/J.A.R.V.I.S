@@ -177,6 +177,8 @@ def verified_owner(monkeypatch):
 def _list_as(role, monkeypatch):
     from backend.user_product import free_service
     monkeypatch.setattr(free_service, "get_connection", lambda: ListConnection(ROWS))
+    # The estimated salary needs a real database: test_owner_monthly_ledger_pg.py.
+    monkeypatch.setattr(free_service.owner_ledger, "salary_estimate_rows", lambda *_a: [])
     token = _as(role)
     try:
         return free_service.list_free_movements()
