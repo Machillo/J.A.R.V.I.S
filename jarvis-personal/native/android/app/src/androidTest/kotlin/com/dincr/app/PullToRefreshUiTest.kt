@@ -89,6 +89,12 @@ class PullToRefreshUiTest {
     }
 
     /** The gesture itself: a swipe down on the tab. */
+    /** Opens the closed Deudas, then goes back to the top: a pull only refreshes from there. */
+    private fun openDebts() {
+        compose.onNodeWithTag("wealth.debts.toggle").performScrollTo().performClick()
+        compose.onNodeWithTag("wealth.netWorth").performScrollTo()
+    }
+
     private fun pull() {
         waitUntil("the refreshable tab") { tagged("tab.refresh") }
         compose.onAllNodes(hasTestTag("tab.refresh")).onFirst().performTouchInput { swipeDown() }
@@ -124,7 +130,7 @@ class PullToRefreshUiTest {
 
             tab(wealthTab)
             waitUntil("$context: debts") { tagged("wealth.debts.toggle") }
-            compose.onNodeWithTag("wealth.debts.toggle").performScrollTo().performClick()
+            openDebts()
             waitUntil("$context: debts open") { tagged("wealth.debts.composition") }
             assertEquals("$context: Cuentas", plan != "vip", present(locks[1]))
             val debts = reads("/user-product/finance/debts")
@@ -142,7 +148,7 @@ class PullToRefreshUiTest {
         launch("vip", refreshFails = true)
         tab(wealthTab)
         waitUntil("debts") { tagged("wealth.debts.toggle") }
-        compose.onNodeWithTag("wealth.debts.toggle").performScrollTo().performClick()
+        openDebts()
         waitUntil("debts open") { tagged("wealth.debts.composition") }
         pull()
         waitUntil("the failure notice") { present(failureNotice) }
@@ -178,7 +184,7 @@ class PullToRefreshUiTest {
         launch("vip")
         tab(wealthTab)
         waitUntil("debts") { tagged("wealth.debts.toggle") }
-        compose.onNodeWithTag("wealth.debts.toggle").performScrollTo().performClick()
+        openDebts()
         waitUntil("debts open") { tagged("wealth.debts.composition") }
         val action = SemanticsMatcher("has the refresh action") { node ->
             node.config.getOrNull(SemanticsActions.CustomActions)?.any { it.label == refreshAction } == true
