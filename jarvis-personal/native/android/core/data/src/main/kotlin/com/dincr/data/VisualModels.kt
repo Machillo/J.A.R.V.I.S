@@ -13,8 +13,11 @@ import kotlin.math.roundToInt
 
 // region Composition (donut)
 
-/** One part of a whole. `value == null` means unknown. Parts in different currencies are never added. */
-data class CompositionItem(val id: String, val label: String, val value: BigDecimal?, val currency: String? = null)
+/**
+ * One part of a whole. `value == null` means unknown. Parts in different currencies are never added.
+ * [parts] is what a grouped part ("Otros") is made of; empty for an ordinary part.
+ */
+data class CompositionItem(val id: String, val label: String, val value: BigDecimal?, val currency: String? = null, val parts: List<CompositionItem> = emptyList())
 
 /**
  * A whole split into parts, with each part's share only when it can be computed honestly.
@@ -37,8 +40,8 @@ data class Composition(val items: List<CompositionItem>) {
         INVALID,
     }
 
-    /** [share] is value / total, only when [status] is [Status.COMPLETE]. */
-    data class Segment(val id: String, val label: String, val value: BigDecimal, val share: Double?)
+    /** [share] is value / total, only when [status] is [Status.COMPLETE]. [parts]: see [CompositionItem]. */
+    data class Segment(val id: String, val label: String, val value: BigDecimal, val share: Double?, val parts: List<CompositionItem> = emptyList())
 
     val status: Status
     /** Parts with a known value, in the caller's order. */
@@ -65,7 +68,7 @@ data class Composition(val items: List<CompositionItem>) {
         }
         total = if (status == Status.COMPLETE) sum else null
         segments = if (status == Status.INVALID) emptyList() else known.map { (item, value) ->
-            Segment(item.id, item.label, value, if (status == Status.COMPLETE) value.divide(sum, MathContext.DECIMAL64).toDouble() else null)
+            Segment(item.id, item.label, value, if (status == Status.COMPLETE) value.divide(sum, MathContext.DECIMAL64).toDouble() else null, item.parts)
         }
     }
 

@@ -15,9 +15,11 @@ public struct CompositionItem: Sendable, Equatable, Identifiable {
     public let label: String
     public let value: Decimal?
     public let currency: String?
+    /// What a grouped part ("Otros") is made of; empty for an ordinary part.
+    public let parts: [CompositionItem]
 
-    public init(id: String, label: String, value: Decimal?, currency: String? = nil) {
-        self.id = id; self.label = label; self.value = value; self.currency = currency
+    public init(id: String, label: String, value: Decimal?, currency: String? = nil, parts: [CompositionItem] = []) {
+        self.id = id; self.label = label; self.value = value; self.currency = currency; self.parts = parts
     }
 }
 
@@ -43,6 +45,8 @@ public struct Composition: Sendable, Equatable {
         public let value: Decimal
         /// value / total, only when `status == .complete`.
         public let share: Double?
+        /// What a grouped part is made of, so its smaller amounts stay readable.
+        public let parts: [CompositionItem]
     }
 
     public let status: Status
@@ -78,7 +82,7 @@ public struct Composition: Sendable, Equatable {
         total = status == .complete ? sum : nil
         segments = status == .invalid ? [] : known.map { item, value in
             Segment(id: item.id, label: item.label, value: value,
-                    share: status == .complete ? NSDecimalNumber(decimal: value / sum).doubleValue : nil)
+                    share: status == .complete ? NSDecimalNumber(decimal: value / sum).doubleValue : nil, parts: item.parts)
         }
     }
 
@@ -114,6 +118,7 @@ public struct Composition: Sendable, Equatable {
         segments.map { segment in
             var text = "\(segment.label): \(format.spoken(segment.value, currency: currency, language: language))"
             if let share = segment.share { text += ", \(VisualText.percent(share, language: language))" }
+            if !segment.parts.isEmpty { text += ". \(language.pick("Incluye", "Includes")): \(segment.parts.map(\.label).joined(separator: ", "))" }
             return text
         } + unknown.map { "\($0.label): \(VisualText.noData(language))" }
     }

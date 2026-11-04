@@ -162,11 +162,25 @@ fun CompositionDonut(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (composition.isDrawable) Box(Modifier.size(10.dp).background(shade(index, segment.id), CircleShape))
-                        Text(segment.label, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text,
-                            modifier = Modifier.weight(1f).padding(start = if (composition.isDrawable) DincrSpacing.s3 else 0.dp, end = DincrSpacing.s2))
+                        Column(Modifier.weight(1f).padding(start = if (composition.isDrawable) DincrSpacing.s3 else 0.dp, end = DincrSpacing.s2)) {
+                            Text(segment.label, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text)
+                            if (segment.parts.isNotEmpty()) {
+                                Text(AppLanguage.current().pick("${segment.parts.size} categorías · tocá para verlas", "${segment.parts.size} categories · tap to see them"),
+                                    style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2)
+                            }
+                        }
                         Column(horizontalAlignment = Alignment.End) {
                             MoneyText(segment.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), currency = composition.currency)
                             segment.share?.let { Text(VisualText.percent(it), style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2) }
+                        }
+                    }
+                    // What a grouped part holds, under its row while it is selected.
+                    if (selectedId == segment.id) segment.parts.forEach { part ->
+                        Row(Modifier.fillMaxWidth().heightIn(min = 32.dp).padding(start = DincrSpacing.s6).semantics(mergeDescendants = true) { },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(part.label, style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2,
+                                modifier = Modifier.weight(1f).padding(end = DincrSpacing.s2))
+                            part.value?.let { MoneyText(it, style = MaterialTheme.typography.labelMedium, currency = composition.currency) }
                         }
                     }
                 }
