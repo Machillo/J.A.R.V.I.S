@@ -148,7 +148,10 @@ def list_free_movements() -> list[dict]:
     # rows also say what they really are and what they count in (owner_ledger); for everyone
     # else the response is unchanged.
     if owner:
-        return [{key: value for key, value in owner_ledger.classify_movement(dict(row)).items() if key != "ledger_type"} for row in rows]
+        with get_connection() as conn:
+            estimates = owner_ledger.salary_estimate_rows(conn, workspace_id, [dict(row) for row in rows])
+        merged = sorted([*map(dict, rows), *estimates], key=lambda row: str(row.get("transaction_date") or ""), reverse=True)
+        return [{key: value for key, value in owner_ledger.classify_movement(row).items() if key != "ledger_type"} for row in merged]
     return [{key: value for key, value in dict(row).items() if key != "ledger_type"} for row in rows]
 
 

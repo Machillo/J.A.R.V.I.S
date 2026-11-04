@@ -20,6 +20,9 @@ data class PendingConversion(
     /** The server converts them by itself at the close, with the dollar of that day. False: the app promises nothing. */
     @SerialName("auto_close") val autoClose: Boolean = false,
 ) {
+    /** Every waiting expense, whatever its month (Hoy's card). */
+    val estimateOfAll: PendingEstimate get() = estimate("", "")
+
     /** What the waiting dollars on screen add to the expenses: with a search every month, without one only [month]. */
     fun estimate(month: String, query: String): PendingEstimate {
         val shown = items.filter { (query.isNotBlank() || it.entryDate.startsWith(month)) && SearchText.matches(query, listOf(it.description, it.category)) }

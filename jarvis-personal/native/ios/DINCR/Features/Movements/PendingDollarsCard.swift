@@ -32,10 +32,15 @@ struct PendingDollarsCard: View {
                 Text(tx("Por convertir al cierre", "To convert at the close")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 ForEach(pending.totals) { total in
                     Text(summary(total)).font(DincrFont.bodySmall.weight(.semibold).monospacedDigit()).foregroundStyle(.dincrText)
-                    if let estimate = total.estimatedAmount {
-                        Text(tx("≈ \(model.moneyFormat.string(estimate)) estimado", "≈ \(model.moneyFormat.string(estimate)) estimated"))
-                            .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
-                    }
+                }
+                // By expense: one without a rate is named, and doesn't hide the estimate of the others.
+                if let sum = pending.estimateOfAll.sum {
+                    Text(tx("≈ \(model.moneyFormat.string(sum)) estimado", "≈ \(model.moneyFormat.string(sum)) estimated"))
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
+                }
+                if pending.estimateOfAll.withoutEstimate > 0 {
+                    Text(tx("\(pending.estimateOfAll.withoutEstimate) sin tipo de cambio", "\(pending.estimateOfAll.withoutEstimate) without a rate"))
+                        .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 }
             }
             Spacer(minLength: 0)

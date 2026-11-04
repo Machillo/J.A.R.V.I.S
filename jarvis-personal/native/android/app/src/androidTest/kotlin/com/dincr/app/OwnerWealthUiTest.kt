@@ -121,6 +121,13 @@ class OwnerWealthUiTest {
         waitForText("ETF de ejemplo", substring = true)
         tapTag("wealth.investments")
         waitForTag("wealth.positions")
+
+    /** The salary the app already knows is in Movimientos, and it counts in Ingresos. */
+    @Test fun theOwnerSeesHisSalaryInMovements() {
+        launchOwner()
+        click(tx("Movimientos", "Transactions"))
+        waitForText(tx("Salario del mes (estimado)", "Salario del mes (estimado)"))
+        waitForTag("movements.totals.income")
     }
 
     @Test fun theOwnerSeesThePortfolioAndItsPositions() {

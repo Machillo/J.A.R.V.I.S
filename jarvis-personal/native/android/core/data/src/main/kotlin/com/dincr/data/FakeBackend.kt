@@ -483,7 +483,11 @@ class FakeBackend(
                 accounts.filter { it.ownershipStatus == "own" }.sortedBy { if (it.accountType == "credit_card") 0 else 1 }
                     .map { PaidWithOptions.Option(it.id, it.accountName, it.bankName, it.accountType, it.accountLast4, it.currency) }))
             // Expenses waiting for the close have no colones amount: listed apart, like the backend.
-            path == "/user-product/free/movements" -> ok(colonesMovements.sortedWith(LIST_ORDER))
+            // The Owner's salary the app already knows (owner_ledger.salary_estimate_rows): invented figure.
+            path == "/user-product/free/movements" -> ok((colonesMovements + if (isInternal) listOf(Movement(
+                movementId = "salary_estimate:${today.toString().take(7)}", origin = "salary_estimate", transactionDate = "${today.toString().take(7)}-01",
+                description = "Salario del mes (estimado)", amount = BigDecimal(400_000), transactionType = "income", category = "Salario", editable = false, countsIn = "income",
+            )) else emptyList()).sortedWith(LIST_ORDER))
             path == "/user-product/finance/expenses/pending-conversion" -> ok(pendingConversion())
             path == "/user-product/finance/expenses/pending-conversion/close" && method == "POST" -> closePending(text("period_key").orEmpty(), money("exchange_rate"))
             (path == "/user-product/finance/income" || path == "/user-product/finance/expenses") && method == "POST" -> {
