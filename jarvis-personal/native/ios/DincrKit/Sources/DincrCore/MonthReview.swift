@@ -12,9 +12,10 @@ public enum MonthReview {
         public let lines: [String]
     }
 
-    /// What was left: income minus spending and debt payments; nil while income or spending is unknown.
+    /// What was left: income minus spending and debt payments. The summary answers 0 for what was never
+    /// registered, so a 0 is unknown here (as on Hoy): no movements don't prove there was no income or spending.
     public static func left(_ summary: MonthlySummary) -> Decimal? {
-        guard let income = summary.income, let expenses = summary.expenses else { return nil }
+        guard let income = summary.income, income > 0, let expenses = summary.expenses, expenses > 0 else { return nil }
         return income - expenses - (summary.debtPaid ?? 0)
     }
 

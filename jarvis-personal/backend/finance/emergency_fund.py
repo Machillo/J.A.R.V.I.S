@@ -9,6 +9,7 @@ from typing import Any
 
 from backend.ai.preferences import get_preference, set_preference
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
+from backend.user_product.debt_payments import known_monthly_payment
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.core.time import costa_rica_today
@@ -566,7 +567,8 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int, config: dic
         "id": debt.get("id"),
         "name": debt.get("name") or tx("Deuda", "Debt"),
         "debt_type": debt.get("debt_type") or "other",
-        "monthly_payment": round(max(_f(debt.get("monthly_payment")), 0.0), 2),
+        # None while unknown: a placeholder 0 would lower the target and raise the coverage.
+        "monthly_payment": None if known_monthly_payment(debt) is None else round(max(known_monthly_payment(debt), 0.0), 2),
         "remaining_amount": round(max(_f(debt.get("remaining_amount")), 0.0), 2),
         "payment_day": debt.get("payment_day"),
     } for debt in data.get("debts") or []]
@@ -579,10 +581,12 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int, config: dic
         "frequency": row.get("frequency") or "monthly",
         "due_day": row.get("due_day"),
     } for row in data.get("recurring") or []]
-    debt_monthly = sum(item["monthly_payment"] for item in debt_items)
+    unknown_payments = sum(1 for item in debt_items if item["monthly_payment"] is None)
+    debt_monthly = sum(item["monthly_payment"] or 0.0 for item in debt_items)
     recurring_monthly = sum(item["monthly_amount"] for item in obligation_items)
     monthly_base = round(debt_monthly + recurring_monthly, 2)
     target = round(monthly_base * target_months, 2)
+    base_known = unknown_payments == 0
     current = data.get("liquid_savings")
     known = current is not None
     declared = current
@@ -590,32 +594,33 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int, config: dic
     auto = _plan_progress(config or {}, float(current), interest=False) if known else None
     if auto and auto.get("enabled"):
         current = auto["total"]
-    status = "OK" if monthly_base > 0 else "needs_obligations"
+    status = "OK" if monthly_base > 0 or unknown_payments else "needs_obligations"
     return {
         "status": status,
         "scope": "users",
+        "unknown_debt_payments": unknown_payments,
         "current_amount": round(current, 2) if known else None,
         "current_amount_known": known,
         "current_amount_source": data.get("savings_source") if known else None,
         "declared_amount": round(declared, 2) if known else None,
         "auto_contribution": auto,
-        "monthly_base": monthly_base,
+        "monthly_base": monthly_base if base_known else None,
         "target_months": target_months,
         "allowed_target_months": list(ALLOWED_TARGET_MONTHS),
-        "target_amount": target,
-        "missing_amount": round(max(target - current, 0.0), 2) if known else None,
-        "coverage_months": round(current / monthly_base, 2) if known and monthly_base > 0 else None,
-        "progress_percent": round(min((current / target) * 100.0, 100.0), 2) if known and target > 0 else None,
+        "target_amount": target if base_known else None,
+        "missing_amount": round(max(target - current, 0.0), 2) if known and base_known else None,
+        "coverage_months": round(current / monthly_base, 2) if known and base_known and monthly_base > 0 else None,
+        "progress_percent": round(min((current / target) * 100.0, 100.0), 2) if known and base_known and target > 0 else None,
         "components": {
-            "debt_monthly_payments": round(debt_monthly, 2),
+            "debt_monthly_payments": round(debt_monthly, 2) if base_known else None,
             "recurring_obligations": round(recurring_monthly, 2),
         },
         "debts": debt_items,
         "obligations": obligation_items,
         "milestones": [{
             "months": months,
-            "target": round(monthly_base * months, 2),
-            "reached": (current >= monthly_base * months) if known and monthly_base > 0 else False,
+            "target": round(monthly_base * months, 2) if base_known else None,
+            "reached": (current >= monthly_base * months) if known and base_known and monthly_base > 0 else False,
         } for months in ALLOWED_TARGET_MONTHS],
         "verification": {
             "mode": "declared",

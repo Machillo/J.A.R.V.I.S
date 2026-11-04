@@ -1515,7 +1515,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     expected = os.getenv("FINVA_GMAIL_CRON_SECRET", "")
     if not expected:
         raise HTTPException(status_code=503, detail="FINVA_GMAIL_CRON_SECRET no está configurado.")
-    if not secret or not secrets.compare_digest(secret, expected):
+    if not secret or not secrets.compare_digest(secret.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Secreto de mantenimiento inválido.")
     with get_connection() as conn:
         # Abandoned OAuth flows must not keep a pending refresh token in Vault.
@@ -1575,7 +1575,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
     expected = os.getenv("FINVA_GMAIL_PUBSUB_VERIFICATION_TOKEN", "")
     if not expected:
         raise HTTPException(status_code=503, detail="Verificación Pub/Sub no configurada.")
-    if not token or not secrets.compare_digest(token, expected):
+    if not token or not secrets.compare_digest(token.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Notificación no autorizada.")
     encoded = (payload.get("message") or {}).get("data")
     if not encoded:

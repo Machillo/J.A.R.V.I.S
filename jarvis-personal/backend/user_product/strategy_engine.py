@@ -171,8 +171,10 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
     if target and available > 0:
         allocations.append({"bucket": "debt_extra", "label": tx(f"Abono extra a {target['name']}", f"Extra payment to {target['name']}"), "amount": available, "debt_id": target.get("id")})
         normal = _money(target.get("monthly_payment"))
-        months = _months_to_payoff(_money(target.get("remaining_amount")), normal + available, target.get("interest_rate"))
-        baseline = _months_to_payoff(_money(target.get("remaining_amount")), normal, target.get("interest_rate"))
+        # An unknown rate gives no estimate: counting it as 0 % would promise an interest-free payoff.
+        known_rate = target.get("interest_rate") is not None
+        months = _months_to_payoff(_money(target.get("remaining_amount")), normal + available, target.get("interest_rate")) if known_rate else None
+        baseline = _months_to_payoff(_money(target.get("remaining_amount")), normal, target.get("interest_rate")) if known_rate else None
         projection = {"debt_id": target.get("id"), "name": target.get("name"), "months": months, "baseline_months": baseline, "monthly_to_target": round(normal + available, 2)}
         recommendation = tx(f"Cubrí tus compromisos y usá lo que te quede libre para pagar {target['name']}.", f"Cover your commitments and use what’s left to pay down {target['name']}.")
         priority = "debt"

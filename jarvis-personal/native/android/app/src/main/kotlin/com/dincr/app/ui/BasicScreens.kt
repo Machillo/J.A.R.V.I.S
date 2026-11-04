@@ -95,10 +95,10 @@ fun MonthlySummaryScreen(model: AppModel, nav: Navigator) {
         LoadContent(summary) { s ->
             DincrCard {
                 Column {
-                    Box(Modifier.testTag("summary.income")) { AmountLine(tx("Ingresos", "Income"), s.income, sign = com.dincr.data.MoneyFormat.Sign.INCOME) }
-                    Box(Modifier.testTag("summary.expenses")) { AmountLine(tx("Gastos", "Expenses"), s.expenses) }
+                    Box(Modifier.testTag("summary.income")) { AmountLine(tx("Ingresos", "Income"), s.income?.takeIf { it.signum() > 0 }, sign = com.dincr.data.MoneyFormat.Sign.INCOME) }
+                    Box(Modifier.testTag("summary.expenses")) { AmountLine(tx("Gastos", "Expenses"), s.expenses?.takeIf { it.signum() > 0 }) }
                     s.debtPaid?.takeIf { it.signum() > 0 }?.let { AmountLine(tx("Pagos de deudas", "Debt payments"), it) }
-                    Box(Modifier.testTag("summary.saved")) { AmountLine(tx("Lo que guardaste", "What you saved"), s.saved?.total, emphasize = true) }
+                    Box(Modifier.testTag("summary.saved")) { AmountLine(tx("Lo que guardaste", "What you saved"), s.saved?.total?.takeIf { it.signum() > 0 }, emphasize = true) }
                     s.saved?.let { saved ->
                         val format = Dincr.money
                         val parts = listOfNotNull(

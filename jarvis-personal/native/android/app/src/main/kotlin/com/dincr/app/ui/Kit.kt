@@ -115,7 +115,11 @@ fun <T> rememberLoad(model: AppModel, vararg keys: Any?, fallback: String = tx("
         if (state.value !is Load.Ready) state.value = Load.Loading
         model.load(fallback) { block() }
             .onSuccess { state.value = Load.Ready(it) }
-            .onFailure { if (it !is AuthException.SignedOut) state.value = Load.Failed(it.message ?: fallback) }
+            .onFailure {
+                if (it is AuthException.SignedOut) return@onFailure
+                // What was ready stays (after a save that succeeded, or a resume offline); it says so apart.
+                if (state.value is Load.Ready) model.showNotice(PullRefresh.failureNotice()) else state.value = Load.Failed(it.message ?: fallback)
+            }
     }
     val read by rememberUpdatedState(block)
     return remember(state) {

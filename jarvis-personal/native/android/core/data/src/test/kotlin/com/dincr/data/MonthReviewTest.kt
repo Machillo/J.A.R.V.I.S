@@ -46,4 +46,15 @@ class MonthReviewTest {
     @Test fun theClosedMonthIsTheOneBeforeToday() {
         assertEquals("2026-12" to "2026-11", MonthReview.closedMonths(LocalDate.of(2027, 1, 3)))
     }
+
+    @Test fun aMonthWithNothingRegisteredIsUnknownNotZero() {
+        val unknown = "Faltan los ingresos o los gastos de este mes para saberlo."
+        val empty = summary("""{"period":"2026-10","income":0,"expenses":0}""")
+        assertEquals(null, MonthReview.left(empty))
+        assertEquals(listOf(unknown), MonthReview.cards(empty, null, colones, es)[0].lines)
+        val noIncome = summary("""{"period":"2026-10","income":0,"expenses":80000}""")
+        assertEquals("missing income is not spending more than came in", listOf(unknown), MonthReview.cards(noIncome, null, colones, es)[0].lines)
+        val noSpending = summary("""{"period":"2026-10","income":80000,"expenses":0}""")
+        assertEquals(listOf(unknown), MonthReview.cards(noSpending, null, colones, es)[0].lines)
+    }
 }

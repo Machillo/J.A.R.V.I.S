@@ -29,7 +29,7 @@ def _b64decode(value: str) -> bytes:
 def require_owner_bridge_key(x_jarvis_bridge_key: str | None = Header(default=None)) -> None:
     if not BRIDGE_API_KEY:
         raise HTTPException(status_code=503, detail="JARVIS_OWNER_BRIDGE_API_KEY no está configurada en JARVIS Personal.")
-    if not x_jarvis_bridge_key or not hmac.compare_digest(x_jarvis_bridge_key, BRIDGE_API_KEY):
+    if not x_jarvis_bridge_key or not hmac.compare_digest(x_jarvis_bridge_key.encode("utf-8"), BRIDGE_API_KEY.encode("utf-8")):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credencial del owner bridge inválida.")
 
 

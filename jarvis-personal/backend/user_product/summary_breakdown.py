@@ -32,7 +32,7 @@ def period_range(value: str | None) -> tuple[date, date, str, str]:
     text = (value or "").strip()
     try:
         if not text:
-            start = date.today().replace(day=1)
+            start = costa_rica_today().replace(day=1)
         elif len(text) == 4 and text.isdigit():
             start = date(int(text), 1, 1)
             return start, date(start.year + 1, 1, 1), text, "year"

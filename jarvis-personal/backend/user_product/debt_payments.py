@@ -19,6 +19,11 @@ from typing import Any
 
 # The same rule in SQL (`monthly_payment_known` may be absent from older selects: always select it).
 UNKNOWN_PAYMENT_SQL = "(monthly_payment IS NULL OR monthly_payment_known IS FALSE)"
+# The month's debt payments: a paid-off debt is no longer a commitment. Null when an active one is unknown.
+ACTIVE_MONTHLY_PAYMENT_SQL = (
+    f"CASE WHEN bool_or({UNKNOWN_PAYMENT_SQL}) FILTER (WHERE remaining_amount>0) THEN NULL "
+    "ELSE COALESCE(SUM(monthly_payment) FILTER (WHERE remaining_amount>0),0) END"
+)
 
 
 def known_monthly_payment(debt: dict[str, Any]) -> float | None:
