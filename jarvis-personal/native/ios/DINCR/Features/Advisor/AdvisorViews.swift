@@ -44,7 +44,6 @@ struct WealthHubView: View {
                     GatedEntry(minimum: .vip, flag: nil, symbol: "scalemass", title: tx("Patrimonio neto", "Net worth"),
                                subtitle: tx("Lo que tenés menos lo que debés", "What you have minus what you owe"), id: "wealth.netWorth") { EmptyView() }
                 }
-                SectionHeader(title: tx("Cuentas", "Accounts"))
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
                 GatedEntry(minimum: .vip, flag: nil, symbol: "building.columns", title: tx("Cuentas", "Accounts"),
                            subtitle: tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"), id: "wealth.accounts") { AccountsView() }
@@ -116,12 +115,12 @@ private struct WealthGroup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            FigureRow(label: title, amount: total).font(DincrFont.body.weight(.semibold))
+            FigureRow(label: title, amount: total, emphasized: true)
             if items.isEmpty {
                 Text(tx("Nada registrado.", "Nothing recorded.")).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                FigureRow(label: item.name ?? tx("Sin nombre", "Unnamed"), amount: item.amount).font(DincrFont.bodySmall)
+                FigureRow(label: item.name ?? tx("Sin nombre", "Unnamed"), amount: item.amount)
             }
         }
         .accessibilityElement(children: .contain)

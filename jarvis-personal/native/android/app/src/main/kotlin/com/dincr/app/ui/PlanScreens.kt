@@ -134,7 +134,7 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
 @Composable
 private fun PlanRow(available: Boolean, minimum: PlanTier, icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, nav: Navigator, route: String,
                     lockedRoute: String = "plans") {
-    if (available) NavRow(icon, title, subtitle) { nav.open(route) }
+    if (available) NavRow(icon, title, subtitle, prominent = route == "strategy") { nav.open(route) }
     else NavRow(icon, title, if (minimum == PlanTier.VIP) tx("Disponible desde VIP", "Available from VIP") else tx("Disponible desde Basic", "Available from Basic"),
         badge = if (minimum == PlanTier.VIP) "VIP" else "Basic") { nav.open(lockedRoute) }
 }

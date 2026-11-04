@@ -94,13 +94,13 @@ struct ProfileHubView: View {
             .dincrRowBackground()
             Section(tx("Ayuda y legal", "Help and legal")) {
                 NavigationLink { SupportView() } label: { Label(tx("Soporte", "Support"), systemImage: "questionmark.bubble") }
-                Link(destination: LegalLinks.terms) { Label(tx("Términos y condiciones", "Terms and conditions"), systemImage: "doc.text") }
-                Link(destination: LegalLinks.privacy) { Label(tx("Política de privacidad", "Privacy policy"), systemImage: "hand.raised") }
+                Link(destination: LegalLinks.terms) { rowLabel(tx("Términos y condiciones", "Terms and conditions"), symbol: "doc.text") }
+                Link(destination: LegalLinks.privacy) { rowLabel(tx("Política de privacidad", "Privacy policy"), symbol: "hand.raised") }
             }
             .dincrRowBackground()
             Section {
                 Button { Task { await export() } } label: {
-                    Label(exporting ? tx("Preparando…", "Preparing…") : tx("Descargar mis datos", "Download my data"), systemImage: "square.and.arrow.down")
+                    rowLabel(exporting ? tx("Preparando…", "Preparing…") : tx("Descargar mis datos", "Download my data"), symbol: "square.and.arrow.down")
                 }
                 .disabled(exporting)
                 Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { confirmingSignOut = true }
@@ -175,6 +175,11 @@ struct ProfileHubView: View {
             reminders = false
             remindersDenied = false
         }
+    }
+
+    /// A row in the text color: `Link` and `Button` would tint the title, unlike the rows around them.
+    private func rowLabel(_ title: String, symbol: String) -> some View {
+        Label { Text(title).foregroundStyle(.dincrText) } icon: { Image(systemName: symbol) }
     }
 
     private func export() async {

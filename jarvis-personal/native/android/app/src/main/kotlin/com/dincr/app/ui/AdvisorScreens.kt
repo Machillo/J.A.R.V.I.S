@@ -100,7 +100,6 @@ fun WealthScreen(model: AppModel, nav: Navigator) {
         // WE-2: what you have minus what you owe (VIP and the Owner; locked below VIP).
         if (plan == PlanTier.VIP) NetWorthCard(model)
         else DincrCard { Column(Modifier.testTag("wealth.netWorth")) { LockedRow(Icons.Rounded.AccountBalanceWallet, tx("Patrimonio neto", "Net worth"), PlanTier.VIP, nav) } }
-        SectionTitle(tx("Cuentas", "Accounts"))
         DincrCard {
             Column {
                 // The screens say themselves when the mail switch pauses them (as in Perfil).
