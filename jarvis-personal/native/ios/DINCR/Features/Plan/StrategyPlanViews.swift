@@ -9,13 +9,17 @@ import SwiftUI
 /// derivation and every historical detail stay one tap away ("¿Por qué?", "Ver todo el detalle").
 struct PlanStrategyView: View {
     @Environment(AppModel.self) private var model
+    @State private var choiceToken = 0
 
     var body: some View {
         ScreenScroll(title: tx("Tu plan del mes", "Your plan for the month")) {
             StrategyLoader { strategy in
                 MonthPlanContent(strategy: strategy)
             }
+            .id(choiceToken)
             if model.planTier == .vip {
+                // The Owner's plan has its own rules; a VIP chooses whether investing is in theirs.
+                if model.profile?.isOwner != true { InvestmentChoiceCard { choiceToken += 1 } }
                 // UX-7: the personal minimum (UX-8: the priority is DINCR's recommendation, not a setting).
                 NavigationLink { PlanPreferencesView() } label: {
                     HubRow(symbol: "slider.horizontal.3", title: tx("Ajustes del plan", "Plan settings"),

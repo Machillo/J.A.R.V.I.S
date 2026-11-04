@@ -48,6 +48,7 @@ CREATE TABLE debts (
     interest_rate_known BOOLEAN,  -- 20261006120000
     monthly_payment_known BOOLEAN  -- 20261101130000
 );
+CREATE TABLE user_preferences (workspace_id UUID, preference_key TEXT, preference_value JSONB);
 CREATE TABLE financial_profiles (
     account_id UUID PRIMARY KEY, workspace_id UUID NOT NULL, income_type TEXT, fixed_monthly_salary NUMERIC(14,2),
     hourly_rate NUMERIC(14,2), work_days_per_week INTEGER, hours_per_day NUMERIC(6,2), pay_frequency TEXT,

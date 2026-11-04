@@ -643,6 +643,10 @@ class FakeBackend(
             path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
                 needs(PlanTier.VIP) ?: mail(method, path, segments, query, body)
             path == "/user-product/vip/wealth" -> needs(PlanTier.VIP) ?: ok(wealth())
+            path == "/user-product/vip/investment-choice" -> needs(PlanTier.VIP) ?: run {
+                if (method == "PUT") wantsInvesting = json.decodeFromJsonElement(InvestmentChoice.serializer(), body!!).wantsInvesting
+                ok(InvestmentChoice(wantsInvesting))
+            }
             path == "/user-product/vip/retirement" -> needs(PlanTier.VIP) ?: retirement(method, body)
             path == "/user-product/vip/salvavidas" -> needs(PlanTier.VIP) ?: salvavidas(method, body)
             path == "/user-product/vip/financial-analysis" -> needs(PlanTier.VIP) ?: ok(financialAnalysis())
@@ -973,6 +977,7 @@ class FakeBackend(
     }
 
     /** RT-1: Plan → Retiro, a synthetic ROP balance; a PUT replaces it (every field is sent). iOS: FixtureBackend.retirement. */
+    private var wantsInvesting = false
     private var retirementConfig = Retirement.Config(BigDecimal(3_000_000), null, 1991, 65)
 
     private fun retirement(method: String, body: JsonObject?): HttpResponse {

@@ -148,6 +148,8 @@ fun StrategyScreen(model: AppModel, nav: Navigator) {
                     ?: EmptyState(Icons.Rounded.AutoAwesome, tx("Sin plan todavía", "No plan yet"), data.dashboard.content.orEmpty())
             }
         }
+        // The Owner's plan has its own rules; a VIP chooses whether investing is in theirs.
+        if (profile?.planTier == PlanTier.VIP && profile?.isOwner != true) InvestmentChoiceCard(model) { strategy.reload() }
         if (profile?.planTier == PlanTier.VIP) Box(Modifier.testTag("plan.month.preferences")) {
             // UX-7: the personal minimum (UX-8: the priority is DINCR's recommendation, not a setting).
             DincrCard { NavRow(Icons.Rounded.Tune, tx("Ajustes del plan", "Plan settings"), tx("Mínimo personal por mes", "Personal minimum per month")) { nav.open("planPreferences") } }

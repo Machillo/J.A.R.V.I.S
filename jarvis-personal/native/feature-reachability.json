@@ -476,6 +476,22 @@
      "used_by": [
       "vip"
      ]
+    },
+    {
+     "method": "GET",
+     "path": "/user-product/vip/investment-choice",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    },
+    {
+     "method": "PUT",
+     "path": "/user-product/vip/investment-choice",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
     }
    ],
    "ios": {
