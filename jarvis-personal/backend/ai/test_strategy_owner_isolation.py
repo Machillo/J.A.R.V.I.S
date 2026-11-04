@@ -171,6 +171,7 @@ def test_the_owner_keeps_his_historical_inputs_and_rules(monkeypatch):
                         record("payroll", {"results": {"base_net": 1_200_000, "projected_net": 1_350_000}}))
     monkeypatch.setattr(strategy_dashboard, "_safe_cycle_report",
                         record("cycle", {"income": {"expected_total": 1_350_000, "received_from_transactions": 0}}))
+    monkeypatch.setattr(strategy_dashboard, "_owner_usual_month", lambda *_a: None)
     monkeypatch.setattr(strategy_dashboard, "_get_strategy_living_expenses", record("casa_linea", {"fixed_living_total": 150000}))
     monkeypatch.setattr(strategy_dashboard, "get_salvavidas_state", record("salvavidas", {"current_amount": 0, "monthly_base": 0}))
     monkeypatch.setattr(strategy_dashboard, "_fetch_post_cut_expenses", record("post_cut", {"total": 0}))
