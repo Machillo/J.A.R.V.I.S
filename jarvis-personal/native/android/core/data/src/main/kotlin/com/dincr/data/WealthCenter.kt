@@ -26,7 +26,12 @@ data class InvestmentCenter(
     /** Whether the server can refresh the snapshot from IBKR (Flex credentials configured). */
     @SerialName("flex_configured") val flexConfigured: Boolean = false,
     @SerialName("included_in_net_worth") val includedInNetWorth: Boolean? = null,
+    /** The dollar rate the net worth converts this portfolio with, and its date (null: none saved). */
+    @SerialName("net_worth_rate") val netWorthRate: NetWorthRate? = null,
 ) {
+    @Serializable
+    data class NetWorthRate(val rate: Money, val date: String? = null)
+
     @Serializable
     data class Portfolio(
         @SerialName("market_value") val marketValue: Money? = null,
@@ -67,9 +72,10 @@ data class InvestmentCenter(
     val figures: Figures? get() {
         val snapshot = portfolio ?: return null
         val market = snapshot.marketValue ?: return null
-        // No contributed capital: the backend's 0 % return is unknown, not a result.
-        val hasCapital = (snapshot.contributedCapital?.signum() ?: 0) > 0
-        return Figures(market, snapshot.contributedCapital, netPnl, if (hasCapital) returnPct else null, snapshot.currency)
+        // No contributed capital (IBKR never sends it, the column defaults to 0): that amount and the
+        // backend's 0 % return are unknown, not a result.
+        val capital = snapshot.contributedCapital?.takeIf { it.signum() > 0 }
+        return Figures(market, capital, netPnl, if (capital != null) returnPct else null, snapshot.currency)
     }
 
     val syncState: SyncState get() = when (syncStatus) {

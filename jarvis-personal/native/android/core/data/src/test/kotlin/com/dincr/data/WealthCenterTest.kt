@@ -62,6 +62,15 @@ class WealthCenterTest {
         assertTrue(center.hasPortfolio)
         same(200, center.figures?.marketValue)
         assertNull(center.figures?.returnPct)
+        // IBKR never sends it and the column defaults to 0: that is unknown, not "you put in $0".
+        assertNull(center.figures?.contributedCapital)
+    }
+
+    @Test fun theRateTheNetWorthUsesIsReadWithItsDate() {
+        val center = json.decodeFromString(InvestmentCenter.serializer(), """{"portfolio":{"market_value":200},"net_worth_rate":{"rate":500,"date":"2026-08-16"}}""")
+        same(500, center.netWorthRate?.rate)
+        assertEquals("2026-08-16", center.netWorthRate?.date)
+        assertNull(json.decodeFromString(InvestmentCenter.serializer(), """{"portfolio":{},"net_worth_rate":null}""").netWorthRate)
     }
 
     @Test fun theBusinessCenterReadsTheBusinessesTheirMovementsAndTotals() {

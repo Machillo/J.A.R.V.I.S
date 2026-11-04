@@ -107,7 +107,7 @@ private fun InvestmentsContent(center: InvestmentCenter, syncing: Boolean, syncE
             val figures = center.figures
             if (figures != null) {
                 AmountLine(tx("Valor de mercado", "Market value"), figures.marketValue, currency = figures.currency)
-                AmountLine(tx("Capital aportado", "Contributed capital"), figures.contributedCapital, currency = figures.currency)
+                figures.contributedCapital?.let { AmountLine(tx("Capital aportado", "Contributed capital"), it, currency = figures.currency) }
                 AmountLine(tx("Ganancia neta", "Net gain"), figures.netPnl, currency = figures.currency)
                 figures.returnPct?.let { pct ->
                     Row(Modifier.heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -121,6 +121,12 @@ private fun InvestmentsContent(center: InvestmentCenter, syncing: Boolean, syncE
                     color = Dincr.colors.text, modifier = Modifier.testTag("wealth.investments.empty"))
             }
             syncCaption(center)?.let { Caption(it) }
+            center.netWorthRate?.takeIf { center.figures?.currency == "USD" }?.let { rate ->
+                val day = com.dincr.data.DebtSavingsReading.dayLabel(rate.date)
+                Text(tx("En tu patrimonio neto se convierte con ₡${rate.rate.toPlainString()} ($day), el último tipo de cambio guardado.",
+                    "In your net worth it’s converted at ₡${rate.rate.toPlainString()} ($day), the last saved exchange rate."),
+                    style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted, modifier = Modifier.testTag("wealth.rate"))
+            }
             AmountLine(tx("Reservado para invertir", "Reserved to invest"), center.reservedToInvestCrc, currency = "CRC")
             if (center.flexConfigured) {
                 TextButton(sync, enabled = !syncing, modifier = Modifier.heightIn(min = 48.dp).testTag("wealth.sync")) {
