@@ -122,7 +122,14 @@ public struct CompositionDonut: View {
                     if composition.isDrawable {
                         Circle().fill(shade(for: segment.id)).frame(width: 10, height: 10).accessibilityHidden(true)
                     }
-                    Text(segment.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(segment.label).font(DincrFont.bodySmall).foregroundStyle(.dincrText).multilineTextAlignment(.leading)
+                        if !segment.parts.isEmpty {
+                            Text(AppLanguage.current.pick("\(segment.parts.count) categorías · tocá para verlas",
+                                                          "\(segment.parts.count) categories · tap to see them"))
+                                .font(DincrFont.caption).foregroundStyle(.dincrText2)
+                        }
+                    }
                     Spacer(minLength: DincrSpacing.s2)
                     VStack(alignment: .trailing, spacing: 0) {
                         MoneyText(segment.value, currency: composition.currency, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
@@ -146,6 +153,7 @@ public struct CompositionDonut: View {
                 .accessibilityLabel(composition.spokenParts(format: format)[index])
                 .accessibilityAddTraits(composition.isDrawable ? .isButton : [])
                 .accessibilityAddTraits(selectedID == segment.id ? .isSelected : [])
+                if selectedID == segment.id { partsOf(segment) }
             }
             ForEach(composition.unknown) { item in
                 HStack {
@@ -156,6 +164,22 @@ public struct CompositionDonut: View {
                 .frame(minHeight: 44)
                 .accessibilityElement(children: .combine)
             }
+        }
+    }
+
+    /// What a grouped part holds, shown under its row while it is selected.
+    private func partsOf(_ segment: Composition.Segment) -> some View {
+        ForEach(segment.parts) { part in
+            HStack(spacing: DincrSpacing.s3) {
+                Text(part.label).font(DincrFont.caption).foregroundStyle(.dincrText2).multilineTextAlignment(.leading)
+                Spacer(minLength: DincrSpacing.s2)
+                if let value = part.value {
+                    MoneyText(value, currency: composition.currency, font: DincrFont.caption.monospacedDigit())
+                }
+            }
+            .padding(.leading, DincrSpacing.s6)
+            .frame(minHeight: 32)
+            .accessibilityElement(children: .combine)
         }
     }
 

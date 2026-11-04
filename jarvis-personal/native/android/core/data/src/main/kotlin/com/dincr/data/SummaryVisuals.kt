@@ -52,10 +52,29 @@ object SummaryVisuals {
      * the backend sent it above zero (an unknown amount is never drawn as zero).
      */
     fun outflows(summary: MonthlySummary, language: AppLanguage = AppLanguage.current()): Composition {
-        val items = categoryItems(summary, language).toMutableList()
-        summary.debtPaid?.takeIf { it.signum() > 0 }?.let { items += CompositionItem("out-debts", language.pick("Pagos de deudas", "Debt payments"), it) }
-        summary.saved?.total?.takeIf { it.signum() > 0 }?.let { items += CompositionItem("out-saved", language.pick("Ahorro", "Savings"), it) }
-        return Composition(items)
+        val named = mutableListOf<CompositionItem>()
+        summary.debtPaid?.takeIf { it.signum() > 0 }?.let { named += CompositionItem("out-debts", language.pick("Pagos de deudas", "Debt payments"), it) }
+        summary.saved?.total?.takeIf { it.signum() > 0 }?.let { named += CompositionItem("out-saved", language.pick("Ahorro", "Savings"), it) }
+        return Composition(groupingSmallest(categoryItems(summary, language), named, language))
+    }
+
+    /** The most parts the stacked bar shows, one color each (`BAR_COLORS_*`). */
+    internal const val BAR_PARTS = 6
+
+    /**
+     * Past [BAR_PARTS], the largest categories keep their name and the rest become one "Otros", last
+     * so it takes the bar's gray; debts and savings are never hidden in it. A category the backend
+     * already calls "Otros" joins it, so the legend never shows two. An unknown or negative amount is
+     * not summed: the parts stay as they are and [Composition] says why it can't draw them.
+     */
+    private fun groupingSmallest(categories: List<CompositionItem>, alwaysNamed: List<CompositionItem>, language: AppLanguage): List<CompositionItem> {
+        if (categories.size + alwaysNamed.size <= BAR_PARTS || categories.any { (it.value?.signum() ?: -1) < 0 }) return categories + alwaysNamed
+        val isOthers = { item: CompositionItem -> item.label.lowercase() in setOf("otros", "otro", "others", "other") }
+        val largestFirst = categories.filterNot(isOthers).sortedByDescending { it.value }
+        val kept = largestFirst.take(BAR_PARTS - 1 - alwaysNamed.size)
+        val rest = largestFirst.drop(kept.size) + categories.filter(isOthers)
+        val others = CompositionItem("out-others", language.pick("Otros", "Other"), rest.fold(BigDecimal.ZERO) { sum, item -> sum + item.value!! }, parts = rest)
+        return kept + alwaysNamed + others
     }
 
     fun flowNotice(flow: Flow, language: AppLanguage = AppLanguage.current()): String? = when (flow) {

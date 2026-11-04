@@ -100,4 +100,31 @@ class SummaryVisualsTest {
         assertEquals(listOf("Comida", "Pagos de deudas", "Ahorro"), outflows.segments.map { it.label })
         assertEquals(0, java.math.BigDecimal(450_000).compareTo(outflows.total))
     }
+
+    private fun sevenCategories() = (1..7).joinToString(",") { """{"category":"C$it","amount":${it * 100}}""" }
+
+    @Test fun pastSixPartsTheSmallestBecomeOtros() {
+        val summary = summary("""{"income":9000,"expenses":2800,"debt_paid":500,"categories":[${sevenCategories()},{"category":"Otros","amount":50}],"saved":{"total":250}}""")
+        val bar = SummaryVisuals.outflows(summary, AppLanguage.SPANISH)
+        assertEquals(listOf("C7", "C6", "C5", "Pagos de deudas", "Ahorro", "Otros"), bar.segments.map { it.label })
+        assertEquals(0, java.math.BigDecimal(3600).compareTo(bar.total))
+        assertEquals(0, java.math.BigDecimal(1050).compareTo(bar.segments.last().value))
+        assertEquals(listOf("C4", "C3", "C2", "C1", "Otros"), bar.segments.last().parts.map { it.label })
+    }
+
+    @Test fun upToSixPartsNothingIsGrouped() {
+        val rows = (1..4).joinToString(",") { """{"category":"C$it","amount":${it * 100}}""" }
+        val summary = summary("""{"income":9000,"expenses":1000,"debt_paid":500,"categories":[$rows],"saved":{"total":250}}""")
+        val bar = SummaryVisuals.outflows(summary, AppLanguage.SPANISH)
+        assertEquals(listOf("C1", "C2", "C3", "C4", "Pagos de deudas", "Ahorro"), bar.segments.map { it.label })
+        assertEquals(true, bar.segments.all { it.parts.isEmpty() })
+    }
+
+    @Test fun anUnknownAmountIsNeverSummedIntoOtros() {
+        val summary = summary("""{"income":9000,"expenses":2800,"categories":[${sevenCategories()},{"category":"Sin monto","amount":null}]}""")
+        val bar = SummaryVisuals.outflows(summary, AppLanguage.SPANISH)
+        assertEquals(Composition.Status.PARTIAL, bar.status)
+        assertEquals(7, bar.segments.size)
+        assertEquals(listOf("Sin monto"), bar.unknown.map { it.label })
+    }
 }
