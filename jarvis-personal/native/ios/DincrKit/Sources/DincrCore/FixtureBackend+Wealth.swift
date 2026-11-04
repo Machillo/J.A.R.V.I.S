@@ -30,6 +30,9 @@ extension FixtureBackend {
         case ("POST", "/finance/investment-center/sync-ibkr"):
             ownerWealth.snapshotAgeSeconds = 0
             return ok(["status": "OK", "snapshot_id": 9001, "positions": 2, "read_only": true, "sync_method": "flex"])
+        case ("POST", "/finance/investment-center/dividend-yield"):
+            guard (body["symbol"] as? String ?? "") == "ACME" else { return error(502, "No pudimos traer el dividendo de esa acción. Podés escribirlo vos.") }
+            return ok(["symbol": "ACME", "yield_pct": 4, "annual_dividend_usd": 4, "price_usd": 100, "payments": 4, "source": "fixture"])
         case ("GET", "/finance/investment-center/dividend-plan"):
             return ok(dividendPlanAnswer())
         case ("PUT", "/finance/investment-center/dividend-plan"):

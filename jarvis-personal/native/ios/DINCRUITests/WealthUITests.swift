@@ -41,6 +41,8 @@ final class WealthUITests: XCTestCase {
             element("wealth.accounts", in: app).tap()
             XCTAssertTrue(text("Suscripción actual", in: app).waitForExistence(timeout: 10), context)
             back(app)
+            XCTAssertFalse(element("wealth.debts.composition", in: app).exists, "\(context): closed until asked for")
+            reveal("wealth.debts.toggle", in: app).tap()
             XCTAssertTrue(reveal("wealth.debts.composition", in: app).exists, "\(context): the debts")
             XCTAssertTrue(text("Tarjeta de crédito", in: app).exists)
             // WE-2: the net worth is VIP's: shown locked, with no figure.
@@ -52,6 +54,7 @@ final class WealthUITests: XCTestCase {
 
     func testDebtsAreManagedInPlan() {
         let app = launch()
+        reveal("wealth.debts.toggle", in: app).tap()
         reveal("wealth.debts.manage", in: app).tap()
         XCTAssertTrue(app.navigationBars["Deudas"].waitForExistence(timeout: 10))
     }
@@ -65,7 +68,36 @@ final class WealthUITests: XCTestCase {
         XCTAssertTrue(element("accounts.bank.bac", in: app).waitForExistence(timeout: 10))
         back(app)
         XCTAssertFalse(element("wealth.connections", in: app).exists, "Conexiones de correo live in Perfil")
-        XCTAssertTrue(reveal("wealth.debts.composition", in: app).exists)
+        XCTAssertTrue(reveal("wealth.debts.toggle", in: app).exists)
+    }
+
+    /// IBKR connected: Patrimonio says what the investments are worth and opening it shows what they hold.
+    func testTheOwnerSeesHisInvestmentsInPatrimonioAndOpensThem() {
+        let app = XCUIApplication()
+        continueAfterFailure = false
+        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrTab", "wealth", "-DincrRole", "owner",
+                               "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
+        app.launch()
+        let card = reveal("wealth.investments", in: app)
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        XCTAssertTrue(text("ETF de ejemplo", in: app).exists, "what it holds, without opening it")
+        card.tap()
+        XCTAssertTrue(element("wealth.positions", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Acción de ejemplo", in: app).exists)
+        let edit = element("wealth.dividends.edit", in: app)
+        XCTAssertTrue(edit.waitForExistence(timeout: 10))
+        // Above the floating tab bar, which would take a tap at the bottom of the screen.
+        for _ in 0..<6 where edit.frame.maxY > app.frame.maxY - 120 { app.swipeUp() }
+        edit.tap()
+        // The stock held is prefilled and its dividend comes by itself.
+        XCTAssertTrue(element("wealth.dividends.yieldNote", in: app).waitForExistence(timeout: 10))
+        XCTAssertEqual(element("wealth.dividends.yieldA", in: app).value as? String, "4")
+    }
+
+    func testVipDoesNotSeeInvestmentsInPatrimonio() {
+        let app = launch(plan: "vip")
+        XCTAssertTrue(reveal("wealth.accounts", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("wealth.investments", in: app).exists)
     }
 
     func testTheOwnerOpensCuentasAndKeepsJarvis() {

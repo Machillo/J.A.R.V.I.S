@@ -378,6 +378,9 @@ class FakeBackend(
                 !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
                 method == "GET" && path == "/finance/investment-center" -> ok(wealth.investmentCenter())
                 method == "POST" && path == "/finance/investment-center/sync-ibkr" -> ok(wealth.syncIbkr())
+                method == "POST" && path == "/finance/investment-center/dividend-yield" ->
+                    if (text("symbol") == "ACME") ok(DividendYield("ACME", BigDecimal(4), BigDecimal(4), BigDecimal(100)))
+                    else error(502, "No pudimos traer el dividendo de esa acción. Podés escribirlo vos.")
                 method == "GET" && path == "/finance/investment-center/dividend-plan" -> ok(wealth.dividendPlan())
                 method == "PUT" && path == "/finance/investment-center/dividend-plan" ->
                     wealth.saveDividendPlan(json.decodeFromJsonElement(DividendPlanUpdate.serializer(), body!!))?.let { ok(it) } ?: error(422, "Los porcentajes tienen que sumar 100.")

@@ -131,4 +131,11 @@ struct DividendPlanTests {
         #expect(body?["monthly_amount_usd"] is NSNull && body?["goal_monthly_usd"] is NSNull)
         #expect((body?["stocks"] as? [[String: Any]])?.first?["yield_pct"] is NSNull)
     }
+
+    @Test func theYieldFoundIsRead() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let found = try decoder.decode(DividendYield.self, from: Data(#"{"symbol":"AAA","yield_pct":2.92,"annual_dividend_usd":1.055,"price_usd":36.1,"payments":4}"#.utf8))
+        #expect(found.symbol == "AAA" && found.yieldPct == Decimal(string: "2.92"))
+    }
 }

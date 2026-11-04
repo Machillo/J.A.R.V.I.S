@@ -1,5 +1,7 @@
 package com.dincr.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,17 +42,24 @@ fun NetWorthCard(model: AppModel) {
                     }
                 }
                 WealthGroup(tx("Lo que tenés", "What you have"), wealth.assets?.total, wealth.owned, "wealth.assets")
-                WealthGroup(tx("Lo que debés", "What you owe"), wealth.liabilities?.total, wealth.owed(), "wealth.liabilities")
+                WealthGroup(tx("Lo que debés", "What you owe"), wealth.liabilities?.total, wealth.owed(), "wealth.liabilities", collapsible = true)
             }
         }
     }
 }
 
 @Composable
-private fun WealthGroup(title: String, total: java.math.BigDecimal?, items: List<Wealth.Item>, tag: String) {
+private fun WealthGroup(title: String, total: java.math.BigDecimal?, items: List<Wealth.Item>, tag: String, collapsible: Boolean = false) {
+    // Only the total until asked for (what is owed, debt by debt).
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     Column(Modifier.testTag(tag), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
         AmountLine(title, total, emphasize = true)
+        if (collapsible && items.isNotEmpty()) {
+            androidx.compose.material3.TextButton({ open = !open }, Modifier.testTag("$tag.toggle")) {
+                Text(if (open) tx("Ocultar detalle", "Hide details") else tx("Ver detalle", "See details"), color = Dincr.colors.tint)
+            }
+        }
         if (items.isEmpty()) Caption(tx("Nada registrado.", "Nothing recorded."))
-        items.forEach { AmountLine(it.name ?: tx("Sin nombre", "Unnamed"), it.amount) }
+        if (!collapsible || open) items.forEach { AmountLine(it.name ?: tx("Sin nombre", "Unnamed"), it.amount) }
     }
 }

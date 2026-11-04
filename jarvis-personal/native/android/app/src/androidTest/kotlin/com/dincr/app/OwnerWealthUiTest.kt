@@ -104,13 +104,23 @@ class OwnerWealthUiTest {
         launchOwner()
         openWealth()
         tapTag("wealth.dividends.edit")
-        waitForTag("wealth.dividends.yieldA")
-        compose.onNodeWithTag("wealth.dividends.yieldA").performTextInput("4")
+        // The stock held is prefilled and its dividend comes by itself.
+        waitForTag("wealth.dividends.yieldNote")
         tapTag("wealth.dividends.save")
         waitForText(tx("Capital que necesitás", "Capital you need"))
         waitForText(tx("Todavía no te toca comprar más", "It’s not time to buy more yet"))
         waitForText(tx("Tenés deuda con tasa anual de 10% o más.", "You have debt at 10% a year or more."))
         assertTrue("never says buy with the gate closed", !present(tx("Este mes comprá", "This month, buy")))
+    }
+
+    /** IBKR connected: Patrimonio says what the investments are worth and opening it shows what they hold. */
+    @Test fun theOwnerSeesHisInvestmentsInPatrimonioAndOpensThem() {
+        launchOwner()
+        click(tx("Patrimonio", "Wealth"))
+        waitForTag("wealth.investments")
+        waitForText("ETF de ejemplo", substring = true)
+        tapTag("wealth.investments")
+        waitForTag("wealth.positions")
     }
 
     @Test fun theOwnerSeesThePortfolioAndItsPositions() {

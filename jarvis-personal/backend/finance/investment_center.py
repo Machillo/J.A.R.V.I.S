@@ -8,6 +8,7 @@ from backend.auth.current_user import get_current_workspace_id
 from backend.ai.preferences import get_preference, set_preference
 from backend.core.database import get_connection, serialize_row, serialize_rows
 from backend.finance import dividend_plan
+from backend.integrations import bccr_rates
 from backend.integrations.ibkr_readonly import flex_is_configured, sync_flex_snapshot
 
 router = APIRouter(prefix="/finance/investment-center", tags=["finance-investments"])
@@ -67,6 +68,14 @@ def _summary(workspace_id: str):
             """,
             (workspace_id,),
         ).fetchall()
+        published = None
+        if bccr_rates.available(conn):
+            row = conn.execute(
+                "SELECT rate, rate_date FROM market_exchange_rates WHERE currency=%s AND rate_type=%s ORDER BY rate_date DESC LIMIT 1",
+                (bccr_rates.CURRENCY, bccr_rates.RATE_TYPE),
+            ).fetchone()
+            if row:
+                published = {"rate": float(row["rate"]), "date": str(row["rate_date"])}
         rate = conn.execute(
             """
             SELECT exchange_rate, rate_date FROM exchange_rates
@@ -131,8 +140,8 @@ def _summary(workspace_id: str):
         "flex_configured": flex_is_configured(),
         "included_in_net_worth": bool(s.get("included_in_net_worth", True)),
         # The rate the next snapshot converts with (ibkr_readonly._persist_snapshot), shown with its
-        # date: the table only gets a rate when one is typed, so it can be months old.
-        "net_worth_rate": {"rate": float(rate["exchange_rate"]), "date": str(rate["rate_date"])} if rate else None,
+        # date: the published one, or else the last typed, which can be months old.
+        "net_worth_rate": published or ({"rate": float(rate["exchange_rate"]), "date": str(rate["rate_date"])} if rate else None),
     }
 
 
@@ -179,6 +188,13 @@ def update_dividend_plan(payload: dict):
     config = dividend_plan.validated(payload)
     set_preference(dividend_plan.PREFERENCE_KEY, config)
     return _dividend_plan_answer(config)
+
+
+@router.post("/dividend-yield")
+def dividend_yield(payload: dict):
+    # A lookup, not a write: POST so that no read path reaches an outside service.
+    get_current_workspace_id()
+    return dividend_plan.lookup_yield(payload.get("symbol"))
 
 
 @router.post("/sync-ibkr")
