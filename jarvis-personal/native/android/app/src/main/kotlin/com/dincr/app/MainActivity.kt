@@ -107,6 +107,11 @@ class MainActivity : FragmentActivity() {
     private fun handleIntent(intent: Intent?) {
         // A launcher shortcut only asks for a screen; the signed-in, unlocked shell opens it.
         QuickAction.fromIntentAction(intent?.action)?.let { model.requestQuickAction(it); return }
+        // Text shared into DINCR only prefills the editor: nothing is recorded until the user saves.
+        if (intent?.action == Intent.ACTION_SEND) {
+            com.dincr.data.SharedExpense.parse(intent.getStringExtra(Intent.EXTRA_TEXT))?.let(model::requestSharedExpense)
+            return
+        }
         val data = intent?.dataString ?: return
         when (intent.action) {
             MailReturnActivity.ACTION_MAIL_RETURN -> model.handleMailReturn(data)

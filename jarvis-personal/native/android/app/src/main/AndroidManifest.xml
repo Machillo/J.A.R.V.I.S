@@ -39,7 +39,29 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Share a bank's SMS or notice: it only prefills the editor of a new expense. -->
+            <intent-filter android:label="@string/share_to_dincr">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
+        <service
+            android:name=".QuickExpenseTile"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/quick_expense_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <receiver android:name=".QuickExpenseWidget" android:exported="false" android:label="@string/quick_expense_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_expense_info" />
+        </receiver>
         <!-- Supabase returns the OAuth code here (PKCE) and it is forwarded to MainActivity. The
              scheme is the identity's own (`com.dincr.app` or `com.dincr.app.nativedev`). -->
         <activity
