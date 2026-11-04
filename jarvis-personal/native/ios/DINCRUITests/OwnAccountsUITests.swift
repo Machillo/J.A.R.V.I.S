@@ -8,7 +8,7 @@ final class OwnAccountsUITests: XCTestCase {
     private func launch() -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrPlan", "vip",
+        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrPlan", "vip", "-DincrMailLeftovers",
                                "-DincrTab", "wealth", "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
         app.launch()
         return app

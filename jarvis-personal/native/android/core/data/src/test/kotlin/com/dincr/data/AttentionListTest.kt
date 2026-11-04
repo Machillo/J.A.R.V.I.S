@@ -199,7 +199,7 @@ class AttentionListTest {
         // Hoy and "Ver todas" read the command center and the advisor: GETs only, never a write, a
         // notification or the notifications cron.
         for (role in FakeBackend.Role.entries) {
-            val backend = FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP, role = role)
+            val backend = FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP, role = role, mailLeftovers = true)
             val api = DincrApi(ApiClient("https://fixtures.invalid", { "t" }, backend, AppLanguage.SPANISH, backoff = {}))
             val before = backend.requests.size
             val items = AttentionList.items(api.commandCenter(), api.proactiveAdvisor(), language = AppLanguage.SPANISH)

@@ -17,7 +17,7 @@ class AccountsAnalysisTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     private fun fixture(plan: PlanTier = PlanTier.VIP, role: FakeBackend.Role = FakeBackend.Role.USER) =
-        FakeBackend(FakeBackend.Scenario.POPULATED, plan, role = role).let { it to DincrApi(ApiClient("https://fixtures.invalid", { "t" }, it, AppLanguage.SPANISH, backoff = {})) }
+        FakeBackend(FakeBackend.Scenario.POPULATED, plan, role = role, mailLeftovers = true).let { it to DincrApi(ApiClient("https://fixtures.invalid", { "t" }, it, AppLanguage.SPANISH, backoff = {})) }
 
     private suspend fun status(block: suspend () -> Unit): Int = try { block(); 200 } catch (error: ApiError) { error.status }
 

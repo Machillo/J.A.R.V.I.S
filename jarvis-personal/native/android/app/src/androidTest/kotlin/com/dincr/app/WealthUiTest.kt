@@ -34,7 +34,7 @@ class WealthUiTest {
     private fun launch(plan: String = "free", role: String? = null) {
         scenario?.close()
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
-            .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
+            .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan).putExtra("dincrMailLeftovers", true)
         role?.let { intent.putExtra("dincrRole", it) }
         scenario = ActivityScenario.launch(intent)
         tab(wealth)
@@ -107,7 +107,7 @@ class WealthUiTest {
         assertFalse(present(fromVip))
         // The mail connections live in Perfil (WE-1).
         assertFalse("Conexiones de correo live in Perfil", present(tx("Conexiones de correo", "Mail connections")))
-        click(tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"))
+        click(tx("Tus cuentas propias y días de corte", "Your own accounts and cut days"))
         waitUntil("the banks") { present("BAC") }
         assertEquals(wealth, selectedTab())
         back()
@@ -118,7 +118,7 @@ class WealthUiTest {
         // The fixture seeds the connected mailbox and detected accounts for a VIP launch; the Owner reaches them by role.
         launch("vip", role = "owner")
         assertFalse("Conexiones de correo live in Perfil", present(tx("Conexiones de correo", "Mail connections")))
-        click(tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices"))
+        click(tx("Tus cuentas propias y días de corte", "Your own accounts and cut days"))
         waitUntil("the banks") { present("BAC") }
         back()
         tab(tx("Perfil", "Profile"))

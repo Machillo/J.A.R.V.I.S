@@ -196,8 +196,8 @@ struct ProfileSetupView: View {
         let columns = [GridItem(.flexible(), spacing: DincrSpacing.s2), GridItem(.flexible(), spacing: DincrSpacing.s2)]
         return VStack(alignment: .leading, spacing: DincrSpacing.s4) {
             header(tx("Tus bancos en un solo lugar", "Your banks in one place"),
-                   tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas; podrás autorizar por separado la lectura de correos financieros compatibles.",
-                      "Select the institutions you use. This selection does not connect your accounts; you can separately authorize reading compatible financial emails."))
+                   tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas.",
+                      "Select the institutions you use. This selection does not connect your accounts."))
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tx("Tu seguridad primero", "Your security comes first")).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText)

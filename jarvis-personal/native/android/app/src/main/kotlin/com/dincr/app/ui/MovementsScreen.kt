@@ -3,7 +3,6 @@ package com.dincr.app.ui
 import com.dincr.data.PullRefresh
 import com.dincr.design.generated.DincrRadius
 import com.dincr.design.DincrTonalButton
-import com.dincr.data.PlanTier
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -171,7 +170,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     // New mail on return (AppModel.syncOnReturn): read again, keeping the list if it fails.
     val dataGeneration by model.dataGeneration.collectAsStateWithLifecycle()
     LaunchedEffect(dataGeneration) { if (dataGeneration > 0) load(quietly = true) }
-    val plan = profile?.planTier ?: PlanTier.FREE
+    val mailLeftovers by model.mailLeftovers.collectAsStateWithLifecycle()
+    val mailEntry = profile?.canReadMail == true || mailLeftovers
 
     Box(Modifier.fillMaxSize().padding(padding)) {
         PullToRefreshBox(refreshing, onRefresh = { scope.launch { refreshing = true; load(); refreshing = false } }, modifier = Modifier.testTag("movements.refresh")) {
@@ -195,17 +195,10 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                             // UX-13: Movimientos → Análisis (monthly summary, reports, monthly review).
                             DincrTonalButton(tx("Análisis", "Analysis"), { nav.open("analysis") }, modifier = Modifier.testTag("movements.analysis"))
-                            // §15 PR 6: Movimientos → Por revisar — the bank notices detected in mail, reviewed in the
-                            // existing mail screen (the same as Perfil's; VIP and the Owner, locked below).
-                            if (plan == PlanTier.VIP) {
+                            // §15 PR 6: Movimientos → Por revisar — the bank notices detected in mail. Mail is paused
+                            // outside the Owner (L-1): only a VIP's leftovers from before the pause still show it.
+                            if (mailEntry) {
                                 DincrTonalButton(tx("Por revisar", "To review"), { nav.open("mail") }, modifier = Modifier.testTag("movements.review"))
-                            } else {
-                                TextButton({ nav.open("plans") }, modifier = Modifier.heightIn(min = 48.dp).testTag("movements.review")) {
-                                    androidx.compose.foundation.layout.Column {
-                                        Text(tx("Por revisar", "To review"), color = Dincr.colors.textMuted)
-                                        Text(tx("Disponible desde VIP", "Available from VIP"), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
-                                    }
-                                }
                             }
                             if (filter == MovementFilter.DEBT) DincrTonalButton(tx("Gestionar deudas", "Manage debts"), { nav.open("debts") })
                         }

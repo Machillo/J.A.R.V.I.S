@@ -48,7 +48,7 @@ class PlanRecoveryUiTest {
     private fun launch(plan: String = "free", role: String? = null, fixture: String = "POPULATED") {
         scenario?.close()
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
-            .putExtra("dincrFixtures", fixture).putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
+            .putExtra("dincrFixtures", fixture).putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan).putExtra("dincrMailLeftovers", true)
         role?.let { intent.putExtra("dincrRole", it) }
         scenario = ActivityScenario.launch(intent)
     }

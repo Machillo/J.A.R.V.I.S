@@ -67,6 +67,7 @@
   "RV-1",
   "RT-1",
   "DB-1",
+  "L-2",
   "OW-1"
  ],
  "fixtures": {
@@ -1410,37 +1411,32 @@
   },
   {
    "id": "movements.review",
-   "name": "Movimientos → Por revisar (§15 PR 6): the mail review of detected bank notices, the same screen as Perfil → Correos financieros",
-   "decision": "PR-6",
+   "name": "Movimientos → Por revisar (§15 PR 6; L-2: mail is paused outside the Owner until the app can pay for it): the mail review of detected bank notices. A VIP who connected a mailbox before the pause still sees it, to review what was imported and to disconnect (MailStatus.hasLeftovers), which the fixture account does not have.",
+   "decision": "L-2",
    "plans": {
-    "free": "VISIBLE_LOCKED",
-    "basic": "VISIBLE_LOCKED",
-    "vip": "AVAILABLE",
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
     "owner": "AVAILABLE"
    },
    "backend": [
     {
-     "method": "GET",
-     "path": "/user-product/vip/gmail/status",
-     "gate": "feature:gmail_automation",
-     "used_by": [
-      "vip"
-     ]
+     "method": "POST",
+     "path": "/user-product/vip/gmail/sync",
+     "gate": "mail_reading:verified_owner",
+     "used_by": []
     }
    ],
    "ios": {
     "tab": "movements",
-    "id": "movements.review",
-    "locked_label": "Disponible desde VIP"
+    "id": "movements.review"
    },
    "android": {
     "tab": "Movimientos",
     "text": "Por revisar",
-    "locked_text": "Disponible desde VIP",
     "en": {
      "tab": "Transactions",
-     "text": "To review",
-     "locked_text": "Available from VIP"
+     "text": "To review"
     }
    }
   },

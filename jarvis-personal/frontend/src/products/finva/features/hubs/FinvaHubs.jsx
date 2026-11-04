@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import {
   BarChart3, Building2, CalendarDays, ChevronRight, CircleUserRound, CreditCard, Landmark,
   LifeBuoy, LogOut, Mail, ReceiptText, Repeat2, Settings, ShieldCheck,
   SlidersHorizontal, Sparkles, Target, TrendingUp, WalletCards,
 } from "lucide-react";
 import { tx } from "../../../../lib/locale";
+import { getVipGmailStatus } from "../../../../users/services/jarvisApi";
 
 function Hub({ eyebrow, title, description, groups }) {
   return <section className="mobile-page finva-hub-page">
@@ -48,13 +50,24 @@ export function AdvisorHub({ plan, navigate }) {
 }
 
 export function ProfileHub({ plan, navigate, onLogout }) {
+  // L-2: mail is paused outside the Owner. Only a mailbox or notices from before the pause still show it,
+  // so they can be reviewed and the mailbox disconnected.
+  const [mailLeftovers, setMailLeftovers] = useState(false);
+  useEffect(() => {
+    if (plan !== "vip") return undefined;
+    let active = true;
+    getVipGmailStatus().then((status) => {
+      if (active) setMailLeftovers(Boolean(status?.pending) || (status?.connections || []).some((c) => c.status !== "disabled"));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [plan]);
   const account = [
     item(navigate, "situation", tx("Mi situación financiera", "My financial situation"), tx("Ingresos, gastos y datos personales", "Income, expenses and personal data"), CircleUserRound),
     item(navigate, "settings", tx("Cuenta y plan", "Account and plan"), tx("Perfil, suscripción y preferencias", "Profile, subscription and preferences"), Settings),
   ];
   if (plan === "vip") account.splice(1, 0,
-    item(navigate, "accounts", tx("Cuentas", "Accounts"), tx("Bancos, cuentas y movimientos por revisar", "Banks, accounts and transactions to review"), Building2),
-    item(navigate, "gmail", tx("Correos financieros", "Financial emails"), tx("Revisión de lo importado y desconexión", "Review what was imported and disconnect"), Mail));
+    item(navigate, "accounts", tx("Cuentas", "Accounts"), tx("Tus cuentas propias y días de corte", "Your own accounts and cut days"), Building2),
+    ...(mailLeftovers ? [item(navigate, "gmail", tx("Correo conectado anteriormente", "Previously connected mail"), tx("Revisá lo importado o desconectalo", "Review what was imported or disconnect it"), Mail)] : []));
   const support = [item(navigate, "feedback", tx("Ayuda y sugerencias", "Help and feedback"), tx("Soporte y estado del servicio", "Support and service status"), LifeBuoy), { key: "logout", label: tx("Cerrar sesión", "Log out"), detail: tx("Salir de DINCR en este dispositivo", "Sign out of DINCR on this device"), icon: LogOut, action: onLogout }];
   return <Hub eyebrow={tx("Tu cuenta", "Your account")} title={tx("Perfil", "Profile")} description={tx("Configuración, conexiones y soporte.", "Settings, connections and support.")} groups={[{ title: tx("Cuenta", "Account"), items: account }, { title: tx("Soporte", "Support"), items: support }]}/>;
 }

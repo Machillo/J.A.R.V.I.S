@@ -34,7 +34,9 @@ struct CandidateReviewList: View {
             case .loaded(let candidates):
                 if candidates.isEmpty {
                     EmptyStateView(symbol: "tray", title: tx("Sin movimientos", "No transactions"),
-                                   message: tx("Cuando lleguen avisos de este banco, aparecerán acá.", "Notices from this bank will appear here.")) { EmptyView() }
+                                   message: model.canReadMail
+                                       ? tx("Cuando lleguen avisos de este banco, aparecerán acá.", "Notices from this bank will appear here.")
+                                       : tx("Los movimientos de este banco aparecerán acá.", "This bank’s transactions will appear here.")) { EmptyView() }
                 }
                 ForEach(candidates) { candidate in
                     CandidateCard(candidate: candidate, busy: busy == candidate.id,

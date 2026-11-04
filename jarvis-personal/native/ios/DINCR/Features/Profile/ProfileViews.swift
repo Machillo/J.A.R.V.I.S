@@ -63,6 +63,10 @@ struct ProfileHubView: View {
                 if model.canReadMail {
                     NavigationLink(value: ProfileRoute.mail) { Label(tx("Conexiones de correo", "Mail connections"), systemImage: "envelope") }
                         .accessibilityIdentifier("profile.mail")
+                } else if model.mailLeftovers {
+                    // A mailbox from before the pause: it can always be reviewed and disconnected.
+                    NavigationLink(value: ProfileRoute.mail) { Label(tx("Correo conectado anteriormente", "Previously connected mail"), systemImage: "envelope") }
+                        .accessibilityIdentifier("profile.mail.leftovers")
                 }
                 // SC-1: iOS only. VIP and the Owner open it; Free and Basic see it locked (opens Suscripción).
                 if ShortcutLinking.isAvailable(to: model.profile) {

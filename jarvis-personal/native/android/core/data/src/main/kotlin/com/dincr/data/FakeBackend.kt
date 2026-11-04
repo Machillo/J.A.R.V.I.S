@@ -32,6 +32,8 @@ class FakeBackend(
     private val role: Role = Role.USER,
     /** B17 UI tests: the identity read again (a pull to refresh) answers like an unreachable server. */
     private val identityRefreshFails: Boolean = false,
+    /** A VIP who connected a mailbox before mail was paused outside the Owner (L-1). */
+    private val mailLeftovers: Boolean = false,
 ) : HttpTransport {
     /** STORE: the account of the store screenshots ([StoreSample]). */
     enum class Scenario { POPULATED, EMPTY, FAILING, NEW_USER, LEGAL_REQUIRED, CHOOSE_PLAN, STORE }
@@ -61,8 +63,9 @@ class FakeBackend(
     /** Accounts detected in the notices (`account_balances`): no balance is ever served (unknown, not zero). */
     private val accounts = mutableListOf<FinancialIdentity.Account>()
     private val tickets = mutableListOf<SupportTicket>()
-    /** A VIP sample account starts with a connected mailbox and notices to review. */
-    private var mailConnected = (scenario == Scenario.POPULATED || scenario == Scenario.STORE) && plan == PlanTier.VIP
+    /** Mail is the Owner's alone (L-1): only its sample account, or a VIP's leftovers, have a mailbox and notices. */
+    private val hasMailSample = role == Role.OWNER || mailLeftovers
+    private var mailConnected = plan == PlanTier.VIP && (scenario == Scenario.STORE || (scenario == Scenario.POPULATED && hasMailSample))
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
     private var identityReads = 0
@@ -1111,6 +1114,12 @@ class FakeBackend(
         // label (`bank_name`) plus `institution_code`. Notices of a known bank with an account, of a
         // bank whose label differs from its code (Banco Popular / popular), of a known bank without
         // a detected account, and of an institution DINCR does not identify.
+        if (hasMailSample) seedMail(::day)
+        accounts += FinancialIdentity.Account(1, "Cuenta de ejemplo", "BAC", "bac", "CR", "checking", "CRC", "1234", "pending")
+        accounts += FinancialIdentity.Account(2, "Ahorro de ejemplo", "Banco Popular", "popular", "CR", "savings", "CRC", "5678", "own")
+    }
+
+    private fun seedMail(day: (Long) -> String) {
         candidates += MailCandidate(21, 21, null, "bac", "avisos@banco.test", "Notificación de compra", "${day(1)}T10:00:00Z", "Compra en supermercado", BigDecimal(15300), "CRC",
             accountBaseCurrency = "CRC", transactionDate = day(1), transactionType = "expense", category = "Comida", reviewStatus = "pending",
             financialAccountId = 1, bankMovement = "purchase", financialEffect = "expense")
@@ -1124,8 +1133,6 @@ class FakeBackend(
             accountBaseCurrency = "CRC", transactionDate = day(4), transactionType = "expense", category = "Servicios", reviewStatus = "pending")
         candidates += MailCandidate(24, 24, null, "cooperativa_ejemplo", "avisos@cooperativa.test", "Pago de servicio", "${day(5)}T10:00:00Z", "Pago de agua", BigDecimal(8200), "CRC",
             accountBaseCurrency = "CRC", transactionDate = day(5), transactionType = "expense", category = "Servicios", reviewStatus = "confirmed")
-        accounts += FinancialIdentity.Account(1, "Cuenta de ejemplo", "BAC", "bac", "CR", "checking", "CRC", "1234", "pending")
-        accounts += FinancialIdentity.Account(2, "Ahorro de ejemplo", "Banco Popular", "popular", "CR", "savings", "CRC", "5678", "own")
     }
 
     private fun sampleProfile(plan: PlanTier) = Profile(

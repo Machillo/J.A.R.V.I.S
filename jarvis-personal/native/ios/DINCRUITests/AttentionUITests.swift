@@ -11,7 +11,7 @@ final class AttentionUITests: XCTestCase {
         let app = XCUIApplication()
         var arguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin",
                          "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
-        if let plan { arguments += ["-DincrPlan", plan] }
+        if let plan { arguments += ["-DincrPlan", plan, "-DincrMailLeftovers"] }
         if let role { arguments += ["-DincrRole", role] }
         app.launchArguments = arguments
         app.launch()

@@ -153,7 +153,7 @@ class PullToRefreshUiTest {
         pull()
         waitUntil("the failure notice") { present(failureNotice) }
         assertTrue("the debts stay", tagged("wealth.debts.composition"))
-        assertTrue("the plan's rows stay", present(tx("Bancos y cuentas detectados en tus avisos", "Banks and accounts found in your notices")))
+        assertTrue("the plan's rows stay", present(tx("Tus cuentas propias y días de corte", "Your own accounts and cut days")))
         assertEquals("no error screen replaces the app", wealthTab, selectedTab())
 
         // The notice stays up while TalkBack-style timeouts apply, so each tab proves its own failed read.

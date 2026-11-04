@@ -263,7 +263,7 @@ class NativeRcTest {
     // --- Fake backend follows FastAPI semantics ------------------------------------------------
 
     private fun fake(plan: PlanTier = PlanTier.FREE, scenario: FakeBackend.Scenario = FakeBackend.Scenario.POPULATED) =
-        DincrApi(ApiClient("https://fixtures.invalid", { "t" }, FakeBackend(scenario, plan), AppLanguage.SPANISH, backoff = {}))
+        DincrApi(ApiClient("https://fixtures.invalid", { "t" }, FakeBackend(scenario, plan, mailLeftovers = plan == PlanTier.VIP), AppLanguage.SPANISH, backoff = {}))
 
     @Test fun fakeBackendEnforcesPlansLikeTheServer() = runTest {
         val free = fake(PlanTier.FREE)

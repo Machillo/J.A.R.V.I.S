@@ -6,7 +6,7 @@ import XCTest
 final class PlainLanguageUITests: XCTestCase {
     private func launch(plan: String, tab: String? = nil, english: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
-        var arguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrPlan", plan]
+        var arguments = ["-DincrDisableAnimations", "-DincrFixtures", "populated", "-DincrSkipLogin", "-DincrPlan", plan, "-DincrMailLeftovers"]
         arguments += english ? ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"] : ["-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
         if let tab { arguments += ["-DincrTab", tab] }
         app.launchArguments = arguments

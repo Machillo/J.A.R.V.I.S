@@ -34,7 +34,7 @@ class AttentionUiTest {
     private fun launch(plan: String, role: String? = null) {
         scenario?.close()
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
-            .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
+            .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan).putExtra("dincrMailLeftovers", true)
         role?.let { intent.putExtra("dincrRole", it) }
         scenario = ActivityScenario.launch(intent)
     }

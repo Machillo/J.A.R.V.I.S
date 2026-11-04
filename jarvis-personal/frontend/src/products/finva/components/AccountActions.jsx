@@ -66,7 +66,7 @@ export default function AccountActions({ onLogout, variant = "free" }) {
         <button className="finva-delete-dialog__close" type="button" aria-label={tx("Cerrar", "Close")} onClick={() => setConfirming(false)} disabled={deleting}><X size={20}/></button>
         <span className="finva-delete-dialog__icon"><Trash2 size={24}/></span>
         <h2 id="finva-delete-title">{tx("¿Eliminar tu cuenta?", "Delete your account?")}</h2>
-        <p>{tx("Se borrarán permanentemente tu perfil, movimientos, deudas, metas y configuraciones, y se revocará el acceso a tu correo conectado. Esta acción no se puede deshacer.", "Your profile, transactions, debts, goals, and settings will be permanently erased, and access to your connected email will be revoked. This action cannot be undone.")}</p>
+        <p>{tx("Se borrarán permanentemente tu perfil, movimientos, deudas, metas y configuraciones, y se revocará cualquier acceso que hayás autorizado. Esta acción no se puede deshacer.", "Your profile, transactions, debts, goals, and settings will be permanently erased, and any access you authorized will be revoked. This action cannot be undone.")}</p>
         {error && <p className="finva-delete-dialog__error" role="alert">{error}</p>}
         <div>
           <button type="button" onClick={() => setConfirming(false)} disabled={deleting}>{tx("Conservar cuenta", "Keep account")}</button>

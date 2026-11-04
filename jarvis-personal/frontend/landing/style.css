@@ -153,9 +153,6 @@ html:not([data-lang]) .lang-switch { display: none; }
 .illus-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .illus-row strong { font-weight: 600; }
 .illus-row .illus-amount { font-size: 1.05rem; font-weight: 600; }
-.illus-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.chip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--field-border); font-size: .8rem; font-weight: 600; color: var(--text-2); }
-.chip.ok { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .bar { height: 10px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .illus-note { color: var(--muted); font-size: .8rem; }

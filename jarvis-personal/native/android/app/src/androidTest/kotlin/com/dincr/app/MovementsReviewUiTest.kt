@@ -12,7 +12,9 @@ import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
@@ -33,10 +35,10 @@ class MovementsReviewUiTest {
     @get:Rule val compose = createEmptyComposeRule()
     private var scenario: ActivityScenario<MainActivity>? = null
 
-    private fun launch(plan: String = "free", role: String? = null) {
+    private fun launch(plan: String = "free", role: String? = null, leftovers: Boolean = false) {
         scenario?.close()
         val intent = Intent(ApplicationProvider.getApplicationContext(), MainActivity::class.java)
-            .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan)
+            .putExtra("dincrFixtures", "POPULATED").putExtra("dincrSkipLogin", true).putExtra("dincrLatencyMs", 0L).putExtra("dincrPlan", plan).putExtra("dincrMailLeftovers", leftovers)
         role?.let { intent.putExtra("dincrRole", it) }
         scenario = ActivityScenario.launch(intent)
         tab(tx("Movimientos", "Transactions"))
@@ -73,18 +75,30 @@ class MovementsReviewUiTest {
 
     private val locked get() = tx("Disponible desde VIP", "Available from VIP")
 
-    @Test fun freeAndBasicSeePorRevisarLockedAndItOpensSuscripcion() {
-        for (plan in listOf("free", "basic")) {
+    /** L-2: mail is paused outside the Owner. No entry, not even locked, and no word about it in Perfil. */
+    @Test fun freeBasicAndAVipWithoutHistorySeeNoTraceOfMail() {
+        for (plan in listOf("free", "basic", "vip")) {
             launch(plan)
-            waitUntil("locked ($plan)") { present(locked) }
-            clickTag("movements.review")
-            waitUntil("Suscripción ($plan)") { present(tx("Suscripción actual", "Current subscription")) }
-            assertFalse(present("Compra en supermercado"))
+            waitUntil("Movimientos ($plan)") { tagged("movements.analysis") }
+            assertFalse(plan, tagged("movements.review"))
+            assertFalse(plan, present(locked))
+            compose.onAllNodesWithText(tx("Perfil", "Profile")).onFirst().performClick()
+            waitUntil("Perfil ($plan)") { present(tx("Ajustes de cuenta", "Account settings")) }
+            assertFalse(plan, present(tx("Correo conectado anteriormente", "Previously connected mail")))
+            assertFalse(plan, present(tx("Conexiones de correo", "Mail connections")))
         }
     }
 
+    /** A VIP who connected before the pause keeps the way to review and disconnect. */
+    @Test fun aVipWithLeftoversCanStillReviewAndDisconnect() {
+        launch("vip", leftovers = true)
+        waitUntil("the review entry") { tagged("movements.review") }
+        compose.onAllNodesWithText(tx("Perfil", "Profile")).onFirst().performClick()
+        waitUntil("the leftover row") { present(tx("Correo conectado anteriormente", "Previously connected mail")) }
+    }
+
     @Test fun vipReviewsANoticeAndOnlyThenItIsAMovement() {
-        launch("vip")
+        launch("vip", leftovers = true)
         assertFalse("not locked", present(locked))
         assertFalse("a pending notice is not a movement", present("Compra en supermercado"))
         clickTag("movements.review")

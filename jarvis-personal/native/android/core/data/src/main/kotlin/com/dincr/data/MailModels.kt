@@ -20,6 +20,13 @@ data class MailStatus(
     /** The server also lists disconnected (`disabled`) mailboxes; the user sees only the others. */
     val visibleConnections: List<Connection> get() = connections.filter { it.status != "disabled" }
 
+    /**
+     * Mail is paused outside the Owner (L-1), so nobody else is offered it. A VIP who connected a
+     * mailbox before the pause still reaches this: a stored authorization must stay disconnectable,
+     * and imported notices stay reviewable. Nothing left means no trace of mail in the app.
+     */
+    val hasLeftovers: Boolean get() = visibleConnections.isNotEmpty() || (pending ?: 0) > 0
+
     @Serializable
     data class Consent(val required: Boolean = true, val version: String? = null)
 
