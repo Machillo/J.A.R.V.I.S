@@ -1138,6 +1138,13 @@
  },
  {
   "method": "POST",
+  "path": "/integrations/exchange-rates/cron",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
   "path": "/integrations/ibkr/flex/cron",
   "gates": [
    "public"

@@ -124,6 +124,7 @@ OWNER_GATED_ROUTER_MODULES = {
     "auth/owner_bridge_routes.py": "router dependency require_owner_bridge_key",
     "deployment_monitor/routes.py": "HMAC secret and require_owner",
     "integrations/ibkr_readonly.py": "HMAC secret headers (Owner cron and sync)",
+    "integrations/bccr_rates.py": "HMAC secret header (scheduled rate sync and dollar close)",
 }
 
 
