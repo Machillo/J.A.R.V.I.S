@@ -214,6 +214,8 @@ class LedgerConnection:
             return self._result()
         if q.startswith("SELECT id FROM finva_email_candidates WHERE account_id=%s AND workspace_id=%s AND related_candidate_id=%s"):
             return self._result([])  # no statement/notification copies linked in this scenario
+        if "FROM user_preferences" in q:
+            return self._result([])  # no investment choice made: off
         raise AssertionError(f"Unexpected query: {q[:100]}")
 
 

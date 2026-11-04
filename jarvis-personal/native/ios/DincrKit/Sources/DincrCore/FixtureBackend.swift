@@ -91,6 +91,7 @@ public actor FixtureBackend: HTTPTransport {
     private var pendingFlows: [String: String] = [:]
     private var nextID = 500
     /// RT-1: Plan → Retiro, a synthetic ROP balance.
+    var wantsInvesting = false
     var retirement: [String: Any] = ["rop_balance": 3_000_000, "voluntary_balance": NSNull(), "birth_year": 1991, "retire_age": 65]
     private var replays: [String: (body: Data?, status: Int, response: Data)] = [:]
     /// The change the scripted JARVIS chat waits a "sí" / "no" for.

@@ -27,6 +27,7 @@ MAX_STOCK_DEBT_APR = 10.0
 STOCK_SALVAVIDAS_MONTHS = 3
 HORIZON_YEARS = (10, 15, 20)
 _SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,11}$")
+HOLDING_TYPES = {"STK", "ETF"}
 
 
 def _number(value: Any) -> float | None:
@@ -191,3 +192,29 @@ def lookup_yield(raw_symbol: Any) -> dict[str, Any]:
     if found is None:
         raise HTTPException(status_code=502, detail="No pudimos traer el dividendo de esa acción. Podés escribirlo vos.")
     return found
+
+
+def goal_from_holdings(goal: Any, positions: list[dict[str, Any]] | None, previous: dict[str, Any]) -> dict[str, Any]:
+    """The plan from one number, the monthly goal, and what he already holds: his largest two stocks in
+    dollars, each with its share of what they are worth and the yield found. A yield not found stays
+    unknown, and the answer then says so; it is never taken as 0."""
+    wanted = _in_range(goal, 1, 1_000_000)
+    if wanted is None:
+        raise HTTPException(status_code=422, detail="Escribí cuánto querés ganar al mes.")
+    held = [row for row in positions or [] if str(row.get("currency") or "").upper() == "USD"
+            and str(row.get("sec_type") or "STK").upper() in HOLDING_TYPES and (_number(row.get("market_value")) or 0) > 0
+            and _SYMBOL.match(str(row.get("symbol") or "").upper())]
+    held = sorted(held, key=lambda row: -(_number(row.get("market_value")) or 0))[:2]
+    if not held:
+        raise HTTPException(status_code=422, detail="Todavía no tenés acciones en tu portafolio. Agregá una a mano en Cambiar acciones.")
+    total = sum(_number(row.get("market_value")) or 0 for row in held)
+    stocks = []
+    for index, row in enumerate(held):
+        symbol = str(row["symbol"]).upper()
+        share = round((_number(row.get("market_value")) or 0) / total * 100, 2) if index < len(held) - 1 else round(100 - sum(s["share_pct"] for s in stocks), 2)
+        try:
+            found = lookup_yield(symbol)["yield_pct"]
+        except HTTPException:
+            found = None
+        stocks.append({"symbol": symbol, "share_pct": share, "yield_pct": found})
+    return {**previous, "stocks": stocks, "goal_monthly_usd": wanted}

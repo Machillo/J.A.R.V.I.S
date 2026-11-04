@@ -150,12 +150,8 @@ def get_center():
     return _summary(get_current_workspace_id())
 
 
-def _dividend_plan_answer(config: dict) -> dict:
-    # Imported here: the strategy's own modules import the finance package at start-up.
-    from backend.finance.emergency_fund import get_salvavidas_state
-    from backend.finance.service import get_debts
-
-    workspace_id = get_current_workspace_id()
+def _latest_positions(workspace_id: str) -> list[dict] | None:
+    """What the newest snapshot holds; None without a snapshot (unknown, not nothing)."""
     with get_connection() as conn:
         snap = conn.execute(
             """
@@ -164,11 +160,19 @@ def _dividend_plan_answer(config: dict) -> dict:
             """,
             (workspace_id,),
         ).fetchone()
-        positions = conn.execute(
-            "SELECT symbol, currency, market_value FROM investment_position_snapshots WHERE portfolio_snapshot_id=%s",
+        rows = conn.execute(
+            "SELECT symbol, sec_type, currency, market_value FROM investment_position_snapshots WHERE portfolio_snapshot_id=%s",
             (snap["id"],),
         ).fetchall() if snap else None
-    positions = serialize_rows(positions) if positions is not None else None
+    return serialize_rows(rows) if rows is not None else None
+
+
+def _dividend_plan_answer(config: dict) -> dict:
+    # Imported here: the strategy's own modules import the finance package at start-up.
+    from backend.finance.emergency_fund import get_salvavidas_state
+    from backend.finance.service import get_debts
+
+    positions = _latest_positions(get_current_workspace_id())
     gate = dividend_plan.stock_gate(get_debts() or [], get_salvavidas_state() or {})
     return {
         "config": config,
@@ -185,7 +189,12 @@ def get_dividend_plan():
 
 @router.put("/dividend-plan")
 def update_dividend_plan(payload: dict):
-    config = dividend_plan.validated(payload)
+    # One number is enough: the goal. The stocks and their yields come from what he holds.
+    if payload.get("from_holdings"):
+        previous = dividend_plan.normalize(get_preference(dividend_plan.PREFERENCE_KEY, {}))
+        config = dividend_plan.goal_from_holdings(payload.get("goal_monthly_usd"), _latest_positions(get_current_workspace_id()), previous)
+    else:
+        config = dividend_plan.validated(payload)
     set_preference(dividend_plan.PREFERENCE_KEY, config)
     return _dividend_plan_answer(config)
 
