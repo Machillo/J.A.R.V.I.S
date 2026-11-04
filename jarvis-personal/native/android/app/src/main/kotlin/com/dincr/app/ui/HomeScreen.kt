@@ -129,15 +129,17 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
             } finally { refreshing = false }
         }
     }
-    PullToRefreshBox(refreshing, onRefresh = { if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
+    // A dollar expense waiting for its close shows at once after saving or pulling, not on the next return.
+    var dollarsRefresh by remember { mutableStateOf(0) }
+    PullToRefreshBox(refreshing, onRefresh = { dollarsRefresh += 1; if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
         modifier = Modifier.fillMaxSize().padding(padding).testTag("home.refresh")) {
-        HomeContent(model, profile?.firstName.orEmpty(), home, if (owner) agenda else null, nav, onSaved = if (owner) home.reload else { { refreshHome() } })
+        HomeContent(model, profile?.firstName.orEmpty(), home, if (owner) agenda else null, nav, dollarsRefresh, onSaved = { dollarsRefresh += 1; if (owner) home.reload() else refreshHome() })
     }
 }
 
 /** Hoy: the hero, and on a rounded sheet over it the blocks. [agenda] is given only on the Owner's Hoy, with JARVIS. */
 @Composable
-private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToday>, agenda: LoadHandle<List<JarvisEvent>>?, nav: Navigator, onSaved: () -> Unit) {
+private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToday>, agenda: LoadHandle<List<JarvisEvent>>?, nav: Navigator, dollarsRefresh: Int, onSaved: () -> Unit) {
     var editor by remember { mutableStateOf<MovementKind?>(null) }
     val owner = agenda != null
     val prefix = if (owner) "owner.home" else "home"
@@ -171,7 +173,7 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
         Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(start = DincrSpacing.s4, end = DincrSpacing.s4, bottom = DincrSpacing.s4).testTag(if (owner) "owner.home" else "home.today"),
             verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
             agenda?.let { OwnerAgenda(it, nav) }
-            PendingDollarsCard(model) { nav.tab(Destination.MOVEMENTS) }
+            PendingDollarsCard(model, dollarsRefresh) { nav.tab(Destination.MOVEMENTS) }
             LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = onSaved, figureInHero = true) }
         }
     }

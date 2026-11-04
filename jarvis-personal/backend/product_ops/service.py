@@ -689,7 +689,7 @@ def list_feedback():
     account_id = get_current_account_id()
     with get_connection() as conn:
         ensure_schema(conn)
-        rows = conn.execute("""SELECT id,category,subject,message,status,owner_notes,source,severity,
+        rows = conn.execute("""SELECT id,category,subject,message,status,source,severity,
           occurrence_count,last_seen_at,affected_operations,discord_alerted_at,user_resolution,user_resolution_at,created_at,updated_at
           FROM feedback_reports WHERE account_id=%s ORDER BY created_at DESC LIMIT 30""", (account_id,)).fetchall()
         conn.commit()

@@ -18,9 +18,9 @@ from backend.core.database import get_connection
 EXPORT_FORMAT_VERSION = 1
 MAX_ROWS_PER_TABLE = 20000
 # Columns that reference secrets or internal infrastructure, not user data.
-# granted_by/courtesy_note: the granting Owner's account id and internal note, not the user's data.
+# granted_by/courtesy_note/owner_notes: the granting Owner's account id and internal notes, not the user's data.
 EXCLUDED_COLUMNS = {"refresh_token_secret_id", "history_id", "watch_expiration", "initial_scan_page_token",
-                    "granted_by", "courtesy_note"}
+                    "granted_by", "courtesy_note", "owner_notes"}
 # Internal machinery, not user data: pending OAuth flows and request idempotency records.
 EXCLUDED_TABLES = {"accounts", "workspaces", "mail_oauth_flows", "operation_idempotency"}
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")

@@ -198,4 +198,4 @@ def safe_abandon_operation(*, account_id: str, key: str, lease: Any) -> None:
     try:
         abandon_operation(account_id=account_id, key=key, lease=lease)
     except Exception:
-        logger.exception("Could not release idempotency reservation account_id=%s", account_id)
+        logger.exception("Could not release idempotency reservation")

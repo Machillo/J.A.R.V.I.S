@@ -45,6 +45,9 @@ ROUTES_BEFORE_ACCEPTANCE = frozenset({
     ("GET", "/product-ops/health"),
     ("GET", "/product-ops/feedback"),
     ("POST", "/product-ops/feedback"),
+    # Withdrawing an authorization never waits: declining new texts can't keep a token stored.
+    ("DELETE", "/user-product/vip/gmail"),
+    ("DELETE", "/user-product/vip/shortcuts/token"),
 })
 
 # Accounts known to have accepted the current versions. An acceptance is never withdrawn for a

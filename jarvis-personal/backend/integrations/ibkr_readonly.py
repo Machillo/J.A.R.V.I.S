@@ -376,7 +376,7 @@ def receive_ibkr_snapshot(
     expected = os.getenv("IBKR_BRIDGE_SECRET", "")
     if not expected:
         raise HTTPException(status_code=503, detail="IBKR_BRIDGE_SECRET no está configurado.")
-    if not x_jarvis_ibkr_secret or not hmac.compare_digest(x_jarvis_ibkr_secret, expected):
+    if not x_jarvis_ibkr_secret or not hmac.compare_digest(x_jarvis_ibkr_secret.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Credencial del puente IBKR inválida.")
 
     return _persist_snapshot(payload, sync_method="bridge")
@@ -387,7 +387,7 @@ def sync_flex_cron(x_jarvis_cron_secret: str | None = Header(default=None)):
     expected = os.getenv("IBKR_FLEX_CRON_SECRET", "").strip() or os.getenv("EMAIL_MONITOR_CRON_SECRET", "").strip()
     if not expected:
         raise HTTPException(status_code=503, detail="IBKR_FLEX_CRON_SECRET no está configurado.")
-    if not x_jarvis_cron_secret or not hmac.compare_digest(x_jarvis_cron_secret, expected):
+    if not x_jarvis_cron_secret or not hmac.compare_digest(x_jarvis_cron_secret.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Credencial del cron IBKR inválida.")
     try:
         result = sync_flex_snapshot()

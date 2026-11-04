@@ -18,7 +18,7 @@ def _check_secret(raw: bytes, provider: str, supplied: str | None) -> None:
     if not secret:
         raise HTTPException(503, "Falta DEPLOYMENT_WEBHOOK_SECRET.")
     expected = "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
-    if not supplied or not hmac.compare_digest(expected, supplied):
+    if not supplied or not hmac.compare_digest(expected.encode("utf-8"), supplied.encode("utf-8")):
         raise HTTPException(403, f"Firma {provider} inválida.")
 
 
@@ -39,7 +39,7 @@ def _check_render_signature(raw: bytes, webhook_id: str | None, webhook_timestam
     except Exception as exc:
         raise HTTPException(403, "No se pudo validar la firma Render.") from exc
     supplied_values = [part.strip().removeprefix("v1,") for part in signature.split()]
-    if not any(hmac.compare_digest(expected, value) for value in supplied_values):
+    if not any(hmac.compare_digest(expected.encode("utf-8"), value.encode("utf-8")) for value in supplied_values):
         raise HTTPException(403, "Firma Render inválida.")
 
 

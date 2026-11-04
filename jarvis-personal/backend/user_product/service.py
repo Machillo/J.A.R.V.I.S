@@ -86,7 +86,7 @@ def _monthly_income_estimate(profile: dict | None) -> float:
 
 def get_user_finance_summary():
     workspace_id = get_current_workspace_id()
-    month_start = date.today().replace(day=1)
+    month_start = costa_rica_today().replace(day=1)
     with get_connection() as conn:
         row = conn.execute(
             """SELECT
@@ -94,7 +94,7 @@ def get_user_finance_summary():
                  COALESCE((SELECT SUM(amount) FROM payroll_events WHERE workspace_id=%s AND created_at >= %s AND amount > 0),0) AS overtime_income,
                  COALESCE((SELECT SUM(amount) FROM expenses WHERE workspace_id=%s AND created_at >= %s),0) AS expenses,
                  COALESCE((SELECT SUM(remaining_amount) FROM debts WHERE workspace_id=%s),0) AS debt_balance,
-                 COALESCE((SELECT SUM(monthly_payment) FROM debts WHERE workspace_id=%s),0) AS debt_monthly""",
+                 COALESCE((SELECT SUM(monthly_payment) FROM debts WHERE workspace_id=%s AND remaining_amount>0),0) AS debt_monthly""",
             (workspace_id, month_start, workspace_id, month_start, workspace_id, month_start, workspace_id, workspace_id),
         ).fetchone()
     regular = _money(row["regular_income"])
@@ -104,7 +104,7 @@ def get_user_finance_summary():
     debt_monthly = _money(row["debt_monthly"])
     income = round(regular + overtime, 2)
     return {
-        "month": date.today().strftime("%Y-%m"),
+        "month": costa_rica_today().strftime("%Y-%m"),
         "income": income,
         "regular_income": regular,
         "overtime_income": overtime,
@@ -153,11 +153,11 @@ def create_income(payload):
         values = _entry_values(conn, payload)
         row = conn.execute(
             f"""INSERT INTO salaries(user_id,workspace_id,amount,source,category,{ORIGINAL_COLUMNS},created_at)
-               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
+               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::date+TIME '12:00')
                RETURNING id,amount,source,category,{ORIGINAL_COLUMNS},created_at""",
             (user_id, workspace_id, values["amount"], (payload.description or payload.category or "Ingreso").strip(),
              (payload.category or "Otros ingresos").strip(), values["original_amount"], values["original_currency"],
-             values["exchange_rate"], payload.entry_date),
+             values["exchange_rate"], payload.entry_date or costa_rica_today()),
         ).fetchone()
         mark_applied(conn)
         conn.commit()
@@ -217,10 +217,10 @@ def create_expense_entry(payload):
         write, link = expense_account.requested_link(conn, payload, account_id=get_current_account_id(), workspace_id=workspace_id)
         row = conn.execute(
             f"""INSERT INTO expenses(category,expense_type,description,amount,{ORIGINAL_COLUMNS},user_id,workspace_id,created_at)
-               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
+               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::date+TIME '12:00')
                RETURNING id,category,expense_type,description,amount,{ORIGINAL_COLUMNS},user_id,workspace_id,created_at""",
             (category, expense_type, payload.description or "", values["amount"], values["original_amount"],
-             values["original_currency"], values["exchange_rate"], user_id, workspace_id, payload.entry_date),
+             values["original_currency"], values["exchange_rate"], user_id, workspace_id, payload.entry_date or costa_rica_today()),
         ).fetchone()
         if write:
             expense_account.write_link(conn, row["id"], link, workspace_id=workspace_id)
@@ -275,8 +275,8 @@ def create_overtime(payload):
     with get_connection() as conn:
         row = conn.execute(
             """INSERT INTO payroll_events(event_type,hours,multiplier,amount,description,user_id,workspace_id,created_at)
-               VALUES('ot',%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00') RETURNING id,created_at""",
-            (payload.hours, payload.multiplier, amount, payload.notes or "", user_id, workspace_id, payload.work_date),
+               VALUES('ot',%s,%s,%s,%s,%s,%s,%s::date+TIME '12:00') RETURNING id,created_at""",
+            (payload.hours, payload.multiplier, amount, payload.notes or "", user_id, workspace_id, payload.work_date or costa_rica_today()),
         ).fetchone()
         conn.commit()
     return {
@@ -352,7 +352,7 @@ def pay_user_debt(debt_id: int, amount: float, remaining_installments: int | Non
             """INSERT INTO transactions(
                    user_id,workspace_id,transaction_date,description,amount,transaction_type,category,account,source,notes,created_at
                ) VALUES(%s,%s,%s,%s,%s,'debt_payment',%s,NULL,'finva_debt_payment',%s,NOW())""",
-            (user_id, workspace_id, date.today().isoformat(), f"Pago {debt['name']}", applied,
+            (user_id, workspace_id, costa_rica_today().isoformat(), f"Pago {debt['name']}", applied,
              debt["name"], f"debt_id:{debt_id}"),
         )
         mark_applied(conn)
@@ -524,7 +524,7 @@ def update_user_goal(goal_id: int, payload):
 
 def contribute_user_goal(goal_id: int, payload):
     workspace_id = get_current_workspace_id()
-    contribution_date = payload.contribution_date or date.today().isoformat()
+    contribution_date = payload.contribution_date or costa_rica_today().isoformat()
     with get_connection() as conn:
         goal = conn.execute(
             "SELECT id,target_amount,current_amount FROM financial_goals WHERE id=%s AND workspace_id=%s FOR UPDATE",
@@ -614,7 +614,7 @@ def update_savings_plan(plan_id: int, payload):
 
 def contribute_savings_plan(plan_id: int, payload):
     workspace_id = get_current_workspace_id()
-    contribution_date = payload.contribution_date or date.today()
+    contribution_date = payload.contribution_date or costa_rica_today()
     with get_connection() as conn:
         plan = conn.execute(
             "SELECT id,saved_amount FROM finva_savings_plans WHERE id=%s AND workspace_id=%s FOR UPDATE",
@@ -684,7 +684,8 @@ def delete_user_transaction(transaction_id: int):
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         row = conn.execute(
-            "DELETE FROM transactions WHERE id=%s AND workspace_id=%s RETURNING id",
+            # Only what the user recorded: a debt payment or imported notice has its own way back.
+            "DELETE FROM transactions WHERE id=%s AND workspace_id=%s AND source IN ('finva','manual','manual_expense') RETURNING id",
             (transaction_id, workspace_id),
         ).fetchone()
         if not row:
@@ -726,8 +727,8 @@ def get_financial_situation():
                  COUNT(DISTINCT date_trunc('month',transaction_date))
                    FILTER (WHERE transaction_type='expense') AS expense_months
                FROM transactions
-               WHERE workspace_id=%s AND transaction_date >= CURRENT_DATE - INTERVAL '90 days'""",
-            (workspace_id,),
+               WHERE workspace_id=%s AND transaction_date >= %s::date - INTERVAL '90 days'""",
+            (workspace_id, costa_rica_today()),
         ).fetchone()
     observed = dict(observed or {})
     income_months = max(int(observed.get("income_months") or 0), 1)

@@ -8,11 +8,12 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
+from backend.core.time import costa_rica_today
 from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
 from backend.core.i18n import tx
 from backend.core.schema_state import tables_exist
-from backend.user_product.debt_payments import UNKNOWN_PAYMENT_SQL, known_monthly_payment
+from backend.user_product.debt_payments import ACTIVE_MONTHLY_PAYMENT_SQL, UNKNOWN_PAYMENT_SQL, known_monthly_payment
 
 
 def _money(value: Any) -> float:
@@ -44,7 +45,7 @@ def _require_basic_tables(conn, *tables: str) -> None:
 
 def _month(value: str | None = None) -> date:
     try:
-        return date.fromisoformat(f"{value}-01") if value else date.today().replace(day=1)
+        return date.fromisoformat(f"{value}-01") if value else costa_rica_today().replace(day=1)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="El periodo debe tener formato YYYY-MM.") from exc
 
@@ -104,7 +105,7 @@ def _monthly_equivalent(amount: float, frequency: str) -> float:
 
 def get_basic_dashboard() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
-    current = date.today().replace(day=1)
+    current = costa_rica_today().replace(day=1)
     with get_connection() as conn:
         profile = _profile(conn, account_id, workspace_id)
         months = []
@@ -120,7 +121,7 @@ def get_basic_dashboard() -> dict:
             (workspace_id,current,_next_month(current),workspace_id,current,_next_month(current)),
         ).fetchall()
         # The monthly total only when every payment is known (an unknown one is not added as 0: debt_payments.py).
-        debts = conn.execute(f"SELECT COALESCE(SUM(total_amount),0) original,COALESCE(SUM(remaining_amount),0) remaining,CASE WHEN bool_or({UNKNOWN_PAYMENT_SQL}) THEN NULL ELSE COALESCE(SUM(monthly_payment),0) END monthly FROM debts WHERE workspace_id=%s",(workspace_id,)).fetchone()
+        debts = conn.execute(f"SELECT COALESCE(SUM(total_amount),0) original,COALESCE(SUM(remaining_amount),0) remaining,{ACTIVE_MONTHLY_PAYMENT_SQL} monthly FROM debts WHERE workspace_id=%s",(workspace_id,)).fetchone()
         goals = conn.execute("SELECT COALESCE(SUM(target_amount),0) target,COALESCE(SUM(current_amount),0) current,COUNT(*) FILTER(WHERE status='active') active FROM financial_goals WHERE workspace_id=%s",(workspace_id,)).fetchone()
     now, previous = months[-1], months[-2]
     debt_original, debt_remaining = _money(debts["original"]), _money(debts["remaining"])
@@ -141,7 +142,7 @@ def get_basic_dashboard() -> dict:
 
 def get_guided_budget() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
-    current = date.today().replace(day=1)
+    current = costa_rica_today().replace(day=1)
     with get_connection() as conn:
         recurring_ready = _basic_tables_ready(conn, "finva_recurring_items")
         budget_ready = _basic_tables_ready(conn, "finva_budget_items")

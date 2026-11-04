@@ -51,4 +51,15 @@ import Testing
         let months = MonthReview.closedMonths(today: calendar.date(from: DateComponents(year: 2027, month: 1, day: 3))!)
         #expect(months.closed == "2026-12" && months.before == "2026-11")
     }
+
+    @Test func aMonthWithNothingRegisteredIsUnknownNotZero() throws {
+        let unknown = "Faltan los ingresos o los gastos de este mes para saberlo."
+        let empty = try summary(#"{"period":"2026-10","income":0,"expenses":0}"#)
+        #expect(MonthReview.left(empty) == nil)
+        #expect(MonthReview.cards(empty, previous: nil, format: colones, language: .spanish)[0].lines == [unknown])
+        let noIncome = try summary(#"{"period":"2026-10","income":0,"expenses":80000}"#)
+        #expect(MonthReview.cards(noIncome, previous: nil, format: colones, language: .spanish)[0].lines == [unknown])
+        let noSpending = try summary(#"{"period":"2026-10","income":80000,"expenses":0}"#)
+        #expect(MonthReview.cards(noSpending, previous: nil, format: colones, language: .spanish)[0].lines == [unknown])
+    }
 }

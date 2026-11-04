@@ -157,6 +157,7 @@ def _engine(inputs: dict, monkeypatch) -> dict:
 
     for module in (service, vip_service, basic_service, free_service, income_policy):
         monkeypatch.setattr(module, "date", _FixtureDate)
+        monkeypatch.setattr(module, "costa_rica_today", _FixtureDate.today, raising=False)
         monkeypatch.setattr(module, "get_connection", _connect, raising=False)
         monkeypatch.setattr(module, "get_current_account_id", lambda: "store-account", raising=False)
         monkeypatch.setattr(module, "get_current_workspace_id", lambda: "store-workspace", raising=False)

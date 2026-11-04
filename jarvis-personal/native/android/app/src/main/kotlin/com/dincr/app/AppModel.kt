@@ -398,6 +398,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun retryIdentity() = viewModelScope.launch { loadIdentity() }
 
+    /** After a purchase or restore: a network blip keeps the app on screen instead of an error page. */
+    fun refreshIdentityKeepingScreen() = viewModelScope.launch { loadIdentity(keepOnTransient = true) }
+
     // JARVIS chat: sent from the model's scope, so leaving the screen never cuts a message in half.
     fun sendToJarvis(text: String) = viewModelScope.launch { jarvisChat.submit(text) }
     fun confirmJarvisChange() = viewModelScope.launch { jarvisChat.confirm() }
@@ -483,6 +486,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
      * appear without a manual refresh. iOS: `AppModel.dataGeneration`.
      */
     val dataGeneration: StateFlow<Int> = _dataGeneration.asStateFlow()
+
+    /** Something was saved outside the screen showing the data (a shortcut's sheet): it reads again. */
+    fun noteDataChanged() { _dataGeneration.value += 1 }
     private var lastReturnSync = 0L
 
     /**

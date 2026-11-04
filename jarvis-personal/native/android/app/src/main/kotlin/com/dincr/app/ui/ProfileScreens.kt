@@ -323,7 +323,7 @@ private fun StoreSubscriptionPanel(model: AppModel) {
                         scope.launch {
                             runCatching { billing.purchase(activity!!, offer) { result ->
                                 busy = false
-                                result.onSuccess { model.retryIdentity(); model.showNotice(tx("Suscripción activa", "Subscription active")) }.onFailure { message = it.message }
+                                result.onSuccess { model.refreshIdentityKeepingScreen(); model.showNotice(tx("Suscripción activa", "Subscription active")) }.onFailure { message = it.message }
                             } }.onFailure { busy = false; message = it.message }
                         }
                     }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Suscribirme", "Subscribe"), color = Dincr.colors.tint) }
@@ -335,7 +335,7 @@ private fun StoreSubscriptionPanel(model: AppModel) {
             TextButton(enabled = !busy, onClick = {
                 busy = true; message = null
                 scope.launch {
-                    runCatching { billing.restore() }.onSuccess { model.retryIdentity(); message = tx("Revisamos tus compras ($it).", "We checked your purchases ($it).") }.onFailure { message = it.message }
+                    runCatching { billing.restore() }.onSuccess { model.refreshIdentityKeepingScreen(); message = tx("Revisamos tus compras ($it).", "We checked your purchases ($it).") }.onFailure { message = it.message }
                     busy = false
                 }
             }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Restaurar compras", "Restore purchases"), color = Dincr.colors.tint) }
