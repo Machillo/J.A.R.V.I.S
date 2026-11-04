@@ -8,6 +8,7 @@ import com.dincr.data.CachedAppearance
 import com.dincr.data.DincrApi
 import com.dincr.data.Profile
 import kotlinx.coroutines.CoroutineScope
+import com.dincr.design.generated.DincrColorStyles
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,16 @@ import kotlinx.coroutines.launch
  */
 class AppearanceController(private val store: SharedPreferences, scope: CoroutineScope, private val api: () -> DincrApi) {
     private val launcher = scope
+    private val pickedStyle = MutableStateFlow(store.getString(COLOR_STYLE_KEY, null) ?: DincrColorStyles.DEFAULT_ID)
+
+    /** The color style picked in Perfil, kept on this device for every plan. An unknown id draws the default. */
+    val colorStyle: StateFlow<String> = pickedStyle.asStateFlow()
+
+    fun selectColorStyle(id: String) {
+        pickedStyle.value = id
+        store.edit().putString(COLOR_STYLE_KEY, id).apply()
+    }
+
     private val profile = MutableStateFlow<Profile?>(null)
     private val saved = MutableStateFlow<AppearanceState?>(null)
     private val draft = MutableStateFlow<AppearancePrefs?>(null)
@@ -94,3 +105,5 @@ class AppearanceController(private val store: SharedPreferences, scope: Coroutin
         const val CACHE_KEY = "personal_appearance"
     }
 }
+
+private const val COLOR_STYLE_KEY = "dincr.colorStyle"

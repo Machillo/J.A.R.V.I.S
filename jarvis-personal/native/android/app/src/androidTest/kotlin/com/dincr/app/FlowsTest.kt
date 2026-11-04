@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -410,5 +411,24 @@ class FlowsTest {
         waitForTag("editor.review.confirm")
         compose.onNodeWithTag("editor.review.confirm").performClick()
         waitForText("Compra grande")
+    }
+
+    @Test fun aColorStyleIsPickedAndStaysAfterRelaunching() {
+        val first = launch()
+        tab(tx("Perfil", "Profile"))
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
+        click(tx("Estilo de colores", "Color style"))
+        waitForTag("colorStyle.rosa")
+        compose.onNodeWithTag("colorStyle.rosa").performScrollTo().performClick()
+        compose.onNodeWithTag("colorStyle.rosa").assertIsSelected()
+        first.close()
+        launch()
+        tab(tx("Perfil", "Profile"))
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
+        click(tx("Estilo de colores", "Color style"))
+        waitForTag("colorStyle.rosa")
+        compose.onNodeWithTag("colorStyle.rosa").assertIsSelected()
+        // Back to the default, so other tests on this device start from it.
+        compose.onNodeWithTag("colorStyle.indigo").performScrollTo().performClick()
     }
 }

@@ -88,6 +88,8 @@ struct ProfileHubView: View {
                     Text(tx("Claro", "Light")).tag(Appearance.light.rawValue)
                     Text(tx("Oscuro", "Dark")).tag(Appearance.dark.rawValue)
                 } label: { Label(tx("Apariencia", "Appearance"), systemImage: "circle.lefthalf.filled") }
+                NavigationLink { ColorStyleView() } label: { Label(tx("Estilo de colores", "Color style"), systemImage: "paintpalette") }
+                    .accessibilityIdentifier("profile.colorStyle")
             }
             .dincrRowBackground()
             Section(tx("Ayuda y legal", "Help and legal")) {

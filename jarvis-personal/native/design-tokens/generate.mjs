@@ -9,12 +9,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { colorStyleFailures, kotlinColorStyles, parseColorStyles, swiftColorStyles } from "./color-styles.mjs";
 import { contrastFailures, kotlinCatalog, kotlinTokens, parseAppearance, swiftCatalog, swiftTokens } from "./appearance.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../../..");
 const designPath = path.join(repoRoot, "DESIGN.md");
 const appearancePath = path.join(here, "appearance.json");
+const colorStylesPath = path.join(here, "color-styles.json");
 const outputs = {
   swift: path.join(here, "../ios/DincrKit/Sources/DincrDesign/Generated/DincrTokens.swift"),
   kotlin: path.join(here, "../android/core/design/src/main/kotlin/com/dincr/design/generated/DincrTokens.kt"),
@@ -22,6 +24,8 @@ const outputs = {
   swiftCatalog: path.join(here, "../ios/DincrKit/Sources/DincrCore/Generated/AppearanceCatalog.swift"),
   kotlinAppearance: path.join(here, "../android/core/design/src/main/kotlin/com/dincr/design/generated/DincrAppearanceTokens.kt"),
   kotlinCatalog: path.join(here, "../android/core/data/src/main/kotlin/com/dincr/data/generated/AppearanceCatalog.kt"),
+  swiftColorStyles: path.join(here, "../ios/DincrKit/Sources/DincrDesign/Generated/DincrColorStyles.swift"),
+  kotlinColorStyles: path.join(here, "../android/core/design/src/main/kotlin/com/dincr/design/generated/DincrColorStyles.kt"),
 };
 
 // Windows checkouts with core.autocrlf turn LF into CRLF; the tokens do not depend on it.
@@ -175,9 +179,18 @@ export function checkedAppearance(tokens, rawAppearance) {
   return appearance;
 }
 
-export function render(source, rawAppearance = fs.readFileSync(appearancePath, "utf8")) {
+/** The color styles, validated with the same contrast rules as an appearance. */
+export function checkedColorStyles(tokens, raw) {
+  const styles = parseColorStyles(raw);
+  const failures = colorStyleFailures(styles, colorMap(tokens));
+  if (failures.length) throw new Error(`color-styles.json contrast:\n  ${failures.join("\n  ")}`);
+  return styles;
+}
+
+export function render(source, rawAppearance = fs.readFileSync(appearancePath, "utf8"), rawColorStyles = fs.readFileSync(colorStylesPath, "utf8")) {
   const tokens = parseTokens(source);
   const appearance = checkedAppearance(tokens, rawAppearance);
+  const colorStyles = checkedColorStyles(tokens, rawColorStyles);
   return {
     swift: swift(tokens),
     kotlin: kotlin(tokens),
@@ -185,6 +198,8 @@ export function render(source, rawAppearance = fs.readFileSync(appearancePath, "
     swiftCatalog: swiftCatalog(appearance, tokens.version),
     kotlinAppearance: kotlinTokens(appearance, tokens.version),
     kotlinCatalog: kotlinCatalog(appearance, tokens.version),
+    swiftColorStyles: swiftColorStyles(colorStyles),
+    kotlinColorStyles: kotlinColorStyles(colorStyles),
   };
 }
 

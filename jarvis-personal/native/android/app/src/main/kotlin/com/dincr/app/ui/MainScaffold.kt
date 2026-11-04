@@ -201,6 +201,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("declaredSavings") { DeclaredSavingsScreen(model, nav) }
                             composable("settings") { SettingsScreen(model, nav, appearance, onAppearance) }
                             // APP-1: the Owner's personal appearance; the screen checks the role again.
+                            composable("colorStyle") { ColorStyleScreen(model, nav) }
                             composable("appearance") { PersonalizationScreen(model, nav) }
                             composable("plans") { PlanSettingsScreen(model, nav) }
                             composable("security") { SecurityScreen(model, nav) }

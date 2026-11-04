@@ -64,12 +64,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
+import com.dincr.design.Dincr
 import com.dincr.design.generated.DincrSpacing
 import kotlinx.coroutines.launch
 
-private val StoryColor = Color(0xFF2A2E6E)
-private val StoryControl = Color(0xFF3D4290)
-private val StoryText2 = Color(0xFFD9DBF5)
+private val StoryColor: Color @Composable get() = Dincr.colors.scene
+private val StoryControl: Color @Composable get() = Dincr.colors.sceneControl
+private val StoryText2: Color @Composable get() = Dincr.colors.onScene2
 
 private enum class WelcomeArt { TOGETHER, MONTH, STEPS, SAFE }
 private class WelcomePage(val title: String, val message: String, val art: WelcomeArt)

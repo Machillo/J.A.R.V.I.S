@@ -42,11 +42,11 @@ import com.dincr.design.TabularNums
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
 
-/** The solid top of Hoy, with its text: one color in both schemes (iOS `OwnerColor.hero`). */
-internal val HomeHeroColor = Color(0xFF2A2E6E)
+/** Hoy's solid top, with its text: one color in both schemes, from the color style (iOS `OwnerColor.hero`). */
+internal val HomeHeroColor: Color @Composable get() = Dincr.colors.scene
 private val OnHero = Color.White
-private val OnHero2 = Color(0xFFD9DBF5)
-private val HeroControl = Color(0xFF3D4290)
+private val OnHero2: Color @Composable get() = Dincr.colors.onScene2
+private val HeroControl: Color @Composable get() = Dincr.colors.sceneControl
 
 /**
  * The top of Hoy in every plan: greeting, the day's key figure and the main actions on one solid color.

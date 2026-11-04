@@ -216,7 +216,7 @@ private fun ReviewStep(bank: BankBranding.Bank, found: List<FinancialIdentity.Ac
 
 @Composable
 private fun DoneStep(accounts: List<FinancialIdentity.Account>) {
-    Column(Modifier.fillMaxWidth().background(HomeHero, RoundedCornerShape(16.dp)).padding(vertical = DincrSpacing.s6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+    Column(Modifier.fillMaxWidth().background(Dincr.colors.scene, RoundedCornerShape(16.dp)).padding(vertical = DincrSpacing.s6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
         Icon(Icons.Rounded.CheckCircle, null, tint = Color.White, modifier = Modifier.size(56.dp))
         Text(if (accounts.size == 1) tx("1 cuenta en tu lista", "1 account on your list") else tx("${accounts.size} cuentas en tu lista", "${accounts.size} accounts on your list"),
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Color.White, modifier = Modifier.testTag("addBank.done").semantics { heading() })
@@ -234,5 +234,3 @@ private fun DoneStep(accounts: List<FinancialIdentity.Account>) {
     }
 }
 
-/** The success header's color (the hero's indigo). */
-private val HomeHero = Color(0xFF2A2E6E)
