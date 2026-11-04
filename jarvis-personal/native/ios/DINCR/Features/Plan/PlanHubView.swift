@@ -36,9 +36,12 @@ struct PlanHubView: View {
         case .hidden:
             EmptyView()
         case .available:
-            NavigationLink { destination(item) } label: { HubRow(symbol: item.symbol, title: item.title, subtitle: item.subtitle) }
+            NavigationLink { destination(item) } label: {
+                HubRow(symbol: item.symbol, title: item.title, subtitle: item.subtitle, prominent: item == .strategy)
+            }
                 .buttonStyle(.plain)
                 .dincrCard(padding: DincrSpacing.s3)
+                .padding(.bottom, item == .strategy ? DincrSpacing.s2 : 0)
                 .accessibilityIdentifier("plan.\(item.rawValue)")
         case .locked(let tier):
             NavigationLink { lockedDestination(item) } label: {

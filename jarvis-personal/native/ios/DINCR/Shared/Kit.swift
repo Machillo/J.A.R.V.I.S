@@ -78,12 +78,15 @@ struct FigureRow: View {
     let amount: Decimal?
     var sign: MoneyFormat.Sign = .none
     var currency: String? = nil
+    /// The total of a group: it reads above the rows it adds up.
+    var emphasized = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(label).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
+            Text(label).font(emphasized ? DincrFont.body.weight(.semibold) : DincrFont.bodySmall)
+                .foregroundStyle(emphasized ? OwnerColor.text : OwnerColor.text2)
             Spacer(minLength: DincrSpacing.s3)
-            MoneyText(amount, sign: sign, currency: currency, font: DincrFont.amount)
+            MoneyText(amount, sign: sign, currency: currency, font: emphasized ? DincrFont.title2.monospacedDigit() : DincrFont.amount)
         }
         .accessibilityElement(children: .combine)
     }
@@ -108,14 +111,16 @@ struct HubRow: View {
     let title: String
     let subtitle: String
     var locked: PlanTier? = nil
+    /// The screen's main entry: it reads first among rows that otherwise weigh the same.
+    var prominent = false
 
     var body: some View {
         HStack(spacing: DincrSpacing.s3) {
-            Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(.dincrTint)
-                .frame(width: 36, height: 36).background(OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+            Image(systemName: symbol).font(.system(size: 18, weight: .medium)).foregroundStyle(prominent ? OwnerColor.onAccent : OwnerColor.accent)
+                .frame(width: 36, height: 36).background(prominent ? OwnerColor.accent : OwnerColor.accentContainer, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
+                Text(title).font(prominent ? DincrFont.title2 : DincrFont.body.weight(.semibold)).foregroundStyle(.dincrText)
                 Text(subtitle).font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
             }
             Spacer(minLength: 0)
