@@ -1,6 +1,8 @@
 """The Owner's distribution as an analysis of his month. Synthetic data only, no database."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backend.ai import owner_analysis as oa
@@ -200,8 +202,8 @@ def test_his_usual_month_reads_the_fixed_categories_the_living_expenses_return(m
     monkeypatch.setattr(owner_debt_blocks, "average_income", lambda *_a: (480_000.0, False))
     monkeypatch.setattr(sd, "get_preference", lambda *_a: {})
     monkeypatch.setattr(sd, "_owner_lived_spending", lambda _w, fixed, _t: seen.update(fixed=fixed) or (300_000.0, 80_000.0))
-    source = sd._get_strategy_living_expenses.__code__.co_consts
-    assert "included_fixed" in source, "the key this test relies on"
+    source = Path(sd.__file__).read_text(encoding="utf-8")
+    assert '"included_fixed": included' in source, "the key this test relies on"
     usual = sd._owner_usual_month("ws", 400_000.0, 100_000.0, {"fixed_living_total": 200_000, "included_fixed": [{"category": "Vivienda"}]}, 10_000.0)
     assert seen["fixed"] == {"vivienda"}
     assert (usual.income, usual.fixed_expenses, usual.lived_variable, usual.lived_necessary) == (480_000.0, 200_000, 300_000.0, 80_000.0)
