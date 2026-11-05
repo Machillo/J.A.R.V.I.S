@@ -91,7 +91,7 @@ class ProjectionsUiTest {
         listOf(1, 3, 6, 12).forEach { assertFalse("$it", tagged("projections.point.$it")) }
         assertFalse(present(tx("Patrimonio neto", "Net worth")))  // no figure from an unknown
         listOf("income" to tx("Ingresos y base", "Income and base"), "essential_expenses" to tx("Ingresos y base", "Income and base"),
-            "savings" to tx("Tus ahorros", "Your savings")).forEach { (code, title) ->
+            "savings" to tx("Mis ahorros", "My savings")).forEach { (code, title) ->
             clickTag("projections.missing.$code")
             waitUntil("$code → $title") { present(title) && !tagged("projections.incomplete") }
             back()
