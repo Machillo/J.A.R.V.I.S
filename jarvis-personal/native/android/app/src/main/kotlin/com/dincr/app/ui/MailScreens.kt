@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -45,6 +47,7 @@ import com.dincr.data.OwnTransferSuggestions
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
+import com.dincr.design.generated.DincrSpacing
 import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
@@ -166,6 +169,7 @@ private fun ConnectMail(model: AppModel, status: MailStatus) {
         tx("DINCR lee solo los avisos de tus bancos (permiso de solo lectura), te propone el movimiento y vos decidís si guardarlo.", "DINCR reads only your banks’ notices (read-only permission), suggests the transaction and you decide whether to save it."))
     if (status.consent?.required == true) Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(consent, role = Role.Checkbox) { consent = it }, verticalAlignment = Alignment.CenterVertically) {
         Checkbox(consent, null)
+        Spacer(Modifier.width(DincrSpacing.s2))
         Text(tx("Autorizo a DINCR a leer los avisos financieros de mi correo en modo solo lectura.", "I allow DINCR to read the financial notices in my mail, read-only."), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text)
     }
     ChoiceChips(listOf("current_month" to tx("Este mes", "This month"), "current_year" to tx("Este año", "This year")), scopeChoice, { scopeChoice = it }, tx("Historia a revisar", "History to review"))

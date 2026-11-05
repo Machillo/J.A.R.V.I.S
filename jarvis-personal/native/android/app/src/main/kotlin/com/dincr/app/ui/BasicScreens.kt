@@ -64,7 +64,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MonthPicker(month: YearMonth, onChange: (YearMonth) -> Unit, allowFuture: Boolean = false) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        IconButton({ onChange(month.minusMonths(1)) }, modifier = Modifier.heightIn(min = 48.dp)) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = tx("Mes anterior", "Previous month")) }
+        IconButton({ onChange(month.minusMonths(1)) }, modifier = Modifier.heightIn(min = 48.dp)) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = tx("Mes anterior", "Previous month"), tint = Dincr.colors.tint) }
         Text(monthLabel(month), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         val canForward = allowFuture || month < YearMonth.now()
         IconButton({ if (canForward) onChange(month.plusMonths(1)) }, enabled = canForward, modifier = Modifier.heightIn(min = 48.dp)) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = tx("Mes siguiente", "Next month")) }

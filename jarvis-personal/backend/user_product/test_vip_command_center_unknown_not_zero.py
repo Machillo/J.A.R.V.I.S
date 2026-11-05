@@ -125,12 +125,12 @@ def test_known_zero_savings_with_known_commitments_keep_the_reserve_alert(ledger
     _profile(ledger).update({"liquid_savings": 0})
     alert = next(alert for alert in _center()["alerts"] if alert["title"] == LOW_RESERVE)
     assert alert["severity"] == "high"
-    assert "0.0 meses" in alert["context"]
+    assert "0,0 meses" in alert["context"]
 
 
 def test_known_savings_below_one_month_keep_the_reserve_alert(ledger):
     alert = next(alert for alert in _center()["alerts"] if alert["title"] == LOW_RESERVE)
-    assert "0.7 meses" in alert["context"]   # 300.000 / 450.000, as before
+    assert "0,7 meses" in alert["context"]   # 300.000 / 450.000, as before
 
 
 def test_a_reserve_of_one_month_or_more_has_no_reserve_alert(ledger):

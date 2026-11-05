@@ -2,6 +2,8 @@ package com.dincr.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -79,6 +81,7 @@ private fun CheckRow(label: String, checked: Boolean, enabled: Boolean, tag: Str
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(tag).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked, onCheckedChange = null, enabled = enabled)
+        Spacer(Modifier.width(DincrSpacing.s2))
         Text(label, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text, modifier = Modifier.weight(1f))
     }
 }

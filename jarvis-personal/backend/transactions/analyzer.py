@@ -1,5 +1,6 @@
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.i18n import tx
 from backend.finance.category_catalog import owner_context
 from backend.user_product import owner_ledger
 from datetime import date, datetime
@@ -350,7 +351,7 @@ def get_spending_breakdown():
         row["total"] = round(row["total"], 2)
 
     return {
-        "period": {"start": year_start.isoformat(), "end": today.isoformat(), "label": f"{today.year} YTD"},
+        "period": {"start": year_start.isoformat(), "end": today.isoformat(), "label": tx(f"En lo que va de {today.year}", f"{today.year} to date")},
         "total": round(sum(float(item.get("amount") or 0) for item in items), 2),
         "categories": categories,
         "transactions": items,

@@ -183,16 +183,12 @@ public struct CompositionDonut: View {
         }
     }
 
-    /// One hue in steps of decreasing strength, in the caller's order; a selection keeps its part
-    /// strong and quiets the rest.
+    /// A selection keeps its part strong and quiets the rest.
     private func shade(for id: String) -> Color {
         guard let index = composition.segments.firstIndex(where: { $0.id == id }) else { return color }
-        if asBar {
-            let part = VisualShade.barColors[index % VisualShade.barColors.count]
-            return selectedID == nil || id == selectedID ? part : part.opacity(0.3)
-        }
-        if let selectedID { return color.opacity(id == selectedID ? 1 : 0.4) }
-        return color.opacity(VisualShade.opacity(at: index))
+        // One color per part, in the ring too: shades of one hue could not be told apart.
+        let part = VisualShade.barColors[index % VisualShade.barColors.count]
+        return selectedID == nil || id == selectedID ? part : part.opacity(0.3)
     }
 
     private var notice: String {
@@ -238,6 +234,8 @@ public struct TrendLineChart: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            // VoiceOver hears the title from the chart, with its points.
+            Text(title).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(.dincrText).accessibilityHidden(true)
             if series.hasTrend {
                 chart
                 if let point = selectedPoint {
