@@ -10,6 +10,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -51,6 +52,8 @@ data class Pkce(val verifier: String) {
     }
 }
 
+private const val SIGN_OUT_TIMEOUT_MS = 5_000L
+
 /** Minimal Supabase GoTrue client: authorize URL, PKCE exchange, refresh, sign-out. */
 class SupabaseAuthClient(
     private val projectUrl: String,
@@ -77,10 +80,11 @@ class SupabaseAuthClient(
     suspend fun refresh(refreshToken: String): AuthSession =
         token("refresh_token", buildJsonObject { put("refresh_token", refreshToken) }.toString())
 
+    /** Best effort: signing out never waits long for a network that is not there. */
     suspend fun signOut(accessToken: String) {
-        runCatching {
+        withTimeoutOrNull(SIGN_OUT_TIMEOUT_MS) { runCatching {
             transport.send(HttpRequest("POST", "$base/auth/v1/logout?scope=local", mapOf("apikey" to anonKey, "Authorization" to "Bearer $accessToken"), ""))
-        }
+        } }
     }
 
     @Serializable

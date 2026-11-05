@@ -99,6 +99,8 @@ public struct SupabaseAuthClient: Sendable {
         request.httpMethod = "POST"
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        // Best effort: signing out never waits long for a network that is not there.
+        request.timeoutInterval = 5
         _ = try? await transport.send(request)
     }
 

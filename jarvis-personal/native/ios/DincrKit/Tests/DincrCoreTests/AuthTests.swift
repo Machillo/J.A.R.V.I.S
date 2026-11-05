@@ -3,6 +3,13 @@ import Testing
 @testable import DincrCore
 
 @Suite struct AuthTests {
+    @Test func signingOutNeverWaitsLongForTheNetwork() async {
+        let transport = ScriptedTransport([.failure(.notConnectedToInternet)])
+        let client = SupabaseAuthClient(projectURL: URL(string: "https://project.example.test")!, anonKey: "synthetic", transport: transport)
+        await client.signOut(accessToken: "synthetic")
+        #expect(transport.requests.first?.timeoutInterval == 5)
+    }
+
     @Test func pkceChallengeMatchesRFC7636TestVector() {
         let pkce = PKCE(verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
         #expect(pkce.challenge == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
