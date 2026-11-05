@@ -451,7 +451,7 @@ class FakeBackend(
             path == "/auth/legal/accept" -> {
                 profile = profile.copy(legal = profile.legal?.copy(required = false))
                 legalGateClosed = false
-                ok("""{"status":"accepted","required":false,"terms_version":"2026-09-23-v3","privacy_version":"2026-09-25-v4"}""")
+                ok("""{"status":"accepted","required":false,"terms_version":"2026-11-05-v4","privacy_version":"2026-11-05-v5"}""")
             }
             path == "/auth/plans" -> ok(PLANS)
             path == "/auth/plan" -> {
@@ -1146,7 +1146,7 @@ class FakeBackend(
         subscription = if (role == Role.OWNER) Profile.Subscription("vip", "VIP", "active", "owner")
         else Profile.Subscription(plan.wire, plan.name.lowercase().replaceFirstChar { it.uppercase() }, "active",
             if (plan == PlanTier.FREE || scenario == Scenario.STORE) "self_service" else "courtesy"),
-        legal = Profile.Legal(required = scenario == Scenario.LEGAL_REQUIRED, termsVersion = "2026-09-23-v3", privacyVersion = "2026-09-25-v4"),
+        legal = Profile.Legal(required = scenario == Scenario.LEGAL_REQUIRED, termsVersion = "2026-11-05-v4", privacyVersion = "2026-11-05-v5"),
     )
 
     private companion object {

@@ -1,6 +1,6 @@
 # Propuesta: Política de Privacidad v5 (LEGAL / PRE-RELEASE GATE)
 
-**Estado: NO publicada.** Esta propuesta prepara el cambio mínimo para que la política describa el comportamiento real después de retirar Firebase Analytics y Crashlytics de la app. No modifica el texto vigente ni fuerza una nueva aceptación. Requiere aprobación humana, incluida una revisión legal.
+**Estado: aplicada en `2026-11-05-v5`, junto con Términos `2026-11-05-v4` y la captura desde el teléfono.** Texto original de la propuesta: Esta propuesta prepara el cambio mínimo para que la política describa el comportamiento real después de retirar Firebase Analytics y Crashlytics de la app. No modifica el texto vigente ni fuerza una nueva aceptación. Requiere aprobación humana, incluida una revisión legal.
 
 ## Por qué
 
