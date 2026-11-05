@@ -212,8 +212,8 @@ fun SecurityScreen(model: AppModel, nav: Navigator) {
                 AppLock.Availability.AVAILABLE -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(tx("Bloquear DINCR", "Lock DINCR"), style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text, modifier = Modifier.weight(1f))
                     Switch(enabled, onCheckedChange = { on ->
-                        if (!on) { lock.setEnabled(false); enabled = false; return@Switch }
-                        activity?.let { a -> lock.authenticate(a) { error -> if (error == null) { lock.setEnabled(true); enabled = true } else message = error } }
+                        // On and off both need the owner of the phone: whoever picks up an open phone can't remove the lock.
+                        activity?.let { a -> lock.authenticate(a) { error -> if (error == null) { lock.setEnabled(on); enabled = on } else message = error } }
                     }, modifier = Modifier.semantics { contentDescription = tx("Bloquear DINCR", "Lock DINCR") })
                 }
             }

@@ -73,9 +73,13 @@ final class AppLock {
     }
 
     /// Turning the lock on requires a successful authentication first, so the user can unlock.
+    /// Turning it off does too, so whoever picks up an open phone can't remove it. A phone that no
+    /// longer has any screen lock can't authenticate: it can always turn it off.
     func setEnabled(_ enabled: Bool) async -> String? {
-        if enabled, let failure = await authenticate(reason: AppLanguage.current.pick("Activá el bloqueo de DINCR", "Turn on the DINCR lock")) {
-            return failure
+        if enabled || availability != .unavailable {
+            let reason = enabled ? AppLanguage.current.pick("Activá el bloqueo de DINCR", "Turn on the DINCR lock")
+                                 : AppLanguage.current.pick("Confirmá que querés quitar el bloqueo de DINCR", "Confirm you want to turn off the DINCR lock")
+            if let failure = await authenticate(reason: reason) { return failure }
         }
         isEnabled = enabled
         if let enabledKey { defaults.set(enabled, forKey: enabledKey) }
