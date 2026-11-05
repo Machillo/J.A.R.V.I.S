@@ -2,11 +2,11 @@
   "platform": "ios",
   "fixture": "STORE",
   "fixture_date": "2026-09-28",
-  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "source_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
   "source_dirty": false,
-  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "pipeline_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
   "built": true,
-  "captured_at": "2026-11-05T15:36:40.303Z",
+  "captured_at": "2026-11-05T22:42:22.340Z",
   "app": {
     "bundle_id": "com.dincr.app",
     "configuration": "Debug"
@@ -68,7 +68,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/es/phone/05-goals.png",
-      "sha256": "64d1b2c7f8d951f9dad662f631ee32123c14dbc9f13273d66f9fc7dd57435259",
+      "sha256": "4bc5cc25313ee4b4458ab07934baff816e969e8f389fe7fcbc73868a4a6f18a5",
       "width": 1320,
       "height": 2868
     },
@@ -88,7 +88,7 @@
       "device": "phone",
       "plan": "basic",
       "file": "raw/ios/es/phone/07-strategy.png",
-      "sha256": "2d69bcf38dddf59651d829f25fe75eafa419ef676e678678517893bc8dfb0a84",
+      "sha256": "2eb055661c6259f5f029804303217302fa257860366df0e9052692c22846501d",
       "width": 1320,
       "height": 2868
     },
@@ -118,7 +118,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/en/phone/03-movements.png",
-      "sha256": "ac3b7da6242d802b5f333a3abb7a77b0d035843fea091fa5f6352fc59b24fab9",
+      "sha256": "4fc3b87756d808528479f5280c5b065544ddf0e0f4972e2a9ecbd6a432e9d129",
       "width": 1320,
       "height": 2868
     },
@@ -138,7 +138,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/en/phone/05-goals.png",
-      "sha256": "c12ec1d719a8c7b8f96a5fe90000db4e0f5178fce79524c89c645f61e2e56df3",
+      "sha256": "afff3fe510d06ae56d776d045455572141ff72111fe06d1d8f7e3b0b5f4bd45f",
       "width": 1320,
       "height": 2868
     },

@@ -1,5 +1,5 @@
 {
-  "output_sha256": "8fa55f70539673b677753a83e930070341b4fb98864013abd28950ae75b87246",
+  "output_sha256": "6c92da4098a112d97ef6d5eef66bcf35db1498428b3f90be234b992df4ba604e",
   "mode": "final",
   "target": "apple-iphone-69",
   "store": "apple",
@@ -12,17 +12,18 @@
   "height": 2868,
   "alpha": false,
   "caption_ratio": 0.1399,
+  "span_capture": null,
   "capture": {
     "file": "raw/ios/en/phone/03-movements.png",
-    "sha256": "ac3b7da6242d802b5f333a3abb7a77b0d035843fea091fa5f6352fc59b24fab9",
+    "sha256": "4fc3b87756d808528479f5280c5b065544ddf0e0f4972e2a9ecbd6a432e9d129",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-11-05T15:36:40.303Z",
+    "captured_at": "2026-11-05T22:42:22.340Z",
     "device": null
   },
-  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "source_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
-  "generated_at": "2026-11-05T15:40:44.084Z"
+  "pipeline_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
+  "generated_at": "2026-11-05T22:44:48.119Z"
 }

@@ -140,6 +140,12 @@ function finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor,
     if (!fs.existsSync(raw)) problems.push(`${label}: capture ${meta.capture.file} not found`);
     else if (sha256(fs.readFileSync(raw)) !== meta.capture.sha256) problems.push(`${label}: capture ${meta.capture.file} changed after composing`);
   }
+  if (meta.span_capture) {
+    // The part of another screen's capture this image shows (a two-image picture): it must exist unchanged.
+    const span = meta.span_capture.file ? path.join(rawRoot, meta.span_capture.file) : null;
+    if (!span || !fs.existsSync(span)) problems.push(`${label}: span capture ${meta.span_capture.file} not found`);
+    else if (sha256(fs.readFileSync(span)) !== meta.span_capture.sha256) problems.push(`${label}: span capture ${meta.span_capture.file} changed after composing`);
+  }
   if (meta.capture?.fixture !== screens.fixture.scenario) problems.push(`${label}: fixture ${meta.capture?.fixture}, expected ${screens.fixture.scenario}`);
   return problems;
 }

@@ -1,5 +1,5 @@
 {
-  "output_sha256": "c22e1d0c77f6750a35c0161ffc313bac1245e798497eb62ac7b6142c6e50bf38",
+  "output_sha256": "d9775d4cab1eb228de930aef08c997b3ace54e68e11891d9bfc18612a4e90941",
   "mode": "final",
   "target": "apple-iphone-69",
   "store": "apple",
@@ -11,18 +11,22 @@
   "width": 1320,
   "height": 2868,
   "alpha": false,
-  "caption_ratio": 0.1399,
+  "caption_ratio": 0,
+  "span_capture": {
+    "file": "raw/ios/es/phone/01-home.png",
+    "sha256": "51a5dc5cbc994321c305e26d881c4138c1362177fc448c16989a23ca3e2e1f41"
+  },
   "capture": {
     "file": "raw/ios/es/phone/02-overview.png",
     "sha256": "f3f6b285b6ba76d682f1ab49b0c7cd31228de0659934b8f9c4b7ac2d4f2c27dd",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-11-05T15:36:40.303Z",
+    "captured_at": "2026-11-05T22:42:22.340Z",
     "device": null
   },
-  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "source_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
-  "generated_at": "2026-11-05T15:40:11.168Z"
+  "pipeline_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
+  "generated_at": "2026-11-05T22:44:10.400Z"
 }
