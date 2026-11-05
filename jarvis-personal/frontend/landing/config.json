@@ -6,5 +6,5 @@
   "privacyEmail": "privacidad@dincr.com",
   "socialLinks": [],
   "reviews": { "enabled": false, "googlePlay": null, "appStore": null },
-  "minimumOS": { "android": "7.0", "ios": "15" }
+  "minimumOS": { "android": "7.0", "ios": "17" }
 }
