@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.zip.ZipFile
 
 plugins {
     alias(libs.plugins.android.application)
@@ -18,6 +19,13 @@ val local = Properties().apply {
 }
 fun setting(key: String, env: String): String = local.getProperty(key) ?: System.getenv(env) ?: ""
 fun quoted(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+// Release signing also comes from local.properties or the environment. The keystore and its
+// passwords are never in the repository.
+val releaseStoreFile = setting("dincr.releaseStoreFile", "DINCR_RELEASE_STORE_FILE")
+val releaseStorePassword = setting("dincr.releaseStorePassword", "DINCR_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = setting("dincr.releaseKeyAlias", "DINCR_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = setting("dincr.releaseKeyPassword", "DINCR_RELEASE_KEY_PASSWORD")
 
 /** Production API, public in the Capacitor app's source (`frontend/src/lib/apiUrl.js`). */
 val productionApiUrl = "https://jarvis-backend-152f.onrender.com"
@@ -48,7 +56,7 @@ android {
             dimension = "identity"
             applicationId = "com.dincr.app"
             versionCode = 100
-            versionName = "2.0.0-rc.1"
+            versionName = "2.0.0"
             buildConfigField("String", "DINCR_API_URL", quoted(setting("dincr.apiUrl", "DINCR_API_URL").ifEmpty { productionApiUrl }))
             buildConfigField("String", "AUTH_REDIRECT", quoted("com.dincr.app://auth/callback"))
             manifestPlaceholders["authScheme"] = "com.dincr.app"
@@ -59,7 +67,7 @@ android {
             dimension = "identity"
             applicationId = "com.dincr.app.nativedev"
             versionCode = 100
-            versionName = "2.0.0-rc.1-dev"
+            versionName = "2.0.0-dev"
             buildConfigField("String", "DINCR_API_URL", quoted(setting("dincr.apiUrl", "DINCR_API_URL")))
             buildConfigField("String", "AUTH_REDIRECT", quoted("com.dincr.app.nativedev://auth/callback"))
             manifestPlaceholders["authScheme"] = "com.dincr.app.nativedev"
@@ -70,12 +78,24 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseStoreFile.isNotEmpty()) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("boolean", "DINCR_FIXTURES", (local.getProperty("dincr.fixtures") == "true").toString())
         }
         release {
             buildConfigField("boolean", "DINCR_FIXTURES", "false")
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -126,3 +146,44 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
 }
+
+// A store build without its backend or signing values would only stop at the "unconfigured" screen
+// on the user's phone, so it fails here instead. Names only: a value is never printed.
+val checkDincrReleaseConfig = tasks.register("checkDincrReleaseConfig") {
+    val required = mapOf(
+        "dincr.supabaseUrl" to setting("dincr.supabaseUrl", "DINCR_SUPABASE_URL"),
+        "dincr.supabaseAnonKey" to setting("dincr.supabaseAnonKey", "DINCR_SUPABASE_ANON_KEY"),
+        "dincr.releaseStoreFile" to releaseStoreFile,
+        "dincr.releaseStorePassword" to releaseStorePassword,
+        "dincr.releaseKeyAlias" to releaseKeyAlias,
+        "dincr.releaseKeyPassword" to releaseKeyPassword,
+    )
+    doLast {
+        val missing = required.filterValues { it.isEmpty() }.keys
+        if (missing.isNotEmpty()) throw GradleException("DINCR release build is missing: ${missing.joinToString()}")
+    }
+}
+// Only the store bundle: CI compiles assembleRelease without secrets on purpose.
+tasks.configureEach { if (name == "bundleDincrRelease") dependsOn(checkDincrReleaseConfig) }
+tasks.configureEach { if (name == "preDincrReleaseBuild") mustRunAfter(checkDincrReleaseConfig) }
+
+// Sample data never ships. The shrinker drops the code; this drops the JSON, and the check below
+// fails the store build if either one is ever back.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { it.packaging.resources.excludes.add("store-sample.json") }
+}
+val verifyDincrReleaseHasNoSampleData = tasks.register("verifyDincrReleaseHasNoSampleData") {
+    val bundle = layout.buildDirectory.file("outputs/bundle/dincrRelease/app-dincr-release.aab")
+    doLast {
+        ZipFile(bundle.get().asFile).use { zip ->
+            val entries = zip.entries().toList()
+            val found = entries.filter { it.name.endsWith("store-sample.json") }.map { it.name } +
+                entries.filter { it.name.endsWith(".dex") }.flatMap { entry ->
+                    val dex = zip.getInputStream(entry).readBytes().toString(Charsets.ISO_8859_1)
+                    listOf("persona@ejemplo.test", "Tarjeta de ejemplo", "com/dincr/data/FakeBackend").filter { marker -> dex.contains(marker) }
+                }
+            if (found.isNotEmpty()) throw GradleException("Sample data in the release bundle: $found")
+        }
+    }
+}
+tasks.configureEach { if (name == "bundleDincrRelease") finalizedBy(verifyDincrReleaseHasNoSampleData) }
