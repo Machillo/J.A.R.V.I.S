@@ -40,9 +40,12 @@ struct HomeHero: View {
         .padding(.bottom, DincrSpacing.s6)
         .frame(maxWidth: 640, alignment: .leading)
         .frame(maxWidth: .infinity)
-        .task(id: model.dataGeneration) {
+        .task(id: "\(model.dataGeneration)-\(status?.cycle?.start ?? "")") {
             // Optional: Hoy never fails because of it; on error the figures stay as registered.
-            if let read = try? await model.service.pendingConversion() { dollars = read.estimate(month: String(Day.today().prefix(7)), query: "").sum }
+            // The Owner's figures are his card statement's, so its dollars are too.
+            if let read = try? await model.service.pendingConversion() {
+                dollars = status?.cycle.map { read.estimate(from: $0.start, through: $0.end).sum } ?? read.estimate(month: String(Day.today().prefix(7)), query: "").sum
+            }
         }
     }
 
@@ -65,12 +68,26 @@ struct HomeHero: View {
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) { facts(status) }
             }
             .accessibilityIdentifier("\(idPrefix).status.facts")
+            if status.headline == .safeToSpend, let takenOut = resultNote(status) {
+                Text(takenOut).font(DincrFont.caption).foregroundStyle(OwnerColor.onHero2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("\(idPrefix).status.resultNote")
+            }
             if let dollars {
                 Text(tx("Gastos incluye ≈ \(format.string(dollars)) estimado en dólares.", "Expenses include ≈ \(format.string(dollars)) estimated in dollars."))
                     .font(DincrFont.caption).foregroundStyle(OwnerColor.onHero2)
                     .accessibilityIdentifier("\(idPrefix).status.dollars")
             }
         }
+    }
+
+    /// Result = income − expenses − what else this line names, so the figures on screen add up.
+    private func resultNote(_ status: HomeStatus) -> String? {
+        var parts: [String] = []
+        if let paid = status.debtPaid { parts.append(tx("\(format.string(paid)) pagados a deudas", "\(format.string(paid)) paid to debts")) }
+        if let saved = status.automaticSaved { parts.append(tx("\(format.string(saved)) de ahorro automático", "\(format.string(saved)) of automatic savings")) }
+        guard !parts.isEmpty else { return nil }
+        return tx("El resultado también resta ", "The result also subtracts ") + parts.joined(separator: tx(" y ", " and ")) + "."
     }
 
     @ViewBuilder private func facts(_ status: HomeStatus) -> some View {

@@ -212,6 +212,7 @@ MINIMUMS = 50000  # the one debt of LedgerDB
 
 def _owner_center(ledger, monkeypatch, cycle):
     from backend.user_product import owner_ledger, vip_service
+    monkeypatch.setattr(vip_service, "_owner_cycle_savings", lambda cycle, today: {"saved": 0.0, "total": 0.0})
     monkeypatch.setattr(vip_service, "owner_account_context", lambda *_: True)
     monkeypatch.setattr(owner_ledger, "owner_month_totals", lambda *_a, **_k: {"income": 0, "expenses": 0, "debt_paid": 0, "balance": 0})
     monkeypatch.setattr(owner_ledger, "owner_cycle_totals", lambda *_a: cycle)

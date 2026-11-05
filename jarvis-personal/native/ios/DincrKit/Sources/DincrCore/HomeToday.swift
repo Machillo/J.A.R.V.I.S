@@ -63,7 +63,7 @@ public struct HomeToday: Sendable, Equatable {
                                 result: income == nil ? nil : month?.balance, debtBalance: debtBalance(debts, fallback: nil),
                                 margin: spend?.monthlyMargin, lowestBalance: spend?.next45DaysMinimum,
                                 budget: budgetLeft(budget), pending: pending(calendar, today: today),
-                                cycle: month.flatMap(HomeStatus.Cycle.init))
+                                cycle: month.flatMap(HomeStatus.Cycle.init), automaticSaved: registered(month?.automaticSaved))
         let next: HomeNext
         let director = center.director
         // The director needs inputs before recommending: priority `incomplete` (#326), or a known
@@ -203,6 +203,8 @@ public struct HomeStatus: Sendable, Equatable {
     public let pending: Pending?
     /// The Owner only: income, expenses and result are this card statement's, not the calendar month's.
     public var cycle: Cycle? = nil
+    /// The Owner only: the statement's automatic savings so far (taken out of the result).
+    public var automaticSaved: Decimal? = nil
 
     public struct Cycle: Sendable, Equatable {
         public let start: String

@@ -70,9 +70,11 @@ def add_months(day: date, months: int) -> date:
 
 
 def contribution_dates(start: date, maturity: date) -> list[date]:
-    """Every payday from ``start`` (a Thursday) up to the day before ``maturity``."""
-    return [start + timedelta(days=7 * week) for week in range(((maturity - start).days + 6) // 7)
-            if start + timedelta(days=7 * week) < maturity]
+    """Every payday (Thursday) from ``start`` up to the day before ``maturity``. A first date that is
+    not a Thursday moves to the next Thursday, the day the bank's saving really runs."""
+    first = start + timedelta(days=(3 - start.weekday()) % 7)
+    return [first + timedelta(days=7 * week) for week in range(((maturity - first).days + 6) // 7)
+            if first + timedelta(days=7 * week) < maturity]
 
 
 def balance_after(balance: float, annual_rate: float | None, monthly_payment: float, months: int) -> float:
