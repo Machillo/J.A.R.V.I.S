@@ -207,7 +207,7 @@ struct RecurringView: View {
     @State private var editing: RecurringList.Item?
 
     var body: some View {
-        ScreenScroll(title: expensesOnly ? tx("Gastos fijos", "Fixed expenses") : tx("Movimientos recurrentes", "Recurring transactions")) {
+        ScreenScroll(title: expensesOnly ? tx("Gastos fijos", "Fixed expenses") : tx("Recurrentes", "Recurring")) {
             WritesPausedBanner()
             if let notice { StatusBanner(tone: .info, title: notice, message: "") }
             AsyncContent(load: { try await model.service.recurring() }) { list, _ in
