@@ -18,11 +18,11 @@
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-11-05T14:14:14.599Z",
+    "captured_at": "2026-11-05T15:36:40.303Z",
     "device": null
   },
-  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
-  "generated_at": "2026-11-05T14:16:14.086Z"
+  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "generated_at": "2026-11-05T15:40:31.813Z"
 }
