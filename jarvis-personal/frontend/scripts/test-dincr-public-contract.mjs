@@ -233,18 +233,18 @@ assert.match(pagesHtml['precios/index.html'], /<span class="sr-only">No incluido
 // looks available before its official URL is configured.
 {
   const download = pagesHtml['descargar/index.html'];
-  const gradle = await readFile(new URL('../android/variables.gradle', import.meta.url), 'utf8');
-  const minSdk = Number(gradle.match(/minSdkVersion = (\d+)/)?.[1]);
+  const gradle = await readFile(new URL('../../native/android/app/build.gradle.kts', import.meta.url), 'utf8');
+  const minSdk = Number(gradle.match(/minSdk = (\d+)/)?.[1]);
   const androidRelease = { 21: '5.0', 22: '5.1', 23: '6.0', 24: '7.0', 25: '7.1', 26: '8.0', 27: '8.1', 28: '9', 29: '10', 30: '11', 31: '12', 32: '12L', 33: '13', 34: '14', 35: '15', 36: '16' }[minSdk];
   assert.ok(androidRelease, `Android minSdk ${minSdk} has no known release name: extend the table`);
   assert.equal(config.minimumOS.android, androidRelease, `Android minSdk ${minSdk} is Android ${androidRelease}: update config.json minimumOS.android`);
   assert.ok(download.includes(`Requiere Android ${androidRelease} o posterior.`), '/descargar/ states the Android minimum');
-  // ios-dincr is the releasable iOS project (test:ios-identity); a native prototype elsewhere does not count.
-  const pbxproj = await readFile(new URL('../ios-dincr/App/App.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
+  // The native iOS app (native/ios/DINCR.xcodeproj) is the one the stores receive.
+  const pbxproj = await readFile(new URL('../../native/ios/DINCR.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
   const iosTargets = [...new Set([...pbxproj.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = "?([^";\s]+)"?;/g)].map(m => m[1]))];
-  assert.equal(iosTargets.length, 1, `ios-dincr declares one deployment target (found ${iosTargets.join(', ') || 'none'})`);
+  assert.equal(iosTargets.length, 1, `the iOS app declares one deployment target (found ${iosTargets.join(', ') || 'none'})`);
   const iosMinimum = iosTargets[0].replace(/\.0$/, '');
-  assert.equal(config.minimumOS.ios, iosMinimum, `ios-dincr targets iOS ${iosMinimum}: update config.json minimumOS.ios (release decision)`);
+  assert.equal(config.minimumOS.ios, iosMinimum, `the iOS app targets iOS ${iosMinimum}: update config.json minimumOS.ios (release decision)`);
   assert.ok(download.includes(`Requiere iOS ${iosMinimum} o posterior.`), '/descargar/ states the iOS minimum');
   for (const [store, key] of [['Google Play', 'googlePlayUrl'], ['App Store', 'appStoreUrl']]) {
     if (config[key]) continue;
