@@ -13,16 +13,16 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 
 PLAN_COPY = {
-    "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Resumen financiero", "Ingresos y gastos", "Deudas", "Metas", "Pagos fijos y recurrentes", "Transacciones", "Horas extra"]},
-    "basic": {"name": "Basic", "tagline": "DINCR organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Reportes"]},
-    "vip": {"name": "VIP", "tagline": "Una estrategia más completa para decidir mejor.", "features": ["Todo Basic", "Estrategia dinámica, proyecciones y escenarios", "Salvavidas y distribución de tu dinero", "Revisión mensual"]},
+    "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Ingresos y gastos", "Deudas", "Metas", "Movimientos recurrentes", "Resumen del mes", "Recordatorios"]},
+    "basic": {"name": "Basic", "tagline": "DINCR organiza y guía tu mes.", "features": ["Todo Gratis", "Tu plan del mes", "Presupuesto guiado", "Calendario financiero", "Distribución de dinero"]},
+    "vip": {"name": "VIP", "tagline": "Una estrategia más completa para decidir mejor.", "features": ["Todo Basic", "Gastos fijos", "Salvavidas y retiro", "Proyecciones y escenarios", "Patrimonio neto y análisis financiero"]},
 }
 # English copy for the same plans (Accept-Language: en). PLAN_COPY stays the
 # canonical catalog used for validation.
 PLAN_COPY_EN = {
-    "free": {"name": "Free", "tagline": "Organize and understand your numbers.", "features": ["Financial summary", "Income and expenses", "Debts", "Goals", "Fixed and recurring payments", "Transactions", "Overtime"]},
-    "basic": {"name": "Basic", "tagline": "DINCR organizes and guides your month.", "features": ["Everything in Free", "Full dashboard", "Guided budget", "Full debts and goals", "Calendar", "Reports"]},
-    "vip": {"name": "VIP", "tagline": "A more complete strategy to decide better.", "features": ["Everything in Basic", "Dynamic strategy, projections, and scenarios", "Emergency plan and money distribution", "Monthly review"]},
+    "free": {"name": "Free", "tagline": "Organize and understand your numbers.", "features": ["Income and expenses", "Debts", "Goals", "Recurring transactions", "Monthly summary", "Reminders"]},
+    "basic": {"name": "Basic", "tagline": "DINCR organizes and guides your month.", "features": ["Everything in Free", "Your plan for the month", "Guided budget", "Financial calendar", "Money distribution"]},
+    "vip": {"name": "VIP", "tagline": "A more complete strategy to decide better.", "features": ["Everything in Basic", "Fixed expenses", "Emergency fund and retirement", "Projections and scenarios", "Net worth and financial analysis"]},
 }
 OWNER_ONLY_SUBSCRIPTION_FIELDS = frozenset({"granted_by", "courtesy_note"})
 BUILTIN_FEATURE_MIN_PLAN = {

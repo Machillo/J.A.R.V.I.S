@@ -155,6 +155,12 @@ struct PlanCardView: View {
             }
             if !paid {
                 Text(tx("Gratis", "Free")).font(DincrFont.title2)
+            } else if canChoose, catalog?.promotion?.active == true, let price {
+                // Free until the promotion ends: the price of later never reads like today's charge.
+                let later = MoneyFormat(currency: "CRC").string(Decimal(price))
+                Text(tx("Gratis hasta el 31 de diciembre", "Free until December 31")).font(DincrFont.title2)
+                Text(tx("Después, \(later) al mes. Sin cobro automático.", "Then \(later) per month. No automatic charge."))
+                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             } else if let price {
                 Text(MoneyFormat(currency: "CRC").string(Decimal(price)) + tx(" al mes", " per month")).font(DincrFont.title2)
             }
@@ -166,9 +172,6 @@ struct PlanCardView: View {
                     .buttonStyle(.dincrPrimary(loading: busy))
                     .disabled(!enabled)
                     .padding(.top, DincrSpacing.s2)
-            } else {
-                Text(tx("Próximamente en las tiendas", "Coming soon to the stores"))
-                    .font(DincrFont.bodySmall).foregroundStyle(.dincrTextMuted)
             }
         }
         .dincrCard()
