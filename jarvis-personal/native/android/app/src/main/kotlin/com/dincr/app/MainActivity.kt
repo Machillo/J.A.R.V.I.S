@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -42,6 +43,8 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // The app switcher never shows balances. Screenshots inside the app keep working.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
         model.configure(AppEnvironment.from(intent))
         // A recreated activity re-delivers its launch intent: only a fresh launch handles it.
         if (savedInstanceState == null) handleIntent(intent)
@@ -71,6 +74,17 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onPause() {
+        // Before Android 13 the only way to hide the app switcher preview is this flag while paused.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     override fun onDestroy() {
