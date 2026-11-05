@@ -1,5 +1,5 @@
 {
-  "output_sha256": "3c4009407788008c441df7f0ed3a299a508aa1a15552f969c3f7591bd9c6f720",
+  "output_sha256": "816e157d0f9b73e4e5bc71cbb172b8afb052ca179f5a710a48e55ed696cd5ecc",
   "mode": "final",
   "target": "google-phone",
   "store": "google",
@@ -11,24 +11,24 @@
   "width": 1440,
   "height": 2560,
   "alpha": false,
-  "caption_ratio": 0.1827,
+  "caption_ratio": 0.1805,
   "capture": {
     "file": "raw/android/en/phone/07-strategy.png",
-    "sha256": "7b8c5133e54dbed45888904bb7769818058f292866317450f14e3ca997bdad45",
+    "sha256": "5324df8bc195166646fab9dcc4da2193fb27d6117f6bd3748a707fe082df55d7",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-30T01:15:01.510Z",
+    "captured_at": "2026-11-05T14:05:59.768Z",
     "device": {
-      "model": "sdk_gphone64_x86_64",
-      "sdk": 35,
+      "model": "sdk_gphone64_arm64",
+      "sdk": 36,
       "width": 1080,
       "height": 2400,
       "density": 420
     }
   },
-  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
-  "generated_at": "2026-09-30T01:16:14.793Z"
+  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "generated_at": "2026-11-05T14:15:41.715Z"
 }

@@ -2,26 +2,21 @@
   "platform": "ios",
   "fixture": "STORE",
   "fixture_date": "2026-09-28",
-  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "source_dirty": false,
-  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "built": true,
-  "captured_at": "2026-09-30T03:31:00.971Z",
+  "captured_at": "2026-11-05T14:14:14.599Z",
   "app": {
     "bundle_id": "com.dincr.app",
     "configuration": "Debug"
   },
-  "xcode": "Xcode 27.0",
+  "xcode": "Xcode 27.2",
   "simulators": [
     {
       "kind": "phone",
       "name": "iPhone 18 Pro Max",
       "runtime": "iPhone 18 Pro Max (D6040888-FF4B-4B57-A2EE-19AFD1C9DFD9) (Booted)"
-    },
-    {
-      "kind": "tablet",
-      "name": "iPad Pro 13-inch (M5)",
-      "runtime": "iPad Pro 13-inch (M5) (ADDEE6D6-AAC6-46A5-9260-3C2D0ED2DCCD) (Booted)"
     }
   ],
   "status_bar": "simctl override: 9:41, Wi-Fi, full signal and battery",
@@ -33,7 +28,7 @@
       "device": "phone",
       "plan": "vip",
       "file": "raw/ios/es/phone/01-home.png",
-      "sha256": "8357323efe9bd7198ba8212951919cb2de8e7373d6c3e2b732298c303c0fb2af",
+      "sha256": "51a5dc5cbc994321c305e26d881c4138c1362177fc448c16989a23ca3e2e1f41",
       "width": 1320,
       "height": 2868
     },
@@ -43,7 +38,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/es/phone/02-overview.png",
-      "sha256": "360ced6a3ca217ae2927bfcf4e9f4544a9124c98666d0c3e79c406a3b324c434",
+      "sha256": "f3f6b285b6ba76d682f1ab49b0c7cd31228de0659934b8f9c4b7ac2d4f2c27dd",
       "width": 1320,
       "height": 2868
     },
@@ -53,7 +48,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/es/phone/03-movements.png",
-      "sha256": "68e71ea61f201f54a93581fe4d9b6eed38087ba9b10f8aa6b00e18d3b771fa6e",
+      "sha256": "5278a91bdc5d3a52751844bf12c2399b0ef2186ea23c2cebcf7a1d4cc8097861",
       "width": 1320,
       "height": 2868
     },
@@ -63,7 +58,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/es/phone/04-debts.png",
-      "sha256": "1b1ad44718ca1cff1567a114684c454f4289a28d423b116895f742bb344db169",
+      "sha256": "d415b6d83ad462c7b1088fa3f4d1a2298e9e72f68325d21218702bbde79cd0ca",
       "width": 1320,
       "height": 2868
     },
@@ -73,7 +68,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/es/phone/05-goals.png",
-      "sha256": "e13763c9d06b9f9e78a884f98acff6200bae78ae3e5aa0a68e6e867352105181",
+      "sha256": "64d1b2c7f8d951f9dad662f631ee32123c14dbc9f13273d66f9fc7dd57435259",
       "width": 1320,
       "height": 2868
     },
@@ -83,7 +78,7 @@
       "device": "phone",
       "plan": "basic",
       "file": "raw/ios/es/phone/06-budget.png",
-      "sha256": "8aea9f4cb991d8a4d65837b1e6edb3494e738021de0b3b579e5f32d8adc9cae1",
+      "sha256": "247962e3a019dc1d87c8d3ba9df7c5ad3ff466d1513d6a413fc443adfc0772a6",
       "width": 1320,
       "height": 2868
     },
@@ -93,7 +88,7 @@
       "device": "phone",
       "plan": "basic",
       "file": "raw/ios/es/phone/07-strategy.png",
-      "sha256": "e52e26027953f25bb5c0e063de1902f17562845bf85f2985644e89ac9542ad3a",
+      "sha256": "2d69bcf38dddf59651d829f25fe75eafa419ef676e678678517893bc8dfb0a84",
       "width": 1320,
       "height": 2868
     },
@@ -103,7 +98,7 @@
       "device": "phone",
       "plan": "vip",
       "file": "raw/ios/en/phone/01-home.png",
-      "sha256": "676f73a8db6159ffedd4e0fcc7d84d173f1cd7c7d7161206a1dd9b57d5099f4a",
+      "sha256": "db4057ab4d18de806bca0a5155611b414ba421fe8b5f3c06895ecfb84022fdac",
       "width": 1320,
       "height": 2868
     },
@@ -113,7 +108,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/en/phone/02-overview.png",
-      "sha256": "f2ffc40ae0a8cd6a65e5492670ccbe32f84ec1ed42dd808233ecfc06988ba0b0",
+      "sha256": "080a81ee1546d229c6eec0e1e04a47f5e0e3cda7d797161af0f2158c838ceb91",
       "width": 1320,
       "height": 2868
     },
@@ -123,7 +118,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/en/phone/03-movements.png",
-      "sha256": "f80f5579e5efe226d938af6a1c5ec3a6138b36a8d97613991a916d66ad51352a",
+      "sha256": "ac3b7da6242d802b5f333a3abb7a77b0d035843fea091fa5f6352fc59b24fab9",
       "width": 1320,
       "height": 2868
     },
@@ -133,7 +128,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/en/phone/04-debts.png",
-      "sha256": "04adad533edb9d2225b415303236fdeaa1b0eaba2c7a57a0dad53b7bf8bb2df2",
+      "sha256": "670843cee97622b193b4c5845528d2d163171a1161b8654f61a152f7e68f1076",
       "width": 1320,
       "height": 2868
     },
@@ -143,7 +138,7 @@
       "device": "phone",
       "plan": "free",
       "file": "raw/ios/en/phone/05-goals.png",
-      "sha256": "74c36e668f94f804ec91930a6c99597ea103b288447948b5ebdc9a2c1a7d997f",
+      "sha256": "c12ec1d719a8c7b8f96a5fe90000db4e0f5178fce79524c89c645f61e2e56df3",
       "width": 1320,
       "height": 2868
     },
@@ -153,7 +148,7 @@
       "device": "phone",
       "plan": "basic",
       "file": "raw/ios/en/phone/06-budget.png",
-      "sha256": "a56cd998651873243548ade8b0c8a68fc9374ede11f4e8775b9b340b44d2fe72",
+      "sha256": "03e86aebceeea64bb3b69b54242babcd9914b725193db97897516ed64ea9e49f",
       "width": 1320,
       "height": 2868
     },
@@ -163,7 +158,7 @@
       "device": "phone",
       "plan": "basic",
       "file": "raw/ios/en/phone/07-strategy.png",
-      "sha256": "75649f3a6505e49fe75e03a58646183892e011bf80991363ce8f0e741aa61929",
+      "sha256": "d9f46f74da034550f740948559279a851d90b6480455ae616a51a658a9c2d0f6",
       "width": 1320,
       "height": 2868
     }
