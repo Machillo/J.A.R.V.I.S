@@ -286,6 +286,14 @@ async def auth_middleware(request: Request, call_next):
 
     access_token = authorization.replace("Bearer ", "", 1).strip()
 
+    # What doesn't even look like a JWT never costs a call to Supabase.
+    if not access_token.startswith("jarvis-owner:") and not JWT_SHAPE.fullmatch(access_token):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Token inválido o expirado."},
+            headers={**cors_headers, "X-Request-ID": request_id},
+        )
+
     # Authentication calls Supabase over HTTP and runs database transactions: it runs
     # in the thread pool (with this context copied), never on the event loop, so one
     # slow or junk request cannot stall every other request of the process.
@@ -520,6 +528,22 @@ class EventRequest(BaseModel):
     event_date: str
     event_type: str = "general"
     description: str = ""
+
+
+JWT_SHAPE = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+
+# Bodies are capped before any work. Public paths take small JSON; authenticated ones may upload a PDF.
+MAX_PUBLIC_BODY_BYTES = 1024 * 1024
+MAX_BODY_BYTES = 15 * 1024 * 1024
+
+
+@app.middleware("http")
+async def body_size_middleware(request: Request, call_next):
+    declared = request.headers.get("content-length", "")
+    limit = MAX_PUBLIC_BODY_BYTES if _is_public_path(request.url.path) else MAX_BODY_BYTES
+    if declared.isdigit() and int(declared) > limit:
+        return JSONResponse(status_code=413, content={"detail": "El contenido es demasiado grande."})
+    return await call_next(request)
 
 
 @app.on_event("startup")
