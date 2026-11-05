@@ -3,6 +3,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from backend.core.idempotency import mark_applied
 from backend.core.database import get_connection
 from backend.core.time import costa_rica_today
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
@@ -2352,6 +2353,7 @@ def apply_monthly_payment_to_debt(
                     (workspace_id, paid_on.isoformat(), f"Abono extra {debt['name']}", extra_principal, debt['name'],
                      f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
                 )
+                mark_applied(conn)  # a retry after a crash can never apply this payment twice
                 conn.commit()
                 return {
                     "message": "La cuota base ya estaba aplicada; el excedente fue 100% a principal.",
@@ -2427,6 +2429,7 @@ def apply_monthly_payment_to_debt(
             """,
             (workspace_id, paid_on.isoformat(), f"Pago {debt['name']}", actual_payment, debt['name'], note),
         )
+        mark_applied(conn)  # a retry after a crash can never apply this payment twice
         conn.commit()
 
     return {
