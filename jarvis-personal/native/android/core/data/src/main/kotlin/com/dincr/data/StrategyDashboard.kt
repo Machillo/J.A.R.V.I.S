@@ -205,6 +205,8 @@ object Distribution {
             "pension_complementaria" -> language.pick("Pensión complementaria", "Complementary pension")
             else -> item.key.orEmpty().replace('_', ' ').replaceFirstChar { it.uppercase() }
         }
+        // The Owner may name the savings account his investment share goes to.
+        if (item.key == "inversion" && !item.targetName.isNullOrBlank()) return language.pick("Ahorro en ${item.targetName}", "Saving in ${item.targetName}")
         return if (item.key == "ataque_de_deuda" && !item.targetName.isNullOrBlank()) "$base · ${item.targetName}" else base
     }
 
