@@ -37,3 +37,10 @@ def _accounts_have_accepted_the_current_terms(request, monkeypatch):
         monkeypatch.setattr(legal, "_has_accepted", lambda account_id: True)
     yield
     legal.forget_acceptances()
+
+
+@pytest.fixture(autouse=True)
+def _no_rejected_tokens_between_tests():
+    from backend.auth import service
+
+    service._REJECTED_TOKENS.clear()

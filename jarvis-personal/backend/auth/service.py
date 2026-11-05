@@ -1,9 +1,13 @@
 import base64
+import hashlib
 import json
 import os
 import re
 import logging
+import threading
+import time
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -141,6 +145,35 @@ def _oauth_identity_allowed(access_token: str, user: dict[str, Any]) -> bool:
     return bool(linked & ALLOWED_AUTH_PROVIDERS)
 
 
+_REJECTED_TOKENS: OrderedDict[str, float] = OrderedDict()
+_REJECTED_TTL_SECONDS = 60.0
+_REJECTED_MAX = 5_000
+_REJECTED_LOCK = threading.Lock()
+
+
+def _token_key(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8", "replace")).hexdigest()  # a token is never kept as is
+
+
+def _remember_rejected(token: str) -> None:
+    with _REJECTED_LOCK:
+        _REJECTED_TOKENS[_token_key(token)] = time.monotonic() + _REJECTED_TTL_SECONDS
+        while len(_REJECTED_TOKENS) > _REJECTED_MAX:
+            _REJECTED_TOKENS.popitem(last=False)
+
+
+def _recently_rejected(token: str) -> bool:
+    with _REJECTED_LOCK:
+        key = _token_key(token)
+        until = _REJECTED_TOKENS.get(key)
+        if until is None:
+            return False
+        if until < time.monotonic():
+            del _REJECTED_TOKENS[key]
+            return False
+        return True
+
+
 def verify_supabase_token(access_token: str) -> dict[str, Any]:
     """
     Valida el access_token contra Supabase Auth.
@@ -151,6 +184,10 @@ def verify_supabase_token(access_token: str) -> dict[str, Any]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Faltan SUPABASE_URL o SUPABASE_ANON_KEY en Render.",
         )
+
+    # The same bad token repeated never costs another call to Supabase.
+    if _recently_rejected(access_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de Supabase inválido o expirado.")
 
     try:
         response = requests.get(
@@ -172,6 +209,7 @@ def verify_supabase_token(access_token: str) -> dict[str, Any]:
     # A rate limit or an outage (429, 5xx) is not a verdict: 503 lets the app retry
     # instead of signing every active user out on a 401.
     if 400 <= response.status_code < 500 and response.status_code != 429:
+        _remember_rejected(access_token)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de Supabase inválido o expirado.",

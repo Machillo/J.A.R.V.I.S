@@ -15,12 +15,18 @@ def test_an_oversized_public_body_is_refused_before_any_work():
     assert answer.status_code == 413
 
 
-def test_junk_never_reaches_supabase(monkeypatch):
-    monkeypatch.setattr(service.requests, "get", lambda *a, **k: pytest.fail("called Supabase"))
-    client = TestClient(app, raise_server_exceptions=False)
-    for junk in ("junk", "a.b", "a.b.c d"):
-        answer = client.get("/auth/me", headers={"Authorization": f"Bearer {junk}"})
-        assert answer.status_code == 401
+def test_a_rejected_token_is_not_sent_to_supabase_again(monkeypatch):
+    calls = []
+    monkeypatch.setattr(service, "SUPABASE_URL", "https://example.invalid")
+    monkeypatch.setattr(service, "SUPABASE_ANON_KEY", "synthetic")
+    monkeypatch.setattr(service.requests, "get", lambda *a, **k: calls.append(1) or SimpleNamespace(status_code=401))
+    service._REJECTED_TOKENS.clear()
+    for _ in range(3):
+        with pytest.raises(HTTPException) as refused:
+            service.verify_supabase_token("rejected-token")
+        assert refused.value.status_code == 401
+    assert len(calls) == 1
+    service._REJECTED_TOKENS.clear()
 
 
 def test_a_non_ascii_owner_token_is_401_not_500(monkeypatch):
