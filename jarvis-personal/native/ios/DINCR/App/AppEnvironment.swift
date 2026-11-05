@@ -9,7 +9,9 @@ import Foundation
 struct AppEnvironment {
     enum Mode {
         case live(apiURL: URL, supabaseURL: URL, anonKey: String)
+        #if DEBUG
         case fixtures(FixtureBackend.Scenario, PlanTier, FixtureBackend.Role)
+        #endif
         case unconfigured(LaunchPolicy.Reason)
     }
 
@@ -32,12 +34,17 @@ struct AppEnvironment {
         case let .live(apiURL, supabaseURL, anonKey):
             return AppEnvironment(mode: .live(apiURL: apiURL, supabaseURL: supabaseURL, anonKey: anonKey))
         case let .fixtures(scenario):
+            #if DEBUG
             // `-DincrPlan basic|vip` picks the fixture account's plan (UI tests of plan gates), and
             // `-DincrRole owner` (or the legacy value `admin`, to prove it is refused) the role the fake server answers in /auth/me (role matrix).
             // Fixtures only: a live session's role always comes from the real backend.
             let argument = { (flag: String) in arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil } }
             return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureBackend.Scenario.init(rawValue:)) ?? .populated, PlanTier.from(argument("-DincrPlan")),
                                                   argument("-DincrRole").flatMap(FixtureBackend.Role.init(rawValue:)) ?? .user))
+            #else
+            _ = scenario
+            return AppEnvironment(mode: .unconfigured(.missing))
+            #endif
         case let .unconfigured(reason):
             return AppEnvironment(mode: .unconfigured(reason))
         }
@@ -50,7 +57,9 @@ struct AppEnvironment {
     #endif
 
     var isFixtures: Bool {
+        #if DEBUG
         if case .fixtures = mode { return true }
+        #endif
         return false
     }
 }

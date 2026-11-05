@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's JARVIS → Mi dinero routes (Debug demos and tests only). Same shapes and
@@ -89,3 +90,4 @@ extension FixtureBackend {
          "cashflow": ["real_balance": 470_000, "loan_received": 0]]
     }
 }
+#endif

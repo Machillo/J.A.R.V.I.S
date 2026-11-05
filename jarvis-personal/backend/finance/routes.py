@@ -131,7 +131,6 @@ from backend.finance.fixed_expenses import (
     delete_fixed_expense,
     get_fixed_expense_status,
     list_fixed_expenses,
-    seed_owner_fixed_expenses,
     update_fixed_expense,
 )
 
@@ -610,10 +609,6 @@ def delete_fixed_expense_route(fixed_expense_id: int):
 def fixed_expense_status(month: str | None = None):
     return get_fixed_expense_status(month)
 
-
-@router.post("/fixed-expenses/seed-owner-defaults")
-def seed_fixed_expenses_route():
-    return {"status": "OK", "items": seed_owner_fixed_expenses()}
 
 @router.get("/cycle-report")
 def financial_cycle_report(as_of: str | None = None):

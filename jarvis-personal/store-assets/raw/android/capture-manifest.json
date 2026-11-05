@@ -88,15 +88,6 @@
       "height": 2400
     },
     {
-      "id": "08-mail",
-      "locale": "es",
-      "plan": "vip",
-      "file": "raw/android/es/phone/08-mail.png",
-      "sha256": "67b0431765710957513cd64683814e22a667b9beb733d7f394cbb0eeff42015d",
-      "width": 1080,
-      "height": 2400
-    },
-    {
       "id": "01-home",
       "locale": "en",
       "plan": "vip",
@@ -156,15 +147,6 @@
       "plan": "basic",
       "file": "raw/android/en/phone/07-strategy.png",
       "sha256": "7b8c5133e54dbed45888904bb7769818058f292866317450f14e3ca997bdad45",
-      "width": 1080,
-      "height": 2400
-    },
-    {
-      "id": "08-mail",
-      "locale": "en",
-      "plan": "vip",
-      "file": "raw/android/en/phone/08-mail.png",
-      "sha256": "f9599366f27c35ac198cd77fe442aad962803dbddf70b59ac76e8be7eefe794d",
       "width": 1080,
       "height": 2400
     }

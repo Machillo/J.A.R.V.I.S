@@ -149,10 +149,17 @@ private struct MonthBars: View {
     let points: [TransactionAnalysis.MonthPoint]
     @Environment(\.moneyFormat) private var format
 
+    /// "2026-06" reads "jun": the full key overlaps on a phone.
+    private static func shortMonth(_ key: String) -> String {
+        let names = tx("ene feb mar abr may jun jul ago set oct nov dic", "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec").split(separator: " ")
+        guard let month = Int(key.suffix(2)), names.indices.contains(month - 1) else { return key }
+        return String(names[month - 1])
+    }
+
     var body: some View {
         Chart {
             ForEach(points) { point in
-                BarMark(x: .value("Mes", point.month), y: .value("Monto", NSDecimalNumber(decimal: point.total ?? 0).doubleValue))
+                BarMark(x: .value("Mes", Self.shortMonth(point.month)), y: .value("Monto", NSDecimalNumber(decimal: point.total ?? 0).doubleValue))
                     .foregroundStyle(DincrColor.chartExpense)
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 4, topTrailingRadius: 4))
             }

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// The invented account behind the App Store screenshots (store-assets/), served by `FixtureBackend`
@@ -81,3 +82,4 @@ public enum StoreSample {
         ]
     }
 }
+#endif

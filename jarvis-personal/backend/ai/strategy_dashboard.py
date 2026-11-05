@@ -476,7 +476,7 @@ def _build_dynamic_director_allocation(
         remaining_weights = {"debt": 0.0, "emergency": 0.0, "life": 0.0, "investment": 0.0}
     elif urgent_goals or goal_now > 0.01:
         mode = "goal_protection"
-        mode_label = "GOAL PROTECTION"
+        mode_label = tx("PROTECCIÓN DE METAS", "GOAL PROTECTION")
         mode_reason = tx("Hay una meta prioritaria con fecha cercana; se protege antes de acelerar deuda.", "A priority goal has an upcoming date; it is protected before accelerating debt.")
         if debt_exists and safety_gap_mini > 0:
             remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "investment": 0.0}
@@ -486,22 +486,22 @@ def _build_dynamic_director_allocation(
             remaining_weights = {"debt": 0.0, "emergency": 0.85, "life": 0.15, "investment": 0.0}
     elif debt_exists and safety_gap_mini > 0:
         mode = "debt_safety"
-        mode_label = "DEBT + SAFETY"
+        mode_label = tx("DEUDA Y SEGURIDAD", "DEBT + SAFETY")
         mode_reason = tx("La deuda importa, pero el fondo mínimo todavía es insuficiente para absorber un imprevisto.", "Debt matters, but the minimum fund is still not enough to absorb an emergency.")
         remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "investment": 0.0}
     elif debt_exists and safety_gap_month > 0:
         mode = "debt_attack"
-        mode_label = "DEBT ATTACK"
+        mode_label = tx("ATAQUE DE DEUDA", "DEBT ATTACK")
         mode_reason = tx("El mini-colchón ya existe; se acelera deuda sin dejar de construir un mes de seguridad.", "The mini cushion exists; debt is accelerated while still building one month of safety.")
         remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "investment": 0.0}
     elif debt_exists:
         mode = "debt_attack"
-        mode_label = "DEBT ATTACK"
+        mode_label = tx("ATAQUE DE DEUDA", "DEBT ATTACK")
         mode_reason = tx("Hay al menos un mes de seguridad; la mayor parte del excedente puede atacar deuda.", "There is at least one month of safety; most of the surplus can go to debt.")
         remaining_weights = {"debt": 0.75, "emergency": 0.10, "life": 0.15, "investment": 0.0}
     else:
         mode = "wealth_building"
-        mode_label = "WEALTH BUILDING"
+        mode_label = tx("CONSTRUIR PATRIMONIO", "WEALTH BUILDING")
         mode_reason = tx("Sin deuda prioritaria, el excedente puede construir seguridad, metas e inversión.", "With no priority debt, the surplus can build safety, goals, and investments.")
         remaining_weights = {
             "debt": 0.0,

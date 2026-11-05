@@ -96,7 +96,7 @@ private fun HealthSection(e: FinancialEngineReport) {
             ProgressLine(score / 100.0, tx("Salud financiera ${score.toInt()} de 100", "Financial health ${score.toInt()} of 100"))
         }
         e.forecast?.let { f ->
-            AmountLine(tx("Cierre de mes previsto (estimación)", "Expected month-end balance (estimate)"), f.projectedEndBalance, emphasize = true)
+            AmountLine(tx("Cierre previsto (estimado)", "Expected month-end balance (estimate)"), f.projectedEndBalance, emphasize = true)
             f.alert?.message?.let { DincrMessage(MessageKind.financial(f.alert?.level), tx("Pronóstico", "Forecast"), it) }
         }
         e.emergencyFund?.let { f ->

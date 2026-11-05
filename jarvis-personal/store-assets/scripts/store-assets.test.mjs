@@ -112,9 +112,9 @@ test("the screen list only confirms screens the native apps have, with how to re
   assert.deepEqual(screensFor(pending, target("google-phone"), true), []);
   assert.equal(screensFor(pending, target("google-phone"), false).length, 1);
   // Google Play takes at most 8. Since #294 the iOS app has every store screen (Home VIP, budget,
-  // strategy, Email Monitor included), with the same ids and plans as Android.
+  // strategy included; mail is Owner-only at launch, so it is not advertised), with the same ids and plans as Android.
   assert.ok(screensFor(screens, target("google-phone"), true).length <= 8);
-  const ids8 = ["01-home", "02-overview", "03-movements", "04-debts", "05-goals", "06-budget", "07-strategy", "08-mail"];
+  const ids8 = ["01-home", "02-overview", "03-movements", "04-debts", "05-goals", "06-budget", "07-strategy"];
   assert.deepEqual(screensFor(screens, target("apple-iphone-69"), true).map((s) => s.id), ids8);
   assert.deepEqual(screensFor(screens, target("google-phone"), true).map((s) => s.id), ids8);
 });
@@ -137,7 +137,7 @@ test("the capture tests navigate to exactly the confirmed screens, each with the
 
 test("the iOS capture run uses simulators of the exact App Store sizes and a clean status bar", () => {
   assert.equal(DEVICES.phone.target, "apple-iphone-69");
-  assert.equal(DEVICES.tablet.target, "apple-ipad-13");
+  assert.equal(DEVICES.tablet, undefined, "iPhone only: no iPad target");
   const bar = STATUS_BAR.join(" ");
   assert.match(bar, /--time 9:41/);
   assert.match(bar, /--batteryLevel 100/);
@@ -254,11 +254,11 @@ test("a paid screen must carry its plan badge and a Free screen none", () => {
   const copies = Object.fromEntries(screens.locales.map((l) => [l.id, loadCopy(l.id)]));
   const bad = structuredClone(copies);
   bad.es.screens.budget.plan_badge = null; // Basic feature shown as if it were free
-  bad.en.screens.mail.plan_badge = "basic"; // VIP feature under the wrong plan
+  bad.en.screens.home.plan_badge = "basic"; // VIP feature under the wrong plan
   bad.en.screens.movements.plan_badge = "vip"; // Free feature labelled as paid
   const problems = copyProblems(targetsConfig, screens, bad).join("\n");
   assert.match(problems, /es\.json: budget badge is none, the screen needs basic/);
-  assert.match(problems, /en\.json: mail badge is basic, the screen needs vip/);
+  assert.match(problems, /en\.json: home badge is basic, the screen needs vip/);
   assert.match(problems, /en\.json: movements badge is vip, the screen needs none/);
 });
 
@@ -309,19 +309,20 @@ test("the validator accepts a correct final set", () => {
 test("the validator rejects wrong sizes, alpha, a caption band over 20%, previews and placeholders", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
   const phone = target("google-phone");
-  for (const n of ["01", "02", "03", "04"]) writeImage(dir, phone, "es-419", n);
+  for (const n of ["01", "02", "03"]) writeImage(dir, phone, "es-419", n);
   writeImage(dir, phone, "es-419", "05", { width: 1080, height: 1920 });
   writeImage(dir, phone, "es-419", "06", { alpha: true });
   writeImage(dir, phone, "es-419", "07", { meta: { caption_ratio: 0.23 } });
-  writeImage(dir, phone, "es-419", "08", { meta: { mode: "preview", capture: { placeholder: true }, source_commit: null } });
+  writeImage(dir, phone, "es-419", "04", { meta: { mode: "preview", capture: { placeholder: true }, source_commit: null } });
   const problems = validator(dir, [phone]).join("\n");
   assert.match(problems, /05-goals\.png: 1080x1920, expected 1440x2560/);
   assert.match(problems, /06-budget\.png: has an alpha channel/);
   assert.match(problems, /07-strategy\.png: caption band 23\.0% > 20%/);
-  assert.match(problems, /08-mail\.png: is a preview image/);
-  assert.match(problems, /08-mail\.png: built from a placeholder/);
-  assert.equal(validator(dir, [phone], { allowPreview: true }).some((p) => p.includes("08-mail.png")), false);
+  assert.match(problems, /04-debts\.png: is a preview image/);
+  assert.match(problems, /04-debts\.png: built from a placeholder/);
+  assert.equal(validator(dir, [phone], { allowPreview: true }).some((p) => p.includes("04-debts.png")), false);
 
+  writeImage(dir, phone, "es-419", "08");
   writeImage(dir, phone, "es-419", "09");
   assert.match(validator(dir, [phone]).join("\n"), /9 images, the store accepts at most 8/);
 });
@@ -346,8 +347,8 @@ test("the validator rejects a final without provenance, from before #287, of an 
   assert.match(problems, /05-goals\.png: capture raw\/android\/es\/phone\/05-goals\.png changed after composing/);
   assert.match(problems, /06-budget\.png: no capture file and SHA-256 recorded/);
   assert.match(problems, /07-strategy\.png: provenance platform ios, expected android/);
-  assert.match(problems, /08-mail\.png: no pipeline commit recorded/);
-  assert.match(problems, /08-mail\.png: fixture undefined, expected STORE/);
+  assert.match(problems, /01-home-extra\.png: no pipeline commit recorded/);
+  assert.match(problems, /01-home-extra\.png: fixture undefined, expected STORE/);
 
   // iOS: a screen the app does not have is refused for an iPhone final.
   const iphone = target("apple-iphone-69");

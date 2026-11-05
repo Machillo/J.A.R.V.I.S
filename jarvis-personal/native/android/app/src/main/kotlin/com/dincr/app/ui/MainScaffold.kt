@@ -147,7 +147,11 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
     // Text shared into DINCR: the editor of a new expense, prefilled; only saving records it.
     val shared by model.pendingShared.collectAsStateWithLifecycle()
     shared?.let { proposal ->
-        MovementEditorSheet(model, EditorMode.Create, onDismiss = model::consumeShared, onSaved = { model.consumeShared() }, onDelete = {}, initialKind = MovementKind.EXPENSE, shared = proposal)
+        MovementEditorSheet(model, EditorMode.Create, onDismiss = model::consumeShared, onSaved = {
+            model.consumeShared()
+            model.showNotice(tx("Gasto guardado.", "Expense saved."))
+            model.noteDataChanged()
+        }, onDelete = {}, initialKind = MovementKind.EXPENSE, shared = proposal)
     }
     if (offerLock) AppLockOffer(model) { offerLock = false }
     BoxWithConstraints(Modifier.fillMaxSize()) {

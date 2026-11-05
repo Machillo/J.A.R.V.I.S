@@ -43,11 +43,6 @@
       "title": "Know where your surplus should go",
       "subtitle": "Your monthly margin and which debt to pay first",
       "plan_badge": "basic"
-    },
-    "mail": {
-      "title": "Transactions from your bank emails",
-      "subtitle": "Read-only, with your consent. You review each one",
-      "plan_badge": "vip"
     }
   },
   "feature_graphic": {

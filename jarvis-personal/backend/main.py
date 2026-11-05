@@ -536,6 +536,14 @@ async def body_size_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def no_store_middleware(request: Request, call_next):
+    # Registered last, so it is the outermost: every answer, also an early 401, is covered.
+    response = await call_next(request)
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
 @app.on_event("startup")
 def startup_event():
     ops.configure_logging()

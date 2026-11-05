@@ -82,16 +82,20 @@ sealed interface AppEnvironment {
             return when (decision) {
                 is LaunchPolicy.Decision.Live -> Live(decision.apiUrl, decision.supabaseUrl, decision.anonKey)
                 is LaunchPolicy.Decision.Unconfigured -> Unconfigured(decision.reason)
-                is LaunchPolicy.Decision.Fixtures -> Fixtures(
-                    FakeBackend.Scenario.entries.firstOrNull { it.name.equals(decision.scenario, ignoreCase = true) } ?: FakeBackend.Scenario.POPULATED,
-                    PlanTier.from(intent?.getStringExtra("dincrPlan")),
-                    intent?.getBooleanExtra("dincrSkipLogin", false) ?: false,
-                    // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
-                    intent?.getLongExtra("dincrLatencyMs", 350) ?: 350,
-                    FakeBackend.Role.entries.firstOrNull { it.wire == intent?.getStringExtra("dincrRole") } ?: FakeBackend.Role.USER,
-                    intent?.getBooleanExtra("dincrRefreshFails", false) ?: false,
-                    intent?.getBooleanExtra("dincrMailLeftovers", false) ?: false,
-                )
+                is LaunchPolicy.Decision.Fixtures -> {
+                    // A compile-time constant: the shrinker removes this branch, and the sample data with it, from release.
+                    check(BuildConfig.DEBUG) { "No sample data in a release build." }
+                    Fixtures(
+                        FakeBackend.Scenario.entries.firstOrNull { it.name.equals(decision.scenario, ignoreCase = true) } ?: FakeBackend.Scenario.POPULATED,
+                        PlanTier.from(intent?.getStringExtra("dincrPlan")),
+                        intent?.getBooleanExtra("dincrSkipLogin", false) ?: false,
+                        // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
+                        intent?.getLongExtra("dincrLatencyMs", 350) ?: 350,
+                        FakeBackend.Role.entries.firstOrNull { it.wire == intent?.getStringExtra("dincrRole") } ?: FakeBackend.Role.USER,
+                        intent?.getBooleanExtra("dincrRefreshFails", false) ?: false,
+                        intent?.getBooleanExtra("dincrMailLeftovers", false) ?: false,
+                    )
+                }
             }
         }
     }
@@ -236,6 +240,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 api = DincrApi(ApiClient(environment.apiUrl, sessions))
             }
             is AppEnvironment.Fixtures -> {
+                check(BuildConfig.DEBUG) { "No sample data in a release build." }
                 sessions = SessionManager(null, InMemorySessionStore(if (environment.skipLogin) FIXTURE_SESSION else null))
                 val backend = FakeBackend(environment.scenario, environment.plan, environment.latencyMs, role = environment.role,
                     identityRefreshFails = environment.identityRefreshFails, mailLeftovers = environment.mailLeftovers)

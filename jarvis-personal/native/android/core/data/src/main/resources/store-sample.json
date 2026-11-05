@@ -1023,7 +1023,7 @@
           {
             "severity": "high",
             "title": "Tu fondo de emergencia cubre menos de un mes",
-            "context": "Alcanza para unos 0.5 meses de tus compromisos.",
+            "context": "Alcanza para unos 0,5 meses de tus compromisos.",
             "action": "Cuando te sobre dinero, apartalo primero para tu fondo de emergencia."
           },
           {

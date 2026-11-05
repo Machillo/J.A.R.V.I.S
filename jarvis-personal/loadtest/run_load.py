@@ -68,7 +68,7 @@ def setup_user(base: str, n: int) -> str:
     steps = [
         ("GET", "/auth/me", None),
         ("POST", "/auth/legal/accept", {"accept_terms": True, "accept_privacy": True,
-                                        "terms_version": "2026-09-23-v3", "privacy_version": "2026-09-25-v4"}),
+                                        "terms_version": "2026-11-05-v4", "privacy_version": "2026-11-05-v5"}),
         ("POST", "/auth/profile-setup", {"display_name": f"Carga {n}", "usage_goal": "control"}),
         ("POST", "/auth/plan", {"plan": plan}),
         ("POST", "/auth/onboarding", {"income_type": "fixed", "work_days_per_week": 5, "pay_frequency": "monthly",

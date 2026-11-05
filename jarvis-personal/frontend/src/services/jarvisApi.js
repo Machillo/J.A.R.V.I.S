@@ -191,7 +191,6 @@ export const getFixedExpenseStatus = (month = "") => request(`/finance/fixed-exp
 export const createFixedExpense = (payload) => jsonRequest("/finance/fixed-expenses", "POST", payload);
 export const updateFixedExpense = (id, payload) => jsonRequest(`/finance/fixed-expenses/${id}`, "PUT", payload);
 export const deleteFixedExpense = (id) => request(`/finance/fixed-expenses/${id}`, { method: "DELETE" });
-export const seedOwnerFixedExpenses = () => request("/finance/fixed-expenses/seed-owner-defaults", { method: "POST" });
 
 
 export const getEmailMonitorStatus = () => request("/email-monitor/status");

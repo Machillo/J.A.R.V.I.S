@@ -31,6 +31,7 @@ object ReminderScheduler {
     private const val PREFS = "dincr.reminders"
     private const val KEY_ON = "on"
     private const val KEY_IDS = "ids"
+    private const val KEY_AT = "at"
     const val CHANNEL = "reminders"
 
     fun isEnabled(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ON, false)
@@ -76,20 +77,45 @@ object ReminderScheduler {
             val at = reminder.at.atZone(zone).toInstant().toEpochMilli()
             alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(context, reminder.id, reminder.title, reminder.body))
         }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(KEY_IDS, plan.map { it.id }.toSet()).apply()
+        // Only the id and the hour, never a name or an amount: what a restart needs to set them again.
+        val times = plan.map { "${it.at.atZone(zone).toInstant().toEpochMilli()}|${it.id}" }.toSet()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(KEY_AT, times).putStringSet(KEY_IDS, plan.map { it.id }.toSet()).apply()
     }
 
     fun clear(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val alarms = context.getSystemService(AlarmManager::class.java)
         prefs.getStringSet(KEY_IDS, emptySet()).orEmpty().forEach { id -> alarms?.cancel(pending(context, id, "", "")) }
-        prefs.edit().remove(KEY_IDS).apply()
+        prefs.edit().remove(KEY_IDS).remove(KEY_AT).apply()
+    }
+
+    /** After a restart: sets the future reminders again with a generic text. Returns how many. */
+    fun restoreAfterBoot(context: Context, now: Long = System.currentTimeMillis()): Int {
+        if (!isEnabled(context)) return 0
+        val alarms = context.getSystemService(AlarmManager::class.java) ?: return 0
+        val future = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(KEY_AT, emptySet()).orEmpty()
+            .mapNotNull { entry ->
+                val at = entry.substringBefore('|').toLongOrNull() ?: return@mapNotNull null
+                if (at > now) at to entry.substringAfter('|') else null
+            }
+        future.forEach { (at, id) ->
+            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(context, id, "DINCR",
+                tx("Tenés un pago o una fecha por revisar.", "You have a payment or a date to check.")))
+        }
+        return future.size
     }
 
     private fun pending(context: Context, id: String, title: String, body: String): PendingIntent =
         PendingIntent.getBroadcast(context, id.hashCode(),
             Intent(context, ReminderReceiver::class.java).setAction(id).putExtra("title", title).putExtra("body", body),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+}
+
+/** Alarms do not survive a restart. Opening the app later replaces these with the full text. */
+class ReminderBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) ReminderScheduler.restoreAfterBoot(context)
+    }
 }
 
 /** Posts a scheduled reminder; tapping it opens DINCR. */

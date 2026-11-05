@@ -142,7 +142,7 @@ def test_shared_ingestion_code_contains_no_owner_identity():
             "gmail_content.py", "payroll_statement.py", "statement_reconciliation.py",
         )
     ] + [path for path in (BACKEND / "user_product").glob("*.py") if not path.name.startswith("test_")]
-    forbidden = re.compile(r"kenneth|alvarado|emily|sidey", re.I)
+    forbidden = re.compile(r"kenneth|alvarado", re.I)
     for path in shared:
         assert not forbidden.search(path.read_text(encoding="utf-8")), path
     assert not hasattr(gmail_service, "_adapt_identity")

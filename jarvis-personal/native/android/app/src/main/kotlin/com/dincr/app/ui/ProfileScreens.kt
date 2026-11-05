@@ -212,8 +212,8 @@ fun SecurityScreen(model: AppModel, nav: Navigator) {
                 AppLock.Availability.AVAILABLE -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(tx("Bloquear DINCR", "Lock DINCR"), style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text, modifier = Modifier.weight(1f))
                     Switch(enabled, onCheckedChange = { on ->
-                        if (!on) { lock.setEnabled(false); enabled = false; return@Switch }
-                        activity?.let { a -> lock.authenticate(a) { error -> if (error == null) { lock.setEnabled(true); enabled = true } else message = error } }
+                        // On and off both need the owner of the phone: whoever picks up an open phone can't remove the lock.
+                        activity?.let { a -> lock.authenticate(a) { error -> if (error == null) { lock.setEnabled(on); enabled = on } else message = error } }
                     }, modifier = Modifier.semantics { contentDescription = tx("Bloquear DINCR", "Lock DINCR") })
                 }
             }
@@ -299,12 +299,8 @@ private fun StoreSubscriptionPanel(model: AppModel) {
     val context = LocalContext.current
     val activity = androidx.activity.compose.LocalActivity.current
     val scope = rememberCoroutineScope()
-    if (!model.isOn(OpsFlag.STORE_BILLING)) {
-        Section(tx("Suscripción en Google Play", "Google Play subscription")) {
-            Caption(model.flags.value.message(OpsFlag.STORE_BILLING, com.dincr.data.AppLanguage.current()) ?: tx("Las compras en Google Play estarán disponibles pronto.", "Google Play purchases will be available soon."))
-        }
-        return
-    }
+    // Nothing announces purchases that are not available yet (App Review 2.1, Play policy).
+    if (!model.isOn(OpsFlag.STORE_BILLING)) return
     val billing = model.storeBilling()
     val offers = rememberLoad(model) { billing.offers() }
     var busy by remember { mutableStateOf(false) }

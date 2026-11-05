@@ -54,6 +54,8 @@ object MonthReview {
 
     /** One thing to do, from the month's own figures (a rule, not advice). */
     fun action(summary: MonthlySummary, left: BigDecimal?, format: MoneyFormat, language: AppLanguage): String {
+        // Unknown is not "all good": without the month's figures there is nothing to keep doing.
+        if (left == null) return language.pick("Registrá tus ingresos y gastos para saber cómo va tu mes.", "Record your income and expenses to see how your month is going.")
         if (left != null && left.signum() < 0) {
             val top = summary.topCategory
             val name = top?.category

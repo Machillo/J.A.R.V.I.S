@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // `POST /finance/strategy-vip/debt-scenario` on the fixture's own debts (Debug demos and tests only):
@@ -102,3 +103,4 @@ private func both(_ first: Decimal?, _ second: Decimal?) -> (Decimal, Decimal)? 
     guard let first, let second else { return nil }
     return (first, second)
 }
+#endif

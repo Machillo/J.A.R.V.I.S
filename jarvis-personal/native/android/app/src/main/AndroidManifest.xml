@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- NT-1: the reminders on the phone (asked from Perfil → Recordatorios). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Package visibility (Android 11+): find a browser / Custom Tabs provider for sign-in and
          mail connection, which always happen in the system browser, never in a WebView. -->
@@ -30,6 +31,27 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Dincr">
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <!-- Alarms do not survive a restart: this sets the pending reminders again. -->
+        <receiver android:name=".ReminderBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <!-- Opened from another app: it hands the text to the one running MainActivity, so sharing
+             never starts a second copy of the app inside the other app's task. -->
+        <activity
+            android:name=".ShareEntryActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <!-- Share a bank's SMS or notice: it only prefills the editor of a new expense. -->
+            <intent-filter android:label="@string/share_to_dincr">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -38,12 +60,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <!-- Share a bank's SMS or notice: it only prefills the editor of a new expense. -->
-            <intent-filter android:label="@string/share_to_dincr">
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
         <service

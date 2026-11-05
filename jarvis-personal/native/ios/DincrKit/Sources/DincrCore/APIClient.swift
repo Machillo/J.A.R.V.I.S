@@ -25,8 +25,16 @@ public final class RefuseRedirects: NSObject, URLSessionTaskDelegate, Sendable {
 }
 
 public struct URLSessionTransport: HTTPTransport {
+    /// Financial answers never go to a disk cache: nothing of them stays on the device after use.
+    public static let noCacheSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }()
+
     let session: URLSession
-    public init(session: URLSession = .shared) { self.session = session }
+    public init(session: URLSession = URLSessionTransport.noCacheSession) { self.session = session }
 
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await session.data(for: request, delegate: RefuseRedirects.shared)

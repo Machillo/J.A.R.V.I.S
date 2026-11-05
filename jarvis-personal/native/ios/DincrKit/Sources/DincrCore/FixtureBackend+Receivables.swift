@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's JARVIS → Control de dinero routes (Debug demos and tests only). Same shapes
@@ -103,3 +104,4 @@ extension FixtureBackend {
                 "summary": ["total_pending": number(open.reduce(0) { $0 + $1.due }), "count_open": open.count, "people_count": ownerReceivables.count]]
     }
 }
+#endif

@@ -9,8 +9,8 @@ from backend.auth.current_user import get_current_account_id
 from backend.core.database import get_connection
 
 
-TERMS_VERSION = "2026-09-23-v3"
-PRIVACY_VERSION = "2026-09-25-v4"
+TERMS_VERSION = "2026-11-05-v4"
+PRIVACY_VERSION = "2026-11-05-v5"
 
 
 def legal_status(conn, account_id: str) -> dict:

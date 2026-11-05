@@ -176,11 +176,18 @@ fun PlanCard(option: PlanOption, catalog: BillingCatalog?, promotionActive: Bool
             Text(
                 when {
                     !paid -> tx("Gratis", "Free")
+                    promotionActive && !current && price != null -> tx("Gratis hasta el 31 de diciembre", "Free until December 31")
                     price != null -> "₡" + "%,d".format(price).replace(',', '.') + tx(" al mes", " per month")
                     else -> ""
                 },
                 style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text,
             )
+            // The price of later never reads like today's charge.
+            if (paid && promotionActive && !current && price != null) {
+                val later = "₡" + "%,d".format(price).replace(',', '.')
+                Text(tx("Después, $later al mes. Sin cobro automático.", "Then $later per month. No automatic charge."),
+                    style = MaterialTheme.typography.bodySmall, color = Dincr.colors.text2)
+            }
             option.features.forEach { feature ->
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(Icons.Rounded.Check, contentDescription = null, tint = Dincr.colors.positive, modifier = Modifier.size(18.dp).padding(top = 2.dp))
@@ -189,7 +196,7 @@ fun PlanCard(option: PlanOption, catalog: BillingCatalog?, promotionActive: Bool
             }
             when {
                 onChoose == null || current -> Unit
-                paid && !promotionActive -> Text(tx("Próximamente en las tiendas", "Coming soon to the stores"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.textMuted)
+                paid && !promotionActive -> Unit
                 else -> DincrPrimaryButton(actionLabel ?: tx("Elegir ${option.name ?: option.code}", "Choose ${option.name ?: option.code}"), onChoose, loading = busy, enabled = enabled)
             }
         }

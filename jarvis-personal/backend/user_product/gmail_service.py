@@ -35,6 +35,7 @@ from backend.email_monitor.sender_trust import single_sender_address as _single_
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
 from backend.finance import additional_cards
 from backend.finance.category_catalog import normalize_category, owner_account_context, transfer_category
+from backend.user_product import mail_authenticity
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.candidate_currency import native_money, transaction_amounts
 from backend.user_product.financial_identity import discover_candidate_account
@@ -1016,6 +1017,10 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
     subject = headers.get("subject", "")
     sender = headers.get("from", "")
     payload = full.get("payload") or {}
+    verdicts = [item.get("value", "") for item in payload.get("headers", [])
+                if item.get("name", "").lower() == "authentication-results"]
+    if mail_authenticity.forged(verdicts, "mx.google.com"):
+        sender = mail_authenticity.UNVERIFIED_SENDER  # recorded as ignored, body and PDFs unread
     attachments = collect_attachments(payload)
     if bank_sender_allowed(sender) or ccss_sender_allowed(sender):
         body = _plain_text(payload) or full.get("snippet", "")

@@ -129,12 +129,4 @@ final class StoreScreenshots: XCTestCase {
             self.wait(app, l.pick("Libre después de tus compromisos", "Left after your commitments"))
         }
     }
-
-    func testS08Mail() throws {
-        try shoot("08-mail", plan: "vip") { app, l in
-            self.tab(app, l.pick("Perfil", "Profile"))
-            self.open(app, "profile.mail")
-            self.wait(app, l.pick("Por revisar", "To review"))
-        }
-    }
 }

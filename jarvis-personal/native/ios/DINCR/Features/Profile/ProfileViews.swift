@@ -280,14 +280,14 @@ private struct SubscriptionChoice: View {
                     }
                 }
             }
-            StoreSubscriptionPanel()
+            if model.flags.isEnabled(.storeBilling) { StoreSubscriptionPanel() }
         }
     }
 }
 
 /// BIL-03 — App Store subscription: buy, restore, manage (Android: `StoreSubscriptionPanel`, Google
 /// Play). The backend decides the plan (`StoreKitBilling`). While the `store_billing` switch is off
-/// the panel only says so.
+/// the panel is not shown: nothing announces purchases that are not available yet.
 private struct StoreSubscriptionPanel: View {
     @Environment(AppModel.self) private var model
     @State private var busy = false
@@ -296,48 +296,41 @@ private struct StoreSubscriptionPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             SectionHeader(title: tx("Suscripción en App Store", "App Store subscription"))
-            if !model.flags.isEnabled(.storeBilling) {
-                Text(model.flags.message(.storeBilling, language: model.language)
-                     ?? tx("Las compras en App Store estarán disponibles pronto.", "App Store purchases will be available soon."))
-                    .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
-                    .accessibilityIdentifier("store.paused")
-            } else {
-                AsyncContent(load: { try await model.storeBilling.offers() }) { offers, _ in
-                    let sellable = offers.filter { $0.product != nil }
-                    if sellable.isEmpty {
-                        Text(StoreMessages.unavailable()).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
-                            .accessibilityIdentifier("store.unavailable")
-                    }
-                    ForEach(sellable) { offer in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(PlanLabel.name(offer.offer.plan)) · \(offer.offer.period == .monthly ? tx("mensual", "monthly") : tx("anual", "yearly"))")
-                                    .font(DincrFont.body).foregroundStyle(.dincrText)
-                                if let price = offer.price { Text(price).font(DincrFont.caption).foregroundStyle(.dincrText2) }
-                            }
-                            Spacer()
-                            Button(tx("Suscribirme", "Subscribe")) { Task { await buy(offer) } }
-                                .disabled(busy)
-                                .frame(minHeight: 44)
+            AsyncContent(load: { try await model.storeBilling.offers() }) { offers, _ in
+                let sellable = offers.filter { $0.product != nil }
+                if sellable.isEmpty {
+                    Text(StoreMessages.unavailable()).font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
+                        .accessibilityIdentifier("store.unavailable")
+                }
+                ForEach(sellable) { offer in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(PlanLabel.name(offer.offer.plan)) · \(offer.offer.period == .monthly ? tx("mensual", "monthly") : tx("anual", "yearly"))")
+                                .font(DincrFont.body).foregroundStyle(.dincrText)
+                            if let price = offer.price { Text(price).font(DincrFont.caption).foregroundStyle(.dincrText2) }
                         }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("store.offer.\(offer.id)")
+                        Spacer()
+                        Button(tx("Suscribirme", "Subscribe")) { Task { await buy(offer) } }
+                            .disabled(busy)
+                            .frame(minHeight: 44)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("store.offer.\(offer.id)")
                 }
-                if let message {
-                    Text(message).font(DincrFont.caption).foregroundStyle(.dincrText2).accessibilityIdentifier("store.message")
-                }
-                HStack {
-                    Button(tx("Restaurar compras", "Restore purchases")) { Task { await restore() } }
-                        .disabled(busy).frame(minHeight: 44)
-                        .accessibilityIdentifier("store.restore")
-                    Spacer()
-                    Link(tx("Administrar", "Manage"), destination: URL(string: "https://apps.apple.com/account/subscriptions")!)
-                        .frame(minHeight: 44)
-                }
-                .font(DincrFont.bodySmall.weight(.semibold))
-                .foregroundStyle(.dincrTint)
             }
+            if let message {
+                Text(message).font(DincrFont.caption).foregroundStyle(.dincrText2).accessibilityIdentifier("store.message")
+            }
+            HStack {
+                Button(tx("Restaurar compras", "Restore purchases")) { Task { await restore() } }
+                    .disabled(busy).frame(minHeight: 44)
+                    .accessibilityIdentifier("store.restore")
+                Spacer()
+                Link(tx("Administrar", "Manage"), destination: URL(string: "https://apps.apple.com/account/subscriptions")!)
+                    .frame(minHeight: 44)
+            }
+            .font(DincrFont.bodySmall.weight(.semibold))
+            .foregroundStyle(.dincrTint)
         }
         .dincrCard()
         .accessibilityElement(children: .contain)
@@ -431,14 +424,14 @@ struct SupportView: View {
         ScreenScroll(title: tx("Soporte", "Support")) {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 Picker(tx("Tipo", "Type"), selection: $category) {
-                    Text(tx("Un problema", "A problem")).tag("error")
+                    Text(tx("Problema", "Problem")).tag("error")
                     Text(tx("Una idea", "An idea")).tag("improvement")
                     Text(tx("Pagos", "Payments")).tag("payment")
                     Text(tx("Mi cuenta", "My account")).tag("account")
                 }
                 .pickerStyle(.segmented)
-                TextField(tx("Asunto", "Subject"), text: $subject).textFieldStyle(.roundedBorder)
-                TextField(tx("Detalle", "Details"), text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
+                LabeledTextField(label: tx("Asunto", "Subject"), text: $subject)
+                LabeledTextField(label: tx("Detalle", "Details"), text: $message, axis: .vertical).lineLimit(4...8)
                 Text(tx("No incluyas contraseñas, códigos ni números completos de tarjeta.", "Don’t include passwords, codes or full card numbers."))
                     .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }

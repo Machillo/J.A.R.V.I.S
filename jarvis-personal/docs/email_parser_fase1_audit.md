@@ -30,7 +30,7 @@ Resultados esperados:
 
 ### 4. Tarjetas BAC
 El parser ya extrae:
-- `card_owner` desde saludo: Kenneth / Emily / Sidey
+- `card_owner` desde el saludo del aviso
 - `card_last4` desde máscara de tarjeta
 - `billing_cycle_start` / `billing_cycle_end` usando corte 21 → 21
 

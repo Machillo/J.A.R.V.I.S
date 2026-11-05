@@ -194,6 +194,19 @@ def test_balances_reconciliation_forecast_and_net_worth_agree(db, monkeypatch):
     assert float(q(db, "SELECT last_reconciliation_difference FROM account_balances WHERE id = %s", (acc,))[0][0]) == -1000.0
 
 
+def test_updating_a_balance_keeps_the_interest_rate(db):
+    from backend.finance import intelligence
+
+    acc = account(db)
+    with db.cursor() as cur:
+        cur.execute("UPDATE account_balances SET annual_interest_rate = 5.5 WHERE id = %s", (acc,))
+    intelligence.upsert_account_balance("Cuenta", 224000)
+    assert float(q(db, "SELECT annual_interest_rate FROM account_balances WHERE id = %s", (acc,))[0][0]) == 5.5
+    # An explicit rate still changes it.
+    intelligence.upsert_account_balance("Cuenta", 224000, annual_interest_rate=3)
+    assert float(q(db, "SELECT annual_interest_rate FROM account_balances WHERE id = %s", (acc,))[0][0]) == 3
+
+
 def test_another_workspace_movement_never_moves_a_balance(db):
     acc = account(db)
     other = account(db, ws=WS_B, name="Otra")

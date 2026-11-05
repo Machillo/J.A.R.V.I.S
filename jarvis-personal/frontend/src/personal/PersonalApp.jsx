@@ -120,16 +120,16 @@ function ProfileHub({ navigatePage, userName, currentUser, onLogout, profilePref
   const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
 
   return (
-    <JarvisScreen eyebrow={tx("Perfil", "Profile", language)} title={profilePreferences?.display_name || userName || "Kenneth"} subtitle={tx("Tu identidad y preferencias", "Your identity and preferences", language)} className="profile-screen">
+    <JarvisScreen eyebrow={tx("Perfil", "Profile", language)} title={profilePreferences?.display_name || userName || "Owner"} subtitle={tx("Tu identidad y preferencias", "Your identity and preferences", language)} className="profile-screen">
       <div className="profile-hero">
         <label className="profile-photo-picker" aria-label={tx("Cambiar foto de perfil", "Change profile photo", language)}>
           <input type="file" accept="image/*" onChange={onProfilePhotoChange} />
           <span className="profile-avatar large">
-            {avatarUrl ? <img src={avatarUrl} alt="Kenneth" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(userName || "O").slice(0, 1).toUpperCase()}</span>}
           </span>
           <span className="profile-camera-badge"><Camera size={18} /></span>
         </label>
-        <h1>{profilePreferences?.display_name || userName || "Kenneth"}</h1>
+        <h1>{profilePreferences?.display_name || userName || "Owner"}</h1>
         <p>{currentUser?.email || sessionStorage.getItem("jarvis_user_email") || ""}</p>
       </div>
 
@@ -212,7 +212,7 @@ export default function App() {
       setOwnerBridgeToken(incomingBridgeToken);
       setOwnerBridgeMode(true);
       window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
-      setSession({ user: { user_metadata: { full_name: "Kenneth" }, bridge: true } });
+      setSession({ user: { user_metadata: { full_name: "Owner" }, bridge: true } });
       setSessionLoaded(true);
       return;
     }
@@ -220,7 +220,7 @@ export default function App() {
     const storedBridgeToken = getOwnerBridgeToken();
     if (storedBridgeToken) {
       setOwnerBridgeMode(true);
-      setSession({ user: { user_metadata: { full_name: "Kenneth" }, bridge: true } });
+      setSession({ user: { user_metadata: { full_name: "Owner" }, bridge: true } });
       setSessionLoaded(true);
       return;
     }

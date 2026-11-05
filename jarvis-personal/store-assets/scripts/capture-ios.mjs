@@ -5,7 +5,6 @@
 //
 //   node jarvis-personal/store-assets/scripts/capture-ios.mjs
 //   node jarvis-personal/store-assets/scripts/capture-ios.mjs --phone "iPhone 17 Pro Max" --tablet "iPad Pro 13-inch (M4)"
-//   node jarvis-personal/store-assets/scripts/capture-ios.mjs --no-tablet   # only if the app is iPhone-only (Kenneth's decision)
 //
 // Needs Xcode with an iOS 17+ simulator runtime. Nothing is signed, uploaded or published.
 import { execFileSync } from "node:child_process";
@@ -21,7 +20,6 @@ const iosDir = path.join(repoRoot, "jarvis-personal/native/ios");
 /** Simulator screen sizes that match the App Store targets exactly (config/targets.json). */
 export const DEVICES = {
   phone: { target: "apple-iphone-69", defaultName: "iPhone 17 Pro Max" },
-  tablet: { target: "apple-ipad-13", defaultName: "iPad Pro 13-inch (M4)" },
 };
 export const STATUS_BAR = ["--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3",
   "--cellularMode", "active", "--cellularBars", "4", "--batteryState", "charged", "--batteryLevel", "100"];
@@ -37,7 +35,7 @@ export async function captureIos(argv = process.argv.slice(2)) {
   const ios = screens.screens.filter((s) => s.platforms?.ios?.confirmed);
   const commit = git("rev-parse", "HEAD");
   const dirty = git("status", "--porcelain", "--", "jarvis-personal/native", "jarvis-personal/store-assets/config").length > 0;
-  const devices = Object.entries(DEVICES).filter(([kind]) => !(kind === "tablet" && argv.includes("--no-tablet")));
+  const devices = Object.entries(DEVICES);
   const out = path.join(root, "raw/ios");
   const records = [];
   const simulators = [];
