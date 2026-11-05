@@ -63,7 +63,7 @@ public struct HomeToday: Sendable, Equatable {
                                 result: income == nil ? nil : month?.balance, debtBalance: debtBalance(debts, fallback: nil),
                                 margin: spend?.monthlyMargin, lowestBalance: spend?.next45DaysMinimum,
                                 budget: budgetLeft(budget), pending: pending(calendar, today: today),
-                                cycle: month.flatMap(HomeStatus.Cycle.init))
+                                cycle: month.flatMap(HomeStatus.Cycle.init), automaticSaved: registered(month?.automaticSaved))
         let next: HomeNext
         let director = center.director
         // The director needs inputs before recommending: priority `incomplete` (#326), or a known
@@ -113,7 +113,8 @@ public struct HomeToday: Sendable, Equatable {
     /// Payments still to come this month (recurring expenses and debts from today on). A payment with
     /// no known amount (0, #326) keeps the total unknown.
     static func pending(_ calendar: FinancialCalendar?, today: Date) -> HomeStatus.Pending? {
-        guard let calendar, let events = calendar.events else { return nil }
+        // A calendar that could not be read is unknown, never "no payments" and never a silent gap.
+        guard let calendar, let events = calendar.events else { return HomeStatus.Pending(count: 0, total: nil, unavailable: true) }
         let key = dayKey(today)
         let due = events.filter { ["expense", "debt"].contains($0.kind ?? "") && ($0.date ?? "") >= key }
         let known = due.allSatisfy { ($0.amount ?? 0) > 0 }
@@ -177,6 +178,8 @@ public struct HomeStatus: Sendable, Equatable {
         public let count: Int
         /// Nil when a pending payment has no known amount.
         public let total: Decimal?
+        /// The calendar could not be read: the payments are unknown.
+        public var unavailable = false
     }
 
     public let headline: Headline
@@ -200,6 +203,8 @@ public struct HomeStatus: Sendable, Equatable {
     public let pending: Pending?
     /// The Owner only: income, expenses and result are this card statement's, not the calendar month's.
     public var cycle: Cycle? = nil
+    /// The Owner only: the statement's automatic savings so far (taken out of the result).
+    public var automaticSaved: Decimal? = nil
 
     public struct Cycle: Sendable, Equatable {
         public let start: String

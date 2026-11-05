@@ -169,8 +169,8 @@ private struct UsersSalvavidasContent: View {
                         .accessibilityIdentifier("salvavidas.updateSavings")
                 }
                 if !fund.savingsKnown {
-                    Text(tx("Declará tus ahorros en Metas y ahorro → Tus ahorros para medir cuántos meses te cubren.",
-                            "Declare your savings in Goals and savings → Your savings to measure how many months they cover."))
+                    Text(tx("Declará tus ahorros en Metas y ahorro → Mis ahorros para medir cuántos meses te cubren.",
+                            "Declare your savings in Goals and savings → My savings to measure how many months they cover."))
                         .font(DincrFont.caption).foregroundStyle(.dincrText2)
                     NavigationLink { DeclaredSavingsView() } label: { Text(tx("Completar tus ahorros", "Complete your savings")) }
                         .buttonStyle(.dincrPrimary)
@@ -312,8 +312,8 @@ private struct SavingsAmountSheet: View {
                 Section {
                     MoneyField(label: tx("Ahorro disponible", "Available savings"), text: $text, error: error, identifier: "salvavidas.amount")
                 } footer: {
-                    Text(tx("Lo que tenés hoy en la cuenta, incluido el aporte que ya entró hoy. Es el mismo dato de Metas y ahorro → Tus ahorros.",
-                            "What the account holds today, including a contribution that already arrived today. It’s the same figure as in Goals and savings → Your savings."))
+                    Text(tx("Lo que tenés hoy en la cuenta, incluido el aporte que ya entró hoy. Es el mismo dato de Metas y ahorro → Mis ahorros.",
+                            "What the account holds today, including a contribution that already arrived today. It’s the same figure as in Goals and savings → My savings."))
                 }
             }
             .navigationTitle(tx("Ahorros", "Savings"))

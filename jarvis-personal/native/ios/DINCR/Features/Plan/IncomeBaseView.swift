@@ -193,8 +193,38 @@ struct DeclaredSavingsView: View {
         AsyncContent(load: { try await model.service.financialSituation() }) { situation, _ in
             DeclaredSavingsForm(situation: situation)
         }
-        .navigationTitle(tx("Tus ahorros", "Your savings"))
+        .navigationTitle(tx("Mis ahorros", "My savings"))
         .dincrScreenBackground()
+    }
+}
+
+/// Mis ahorros also shows what saves itself: the Salvavidas (VIP and the Owner) and the locked savings
+/// for debts (the Owner). Read-only figures from their own screens; a failed read just leaves them out.
+private struct AutomaticSavingsSection: View {
+    let salvavidas: Decimal?
+    let blocks: [DebtSavingsBlocks.Block]
+
+    var body: some View {
+        if salvavidas != nil || !blocks.isEmpty {
+            Section(tx("Se guardan solos", "Saved automatically")) {
+                if let salvavidas {
+                    row(tx("Salvavidas", "Emergency fund"), salvavidas)
+                }
+                ForEach(blocks) { block in
+                    row(tx("Ahorro para \(block.debtName ?? "tu deuda")", "Saving for \(block.debtName ?? "your debt")"), block.savedSoFar ?? 0)
+                }
+            }
+        }
+    }
+
+    private func row(_ label: String, _ amount: Decimal) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.dincrText)
+            Spacer()
+            MoneyText(amount)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("declaredSavings.automatic")
     }
 }
 
@@ -205,6 +235,8 @@ private struct DeclaredSavingsForm: View {
     @State private var emergency = ""
     @State private var save = ProfileSave()
     @State private var loaded = false
+    @State private var salvavidas: Decimal?
+    @State private var blocks: [DebtSavingsBlocks.Block] = []
 
     private var incomeDeclared: Bool { ProfileSave.incomeDeclared(situation.financialProfile) }
 
@@ -218,6 +250,7 @@ private struct DeclaredSavingsForm: View {
                         .accessibilityIdentifier("declaredSavings.declareIncome")
                 }
             }
+            AutomaticSavingsSection(salvavidas: salvavidas, blocks: blocks)
             Section {
                 MoneyField(label: tx("Ahorros disponibles", "Available savings"), text: $savings)
                 MoneyField(label: tx("Meta de fondo de emergencia", "Emergency fund target"), text: $emergency)
@@ -227,6 +260,13 @@ private struct DeclaredSavingsForm: View {
             }
         }
         .scrollContentBackground(.hidden)
+        // On the form, which always exists: a modifier on a view with nothing to show never runs.
+        .task(id: model.dataGeneration) {
+            if model.planTier.rank >= PlanTier.vip.rank { salvavidas = (try? await model.service.salvavidas())?.currentAmount }
+            if model.profile?.isOwner == true {
+                blocks = ((try? await model.service.debtSavingsBlocks())?.blocks ?? []).filter { $0.matured != true }
+            }
+        }
         .onAppear {
             guard !loaded else { return }
             loaded = true

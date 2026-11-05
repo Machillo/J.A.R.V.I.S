@@ -67,7 +67,7 @@ data class HomeToday(
                 income, registered(month?.expenses), registered(month?.debtPaid), if (income == null) null else month?.balance,
                 debtBalance(debts, null), margin = spend?.monthlyMargin, lowestBalance = spend?.next45DaysMinimum,
                 budget = budgetLeft(budget), pending = pending(calendar, today),
-                cycle = month?.let(HomeStatus.Cycle::of))
+                cycle = month?.let(HomeStatus.Cycle::of), automaticSaved = registered(month?.automaticSaved))
             val director = center.director
             val headline = director?.headline?.trim()?.takeIf { it.isNotEmpty() }
             // The director needs inputs before recommending: priority `incomplete` (#326), or a known
@@ -110,7 +110,8 @@ data class HomeToday(
          * no known amount (0, #326) keeps the total unknown.
          */
         internal fun pending(calendar: FinancialCalendar?, today: LocalDate): HomeStatus.Pending? {
-            calendar ?: return null
+            // A calendar that could not be read is unknown, never "no payments" and never a silent gap.
+            calendar ?: return HomeStatus.Pending(0, null, unavailable = true)
             val key = today.toString()
             val due = calendar.events.filter { (it.kind ?: "") in setOf("expense", "debt") && (it.date ?: "") >= key }
             val known = due.all { (it.amount ?: BigDecimal.ZERO).signum() > 0 }
@@ -171,6 +172,8 @@ data class HomeStatus(
     val pending: Pending?,
     /** The Owner only: income, expenses and result are this card statement's, not the calendar month's. */
     val cycle: Cycle? = null,
+    /** The Owner only: the statement's automatic savings so far (taken out of the result). */
+    val automaticSaved: BigDecimal? = null,
 ) {
     data class Cycle(val start: String, val end: String, val payment: String?) {
         companion object {
@@ -189,8 +192,8 @@ data class HomeStatus(
 
     data class BudgetLeft(val remaining: BigDecimal, val used: ProgressValue)
 
-    /** [total] is null when a pending payment has no known amount. */
-    data class Pending(val count: Int, val total: BigDecimal?)
+    /** [total] is null when a pending payment has no known amount; [unavailable] when the calendar could not be read. */
+    data class Pending(val count: Int, val total: BigDecimal?, val unavailable: Boolean = false)
 }
 
 /** Qué sigue: exactly one thing. The detailed plan lives in Plan → Tu plan del mes. */

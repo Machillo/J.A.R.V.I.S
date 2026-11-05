@@ -5,6 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
+import com.dincr.data.PlanTier
+import com.dincr.data.DebtSavingsBlocks
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -166,8 +171,38 @@ private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: Financ
 @Composable
 fun DeclaredSavingsScreen(model: AppModel, nav: Navigator) {
     val situation = rememberLoad(model) { model.api.financialSituation() }
-    DetailScaffold(tx("Tus ahorros", "Your savings"), nav::back) {
+    DetailScaffold(tx("Mis ahorros", "My savings"), nav::back) {
+        AutomaticSavingsSection(model)
         LoadContent(situation) { s -> DeclaredSavingsForm(model, nav, s.profile) { situation.replace(it) } }
+    }
+}
+
+/**
+ * Mis ahorros also shows what saves itself: the Salvavidas (VIP and the Owner) and the locked savings
+ * for debts (the Owner). Read-only figures from their own screens; a failed read just leaves them out.
+ */
+@Composable
+private fun AutomaticSavingsSection(model: AppModel) {
+    val profile by model.profile.collectAsStateWithLifecycle()
+    val tier = profile?.planTier ?: PlanTier.FREE
+    val owner = profile?.isOwner == true
+    var salvavidas by remember { mutableStateOf<java.math.BigDecimal?>(null) }
+    var blocks by remember { mutableStateOf<List<DebtSavingsBlocks.Block>>(emptyList()) }
+    val generation by model.dataGeneration.collectAsStateWithLifecycle()
+    LaunchedEffect(generation, tier, owner) {
+        if (tier == PlanTier.VIP || owner) salvavidas = runCatching { model.api.salvavidas().currentAmount }.getOrNull()
+        if (owner) blocks = runCatching { model.api.debtSavingsBlocks().blocks.orEmpty().filter { it.matured != true } }.getOrDefault(emptyList())
+    }
+    if (salvavidas != null || blocks.isNotEmpty()) Section(tx("Se guardan solos", "Saved automatically")) {
+        Box(Modifier.testTag("declaredSavings.automatic")) {
+            Column {
+                salvavidas?.let { AmountLine(tx("Salvavidas", "Emergency fund"), it) }
+                blocks.forEach { block ->
+                    val debt = block.debtName
+                    AmountLine(tx("Ahorro para ${debt ?: "tu deuda"}", "Saving for ${debt ?: "your debt"}"), block.savedSoFar ?: java.math.BigDecimal.ZERO)
+                }
+            }
+        }
     }
 }
 
@@ -183,7 +218,7 @@ private fun DeclaredSavingsForm(model: AppModel, nav: Navigator, current: Financ
     val scope = rememberCoroutineScope()
     val incomeDeclared = incomeDeclared(current)
     if (!incomeDeclared) DeclareIncomeFirst(tx("Primero declará tu ingreso: tus ahorros se guardan junto con él.", "Declare your income first: your savings are saved with it."), nav)
-    Section(tx("Tus ahorros", "Your savings")) {
+    Section(tx("Declarados por vos", "Declared by you")) {
         MoneyField(tx("Ahorros disponibles", "Available savings"), savings, { savings = it }, errors["savings"])
         MoneyField(tx("Meta de fondo de emergencia", "Emergency fund target"), emergency, { emergency = it }, errors["emergency"])
         Caption(tx("Dejá vacío lo que no sabés: DINCR lo trata como desconocido, no como cero.", "Leave empty what you don’t know: DINCR treats it as unknown, not zero."))

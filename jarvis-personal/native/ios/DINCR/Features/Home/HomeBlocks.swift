@@ -233,6 +233,7 @@ private struct HomeStatusCard: View {
 
     /// Payments the calendar knows of (scheduled from today on): none known is not "none due".
     private func pendingText(_ pending: HomeStatus.Pending) -> String {
+        if pending.unavailable { return tx("No se pudieron cargar", "Couldn’t load") }
         if pending.count == 0 { return tx("Ninguno registrado", "None recorded") }
         let count = pending.count == 1 ? tx("1 pago", "1 payment") : tx("\(pending.count) pagos", "\(pending.count) payments")
         guard let total = pending.total else { return tx("\(count) · monto por confirmar", "\(count) · amount to confirm") }

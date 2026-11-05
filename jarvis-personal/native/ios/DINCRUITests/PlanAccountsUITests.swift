@@ -382,6 +382,23 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertFalse(element("profile.situation", in: app).exists)
     }
 
+    func testMisAhorrosShowsWhatSavesItselfFromVipUp() {
+        let owner = launch(role: "owner", tab: nil)
+        let goals = element("owner.home.goals", in: owner)
+        XCTAssertTrue(goals.waitForExistence(timeout: 15), "missing the Owner's goals")
+        for _ in 0..<6 where !goals.isHittable { owner.swipeUp() }
+        goals.tap()
+        open("goals.declaredSavings", in: owner)
+        XCTAssertTrue(element("declaredSavings.automatic", in: owner).waitForExistence(timeout: 10), "the Salvavidas shows in Mis ahorros")
+        owner.terminate()
+
+        let free = launch(tab: nil)
+        open("home.goals", in: free)
+        open("goals.declaredSavings", in: free)
+        XCTAssertTrue(text("Ahorros disponibles", in: free).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("declaredSavings.automatic", in: free).exists, "Free has no automatic savings")
+    }
+
     func testVipSeesDincrsRecommendationAndSetsOnlyTheMinimum() {
         // Saved with the declared profile: without an income, the settings say where to declare it.
         let undeclared = launch(plan: "vip", tab: "plan")

@@ -98,6 +98,21 @@ def last_month_automatic_savings(salvavidas: dict[str, Any], today: date) -> dic
             "frequency": plan["frequency"], "month": month_start.strftime("%Y-%m")}
 
 
+def cycle_automatic_savings(salvavidas: dict[str, Any], blocks: list[dict[str, Any]], start: date, end: date, today: date) -> dict[str, float]:
+    """What the Salvavidas and the locked blocks take in the statement ``start``..``end`` (inclusive):
+    ``saved`` by today and ``total`` by its end. The bank moves this money every payday, so it is no
+    longer free. Derived on read, nothing is written."""
+    after = start - timedelta(days=1)
+    dates: list[tuple[date, float]] = []
+    plan = salvavidas_plan.normalize_plan(salvavidas.get("auto_contribution"))
+    if plan and plan["enabled"]:
+        dates += [(day, plan["amount"]) for day in salvavidas_plan.scheduled_dates(plan, after, end)]
+    for block in owner_debt_block_store.open_blocks(blocks):
+        dates += [(day, block["weekly_amount"]) for day in owner_debt_block_store.contributions(block, after, end)]
+    return {"saved": round(sum(amount for day, amount in dates if day <= today), 2),
+            "total": round(sum(amount for _, amount in dates), 2)}
+
+
 def move_share(amounts: dict[str, float], amount: float, source: str, target: str) -> tuple[dict[str, float], float]:
     """Moves up to ``amount`` from one share to another; the total stays the same."""
     result = dict(amounts)

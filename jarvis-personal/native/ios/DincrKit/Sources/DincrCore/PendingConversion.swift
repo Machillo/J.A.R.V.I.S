@@ -106,6 +106,13 @@ public struct PendingConversion: Decodable, Sendable, Equatable {
     /// Every waiting expense, whatever its month (Hoy's card).
     public var estimateOfAll: PendingEstimate { estimate(month: "", query: "") }
 
+    /// The waiting dollars of a card statement, `start` to `end` inclusive (`yyyy-MM-dd`).
+    public func estimate(from start: String, through end: String) -> PendingEstimate {
+        let shown = items.filter { $0.entryDate >= start && String($0.entryDate.prefix(10)) <= end }
+        let known = shown.compactMap(\.estimatedAmount)
+        return PendingEstimate(sum: known.isEmpty ? nil : known.reduce(0, +), withoutEstimate: shown.count - known.count)
+    }
+
     /// What the waiting dollars on screen add to the expenses: with a search every month, without
     /// one only `month` (`YYYY-MM`), like the colones rows. `sum` nil: none has an estimate.
     public func estimate(month: String, query: String) -> PendingEstimate {

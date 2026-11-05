@@ -175,7 +175,7 @@ import Testing
     @Test func noKnownPaymentsIsZeroKnownNotNone() throws {
         let cal = try decode(FinancialCalendar.self, #"{"events":[]}"#)
         #expect(HomeToday.pending(cal, today: today) == HomeStatus.Pending(count: 0, total: 0))
-        #expect(HomeToday.pending(nil, today: today) == nil)
+        #expect(HomeToday.pending(nil, today: today) == HomeStatus.Pending(count: 0, total: nil, unavailable: true))
     }
 
     @Test func anInvalidPaymentDayGivesNoDate() throws {
@@ -217,5 +217,16 @@ import Testing
         // A public plan's month has no statement.
         let month = try APIClient.decoder.decode(CommandCenter.self, from: Data(#"{"reports":{"current":{"month":"2026-11","income":1,"expenses":1}}}"#.utf8))
         #expect(HomeToday.vip(month, budget: nil, calendar: nil, debts: nil).status.cycle == nil)
+    }
+
+    /// A statement's dollars are the ones bought inside it, never the calendar month's.
+    @Test func aStatementCountsItsOwnDollars() {
+        let item = { (day: String, amount: Decimal) in
+            PendingConversion.Item(movementId: "e\(day)", id: 1, entryDate: day, description: "x", category: nil,
+                                   originalAmount: 1, originalCurrency: "USD", financialAccountId: nil, estimatedAmount: amount)
+        }
+        let read = PendingConversion(available: true, items: [item("2026-10-21", 100), item("2026-10-22", 200), item("2026-11-02", 400)], totals: [])
+        #expect(read.estimate(from: "2026-09-22", through: "2026-10-21").sum == 100)
+        #expect(read.estimate(from: "2026-10-22", through: "2026-11-21").sum == 600)
     }
 }

@@ -152,8 +152,9 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
     // The dollars of this month still waiting for their close, as an estimate. Optional: Hoy never fails because of it.
     var dollars by remember { mutableStateOf<java.math.BigDecimal?>(null) }
     val dollarsGeneration by model.dataGeneration.collectAsStateWithLifecycle()
-    LaunchedEffect(dollarsGeneration) {
-        dollars = try { model.api.pendingConversion().estimate(java.time.YearMonth.now().toString(), "").sum } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { dollars }
+    LaunchedEffect(dollarsGeneration, status?.cycle?.start) {
+        // The Owner's figures are his card statement's, so its dollars are too.
+        dollars = try { model.api.pendingConversion().let { read -> status?.cycle?.let { read.estimateBetween(it.start, it.end).sum } ?: read.estimate(java.time.YearMonth.now().toString(), "").sum } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { dollars }
     }
     // Light status bar icons over the hero, only while this screen is on.
     val view = LocalView.current
@@ -350,6 +351,7 @@ private fun Fact(label: String, amount: BigDecimal?, sign: MoneyFormat.Sign, unk
 /** Payments the calendar knows of (scheduled from today on): none known is not "none due". */
 @Composable
 private fun pendingText(pending: HomeStatus.Pending): String {
+    if (pending.unavailable) return tx("No se pudieron cargar", "Couldn’t load")
     if (pending.count == 0) return tx("Ninguno registrado", "None recorded")
     val count = if (pending.count == 1) tx("1 pago", "1 payment") else tx("${pending.count} pagos", "${pending.count} payments")
     val total = pending.total ?: return tx("$count · monto por confirmar", "$count · amount to confirm")

@@ -97,7 +97,7 @@ final class PlanOrganizeUITests: XCTestCase {
         let app = launch()
         open("plan.incomeBase", in: app)
         open("incomeBase.recurring", in: app)
-        XCTAssertTrue(app.navigationBars["Movimientos recurrentes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Recurrentes"].waitForExistence(timeout: 10))
         back(app)
         XCTAssertTrue(app.navigationBars["Ingresos y base"].waitForExistence(timeout: 10))
     }

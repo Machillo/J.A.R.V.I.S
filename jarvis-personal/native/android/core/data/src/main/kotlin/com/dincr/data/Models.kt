@@ -137,6 +137,8 @@ data class MonthTotals(
     @SerialName("period_start") val periodStart: String? = null,
     @SerialName("period_end") val periodEnd: String? = null,
     @SerialName("payment_date") val paymentDate: String? = null,
+    /** The Owner only: the automatic savings already taken in this statement (part of the balance). */
+    @SerialName("automatic_saved") val automaticSaved: Money? = null,
 )
 
 @Serializable

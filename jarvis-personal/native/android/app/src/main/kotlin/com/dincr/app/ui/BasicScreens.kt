@@ -268,7 +268,7 @@ fun RecurringScreen(model: AppModel, nav: Navigator, expensesOnly: Boolean = fal
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { model.recordScreen("recurring_opened", "recurring") }
-    DetailScaffold(if (expensesOnly) tx("Gastos fijos", "Fixed expenses") else tx("Movimientos recurrentes", "Recurring transactions"), nav::back, actions = {
+    DetailScaffold(if (expensesOnly) tx("Gastos fijos", "Fixed expenses") else tx("Recurrentes", "Recurring"), nav::back, actions = {
         IconButton({ creating = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("recurring.add")) { Icon(Icons.Rounded.Add, contentDescription = tx("Agregar recurrente", "Add recurring")) }
     }) {
         LoadContent(list) { all ->

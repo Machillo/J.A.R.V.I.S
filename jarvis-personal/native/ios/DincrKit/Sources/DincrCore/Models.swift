@@ -135,6 +135,8 @@ public struct MonthTotals: Decodable, Sendable, Equatable, Identifiable {
     public var periodStart: String? = nil
     public var periodEnd: String? = nil
     public var paymentDate: String? = nil
+    /// The Owner only: the automatic savings already taken in this statement (part of `balance`).
+    public var automaticSaved: Decimal? = nil
     public var id: String { month }
 
     public init(month: String, income: Decimal, expenses: Decimal, debtPaid: Decimal? = nil, balance: Decimal? = nil) {
