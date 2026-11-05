@@ -733,7 +733,7 @@
           "monthly_limit": 30000
         }
       ],
-      "pending_notices": 2
+      "pending_notices": 0
     },
     "engine": {
       "strategy_basic": {
@@ -1025,12 +1025,6 @@
             "title": "Tu fondo de emergencia cubre menos de un mes",
             "context": "Alcanza para unos 0,5 meses de tus compromisos.",
             "action": "Cuando te sobre dinero, apartalo primero para tu fondo de emergencia."
-          },
-          {
-            "severity": "medium",
-            "title": "Movimientos por revisar",
-            "context": "Hay 2 movimientos importados sin confirmar.",
-            "action": "Revisalos antes de confiar en el cierre mensual."
           }
         ],
         "calendar": [
@@ -1223,7 +1217,7 @@
         },
         "automation": {
           "confirmed": 0,
-          "review": 2,
+          "review": 0,
           "duplicates": 0
         },
         "roadmap": [
@@ -2121,7 +2115,7 @@
           "monthly_limit": 30000
         }
       ],
-      "pending_notices": 2
+      "pending_notices": 0
     },
     "engine": {
       "strategy_basic": {
@@ -2413,12 +2407,6 @@
             "title": "Your emergency fund covers less than a month",
             "context": "It covers about 0.5 months of your commitments.",
             "action": "When you have money left over, set it aside for your emergency fund first."
-          },
-          {
-            "severity": "medium",
-            "title": "Transactions to review",
-            "context": "There are 2 unconfirmed imported transactions.",
-            "action": "Review them before relying on the monthly close."
           }
         ],
         "calendar": [
@@ -2611,7 +2599,7 @@
         },
         "automation": {
           "confirmed": 0,
-          "review": 2,
+          "review": 0,
           "duplicates": 0
         },
         "roadmap": [
