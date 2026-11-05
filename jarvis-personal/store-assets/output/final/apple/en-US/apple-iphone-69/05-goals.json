@@ -1,5 +1,5 @@
 {
-  "output_sha256": "523c712f3e71edcfee95424cb0bc5857121ec8ed2e2f7b7f4bcaf37c4ce71a4b",
+  "output_sha256": "cd400b6af1cd51363fbab0fb3ad5e86c958e3f5881baf7213ed9b953f84b2553",
   "mode": "final",
   "target": "apple-iphone-69",
   "store": "apple",
@@ -12,17 +12,18 @@
   "height": 2868,
   "alpha": false,
   "caption_ratio": 0.1059,
+  "span_capture": null,
   "capture": {
     "file": "raw/ios/en/phone/05-goals.png",
-    "sha256": "c12ec1d719a8c7b8f96a5fe90000db4e0f5178fce79524c89c645f61e2e56df3",
+    "sha256": "afff3fe510d06ae56d776d045455572141ff72111fe06d1d8f7e3b0b5f4bd45f",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-11-05T15:36:40.303Z",
+    "captured_at": "2026-11-05T22:42:22.340Z",
     "device": null
   },
-  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "source_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
-  "generated_at": "2026-11-05T15:40:52.132Z"
+  "pipeline_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
+  "generated_at": "2026-11-05T22:44:56.684Z"
 }

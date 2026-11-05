@@ -1,5 +1,5 @@
 {
-  "output_sha256": "b74f3e2a58785dcd01b8ac8e4915cf4d3dffd13544c92e8b04b12604fef908d3",
+  "output_sha256": "0840d81da8a2e01985d35f10d46827f2ba75784a12375319dc75885c7b63fd94",
   "mode": "final",
   "target": "apple-iphone-69",
   "store": "apple",
@@ -12,17 +12,18 @@
   "height": 2868,
   "alpha": false,
   "caption_ratio": 0.1745,
+  "span_capture": null,
   "capture": {
     "file": "raw/ios/es/phone/07-strategy.png",
-    "sha256": "2d69bcf38dddf59651d829f25fe75eafa419ef676e678678517893bc8dfb0a84",
+    "sha256": "2eb055661c6259f5f029804303217302fa257860366df0e9052692c22846501d",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-11-05T15:36:40.303Z",
+    "captured_at": "2026-11-05T22:42:22.340Z",
     "device": null
   },
-  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "source_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
-  "generated_at": "2026-11-05T15:40:31.813Z"
+  "pipeline_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
+  "generated_at": "2026-11-05T22:44:32.365Z"
 }

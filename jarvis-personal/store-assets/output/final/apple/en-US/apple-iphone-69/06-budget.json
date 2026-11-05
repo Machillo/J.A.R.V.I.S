@@ -12,17 +12,18 @@
   "height": 2868,
   "alpha": false,
   "caption_ratio": 0.1405,
+  "span_capture": null,
   "capture": {
     "file": "raw/ios/en/phone/06-budget.png",
     "sha256": "03e86aebceeea64bb3b69b54242babcd9914b725193db97897516ed64ea9e49f",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-11-05T15:36:40.303Z",
+    "captured_at": "2026-11-05T22:42:22.340Z",
     "device": null
   },
-  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "source_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
-  "generated_at": "2026-11-05T15:40:56.102Z"
+  "pipeline_commit": "2e4ec374e5ccf032431b82caef1e62dc0705c8dd",
+  "generated_at": "2026-11-05T22:45:01.125Z"
 }
