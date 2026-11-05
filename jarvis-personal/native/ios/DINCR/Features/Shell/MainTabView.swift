@@ -37,7 +37,7 @@ struct MainTabView: View {
                     openPendingRoute(model.pendingRoute)
                 }
                 .sheet(isPresented: $quickExpense) {
-                    MovementEditor(mode: .create, initialKind: .expense) { _ in }
+                    MovementEditor(mode: .create, initialKind: .expense) { _ in model.noteDataChanged() }
                 }
                 .alert(tx("¿Proteger DINCR con bloqueo?", "Protect DINCR with a lock?"), isPresented: $offeringLock) {
                     Button(tx("Activar", "Turn on")) { model.appLock.markOffered(); Task { _ = await model.appLock.setEnabled(true) } }

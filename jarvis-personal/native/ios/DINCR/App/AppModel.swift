@@ -1,6 +1,7 @@
 import DincrCore
 import Foundation
 import Observation
+import UIKit
 
 /// Session and identity state. Reproduces the Capacitor gate order (App.jsx): session → release
 /// policy → identity → Owner boundary → legal → profile setup → plan → app lock → app.
@@ -153,12 +154,22 @@ final class AppModel {
             if phase == .loadingIdentity { await loadIdentity() }
             return
         }
+        // The session is only readable with the device unlocked. An app started while it is locked
+        // waits here: a locked phone never reads as "signed out".
+        await waitForProtectedData()
         if await sessions.hasSession {
             await loadIdentity()
         } else {
             phase = .signedOut
             // A mail return delivered during boot belongs to no session: drop it.
             retryMailReturn = nil
+        }
+    }
+
+    private func waitForProtectedData() async {
+        guard !UIApplication.shared.isProtectedDataAvailable else { return }
+        for await _ in NotificationCenter.default.notifications(named: UIApplication.protectedDataDidBecomeAvailableNotification) {
+            return
         }
     }
 
@@ -189,6 +200,9 @@ final class AppModel {
 
     /// Reads the connected mailboxes (where mail is part of the plan and switched on), then asks the
     /// visible screens to read again. A failure or no mailbox changes nothing on screen.
+    /// Something saved outside the screens on view: they read again.
+    func noteDataChanged() { dataGeneration += 1 }
+
     func syncOnReturn() async {
         guard phase == .ready, Date.now.timeIntervalSince(lastReturnSync) >= returnSyncInterval else { return }
         lastReturnSync = .now
