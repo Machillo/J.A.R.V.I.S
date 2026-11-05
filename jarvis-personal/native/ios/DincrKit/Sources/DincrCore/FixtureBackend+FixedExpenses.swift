@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's Plan → Gastos fijos routes for the Owner (Debug demos and tests only). Same
@@ -61,3 +62,4 @@ extension FixtureBackend {
         }
     }
 }
+#endif

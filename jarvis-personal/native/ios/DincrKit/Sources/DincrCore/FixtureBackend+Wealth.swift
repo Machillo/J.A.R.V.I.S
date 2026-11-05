@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's JARVIS → Patrimonio routes (Debug demos and tests only). Same shapes and
@@ -126,3 +127,4 @@ extension FixtureBackend {
                 "income": number(income), "expenses": number(expenses), "profit": number(income - expenses), "capital": number(total("capital"))]
     }
 }
+#endif

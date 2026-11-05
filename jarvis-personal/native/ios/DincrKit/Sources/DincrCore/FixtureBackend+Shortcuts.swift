@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's Atajos de iPhone routes (Debug demos and tests only), with the backend's shapes:
@@ -61,3 +62,4 @@ extension FixtureBackend {
         }
     }
 }
+#endif

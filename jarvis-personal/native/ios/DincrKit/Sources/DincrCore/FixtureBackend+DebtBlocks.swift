@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's Plan → Ahorro para deudas routes (Debug demos and tests only). Same shapes and
@@ -83,3 +84,4 @@ extension FixtureBackend {
         return base.merging(["status": "proposal", "proposal": proposal]) { $1 }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's Plan tab, Cuentas and JARVIS analysis routes (Debug demos and tests only).
@@ -328,3 +329,4 @@ extension FixtureBackend {
                 "net_worth": number(assets - owed), "complete": true, "unknown": [String]()]
     }
 }
+#endif

@@ -103,6 +103,7 @@ final class AppModel {
             self.sessions = sessions
             service = DincrService(client: APIClient(baseURL: apiURL, tokens: sessions))
             self.shortcutTokens = KeychainShortcutTokenStore()
+        #if DEBUG
         case let .fixtures(scenario, plan, role):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
@@ -125,10 +126,11 @@ final class AppModel {
                                                             mailLeftovers: ProcessInfo.processInfo.arguments.contains("-DincrMailLeftovers")))
             returnSyncInterval = 0  // fixtures: every return reads again (UI tests do not wait a minute)
             self.shortcutTokens = InMemoryShortcutTokenStore()
+        #endif
         case let .unconfigured(reason):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
-            service = DincrService(client: APIClient(baseURL: FixtureBackend.baseURL, tokens: FixtureTokens(), transport: UnconfiguredTransport()))
+            service = DincrService(client: APIClient(baseURL: URL(string: "https://unconfigured.invalid")!, tokens: UnconfiguredTokens(), transport: UnconfiguredTransport()))
             self.shortcutTokens = InMemoryShortcutTokenStore()
             self.phase = .unconfigured(reason)
         }
@@ -539,4 +541,9 @@ final class AppModel {
 /// show data (real or sample) in that state.
 private struct UnconfiguredTransport: HTTPTransport {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) { throw URLError(.cannotConnectToHost) }
+}
+
+/// No backend configured: nothing is ever sent, this only satisfies the unconfigured service.
+private struct UnconfiguredTokens: AccessTokenProvider {
+    func accessToken(forceRefresh: Bool) async throws -> String { "" }
 }

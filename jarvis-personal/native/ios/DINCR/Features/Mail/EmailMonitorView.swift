@@ -282,7 +282,12 @@ private struct MailMonitorContent: View {
         await perform("connect", fallback: MailReturn.message("error", language: model.language)) {
             let url = try await model.service.connectMail(provider, MailConnectRequest(scope: scope, language: model.language))
             let callback: URL
-            if model.environment.isFixtures, let simulated = FixtureOAuth.simulatedReturn(from: url) {
+            #if DEBUG
+            let simulated = model.environment.isFixtures ? FixtureOAuth.simulatedReturn(from: url) : nil
+            #else
+            let simulated: URL? = nil
+            #endif
+            if let simulated {
                 callback = simulated // Debug fixture only: no provider, no browser
             } else {
                 do {
@@ -661,6 +666,7 @@ private struct AccountsContent: View {
 
 /// Debug fixture mode only: the fixture backend's authorization URL carries the return the real
 /// provider would send, so flows run without a browser. A Release build never has fixture data.
+#if DEBUG
 enum FixtureOAuth {
     static func simulatedReturn(from url: URL) -> URL? {
         guard url.host == FixtureBackend.authorizeHost,
@@ -668,3 +674,4 @@ enum FixtureOAuth {
         return URL(string: value)
     }
 }
+#endif

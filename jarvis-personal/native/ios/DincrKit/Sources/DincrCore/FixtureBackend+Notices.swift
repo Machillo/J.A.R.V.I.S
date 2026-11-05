@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's Owner notices (Debug demos and tests only). Same shapes and access rule as
@@ -23,3 +24,4 @@ extension FixtureBackend {
         ] as [String: Any]]])
     }
 }
+#endif
