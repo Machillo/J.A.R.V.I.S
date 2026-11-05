@@ -94,6 +94,10 @@ final class StoreScreenshots: XCTestCase {
         try shoot("03-movements", plan: "free") { app, l in
             self.wait(app, l.pick("Resultado del mes", "This month’s result"))
             self.tab(app, l.pick("Movimientos", "Transactions"))
+            // The list opens on the Mac's current month and a simulator's clock can't be set: walk back to the sample's.
+            let coffee = app.staticTexts[l.pick("Café", "Coffee")]
+            let previous = app.buttons[l.pick("Mes anterior", "Previous month")]
+            for _ in 0..<24 where !coffee.waitForExistence(timeout: 2) && previous.exists { previous.tap() }
             self.wait(app, l.pick("Café", "Coffee"))
         }
     }

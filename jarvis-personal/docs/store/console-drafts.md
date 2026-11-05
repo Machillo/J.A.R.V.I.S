@@ -70,4 +70,4 @@ Tiene que coincidir con `native/ios/DINCR/Resources/PrivacyInfo.xcprivacy`.
 
 - Confirmar con el formulario de Google si los contadores anónimos del servidor deben declararse.
 - Plazo real de las copias de respaldo de Supabase, que la política fija en máximo 30 días.
-- Texto de la ficha de cada tienda: nombre, descripción corta y larga. No hay borrador todavía.
+- Texto de la ficha de cada tienda: borrador en `listing.md`.

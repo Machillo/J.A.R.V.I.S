@@ -104,6 +104,8 @@ Notes:
 
 - The iOS simulator uses the Mac's clock, so the transactions list shows dates ("28 de
   septiembre") instead of "Hoy/Ayer" unless the Mac's date is 2026-09-28. Both are true to the data.
+- The list opens on the Mac's current month, so the capture test walks back to the sample's month
+  with the previous-month button.
 - iPhone only: no iPad captures.
 - Since #294 the native iOS app has every store screen, with the identity `com.dincr.app`. The
   store release gates are in `native/RELEASE_IDENTITY.md` (the stores still ship Capacitor).
