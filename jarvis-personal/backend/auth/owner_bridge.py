@@ -95,8 +95,9 @@ def authenticate_owner_bridge_token(token: str) -> dict:
     if not BRIDGE_API_KEY:
         raise HTTPException(status_code=503, detail="Owner bridge no disponible.")
     try:
+        token.encode("ascii")
         encoded, signature = token.split(".", 1)
-    except ValueError as exc:
+    except ValueError as exc:  # UnicodeEncodeError is a ValueError: a non-ASCII token is invalid, not a 500
         raise HTTPException(status_code=401, detail="Sesión owner inválida.") from exc
 
     expected = _b64encode(hmac.new(BRIDGE_API_KEY.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256).digest())

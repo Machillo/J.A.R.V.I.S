@@ -522,6 +522,20 @@ class EventRequest(BaseModel):
     description: str = ""
 
 
+# Bodies are capped before any work. Public paths take small JSON; authenticated ones may upload a PDF.
+MAX_PUBLIC_BODY_BYTES = 1024 * 1024
+MAX_BODY_BYTES = 15 * 1024 * 1024
+
+
+@app.middleware("http")
+async def body_size_middleware(request: Request, call_next):
+    declared = request.headers.get("content-length", "")
+    limit = MAX_PUBLIC_BODY_BYTES if _is_public_path(request.url.path) else MAX_BODY_BYTES
+    if declared.isdigit() and int(declared) > limit:
+        return JSONResponse(status_code=413, content={"detail": "El contenido es demasiado grande."})
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def no_store_middleware(request: Request, call_next):
     # Registered last, so it is the outermost: every answer, also an early 401, is covered.

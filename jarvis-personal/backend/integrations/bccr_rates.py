@@ -155,7 +155,7 @@ def sync_rates_cron(x_jarvis_cron_secret: str | None = Header(default=None)):
     expected = os.getenv("IBKR_FLEX_CRON_SECRET", "").strip() or os.getenv("EMAIL_MONITOR_CRON_SECRET", "").strip()
     if not expected:
         raise HTTPException(status_code=503, detail="El cron no está configurado.")
-    if not x_jarvis_cron_secret or not hmac.compare_digest(x_jarvis_cron_secret, expected):
+    if not x_jarvis_cron_secret or not hmac.compare_digest(x_jarvis_cron_secret.encode(), expected.encode()):
         raise HTTPException(status_code=403, detail="Credencial del cron inválida.")
     from backend.user_product.pending_conversion import close_due_periods
 

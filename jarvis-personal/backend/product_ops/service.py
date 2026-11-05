@@ -180,6 +180,9 @@ def update_feature_flag(flag_key: str, payload):
     return row
 
 
+FEEDBACK_PER_HOUR = 10
+
+
 def support_email_configuration() -> dict[str, object]:
     """Return non-secret SMTP readiness details for the owner dashboard."""
     username = os.getenv("SUPPORT_SMTP_USER", "").strip()
@@ -227,7 +230,7 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
         return False
 
     message = EmailMessage()
-    message["Subject"] = f"[{public_id}] {payload.category.upper()}: {payload.subject.strip()}"
+    message["Subject"] = f"[{public_id}] {payload.category.upper()}: {' '.join(payload.subject.split())}"
     message["From"] = sender
     message["To"] = recipient
     if email and email != "no disponible":
@@ -541,6 +544,13 @@ def create_feedback(payload):
     user = get_current_user()
     with get_connection() as conn:
         ensure_schema(conn)
+        # Each report sends an email and a Discord message: one account can't flood them.
+        recent = conn.execute(
+            "SELECT COUNT(*) AS total FROM feedback_reports WHERE account_id=%s AND created_at>NOW()-INTERVAL '1 hour'",
+            (user["account_id"],),
+        ).fetchone()
+        if int((recent or {}).get("total") or 0) >= FEEDBACK_PER_HOUR:
+            raise HTTPException(status_code=429, detail="Recibimos varios reportes tuyos. Intentá de nuevo en una hora.")
         identity = conn.execute(
             """SELECT a.primary_email,p.code AS plan_code FROM accounts a
                LEFT JOIN account_subscriptions s ON s.account_id=a.id

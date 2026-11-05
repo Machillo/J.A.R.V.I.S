@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, Request, HTTPException
 from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.models import AllowedUserRequest, LegalAcceptanceRequest, PlanSelectionRequest, ProfileSetupRequest, UnifiedOnboardingRequest
@@ -10,9 +10,12 @@ from backend.auth.service import (
     delete_allowed_user,
     delete_current_account,
 )
-from backend.auth.current_user import get_current_user, require_owner
+from backend.auth.current_user import get_current_account_id, get_current_user, require_owner
+from backend.core.write_limit import WriteLimiter
 from backend.auth.saas import complete_onboarding, complete_profile_setup, enrich_identity, get_available_plans, get_onboarding_status, select_plan
 
+
+_export_limiter = WriteLimiter(limit=5, window=3600.0)
 
 router = APIRouter(
     prefix="/auth",
@@ -57,6 +60,11 @@ def me():
 
 @router.get("/me/export")
 def export_my_data():
+    # A complete copy is heavy: reasonable by hand, not in a loop. Deleting the account stays open.
+    wait = _export_limiter.check(str(get_current_account_id()))
+    if wait is not None:
+        raise HTTPException(status_code=429, detail="Ya descargaste tus datos varias veces. Intentá más tarde.",
+                            headers={"Retry-After": str(int(wait))})
     return export_current_account_data()
 
 
