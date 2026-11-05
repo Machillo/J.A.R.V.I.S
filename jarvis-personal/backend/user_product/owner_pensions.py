@@ -34,8 +34,13 @@ def parse_statement(subject: str, sender: str, text: str, attachment_names: list
     if rop is None and fcl is None:
         return None
     named = next((found for found in map(_FILE_MONTH.search, attachment_names or []) if found), None)
-    month = f"{named.group(1)}-{named.group(2)}" if named else str(received_at or "")[:7]
+    received_month = str(received_at or "")[:7]
+    month = f"{named.group(1)}-{named.group(2)}" if named else received_month
     if not re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", month):
+        return None
+    # A statement can't be newer than its mail. Without this check, one file named far in the
+    # future would block every real statement, because an older month never replaces a newer one.
+    if not received_month or month > received_month:
         return None
     return {"rop_balance": rop, "fcl_balance": fcl, "month": month}
 
