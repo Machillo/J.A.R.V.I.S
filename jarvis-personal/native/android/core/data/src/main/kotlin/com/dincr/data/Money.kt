@@ -111,7 +111,6 @@ data class AccountBalanceRequest(
     val currency: String = "CRC",
     @SerialName("account_type") val accountType: String = "checking",
     @SerialName("include_in_net_worth") val includeInNetWorth: Boolean = true,
-    @SerialName("annual_interest_rate") val annualInterestRate: Money = java.math.BigDecimal.ZERO,
     val source: String = "manual",
     val note: String = "",
 ) {

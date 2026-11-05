@@ -80,8 +80,9 @@ class MoneyTest {
         val body = json.encodeToString(AccountBalanceRequest.serializer(),
             AccountBalanceRequest("Cuenta", BigDecimal(50_000), "Banco", "4444", "USD", "savings", includeInNetWorth = false))
         listOf("\"account_name\":\"Cuenta\"", "\"current_balance\":50000", "\"bank_name\":\"Banco\"", "\"account_last4\":\"4444\"", "\"currency\":\"USD\"",
-            "\"account_type\":\"savings\"", "\"include_in_net_worth\":false", "\"annual_interest_rate\":0", "\"source\":\"manual\"", "\"note\":\"\"")
+            "\"account_type\":\"savings\"", "\"include_in_net_worth\":false", "\"source\":\"manual\"", "\"note\":\"\"")
             .forEach { assertTrue("$it in $body", body.contains(it)) }
+        assertTrue("updating a balance does not send a rate", !body.contains("annual_interest_rate"))
     }
 
     @Test fun theLastDigitsAreFourNumbersOrNothing() {
