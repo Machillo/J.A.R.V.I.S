@@ -157,24 +157,6 @@
           "how_to_reach": "DINCR tab > Tu estrategia/Your strategy with a Basic account (advisor.strategy)"
         }
       }
-    },
-    {
-      "id": "08-mail",
-      "area": "Financial emails (bank notices to review)",
-      "copy_key": "mail",
-      "plan": "vip",
-      "platforms": {
-        "android": {
-          "available": true,
-          "confirmed": true,
-          "how_to_reach": "Perfil/Profile > Correos financieros/Financial emails with a VIP account (fixture mailbox ana.demo@example.com)"
-        },
-        "ios": {
-          "available": true,
-          "confirmed": true,
-          "how_to_reach": "Perfil/Profile > Monitor de correo/Email Monitor with a VIP account (profile.mail; fixture mailbox ana.demo@example.com)"
-        }
-      }
     }
   ],
   "platform_baselines": {

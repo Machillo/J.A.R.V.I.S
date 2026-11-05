@@ -130,13 +130,4 @@ class StoreScreenshots {
         waitForText(tx("Libre después de tus compromisos", "Left after your commitments"))
         capture("07-strategy")
     }
-
-    @Test fun s08Mail() {
-        launch("vip")
-        waitForText(today)
-        click(tx("Perfil", "Profile"))
-        click(tx("Conexiones de correo", "Mail connections"))
-        waitForText(tx("Por revisar", "To review"))
-        capture("08-mail")
-    }
 }

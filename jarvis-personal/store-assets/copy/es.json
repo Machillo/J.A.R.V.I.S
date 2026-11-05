@@ -43,11 +43,6 @@
       "title": "Sabé a dónde mandar lo que te sobra",
       "subtitle": "Tu margen del mes y a qué deuda abonar primero",
       "plan_badge": "basic"
-    },
-    "mail": {
-      "title": "Movimientos desde tus correos del banco",
-      "subtitle": "Solo lectura, con tu permiso. Vos revisás cada uno",
-      "plan_badge": "vip"
     }
   },
   "feature_graphic": {
