@@ -463,7 +463,7 @@ class PlanRecoveryUiTest {
         back()
         click(tx("Hoy", "Today"))
         click(tx("Metas y ahorros", "Goals and savings"))
-        click(tx("Tus ahorros", "Your savings"))
+        click(tx("Mis ahorros", "My savings"))
         waitForText(tx("Ahorros disponibles", "Available savings"))
         scrollTo(tx("Meta de fondo de emergencia", "Emergency fund target"))
         back(); back()

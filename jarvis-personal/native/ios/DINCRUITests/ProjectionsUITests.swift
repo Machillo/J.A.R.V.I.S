@@ -50,7 +50,7 @@ final class ProjectionsUITests: XCTestCase {
         XCTAssertTrue(element("projections.incomplete", in: app).waitForExistence(timeout: 10))
         for months in [1, 3, 6, 12] { XCTAssertFalse(element("projections.point.\(months)", in: app).exists, "\(months)") }
         XCTAssertFalse(app.staticTexts["Patrimonio neto"].exists)  // no figure from an unknown
-        for (code, title) in [("income", "Ingresos y base"), ("essential_expenses", "Ingresos y base"), ("savings", "Tus ahorros")] {
+        for (code, title) in [("income", "Ingresos y base"), ("essential_expenses", "Ingresos y base"), ("savings", "Mis ahorros")] {
             open("projections.missing.\(code)", in: app)
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10), code)
             app.navigationBars.buttons.element(boundBy: 0).tap()
