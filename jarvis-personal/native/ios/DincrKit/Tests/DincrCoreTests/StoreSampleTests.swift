@@ -76,6 +76,13 @@ import Testing
         #expect(StoreSample.inputs(.spanish)["pending_notices"] as? Int == 0)
     }
 
+    /// Without a store link the update screen must still offer a way out, as on Android.
+    @Test func theUpdateScreenCanCheckAgain() throws {
+        let file = Self.native.appendingPathComponent("ios/DINCR/App/RootView.swift")
+        let source = try String(contentsOf: file, encoding: .utf8)
+        #expect(source.contains("Comprobar nuevamente") && source.contains("await model.start()"))
+    }
+
     /// #292: the safe-to-spend minimum is the lowest expected balance, never "commitments".
     @Test func homeLabelsTheMinimumAsTheLowestExpectedBalance() throws {
         let file = Self.native.appendingPathComponent("ios/DINCR/Features/Home/HomeBlocks.swift")

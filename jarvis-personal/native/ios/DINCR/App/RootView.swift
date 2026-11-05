@@ -47,6 +47,7 @@ struct RootView: View {
                     title: tx("Actualizá DINCR", "Update DINCR"),
                     message: policy.message(model.language) ?? tx("Esta versión ya no es compatible. Actualizá desde el App Store para continuar.", "This version is no longer supported. Update from the App Store to continue."),
                     primary: Self.storeURL(policy.updateUrl).map { url in (tx("Actualizar", "Update"), { UIApplication.shared.open(url) }) },
+                    secondary: (tx("Comprobar nuevamente", "Check again"), { Task { await model.start() } }),
                     showsSignOut: false
                 )
             case .unsupportedRole:
@@ -105,6 +106,7 @@ struct GateMessageView: View {
     let title: String
     let message: String
     let primary: (String, () -> Void)?
+    var secondary: (String, () -> Void)?
     var showsSignOut = true
 
     var body: some View {
@@ -116,6 +118,12 @@ struct GateMessageView: View {
             Spacer()
             if let primary {
                 Button(primary.0, action: primary.1).buttonStyle(.dincrPrimary)
+            }
+            if let secondary {
+                Button(secondary.0, action: secondary.1)
+                    .font(DincrFont.title2)
+                    .foregroundStyle(.dincrTint)
+                    .frame(minHeight: 44)
             }
             if showsSignOut {
                 Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }
