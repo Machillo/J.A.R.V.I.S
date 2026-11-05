@@ -175,7 +175,7 @@ import Testing
     @Test func noKnownPaymentsIsZeroKnownNotNone() throws {
         let cal = try decode(FinancialCalendar.self, #"{"events":[]}"#)
         #expect(HomeToday.pending(cal, today: today) == HomeStatus.Pending(count: 0, total: 0))
-        #expect(HomeToday.pending(nil, today: today) == nil)
+        #expect(HomeToday.pending(nil, today: today) == HomeStatus.Pending(count: 0, total: nil, unavailable: true))
     }
 
     @Test func anInvalidPaymentDayGivesNoDate() throws {

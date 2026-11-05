@@ -169,7 +169,7 @@ class HomeTodayTest {
 
     @Test fun noKnownPaymentsIsZeroKnownNotNone() {
         assertEquals(HomeStatus.Pending(0, BigDecimal.ZERO), HomeToday.pending(json.decodeFromString("""{"events":[]}"""), today))
-        assertNull(HomeToday.pending(null, today))
+        assertEquals(HomeStatus.Pending(0, null, unavailable = true), HomeToday.pending(null, today))
     }
 
     @Test fun anInvalidPaymentDayGivesNoDate() {
