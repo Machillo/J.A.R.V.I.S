@@ -13,18 +13,12 @@ Sources:
 | Item | Requirement | DINCR decision |
 |---|---|---|
 | iPhone | **6.9"** portrait 1260×2736, 1290×2796 or **1320×2868** is required when the app runs on iPhone. 6.5", 6.3", 6.1", 5.5" and 4.7" are scaled down from it when not supplied | `apple-iphone-69` at **1320×2868** |
-| iPad | **13"** portrait 2064×2752 or 2048×2732 is **required if the app runs on iPad**. 11", 12.9", 10.5" and 9.7" are scaled from it | `apple-ipad-13` at **2064×2752** (see iPad note) |
 | Format | `.png`, `.jpg` or `.jpeg`; **no alpha channel or transparency** | Opaque 24-bit PNG (RGB, no tRNS), enforced by `png.mjs` and `validate.mjs` |
-| Count | 1 to 10 per localization | 8 screens, the same as Google Play (the native iOS app has them since #294) |
+| Count | 1 to 10 per localization | 7 screens, the same as Google Play |
 | Device frames | Allowed | Generic rounded frame, no real device model or trademark |
 | Paid features | Content shown that needs a purchase must say so (App Review 2.3.2) | Every screen carries its plan's badge (`screens.json` `plan`, checked by `validate.mjs`); each capture runs with that plan |
 
-**iPad note (re-checked on `main` after #294).** Both the native app
-(`native/ios/Config/Base.xcconfig` and the project) and the Capacitor project declare
-`TARGETED_DEVICE_FAMILY = 1,2` (iPhone and iPad), so App Store Connect requires 13" iPad
-screenshots and the pipeline keeps the `apple-ipad-13` target. Nothing was changed. Making the app
-iPhone-only is Kenneth's release decision (it changes who can install the app); only after that
-decision remove the target and run `capture-ios.mjs --no-tablet`.
+**iPhone only.** Kenneth decided the app ships for iPhone and Android, without iPad, so there is no iPad target.
 
 ## Google Play
 
@@ -40,7 +34,7 @@ decision remove the target and run `capture-ios.mjs --no-tablet`.
 ## Rules this pipeline adds (from `PRODUCT.md` and `CLAUDE.md`)
 
 - Real UI only. The only app UI in an image is a real capture of the native app (#287 or later). Templates never draw UI.
-- Each paid feature is shown with the lowest plan that includes it and labelled with that plan (Basic: budget, strategy; VIP: home, mail).
+- Each paid feature is shown with the lowest plan that includes it and labelled with that plan (Basic: budget, strategy; VIP: home). Mail reading is Owner-only at launch and is not advertised.
 - Synthetic data only: fixture mode, invented names and amounts, `example.com` mail. No production, no real account, no real financial data.
 - No testimonials, user counts, press quotes or certifications (none exist; `PRODUCT.md`).
 - Voseo Spanish; calm, non-alarmist tone.

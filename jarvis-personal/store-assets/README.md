@@ -9,8 +9,8 @@ or publishes anything.**
 
 | Set | State |
 |---|---|
-| Google Play, ES (`es-419`) and EN (`en-US`) | **Final**: 8 phone screenshots per language (1440×2560) + feature graphic (1024×500), from Android captures. `output/final/google/` |
-| App Store, iPhone 6.9" and iPad 13" | **MAC REQUIRED**: not captured yet. Since #294 the iOS app has the same 8 store screens as Android, and the capture test navigates them (`StoreScreenshots.swift`). See `CAPTURE.md` |
+| Google Play, ES (`es-419`) and EN (`en-US`) | **Final**: 7 phone screenshots per language (1440×2560) + feature graphic (1024×500), from Android captures. `output/final/google/` |
+| App Store, iPhone 6.9" | **MAC REQUIRED**: not captured yet. Since #294 the iOS app has the same 7 store screens as Android, and the capture test navigates them (`StoreScreenshots.swift`). See `CAPTURE.md` |
 
 **Human gate before uploading (not a screenshot decision):** the stores still ship the Capacitor
 app. These images show the native app, so they may be uploaded only when the native build takes the
@@ -83,7 +83,7 @@ node jarvis-personal/store-assets/scripts/compose.mjs --mode final --targets goo
 node jarvis-personal/store-assets/scripts/validate.mjs --targets google-phone,google-feature-graphic
 ```
 
-iOS: `CAPTURE.md` → MAC REQUIRED. Then compose with `--targets apple-iphone-69,apple-ipad-13` and the iOS manifest's commit.
+iOS: `CAPTURE.md` → MAC REQUIRED. Then compose with `--targets apple-iphone-69` and the iOS manifest's commit.
 
 Tests and layout proofs:
 

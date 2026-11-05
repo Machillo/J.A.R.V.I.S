@@ -43,7 +43,7 @@ export function screensFor(screens, target, final) {
   return screens.screens.filter((s) => (final ? s.platforms?.[platform]?.confirmed === true : s.platforms?.[platform]?.available === true));
 }
 
-export const deviceOf = (target) => (target.id === "apple-ipad-13" ? "tablet" : "phone");
+export const deviceOf = (target) => ("phone");
 
 /** Where the capture of one screen lives: raw/<platform>/<locale>/<device>/<screen>.png */
 export function rawPathFor(target, locale, screenId, rawDir = path.join(root, "raw")) {
@@ -274,7 +274,7 @@ function placeholderHtml(width, height, colors, label) {
 }
 
 // Placeholder capture sizes: typical native screen sizes of each device class (aspect matters).
-const PLACEHOLDER_SIZE = { "apple-iphone-69": [1206, 2622], "apple-ipad-13": [2064, 2752], "google-phone": [1080, 2400] };
+const PLACEHOLDER_SIZE = { "apple-iphone-69": [1206, 2622], "google-phone": [1080, 2400] };
 
 function parseArgs(argv) {
   const args = { mode: "preview", targets: null, locales: null, rawDir: path.join(root, "raw"), outDir: null, sourceCommit: null, requireMain: argv.includes("--require-main") };
