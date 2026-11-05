@@ -59,7 +59,7 @@ struct MoneyTests {
         let request = AccountBalanceRequest(accountName: "Cuenta", currentBalance: 50_000, bankName: "Banco", accountLast4: "4444", currency: "USD",
                                             accountType: "savings", includeInNetWorth: false)
         let body = String(decoding: try encoder.encode(request), as: UTF8.self)
-        #expect(body == #"{"account_last4":"4444","account_name":"Cuenta","account_type":"savings","annual_interest_rate":0,"bank_name":"Banco","currency":"USD","current_balance":50000,"include_in_net_worth":false,"note":"","source":"manual"}"#)
+        #expect(body == #"{"account_last4":"4444","account_name":"Cuenta","account_type":"savings","bank_name":"Banco","currency":"USD","current_balance":50000,"include_in_net_worth":false,"note":"","source":"manual"}"#)
     }
 
     @Test func theLastDigitsAreFourNumbersOrNothing() {

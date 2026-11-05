@@ -171,7 +171,6 @@ public struct AccountBalanceRequest: Encodable, Sendable, Equatable {
     public let currency: String
     public let accountType: String
     public let includeInNetWorth: Bool
-    public let annualInterestRate: Decimal
     public let source: String
     public let note: String
 
@@ -179,13 +178,13 @@ public struct AccountBalanceRequest: Encodable, Sendable, Equatable {
                 accountType: String = "checking", includeInNetWorth: Bool = true) {
         self.accountName = accountName; self.currentBalance = currentBalance; self.bankName = bankName; self.accountLast4 = accountLast4
         self.currency = currency; self.accountType = accountType; self.includeInNetWorth = includeInNetWorth
-        annualInterestRate = 0; source = "manual"; note = ""
+        source = "manual"; note = ""
     }
 
     enum CodingKeys: String, CodingKey {
         case currency, source, note
         case accountName = "account_name", currentBalance = "current_balance", bankName = "bank_name", accountLast4 = "account_last4"
-        case accountType = "account_type", includeInNetWorth = "include_in_net_worth", annualInterestRate = "annual_interest_rate"
+        case accountType = "account_type", includeInNetWorth = "include_in_net_worth"
     }
 
     /// Empty, or exactly four digits.

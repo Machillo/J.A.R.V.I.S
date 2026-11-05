@@ -937,7 +937,7 @@ def list_account_balances() -> dict[str, Any]:
     return {"status": "OK", "items": items, "total_real_balance": liquid_total, "currency": "CRC"}
 
 
-def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC", account_type: str = "checking", annual_interest_rate: float = 0, include_in_net_worth: bool = True, source: str = "manual", note: str = "") -> dict[str, Any]:
+def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC", account_type: str = "checking", annual_interest_rate: float | None = None, include_in_net_worth: bool = True, source: str = "manual", note: str = "") -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         existing = conn.execute(
@@ -957,13 +957,13 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
             row = conn.execute(
                 """
                 UPDATE account_balances
-                SET bank_name=%s, account_type=%s, currency=%s, current_balance=%s, annual_interest_rate=%s,
+                SET bank_name=%s, account_type=%s, currency=%s, current_balance=%s, annual_interest_rate=COALESCE(%s, annual_interest_rate),
                     last_reconciliation_difference=%s,
                     balance_as_of=NOW(), source=%s, include_in_net_worth=%s, is_active=true, updated_at=NOW()
                 WHERE id = %s AND workspace_id = %s
                 RETURNING *
                 """,
-                (bank_name, account_type, currency.upper(), current_balance, max(annual_interest_rate, 0), reconciliation_difference, source, include_in_net_worth, existing["id"], workspace_id),
+                (bank_name, account_type, currency.upper(), current_balance, None if annual_interest_rate is None else max(annual_interest_rate, 0), reconciliation_difference, source, include_in_net_worth, existing["id"], workspace_id),
             ).fetchone()
         else:
             row = conn.execute(
@@ -972,7 +972,7 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING *
                 """,
-                (workspace_id, account_name, bank_name, account_type, account_last4, currency.upper(), current_balance, max(annual_interest_rate, 0), source, include_in_net_worth),
+                (workspace_id, account_name, bank_name, account_type, account_last4, currency.upper(), current_balance, max(annual_interest_rate or 0, 0), source, include_in_net_worth),
             ).fetchone()
         conn.execute("""INSERT INTO account_balance_history(workspace_id,financial_account_id,balance,currency,source,note)
                         VALUES(%s,%s,%s,%s,%s,%s)""", (workspace_id, row["id"], current_balance, currency.upper(), source, note))
