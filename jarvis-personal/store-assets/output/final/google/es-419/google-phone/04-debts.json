@@ -1,5 +1,5 @@
 {
-  "output_sha256": "8e0542c0c4898d0fe33b6528c6e2b83d71df6dbca0b6e21c86b134ae78ef17e0",
+  "output_sha256": "6c70077d5fd87bb8f7cde0a3b1d62f65489fa21964ce3d782a8aad8c93b51a34",
   "mode": "final",
   "target": "google-phone",
   "store": "google",
@@ -11,24 +11,25 @@
   "width": 1440,
   "height": 2560,
   "alpha": false,
-  "caption_ratio": 0.1437,
+  "caption_ratio": 0.1441,
+  "span_capture": null,
   "capture": {
     "file": "raw/android/es/phone/04-debts.png",
-    "sha256": "c5c0fb5839810c06d63db1a49f1e2844b952f28daffdf691ef4defb45a19c293",
+    "sha256": "115513c6e924662c7bb314e564b29a6d586faeb82566cec1b0a544e892208d17",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-11-05T15:25:26.763Z",
+    "captured_at": "2026-11-05T23:14:40.634Z",
     "device": {
-      "model": "sdk_gphone64_arm64",
-      "sdk": 36,
+      "model": "sdk_gphone64_x86_64",
+      "sdk": 35,
       "width": 1080,
       "height": 2400,
       "density": 420
     }
   },
-  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
+  "source_commit": "8f062b362a3545919ee7b34a0fea9357c5f81c71",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
-  "generated_at": "2026-11-05T15:39:09.674Z"
+  "pipeline_commit": "8f062b362a3545919ee7b34a0fea9357c5f81c71",
+  "generated_at": "2026-11-05T23:15:04.791Z"
 }
