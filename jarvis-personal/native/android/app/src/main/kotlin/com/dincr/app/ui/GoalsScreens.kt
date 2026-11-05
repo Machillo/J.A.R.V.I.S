@@ -88,7 +88,7 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
     }) {
         // UX-7: the declared available savings and emergency-fund target (moved from Situación).
         Box(Modifier.testTag("goals.declaredSavings")) {
-            DincrCard { NavRow(Icons.Rounded.Payments, tx("Tus ahorros", "Your savings"), tx("Ahorros disponibles y meta de fondo de emergencia", "Available savings and emergency fund target")) { nav.open("declaredSavings") } }
+            DincrCard { NavRow(Icons.Rounded.Payments, tx("Mis ahorros", "My savings"), if (profile?.planTier == PlanTier.VIP || profile?.isOwner == true) tx("Ahorros disponibles, Salvavidas y meta de emergencia", "Available savings, emergency fund and target") else tx("Ahorros disponibles y meta de fondo de emergencia", "Available savings and emergency fund target")) { nav.open("declaredSavings") } }
         }
         LoadContent(data) { loaded ->
             val (goals, plans) = loaded
