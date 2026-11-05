@@ -9,7 +9,7 @@ from backend.auth.current_user import get_current_account_id
 from backend.core.database import get_connection
 
 
-TERMS_VERSION = "2026-11-05-v4"
+TERMS_VERSION = "2026-11-05-v5"
 PRIVACY_VERSION = "2026-11-05-v5"
 
 

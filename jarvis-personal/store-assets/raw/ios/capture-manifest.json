@@ -2,11 +2,11 @@
   "platform": "ios",
   "fixture": "STORE",
   "fixture_date": "2026-09-28",
-  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
   "source_dirty": false,
-  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
   "built": true,
-  "captured_at": "2026-11-05T14:14:14.599Z",
+  "captured_at": "2026-11-05T15:36:40.303Z",
   "app": {
     "bundle_id": "com.dincr.app",
     "configuration": "Debug"
@@ -158,7 +158,7 @@
       "device": "phone",
       "plan": "basic",
       "file": "raw/ios/en/phone/07-strategy.png",
-      "sha256": "d9f46f74da034550f740948559279a851d90b6480455ae616a51a658a9c2d0f6",
+      "sha256": "44b78577afa2efc345a3a3a5cf685e6ab7c61e2e8da5c50e4a71b3807411a5e1",
       "width": 1320,
       "height": 2868
     }

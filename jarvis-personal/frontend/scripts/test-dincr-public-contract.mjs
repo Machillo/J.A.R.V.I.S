@@ -19,7 +19,7 @@ assert.doesNotMatch(price, /₡\d/);
 const support = await readFile(new URL('soporte/index.html', out), 'utf8');
 assert.match(support, /mailto:soporte@dincr\.com/);
 assert.match(support, /mailto:privacidad@dincr\.com/);
-for (const [legal, version] of [['terminos', '2026-11-05-v4'], ['privacidad', '2026-11-05-v5']]) {
+for (const [legal, version] of [['terminos', '2026-11-05-v5'], ['privacidad', '2026-11-05-v5']]) {
   const html = await readFile(new URL(`${legal}/index.html`, out), 'utf8');
   assert.ok(html.includes(version), `${legal} shows version ${version}`);
   assert.match(html, /soporte@dincr\.com/);

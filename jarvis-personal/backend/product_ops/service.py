@@ -21,7 +21,7 @@ from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_c
 from backend.product_ops.email_monitor_dashboard import build_email_monitor_dashboard
 
 LAUNCH_PROMOTION_CODE = "launch-free-2026"
-LAUNCH_PROMOTION_END = datetime(2027, 1, 1, 6, 0, 0, tzinfo=timezone.utc)
+LAUNCH_PROMOTION_END = datetime(2027, 4, 1, 6, 0, 0, tzinfo=timezone.utc)
 PRICES = {
     "basic": {"regular": 2990},
     "vip": {"regular": 4990},
@@ -417,7 +417,7 @@ def launch_promotion_status(now: datetime | None = None):
         "active": active,
         "ends_at": LAUNCH_PROMOTION_END.isoformat().replace("+00:00", "Z"),
         "message": (
-            "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No se realizará ningún cobro automático."
+            "Basic y VIP están gratis hasta el 31 de marzo de 2027. No se realizará ningún cobro automático."
             if active else
             "La promoción terminó. Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante."
         ),
@@ -456,7 +456,7 @@ def activate_launch_promotion(plan_code: str):
     return {
         "status": "promotion_active",
         "promotion": launch_promotion_status(),
-        "message": f"{plan_code.upper()} quedó activo gratis hasta el 31 de diciembre de 2026.",
+        "message": f"{plan_code.upper()} quedó activo gratis hasta el 31 de marzo de 2027.",
     }
 
 

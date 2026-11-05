@@ -176,7 +176,7 @@ fun PlanCard(option: PlanOption, catalog: BillingCatalog?, promotionActive: Bool
             Text(
                 when {
                     !paid -> tx("Gratis", "Free")
-                    promotionActive && !current && price != null -> tx("Gratis hasta el 31 de diciembre", "Free until December 31")
+                    promotionActive && !current && price != null -> tx("Gratis hasta el 31 de marzo", "Free until March 31")
                     price != null -> "₡" + "%,d".format(price).replace(',', '.') + tx(" al mes", " per month")
                     else -> ""
                 },

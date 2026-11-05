@@ -8,7 +8,7 @@
 
 export const legalEn = {
   TermsPage: {
-    version: '2026-11-05-v4',
+    version: '2026-11-05-v5',
     title: 'Terms and Conditions',
     html: `
       <h2>1. Acceptance and capacity</h2><p>By creating or using an account, the person confirms that they have read and accepted these terms and the Privacy Policy. They must be at least 18 years old and have the legal capacity to contract. If they do not agree, they must not use the service.</p>
@@ -16,7 +16,7 @@ export const legalEn = {
       <h2>3. Not professional advice</h2><p>The service is not a bank, financial institution, accountant, investment advisor, lawyer or tax advisor. It does not execute investments and does not guarantee savings, returns, the elimination of debts or financial results. Final decisions belong to the user, who must verify the information and seek professional advice when appropriate.</p>
       <h2>4. Account and security</h2><p>The user must provide accurate information, protect access to their account, keep their device secure and report any unauthorized access. They may not share accounts, impersonate other people, attempt to breach the system or use it for unlawful purposes.</p>
       <h2>5. Data entered and authorizations</h2><p>The user retains ownership of their data and authorizes its processing solely to provide, maintain, protect and improve the features they request. The user is responsible for having authorization when they add information about third parties.</p>
-      <h2>6. Plans, promotion and payments</h2><p>The Free plan has no cost. Basic and VIP will be available free of charge until December 31, 2026. From January 1, 2027, their monthly launch prices are ₡2,990 and ₡4,990, respectively. The promotion does not generate automatic charges and does not oblige anyone to subscribe. To continue with a paid plan, the user will have to initiate and confirm a payment through the method available at that time.</p>
+      <h2>6. Plans, promotion and payments</h2><p>The Free plan has no cost. Basic and VIP will be available free of charge until March 31, 2027. From April 1, 2027, their monthly launch prices are ₡2,990 and ₡4,990, respectively. The promotion does not generate automatic charges and does not oblige anyone to subscribe. To continue with a paid plan, the user will have to initiate and confirm a payment through the method available at that time.</p>
       <h2>7. Activation of paid plans</h2><p>Basic and VIP purchases are not yet enabled. When they become available, in-app purchases will be made through Google Play or the App Store, depending on the device, under the conditions shown before the purchase is confirmed. The current promotion does not start a subscription or generate an automatic charge.</p>
       <h2>8. Availability and changes</h2><p>The service may change, suspend features or experience interruptions due to maintenance, security, providers or causes beyond reasonable control. Material changes to prices or conditions will be announced before they apply and may require a new acceptance.</p>
       <h2>9. Intellectual property</h2><p>The software, design, brand, content and proprietary models belong to their respective owners. The account grants a personal, limited, revocable and non-transferable license to use the service; it does not permit copying, reselling, decompiling or improperly exploiting its components.</p>

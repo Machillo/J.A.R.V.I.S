@@ -2,17 +2,17 @@
   "platform": "android",
   "fixture": "STORE",
   "fixture_date": "2026-09-28",
-  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "source_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
   "source_dirty": false,
-  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "pipeline_commit": "73586a004ef63c00cceca6b1ae1417976cbdf59f",
   "built": true,
-  "captured_at": "2026-11-05T14:05:59.768Z",
+  "captured_at": "2026-11-05T15:25:26.763Z",
   "app": {
     "package": "com.dincr.app",
     "flavor": "dincr",
     "build_type": "debug",
     "version_name": "2.0.0",
-    "last_update": "2026-11-05 08:05:01"
+    "last_update": "2026-11-05 09:24:21"
   },
   "device": {
     "model": "sdk_gphone64_arm64",

@@ -149,7 +149,7 @@ Operational rule: samples must never be exported from DINCR user data or from th
 1. Install the app (Android internal testing or TestFlight; **MANUAL:** Google needs a way to install it).
 2. Sign in with Google.
 3. Accept Terms and Privacy.
-4. Choose VIP (free until 2026-12-31 through the launch promotion, with no payment).
+4. Choose VIP (free until 2027-03-31 through the launch promotion, with no payment).
 5. Go to Perfil → Correos financieros.
 6. Accept the in-app explanation and tap Conectar Gmail.
 7. Complete Google consent.
