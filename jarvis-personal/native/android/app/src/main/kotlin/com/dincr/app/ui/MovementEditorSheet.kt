@@ -39,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
+import com.dincr.app.RatingRequest
 import com.dincr.app.tx
 import com.dincr.data.AmountInput
 import com.dincr.data.MovementReview
@@ -151,6 +153,7 @@ fun MovementEditorSheet(
     val showsPaidWith = kind == MovementKind.EXPENSE && paidWithOptions.isNotEmpty() && (editing == null || editing.origin == "expense")
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     /** Set while the review before saving is on screen (`MovementReview`). */
@@ -206,6 +209,7 @@ fun MovementEditorSheet(
             when {
                 error == null -> {
                     haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                    if (editing == null) RatingRequest.movementSaved(context, model)
                     onSaved(if (editing != null) tx("Cambios guardados", "Changes saved") else if (kind == MovementKind.INCOME) tx("Ingreso guardado", "Income saved") else tx("Gasto guardado", "Expense saved"))
                 }
                 // Deleted or locked elsewhere: nothing to save; the list refreshes and says so.

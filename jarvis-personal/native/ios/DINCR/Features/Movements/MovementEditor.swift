@@ -383,6 +383,7 @@ struct MovementEditor: View {
                     convertAtClose: waits))
             }
             saved += 1
+            if !isEditing { RatingRequest.movementSaved(model: model) }
             onSaved(isEditing ? tx("Cambios guardados", "Changes saved") : (kind == .income ? tx("Ingreso guardado", "Income saved") : tx("Gasto guardado", "Expense saved")))
             dismiss()
         } catch let error as APIError where error.kind == .notFound && isEditing {

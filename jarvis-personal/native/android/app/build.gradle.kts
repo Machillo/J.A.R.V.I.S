@@ -137,6 +137,7 @@ dependencies {
     implementation(libs.browser)
     implementation(libs.biometric)
     implementation(libs.billing)
+    implementation(libs.play.review)
     implementation(libs.coroutines.android)
     implementation(libs.serialization.json)
     debugImplementation(libs.compose.ui.tooling)
