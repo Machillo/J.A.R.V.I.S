@@ -350,6 +350,7 @@ private fun Fact(label: String, amount: BigDecimal?, sign: MoneyFormat.Sign, unk
 /** Payments the calendar knows of (scheduled from today on): none known is not "none due". */
 @Composable
 private fun pendingText(pending: HomeStatus.Pending): String {
+    if (pending.unavailable) return tx("No se pudieron cargar", "Couldn’t load")
     if (pending.count == 0) return tx("Ninguno registrado", "None recorded")
     val count = if (pending.count == 1) tx("1 pago", "1 payment") else tx("${pending.count} pagos", "${pending.count} payments")
     val total = pending.total ?: return tx("$count · monto por confirmar", "$count · amount to confirm")

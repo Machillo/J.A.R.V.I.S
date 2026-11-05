@@ -110,7 +110,8 @@ data class HomeToday(
          * no known amount (0, #326) keeps the total unknown.
          */
         internal fun pending(calendar: FinancialCalendar?, today: LocalDate): HomeStatus.Pending? {
-            calendar ?: return null
+            // A calendar that could not be read is unknown, never "no payments" and never a silent gap.
+            calendar ?: return HomeStatus.Pending(0, null, unavailable = true)
             val key = today.toString()
             val due = calendar.events.filter { (it.kind ?: "") in setOf("expense", "debt") && (it.date ?: "") >= key }
             val known = due.all { (it.amount ?: BigDecimal.ZERO).signum() > 0 }
@@ -189,8 +190,8 @@ data class HomeStatus(
 
     data class BudgetLeft(val remaining: BigDecimal, val used: ProgressValue)
 
-    /** [total] is null when a pending payment has no known amount. */
-    data class Pending(val count: Int, val total: BigDecimal?)
+    /** [total] is null when a pending payment has no known amount; [unavailable] when the calendar could not be read. */
+    data class Pending(val count: Int, val total: BigDecimal?, val unavailable: Boolean = false)
 }
 
 /** Qué sigue: exactly one thing. The detailed plan lives in Plan → Tu plan del mes. */
