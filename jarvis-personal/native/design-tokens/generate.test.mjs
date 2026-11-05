@@ -170,13 +170,13 @@ test("every color style keeps the contrast rules, and a weak one is caught", () 
   const base = colorMap(tokens);
   assert.deepEqual(colorStyleFailures(parseColorStyles(raw), base), []);
   const weak = JSON.parse(raw);
-  weak.styles.rosa.light.tint = "#EC4899"; // the swatch itself: too light for text on white
-  weak.styles.oliva.dark.tint = "#3D4337"; // the swatch itself: too dark on its surfaces
-  weak.styles.bosque["on-hero-2"] = "#3E5A3F";
+  weak.styles.vino.light.tint = "#B6F23A"; // the swatch itself: too light for text on white
+  weak.styles.petroleo.dark.tint = "#0E4A52"; // the swatch itself: too dark on its surfaces
+  weak.styles.grafito["on-hero-2"] = "#3A3D45";
   const failures = colorStyleFailures(parseColorStyles(JSON.stringify(weak)), base);
-  assert.ok(failures.some((f) => f.startsWith("rosa+rosa.light tint/surface")), failures.join("; "));
-  assert.ok(failures.some((f) => f.startsWith("oliva+oliva.dark tint/surface")), failures.join("; "));
-  assert.ok(failures.some((f) => f.startsWith("bosque on-hero-2/hero")), failures.join("; "));
+  assert.ok(failures.some((f) => f.startsWith("vino+vino.light tint/surface")), failures.join("; "));
+  assert.ok(failures.some((f) => f.startsWith("petroleo+petroleo.dark tint/surface")), failures.join("; "));
+  assert.ok(failures.some((f) => f.startsWith("grafito on-hero-2/hero")), failures.join("; "));
 });
 
 test("malformed appearance.json fails instead of dropping options", () => {

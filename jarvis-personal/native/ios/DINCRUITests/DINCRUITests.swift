@@ -215,17 +215,17 @@ final class DINCRUITests: XCTestCase {
     func testAColorStyleIsPickedAndStaysAfterRelaunching() {
         let app = launch(extra: ["-DincrTab", "profile"])
         open("profile.colorStyle", in: app)
-        let rosa = app.buttons["colorStyle.rosa"]
-        XCTAssertTrue(rosa.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["colorStyle.indigo"].exists && app.buttons["colorStyle.bosque"].exists && app.buttons["colorStyle.oliva"].exists)
-        rosa.tap()
-        XCTAssertTrue(rosa.isSelected, "applied at once")
+        let vino = app.buttons["colorStyle.vino"]
+        XCTAssertTrue(vino.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["colorStyle.indigo"].exists && app.buttons["colorStyle.grafito"].exists && app.buttons["colorStyle.petroleo"].exists)
+        vino.tap()
+        XCTAssertTrue(vino.isSelected, "applied at once")
         XCTAssertFalse(app.buttons["colorStyle.indigo"].isSelected)
         app.terminate()
         app.launch()
         open("profile.colorStyle", in: app)
-        XCTAssertTrue(rosa.waitForExistence(timeout: 10))
-        XCTAssertTrue(rosa.isSelected, "still picked after relaunching")
+        XCTAssertTrue(vino.waitForExistence(timeout: 10))
+        XCTAssertTrue(vino.isSelected, "still picked after relaunching")
         // Back to the default, so other tests on this simulator start from it.
         app.buttons["colorStyle.indigo"].tap()
         XCTAssertTrue(app.buttons["colorStyle.indigo"].isSelected)

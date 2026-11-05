@@ -2,50 +2,162 @@
  "about": "The color styles a person may pick in Perfil (every plan; kept on the device). The default uses the scene of appearance.json as it is. Each other style replaces its neutrals, accent and hero, in both schemes; status and chart colors keep their meaning. generate.mjs validates them with the appearance contrast rules and turns them into Swift and Kotlin.",
  "default": "indigo",
  "styles": {
-  "indigo": { "es": "Índigo", "en": "Indigo", "swatches": ["#0A0B1E", "#2A2E6E", "#4A4FD9", "#8F95FF", "#F2F2F7"] },
-  "rosa": {
-   "es": "Rosa", "en": "Pink",
-   "swatches": ["#121212", "#1F2937", "#334155", "#64748B", "#F1F5F9", "#EC4899"],
-   "hero": "#1F2937", "hero-control": "#334155", "on-hero-2": "#CBD5E1",
+  "indigo": {
+   "es": "Índigo",
+   "en": "Indigo",
+   "swatches": [
+    "#0A0B1E",
+    "#2A2E6E",
+    "#4A4FD9",
+    "#8F95FF",
+    "#F2F2F7"
+   ]
+  },
+  "vino": {
+   "es": "Vino",
+   "en": "Wine",
+   "swatches": [
+    "#1A060C",
+    "#4A1022",
+    "#6B1A33",
+    "#F2C9CF",
+    "#FBF3F4",
+    "#B6F23A"
+   ],
+   "hero": "#4A1022",
+   "hero-control": "#6B1A33",
+   "on-hero-2": "#F2C9CF",
    "light": {
-    "bg": "#F1F5F9", "surface": "#FFFFFF", "surface-2": "#E2E8F0", "line": "#CBD5E1", "line-strong": "#94A3B8", "field-border": "#64748B",
-    "text": "#121212", "text-2": "#334155", "text-muted": "#475569",
-    "tint": "#BE185D", "tint-pressed": "#9D174D", "tint-container": "#FCE7F3", "on-tint": "#FFFFFF", "on-tint-container": "#831843", "focus-ring": "#BE185D"
+    "bg": "#FBF3F4",
+    "surface": "#FFFFFF",
+    "surface-2": "#F6E1E4",
+    "line": "#EBCBD1",
+    "line-strong": "#D7A7B0",
+    "field-border": "#8C5A66",
+    "text": "#2A0812",
+    "text-2": "#5A2A38",
+    "text-muted": "#6E3A48",
+    "tint": "#7A1A38",
+    "tint-pressed": "#5E1229",
+    "tint-container": "#F2C9CF",
+    "on-tint": "#FFFFFF",
+    "on-tint-container": "#4A1022",
+    "focus-ring": "#7A1A38"
    },
    "dark": {
-    "bg": "#121212", "surface": "#1F2937", "surface-2": "#334155", "line": "#334155", "line-strong": "#64748B", "field-border": "#94A3B8",
-    "text": "#F1F5F9", "text-2": "#CBD5E1", "text-muted": "#B4BFCE",
-    "tint": "#F472B6", "tint-pressed": "#EC4899", "tint-container": "#4A1530", "on-tint": "#121212", "on-tint-container": "#FBCFE8", "focus-ring": "#F472B6"
+    "bg": "#1A060C",
+    "surface": "#2A0C16",
+    "surface-2": "#3D1422",
+    "line": "#4F1C2E",
+    "line-strong": "#7A3A50",
+    "field-border": "#A06A7A",
+    "text": "#FBEFF1",
+    "text-2": "#F2C9CF",
+    "text-muted": "#D9A9B3",
+    "tint": "#B6F23A",
+    "tint-pressed": "#9ED62A",
+    "tint-container": "#2F3D10",
+    "on-tint": "#1A060C",
+    "on-tint-container": "#D9FA9A",
+    "focus-ring": "#B6F23A"
    }
   },
-  "bosque": {
-   "es": "Bosque y arena", "en": "Forest and sand",
-   "swatches": ["#0B0F0D", "#1F2A1F", "#3E5A3F", "#8CA98C", "#D9C7A3", "#B08D57"],
-   "hero": "#1F2A1F", "hero-control": "#3E5A3F", "on-hero-2": "#D9C7A3",
+  "grafito": {
+   "es": "Grafito",
+   "en": "Graphite",
+   "swatches": [
+    "#151619",
+    "#2B2D33",
+    "#3A3D45",
+    "#6B6F78",
+    "#E4E6EA",
+    "#F2412C"
+   ],
+   "hero": "#2B2D33",
+   "hero-control": "#3A3D45",
+   "on-hero-2": "#C9CCD3",
    "light": {
-    "bg": "#F5F1E6", "surface": "#FFFFFF", "surface-2": "#ECE6D6", "line": "#D9C7A3", "line-strong": "#BFB38F", "field-border": "#7C7355",
-    "text": "#0B0F0D", "text-2": "#3E5A3F", "text-muted": "#4F5F4F",
-    "tint": "#7F5F2C", "tint-pressed": "#6F5429", "tint-container": "#F3E8D2", "on-tint": "#FFFFFF", "on-tint-container": "#4A3715", "focus-ring": "#7F5F2C"
+    "bg": "#F1F2F4",
+    "surface": "#FFFFFF",
+    "surface-2": "#E4E6EA",
+    "line": "#D5D8DE",
+    "line-strong": "#B3B7C0",
+    "field-border": "#6B6F78",
+    "text": "#16171A",
+    "text-2": "#3A3D45",
+    "text-muted": "#555963",
+    "tint": "#C8321F",
+    "tint-pressed": "#A6281A",
+    "tint-container": "#FDE3DF",
+    "on-tint": "#FFFFFF",
+    "on-tint-container": "#7A1A0E",
+    "focus-ring": "#C8321F"
    },
    "dark": {
-    "bg": "#0B0F0D", "surface": "#1F2A1F", "surface-2": "#2B3A2B", "line": "#3E5A3F", "line-strong": "#5C7A5D", "field-border": "#8CA98C",
-    "text": "#F3EFE4", "text-2": "#D9C7A3", "text-muted": "#B5BFA9",
-    "tint": "#D0AB6E", "tint-pressed": "#C09A5C", "tint-container": "#3A2F1B", "on-tint": "#0B0F0D", "on-tint-container": "#E8D9B8", "focus-ring": "#D0AB6E"
+    "bg": "#151619",
+    "surface": "#2B2D33",
+    "surface-2": "#3A3D45",
+    "line": "#3A3D45",
+    "line-strong": "#5B5F69",
+    "field-border": "#8A8E98",
+    "text": "#E4E6EA",
+    "text-2": "#C9CCD3",
+    "text-muted": "#A9ADB6",
+    "tint": "#FF6A55",
+    "tint-pressed": "#F2412C",
+    "tint-container": "#4A1810",
+    "on-tint": "#151619",
+    "on-tint-container": "#FFD3CC",
+    "focus-ring": "#FF6A55"
    }
   },
-  "oliva": {
-   "es": "Oliva", "en": "Olive",
-   "swatches": ["#0F1F17", "#1E3A2E", "#3E5A3F", "#6B7F67", "#C7CBB8", "#3D4337"],
-   "hero": "#1E3A2E", "hero-control": "#3E5A3F", "on-hero-2": "#C7CBB8",
+  "petroleo": {
+   "es": "Petróleo",
+   "en": "Petrol",
+   "swatches": [
+    "#062328",
+    "#0E4A52",
+    "#176069",
+    "#F3E6CF",
+    "#FAF4EA",
+    "#A24BFF"
+   ],
+   "hero": "#0E4A52",
+   "hero-control": "#176069",
+   "on-hero-2": "#F3E6CF",
    "light": {
-    "bg": "#F1F2EA", "surface": "#FFFFFF", "surface-2": "#E4E6DA", "line": "#C7CBB8", "line-strong": "#A3A894", "field-border": "#6B7F67",
-    "text": "#0F1F17", "text-2": "#3D4337", "text-muted": "#525A4C",
-    "tint": "#3E5A3F", "tint-pressed": "#2F4630", "tint-container": "#E3E9DC", "on-tint": "#FFFFFF", "on-tint-container": "#1E3A2E", "focus-ring": "#3E5A3F"
+    "bg": "#FAF4EA",
+    "surface": "#FFFFFF",
+    "surface-2": "#F3E6CF",
+    "line": "#E6D6B8",
+    "line-strong": "#CDB894",
+    "field-border": "#6E6450",
+    "text": "#0B2226",
+    "text-2": "#234A50",
+    "text-muted": "#3E5654",
+    "tint": "#7C2FD6",
+    "tint-pressed": "#6421B3",
+    "tint-container": "#EFE3FF",
+    "on-tint": "#FFFFFF",
+    "on-tint-container": "#4A1690",
+    "focus-ring": "#7C2FD6"
    },
    "dark": {
-    "bg": "#0F1F17", "surface": "#1E3A2E", "surface-2": "#2A4A3B", "line": "#3E5A3F", "line-strong": "#6B7F67", "field-border": "#8FA38B",
-    "text": "#F1F3EA", "text-2": "#C7CBB8", "text-muted": "#B9BEAA",
-    "tint": "#C7CBB8", "tint-pressed": "#B3B8A2", "tint-container": "#3D4337", "on-tint": "#0F1F17", "on-tint-container": "#E4E7D8", "focus-ring": "#C7CBB8"
+    "bg": "#062328",
+    "surface": "#0E3A41",
+    "surface-2": "#134A52",
+    "line": "#1C5961",
+    "line-strong": "#3E7880",
+    "field-border": "#6F9EA4",
+    "text": "#F3E6CF",
+    "text-2": "#E2D3B8",
+    "text-muted": "#BFB49E",
+    "tint": "#B98AFF",
+    "tint-pressed": "#CBA6FF",
+    "tint-container": "#31195A",
+    "on-tint": "#062328",
+    "on-tint-container": "#E5D6FF",
+    "focus-ring": "#B98AFF"
    }
   }
  }
