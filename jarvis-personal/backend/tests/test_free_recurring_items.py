@@ -76,6 +76,6 @@ def test_create_edit_and_delete_are_gated_only_by_recurring_items():
 
 
 def test_the_plan_catalogue_lists_recurring_payments_in_free_not_as_a_basic_extra():
-    assert "Pagos fijos y recurrentes" in saas.PLAN_COPY["free"]["features"]
+    assert "Movimientos recurrentes" in saas.PLAN_COPY["free"]["features"]
     assert "Recurrentes" not in saas.PLAN_COPY["basic"]["features"]
-    assert "Fixed and recurring payments" in saas.PLAN_COPY_EN["free"]["features"]
+    assert "Recurring transactions" in saas.PLAN_COPY_EN["free"]["features"]

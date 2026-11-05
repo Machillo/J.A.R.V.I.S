@@ -32,13 +32,13 @@ final class StoreSubscriptionUITests: XCTestCase {
         return target
     }
 
-    func testWhileTheSwitchIsOffThePanelOnlySaysSo() {
+    func testWhileTheSwitchIsOffThereIsNoPanel() {
         let app = launch()
         openSubscription(app)
-        let paused = reveal("store.paused", in: app)
-        XCTAssertTrue(paused.waitForExistence(timeout: 10))
-        XCTAssertTrue(paused.label.contains("App Store"), paused.label)
-        XCTAssertFalse(element("store.restore", in: app).exists, "nothing to buy or restore while paused")
+        XCTAssertTrue(app.staticTexts["Suscripción"].waitForExistence(timeout: 10))
+        for _ in 0..<4 { app.swipeUp() }
+        XCTAssertFalse(element("store.panel", in: app).exists, "nothing announces purchases that are not available")
+        XCTAssertFalse(element("store.restore", in: app).exists)
     }
 
     func testWithTheSwitchOnItOffersOnlyWhatTheStoreSells() {
@@ -48,7 +48,6 @@ final class StoreSubscriptionUITests: XCTestCase {
                       "no App Store products for this build: said in words, no price invented")
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'store.offer.'")).firstMatch.exists)
         XCTAssertTrue(element("store.restore", in: app).exists, "Restaurar compras stays available")
-        XCTAssertFalse(element("store.paused", in: app).exists)
     }
 
     func testTheOwnerHasNoStorePanel() {

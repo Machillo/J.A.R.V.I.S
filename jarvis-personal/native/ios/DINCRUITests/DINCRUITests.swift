@@ -152,9 +152,9 @@ final class DINCRUITests: XCTestCase {
         next.tap()
         XCTAssertTrue(app.buttons["Entrar a DINCR"].waitForExistence(timeout: 2))
         app.buttons["Entrar a DINCR"].tap()
-        // A11: a new account chooses its plan; paid plans wait for the stores.
+        // A11: a new account chooses its plan; nothing announces a feature that isn't available.
         XCTAssertTrue(app.staticTexts["Elegí tu suscripción"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Próximamente en las tiendas"].exists)
+        XCTAssertFalse(app.staticTexts["Próximamente en las tiendas"].exists)
         app.buttons["Elegir Free"].tap()
         XCTAssertTrue(app.staticTexts["Resultado del mes"].waitForExistence(timeout: 5))
     }

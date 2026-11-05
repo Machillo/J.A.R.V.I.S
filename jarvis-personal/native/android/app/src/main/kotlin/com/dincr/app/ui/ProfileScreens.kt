@@ -299,12 +299,8 @@ private fun StoreSubscriptionPanel(model: AppModel) {
     val context = LocalContext.current
     val activity = androidx.activity.compose.LocalActivity.current
     val scope = rememberCoroutineScope()
-    if (!model.isOn(OpsFlag.STORE_BILLING)) {
-        Section(tx("Suscripción en Google Play", "Google Play subscription")) {
-            Caption(model.flags.value.message(OpsFlag.STORE_BILLING, com.dincr.data.AppLanguage.current()) ?: tx("Las compras en Google Play estarán disponibles pronto.", "Google Play purchases will be available soon."))
-        }
-        return
-    }
+    // Nothing announces purchases that are not available yet (App Review 2.1, Play policy).
+    if (!model.isOn(OpsFlag.STORE_BILLING)) return
     val billing = model.storeBilling()
     val offers = rememberLoad(model) { billing.offers() }
     var busy by remember { mutableStateOf(false) }
