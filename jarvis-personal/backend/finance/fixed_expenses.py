@@ -378,26 +378,6 @@ def get_fixed_expense_status(month: str | None = None) -> dict[str, Any]:
     }
 
 
-def seed_owner_fixed_expenses():
-    defaults = [
-        {"name": "Casa", "category": "Vivienda", "expected_amount": 100000, "due_day": 30, "aliases": ["casa y prestamo", "casa"], "notes": "Aporte mensual a casa."},
-        {"name": "Préstamo papá", "category": "Familiar", "expected_amount": 30387.13, "due_day": 30, "aliases": ["prestamo papa", "préstamo papá", "casa y prestamo"], "notes": "Parte de Casa y Préstamo."},
-        {"name": "Nutricionista", "category": "Salud", "expected_amount": 40000, "due_day": 14, "interval_months": 2, "start_month": "2026-02", "aliases": ["nutricionista"]},
-        {"name": "Préstamo Popular", "category": "Banco Popular", "expected_amount": 65480.40, "auto_deducted": True, "payment_method": "planilla", "aliases": ["popular", "prestamo popular", "banco popular"], "notes": "Rebajo directo de planilla."},
-        {"name": "Línea Liberty", "category": "Teléfono", "expected_amount": 33850.86, "due_day": 4, "aliases": ["liberty", "linea", "línea", "pago liberty"]},
-        {"name": "Gimnasio", "category": "Salud", "expected_amount": 24950, "due_day": 4, "aliases": ["novo fit", "gimnasio", "gym"]},
-        {"name": "Préstamo BAC", "category": "Tarjeta BAC", "expected_amount": 16950, "aliases": ["prestamo bac", "préstamo bac"]},
-        {"name": "Reloj", "category": "Reloj", "expected_amount": 7793.30, "due_day": 22, "aliases": ["ishop", "reloj", "tasa cero"]},
-        {"name": "Minicuota", "category": "Tarjeta BAC", "expected_amount": 8760, "due_day": 22, "aliases": ["minicuotas", "minicuota", "credomatic minic"]},
-        {"name": "PS Plus", "category": "Videojuegos", "expected_amount": 7000, "due_day": 16, "aliases": ["playstation", "ps plus", "playstation network"]},
-        {"name": "Seguro tarjeta", "category": "Seguros", "expected_amount": 2950, "due_day": 21, "aliases": ["seguro proteccion", "seguro protección", "bdpc5"]},
-        {"name": "Crunchyroll", "category": "Suscripciones", "expected_amount": 3390, "due_day": 8, "aliases": ["crunchyroll"]},
-        {"name": "Google One", "category": "Suscripciones", "expected_amount": 5537, "due_day": 22, "aliases": ["google one"]},
-        {"name": "iCloud / Apple", "category": "Suscripciones", "expected_amount": None, "aliases": ["apple.com", "icloud", "apple"], "notes": "Monto variable; Jarvis debe aprenderlo con transacciones."},
-    ]
-    return [create_fixed_expense(**item) for item in defaults]
-
-
 def _find_by_name(name: str) -> dict[str, Any] | None:
     needle = _normalize(name)
     for item in list_fixed_expenses(active_only=True):

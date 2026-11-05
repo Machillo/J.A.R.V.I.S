@@ -24,7 +24,7 @@ loan's liability is a `debts` row, so net worth gains the cash and the debt toge
 
 An own transfer, or a card payment, is one `transactions` row with a single
 `financial_account_id`; its origin and destination exist only as text in `account`
-(`"BAC ****8137 + MM ****6126"`, `"… → …"`). A correct per-account balance needs the
+(`"Banco A ****0001 + Banco B ****0002"`, `"… → …"`). A correct per-account balance needs the
 transfer to take cash out of the origin and put it into the destination, and a card payment
 to lower the bank balance and the card's debt. With one linked account and no direction,
 neither side can be applied, so transfers stay neutral here and a balance that has transfers

@@ -27,7 +27,6 @@ import {
   getTransactionAnalysis,
   previewFinanceInput,
   previewFinancePdf,
-  seedOwnerFixedExpenses,
   getCurrencyAlerts,
   setCurrencyRate,
   getAguinaldo,
@@ -782,27 +781,16 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
   );
 }
 
-function FixedExpensesPanel({ data, onRefresh, isOwner }) {
+function FixedExpensesPanel({ data }) {
   const items = data?.items || [];
   const summary = data?.summary || {};
   const alerts = data?.alerts || [];
-  const [seeding, setSeeding] = useState(false);
   const statusLabels = {
     paid: "Pagado",
     pending: "Pendiente",
     overdue: "Vencido",
     doubtful: "Dudoso",
     not_due: "No toca",
-  };
-
-  const runSeed = async () => {
-    setSeeding(true);
-    try {
-      await seedOwnerFixedExpenses();
-      await onRefresh?.();
-    } finally {
-      setSeeding(false);
-    }
   };
 
   return (
@@ -836,11 +824,6 @@ function FixedExpensesPanel({ data, onRefresh, isOwner }) {
           <CircleDollarSign size={24} />
           <h3>Sin gastos fijos</h3>
           
-          {isOwner && (
-            <button className="hud-action-button" onClick={runSeed} disabled={seeding}>
-              Cargar mis gastos fijos
-            </button>
-          )}
         </div>
       ) : (
         <div className="fixed-expense-list">
@@ -1351,7 +1334,6 @@ export default function Finance({
   loading = false,
   error = "",
   onRefresh,
-  currentUser,
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [transactionAnalysis, setTransactionAnalysis] = useState(null);
@@ -1449,7 +1431,6 @@ export default function Finance({
     transactions: [],
     total: 0,
   };
-  const isOwner = currentUser?.role === "owner";
   const openDetail = (title, items = [], empty = "No movements to display.") => setDetail({ title, items, empty });
 
   return (
@@ -1495,7 +1476,7 @@ export default function Finance({
 
       {activeTab === "spending" && <div className="dashboard-grid finance-dashboard-grid finance-spending-grid">
         <article className="hud-panel large"><div className="panel-title"><div><h3>EXPENSES BY CATEGORY</h3></div><span>{spendingBreakdown?.period?.label || "CURRENT"}</span></div><SpendingDonut breakdown={spendingBreakdown} /></article>
-        <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
+        <FixedExpensesPanel data={fixedStatus} />
         <article className="hud-panel large"><div className="panel-title"><div><h3>RECENT EXPENSES</h3></div><span>{recentExpenses.length}</span></div>{recentExpenses.length ? <div className="finance-detail-list recent-expense-list">{recentExpenses.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date} · {item.category}</span></div><b>{formatCRC(item.amount)}</b></div>)}</div> : <EmptyPanel title="No recent expenses" description="New expenses will appear here." />}</article>
         <CurrencyAlertsPanel alerts={currencyAlerts} onApplied={async () => { await loadSupportingData(); await onRefresh?.(); }} />
         <FinanceInputPanel onSaved={async () => { await loadSupportingData(); await onRefresh?.(); }} />
