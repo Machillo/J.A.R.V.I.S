@@ -39,6 +39,15 @@ import Testing
         #expect(byId.allSatisfy { $0.date.hour == 9 })
     }
 
+    /// A debt's name and amount never show on a locked screen, on either platform.
+    @Test func theDetailStaysOffALockedScreen() throws {
+        let native = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let ios = try String(contentsOf: native.appendingPathComponent("ios/DINCR/App/ReminderScheduler.swift"), encoding: .utf8)
+        let android = try String(contentsOf: native.appendingPathComponent("android/app/src/main/kotlin/com/dincr/app/ReminderScheduler.kt"), encoding: .utf8)
+        #expect(ios.contains("hiddenPreviewsBodyPlaceholder") && ios.contains("content.categoryIdentifier"))
+        #expect(android.contains("VISIBILITY_PRIVATE") && android.contains("setPublicVersion"))
+    }
+
     @Test func aDueDayAlreadyPassedThisMonthIsRemindedNextMonth() {
         let bills = [Reminders.Bill(id: "debt-1", kind: .debt, name: "Préstamo", amount: nil, day: 5)]
         let plan = Reminders.plan(today: date(2026, 11, 10), bills: bills, saving: nil, format: colones, language: .spanish)

@@ -12,6 +12,7 @@ import UserNotifications
 enum ReminderScheduler {
     static let enabledKey = "dincr.reminders"
     private static let prefix = "dincr.reminder."
+    private static let category = "dincr.reminder"
     private static var center: UNUserNotificationCenter { .current() }
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
@@ -69,11 +70,17 @@ enum ReminderScheduler {
         }
         let plan = Reminders.plan(today: Date(), bills: bills, saving: saving, blocks: blocks, waiting: waiting, format: model.moneyFormat, language: model.language)
         await clear()
+        // With previews hidden, the lock screen keeps the title (no name or amount) and never the detail.
+        center.setNotificationCategories([UNNotificationCategory(
+            identifier: category, actions: [], intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: tx("Abrí DINCR para ver el detalle.", "Open DINCR to see the details."),
+            options: [.hiddenPreviewsShowTitle])])
         for reminder in plan {
             let content = UNMutableNotificationContent()
             content.title = reminder.title
             content.body = reminder.body
             content.sound = .default
+            content.categoryIdentifier = category
             let trigger = UNCalendarNotificationTrigger(dateMatching: reminder.date, repeats: false)
             try? await center.add(UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger))
         }

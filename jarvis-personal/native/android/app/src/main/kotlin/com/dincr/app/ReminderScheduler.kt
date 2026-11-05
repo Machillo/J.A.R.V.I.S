@@ -135,6 +135,16 @@ class ReminderReceiver : BroadcastReceiver() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(intent.getStringExtra("body")))
             .setContentIntent(open)
             .setAutoCancel(true)
+            // A debt's name and amount stay off a locked screen: it shows only this neutral version.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, ReminderScheduler.CHANNEL)
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                    .setContentTitle("DINCR")
+                    .setContentText(tx("Tenés un recordatorio. Abrí la app para verlo.", "You have a reminder. Open the app to see it."))
+                    .setContentIntent(open)
+                    .build(),
+            )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
