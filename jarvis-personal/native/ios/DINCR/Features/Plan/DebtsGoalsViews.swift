@@ -400,8 +400,8 @@ struct GoalsView: View {
             WritesPausedBanner()
             // UX-7: the declared available savings and emergency-fund target (moved from Situación).
             NavigationLink { DeclaredSavingsView() } label: {
-                HubRow(symbol: "banknote", title: tx("Tus ahorros", "Your savings"),
-                       subtitle: tx("Ahorros disponibles y meta de fondo de emergencia", "Available savings and emergency fund target"))
+                HubRow(symbol: "banknote", title: tx("Mis ahorros", "My savings"),
+                       subtitle: model.planTier.rank >= PlanTier.vip.rank ? tx("Ahorros disponibles, Salvavidas y meta de emergencia", "Available savings, emergency fund and target") : tx("Ahorros disponibles y meta de fondo de emergencia", "Available savings and emergency fund target"))
             }
             .buttonStyle(.plain)
             .dincrCard(padding: DincrSpacing.s3)
