@@ -135,10 +135,10 @@ data class MonthTotals(
     val balance: Money? = null,
     /** The Owner's card statement (`owner_ledger.owner_cycle_totals`): first and last day, and when it is paid. */
     @SerialName("period_start") val periodStart: String? = null,
-    /** The Owner only: the automatic savings already taken in this statement (part of the balance). */
-    @SerialName("automatic_saved") val automaticSaved: Money? = null,
     @SerialName("period_end") val periodEnd: String? = null,
     @SerialName("payment_date") val paymentDate: String? = null,
+    /** The Owner only: the automatic savings already taken in this statement (part of the balance). */
+    @SerialName("automatic_saved") val automaticSaved: Money? = null,
 )
 
 @Serializable
