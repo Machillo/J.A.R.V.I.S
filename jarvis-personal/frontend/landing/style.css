@@ -1,7 +1,8 @@
 /* DINCR public site. Colors are the DINCR 2.0 tokens from /DESIGN.md (the same values the
    iOS and Android apps use); the site follows the visitor's system appearance. Mobile first.
    Each color variable names its DESIGN.md token in a trailing comment (dark block = `dark-`
-   token). `npm run test:landing` checks these pairs for WCAG AA, that every value still equals its
+   token; `indigo-N` is a swatch of the app's default style, native/design-tokens/color-styles.json).
+   `npm run test:landing` checks these pairs for WCAG AA, that every value still equals its
    token (DESIGN.md is required), and that no rule uses a literal color. */
 :root {
   --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
@@ -16,16 +17,21 @@
   --text: #EDF2F9; /* text */
   --text-2: #B3C0D2; /* text-2 */
   --muted: #94A3B9; /* text-muted */
-  --accent: #45D3BC; /* tint */
-  --accent-pressed: #33B9A4; /* tint-pressed */
-  --accent-text: #45D3BC; /* tint */
-  --on-accent: #03201B; /* on-tint */
-  --accent-soft: #0C3A34; /* tint-container */
-  --on-accent-soft: #C0F2E8; /* on-tint-container */
+  --accent: #8F95FF; /* indigo-3 */
+  --accent-pressed: #F2F2F7; /* indigo-4 */
+  --accent-text: #8F95FF; /* indigo-3 */
+  --on-accent: #0A0B1E; /* indigo-0 */
+  --accent-soft: #2A2E6E; /* indigo-1 */
+  --on-accent-soft: #F2F2F7; /* indigo-4 */
   --vip: #E3BD6A; /* vip */
   --vip-soft: #3A2C0C; /* vip-container */
   --warning: #F5B94A; /* warning */
   --expense: #7A80E0; /* chart-expense */
+  --indigo-0: #0A0B1E; /* indigo-0 */
+  --indigo-1: #2A2E6E; /* indigo-1 */
+  --indigo-2: #4A4FD9; /* indigo-2 */
+  --indigo-3: #8F95FF; /* indigo-3 */
+  --indigo-4: #F2F2F7; /* indigo-4 */
   --radius: 20px;
   --radius-control: 14px;
   --shadow: 0 8px 24px rgba(0, 0, 0, .40);
@@ -46,16 +52,21 @@
     --text: #0A1628; /* text */
     --text-2: #3F4D66; /* text-2 */
     --muted: #56647C; /* text-muted */
-    --accent: #0A6B5C; /* tint */
-    --accent-pressed: #075447; /* tint-pressed */
-    --accent-text: #0A6B5C; /* tint */
-    --on-accent: #FFFFFF; /* on-tint */
-    --accent-soft: #D2F0E7; /* tint-container */
-    --on-accent-soft: #03372E; /* on-tint-container */
+    --accent: #4A4FD9; /* indigo-2 */
+    --accent-pressed: #2A2E6E; /* indigo-1 */
+    --accent-text: #4A4FD9; /* indigo-2 */
+    --on-accent: #F2F2F7; /* indigo-4 */
+    --accent-soft: #F2F2F7; /* indigo-4 */
+    --on-accent-soft: #2A2E6E; /* indigo-1 */
     --vip: #845600; /* vip */
     --vip-soft: #F6EACD; /* vip-container */
     --warning: #965500; /* warning */
     --expense: #5B63C9; /* chart-expense */
+    --indigo-0: #0A0B1E; /* indigo-0 */
+    --indigo-1: #2A2E6E; /* indigo-1 */
+    --indigo-2: #4A4FD9; /* indigo-2 */
+    --indigo-3: #8F95FF; /* indigo-3 */
+    --indigo-4: #F2F2F7; /* indigo-4 */
     --shadow: 0 8px 24px rgba(11, 21, 38, .12);
   }
 }
@@ -64,7 +75,7 @@
 html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.6; font-size: 1rem; }
 ::selection { background: var(--accent-soft); color: var(--on-accent-soft); }
-.num, .price, .illus-amount { font-variant-numeric: tabular-nums; }
+.num, .price { font-variant-numeric: tabular-nums; }
 img { max-width: 100%; height: auto; }
 h1, h2, h3, p, ul, ol, figure { margin-top: 0; }
 h1 { font-size: clamp(2.1rem, 8vw, 3.9rem); line-height: 1.08; letter-spacing: -.03em; margin-bottom: 18px; }
@@ -137,30 +148,71 @@ html:not([data-lang]) .lang-switch { display: none; }
 .section-lead { color: var(--muted); font-size: 1.08rem; max-width: 60ch; }
 .page { padding-top: 40px; }
 
-/* Hero */
-.hero { padding-block: 40px 56px; }
-.hero-grid { display: grid; gap: 40px; align-items: center; }
-.lead { font-size: clamp(1.05rem, 3.6vw, 1.25rem); color: var(--text); max-width: 56ch; margin-bottom: 10px; }
-.lead-sub { color: var(--text-2); max-width: 56ch; }
-.hero-visual { margin: 0; justify-self: center; width: min(360px, 100%); }
-.hero-visual figcaption { margin-top: 10px; text-align: center; color: var(--muted); font-size: .8rem; }
-.shot { display: block; margin-inline: auto; border-radius: 32px; box-shadow: var(--shadow); }
-.illus { display: grid; gap: 14px; padding: 20px; border: 1px solid var(--border); border-radius: 28px; background: var(--surface); }
-.illus-card { display: grid; gap: 6px; padding: 18px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
-.illus-card-soft { gap: 10px; }
-.illus-label { color: var(--muted); font-size: .8rem; }
-.illus-amount { font-size: 1.6rem; font-weight: 700; letter-spacing: -.01em; }
-.illus-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.illus-row strong { font-weight: 600; }
-.illus-row .illus-amount { font-size: 1.05rem; font-weight: 600; }
-.bar { height: 10px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
-.illus-note { color: var(--muted); font-size: .8rem; }
+/* Home: one film, scene by scene. The fields are fixed to the indigo style in both appearances. */
+.hero { position: relative; overflow: hidden; min-height: calc(100svh - 64px); padding-block: 8px 0; color: var(--indigo-4); background: radial-gradient(90% 70% at 72% 92%, var(--indigo-2), transparent 70%), radial-gradient(60% 50% at 8% 8%, var(--indigo-1), transparent 72%), var(--indigo-0); perspective: 1400px; }
+.hero-word { position: absolute; inset: 0 0 auto; margin: 0; text-align: center; font-size: 25.5vw; font-weight: 900; line-height: .86; letter-spacing: -.04em; color: var(--indigo-1); user-select: none; }
+.hero-grid { position: relative; display: grid; gap: 32px; padding-top: 19vw; }
+.hero h1 { font-size: clamp(2.5rem, 10.5vw, 3.4rem); line-height: 1.02; letter-spacing: -.035em; text-wrap: balance; margin-bottom: 18px; }
+.lead { font-size: clamp(1.05rem, 3.6vw, 1.25rem); line-height: 1.5; max-width: 52ch; margin-bottom: 10px; }
+.hero .lead, .closing .lead { color: var(--indigo-4); }
+.hero .status, .closing .status { color: var(--indigo-4); }
+:is(.hero, .closing) .button { background: var(--indigo-4); border-color: var(--indigo-4); color: var(--indigo-0); }
+:is(.hero, .closing) .button:hover { background: var(--indigo-3); border-color: var(--indigo-3); }
+:is(.hero, .closing) .button-ghost { background: transparent; border-color: var(--indigo-3); color: var(--indigo-4); }
+:is(.hero, .closing) .button-ghost:hover { background: var(--indigo-1); border-color: var(--indigo-3); }
 
-/* Problem, steps, features */
-.pain { list-style: none; padding: 0; display: grid; gap: 10px; margin: 24px 0; }
-.pain li { position: relative; padding: 16px 18px 16px 50px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control); font-weight: 600; }
-.pain li::before { content: ""; position: absolute; left: 18px; top: 18px; width: 20px; height: 20px; background: var(--warning); -webkit-mask: var(--icon-alert) center / contain no-repeat; mask: var(--icon-alert) center / contain no-repeat; }
+/* A phone: the capture in a plain dark body, floating. */
+.phone { margin: 0; padding: 7px; border-radius: 44px; background: var(--indigo-0); box-shadow: 0 2px 1px color-mix(in srgb, var(--indigo-4) 18%, transparent) inset, 0 44px 90px -20px color-mix(in srgb, var(--indigo-0) 75%, transparent); }
+.phone img { display: block; width: 100%; height: auto; border-radius: 37px; }
+.hero-phone { justify-self: center; width: min(72vw, 330px); margin-bottom: -46%; transform-origin: 50% 100%; }
+
+.problem { padding-block: clamp(96px, 20vh, 200px); color: var(--indigo-4); background: linear-gradient(var(--indigo-0), var(--indigo-1)); }
+.problem h2 { max-width: 15ch; font-size: clamp(2.6rem, 8.6vw, 7rem); line-height: .98; letter-spacing: -.04em; margin-bottom: clamp(40px, 8vh, 88px); text-wrap: balance; }
+.pain { list-style: none; padding: 0; margin: 0 0 clamp(40px, 8vh, 88px); display: grid; gap: 4px; border-top: 1px solid var(--indigo-3); }
+.pain li { padding-block: 20px; border-bottom: 1px solid var(--indigo-3); font-size: clamp(1.2rem, 3vw, 2rem); line-height: 1.25; letter-spacing: -.015em; }
+.problem-answer { margin: 0; max-width: 24ch; font-size: clamp(1.5rem, 4vw, 3rem); font-weight: 800; line-height: 1.1; letter-spacing: -.025em; color: var(--indigo-3); }
+
+.scenes-intro { padding-block: clamp(72px, 14vh, 140px) clamp(48px, 8vh, 80px); color: var(--indigo-4); background: linear-gradient(var(--indigo-1), var(--indigo-2)); }
+.scenes-intro h2 { max-width: 16ch; font-size: clamp(2.2rem, 6.4vw, 5.2rem); line-height: 1; letter-spacing: -.035em; text-wrap: balance; }
+.scenes-intro p { max-width: 58ch; margin: 0; }
+.scene { --ink: var(--indigo-4); --soft: var(--indigo-4); position: relative; overflow: hidden; display: grid; gap: 32px; padding: 56px 16px 0; color: var(--ink); background: var(--field); perspective: 1400px; }
+.scene-indigo { --field: radial-gradient(60% 55% at 86% 82%, var(--indigo-3), transparent 75%), var(--indigo-2); }
+.scene-lilac { --field: radial-gradient(70% 80% at 12% 90%, var(--indigo-4), transparent 70%), var(--indigo-3); --ink: var(--indigo-0); --soft: var(--indigo-0); }
+.scene-mist { --field: radial-gradient(60% 60% at 90% 0%, var(--indigo-3), transparent 70%), var(--indigo-4); --ink: var(--indigo-0); --soft: var(--indigo-1); }
+.scene-night { --field: radial-gradient(60% 60% at 70% 100%, var(--indigo-2), transparent 70%), var(--indigo-0); --soft: var(--indigo-4); }
+.scene-deep { --field: radial-gradient(70% 60% at 20% 10%, var(--indigo-2), transparent 70%), var(--indigo-1); }
+.scene-copy h3 { margin-bottom: 20px; font-size: clamp(2.6rem, 12.4vw, 4.4rem); font-weight: 900; line-height: .94; letter-spacing: -.04em; overflow-wrap: anywhere; hyphens: auto; }
+.scene-note { display: grid; justify-items: start; gap: 12px; max-width: 34ch; }
+.scene-note .badge { margin: 0; }
+.scene-note p { margin: 0; color: var(--soft); font-size: 1.1rem; line-height: 1.45; }
+.scene-phone { justify-self: center; width: min(72vw, 320px); margin-bottom: -30%; transform-origin: 50% 70%; }
+
+.how .steps li, .privacy .checks li { background: transparent; border-inline: 0; border-top: 0; border-radius: 0; }
+.how h2, .privacy h2, #planes h2, #plans h2, .band h2 { font-size: clamp(2rem, 5.6vw, 4rem); line-height: 1.02; letter-spacing: -.035em; }
+.closing { overflow: hidden; color: var(--indigo-4); background: radial-gradient(70% 90% at 80% 100%, var(--indigo-3), transparent 70%), var(--indigo-2); padding-top: clamp(72px, 14vh, 140px); }
+.closing h2 { font-size: clamp(2.6rem, 9vw, 6.6rem); line-height: .96; letter-spacing: -.04em; text-wrap: balance; }
+.closing-grid { display: grid; gap: 40px; }
+.closing-phone { justify-self: center; width: min(66vw, 300px); margin-bottom: -40%; }
+
+@media (min-width: 900px) {
+  .hero { min-height: max(680px, calc(100svh - 64px)); }
+  .hero-grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: end; padding-top: min(11vw, 15svh); }
+  .hero h1 { font-size: clamp(2.6rem, min(4.4vw, 7.4svh), 4.6rem); }
+  .hero-copy { padding-bottom: clamp(32px, 7vh, 72px); }
+  .hero-phone { width: min(29vw, 44svh); margin-bottom: -22%; transform: rotateZ(-3deg); }
+  .pain { grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .scene-track { position: relative; height: 210svh; }
+  .scene-track + .scene-track { margin-top: -100svh; }
+  .scene { position: sticky; top: 0; height: 100svh; padding: clamp(84px, 12vh, 128px) clamp(32px, 6vw, 96px) 0; grid-template-columns: minmax(0, 1fr) auto; gap: 0; }
+  .scene-copy { position: relative; z-index: 1; display: grid; align-content: space-between; padding-bottom: clamp(40px, 9vh, 96px); margin-right: -9vw; }
+  .scene-copy h3 { font-size: clamp(4.4rem, 9.6vw, 10rem); margin-bottom: 0; }
+  .scene-phone { position: relative; z-index: 2; align-self: start; width: min(26vw, 45svh); margin-bottom: 0; }
+  .closing-grid { grid-template-columns: 1.2fr .8fr; align-items: end; }
+  .closing-grid > div { padding-bottom: 96px; }
+  .closing-phone { width: min(24vw, 40svh); margin-bottom: -18%; }
+}
+
+/* Steps, plans' shared pieces */
 .steps { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 12px; counter-reset: step; }
 .steps li { position: relative; padding: 20px 20px 20px 64px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 18px; top: 18px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); font-weight: 800; }
@@ -230,8 +282,6 @@ html:not([data-lang]) .lang-switch { display: none; }
 }
 @media (min-width: 960px) {
   .section { padding-block: 96px; }
-  .hero { padding-block: 72px 96px; }
-  .hero-grid { grid-template-columns: 1.15fr .85fr; gap: 64px; }
   .steps { grid-template-columns: repeat(4, 1fr); }
   .steps li { padding: 64px 20px 22px; }
   .features, .plans { grid-template-columns: repeat(3, 1fr); }
@@ -240,19 +290,54 @@ html:not([data-lang]) .lang-switch { display: none; }
   .footer-brand { grid-column: auto; }
 }
 
+/* Scroll-driven motion, CSS only: the page reads complete without it, in any browser. */
 @media (prefers-reduced-motion: no-preference) {
-  .hero-visual .illus { animation: illus-in .5s var(--ease-out) .1s both; }
-  .illus-card + .illus-card { animation: illus-in .5s var(--ease-out) .25s both; }
-  .bar i { animation: bar-fill .8s var(--ease-out) .5s both; transform-origin: left; }
+  .hero-word { animation: word-in 1.1s var(--ease-out) both; }
+  .hero-copy > * { animation: rise .9s var(--ease-out) both; }
+  .hero-copy > :nth-child(2) { animation-delay: .08s; }
+  .hero-copy > :nth-child(n + 3) { animation-delay: .16s; }
+  .hero-phone { animation: phone-in 1.2s var(--ease-out) .1s both; }
+  .button { transition: transform .2s var(--ease-out), background-color .2s var(--ease-out); }
+  @supports (animation-timeline: view()) {
+    .hero { view-timeline-name: --hero; }
+    .hero-word { animation: word-drift linear both; animation-timeline: --hero; animation-range: exit 0% exit 100%; }
+    .hero-phone { animation: phone-lift linear both; animation-timeline: --hero; animation-range: exit 0% exit 100%; }
+    .hero-copy > * { animation: fade-away linear both; animation-timeline: --hero; animation-range: exit 0% exit 70%; }
+    .problem h2 { animation: settle linear both; animation-timeline: view(); animation-range: entry 10% cover 40%; }
+    .pain li { animation: light-up linear both; animation-timeline: view(); animation-range: entry 30% cover 45%; }
+    .problem-answer { animation: light-up linear both; animation-timeline: view(); animation-range: entry 40% cover 50%; }
+    .scene-phone { animation: phone-enter linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
+    .scene-copy h3 { animation: word-enter linear both; animation-timeline: view(); animation-range: entry 0% cover 40%; }
+    .steps li, .checks li, .plan { animation: settle linear both; animation-timeline: view(); animation-range: entry 0% entry 90%; }
+    .closing-phone { animation: phone-enter linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
+    @media (min-width: 900px) {
+      .scene-track { view-timeline-name: --scene; }
+      .scene { animation: scene-open linear both; animation-timeline: --scene; animation-range: entry 0% entry 100%; }
+      .scene-phone { animation: phone-enter linear both, phone-leave linear both; animation-timeline: --scene, --scene; animation-range: entry 15% entry 100%, exit -60% exit 0%; }
+      .scene-copy h3 { animation: word-enter linear both, word-leave linear both; animation-timeline: --scene, --scene; animation-range: entry 20% entry 100%, exit -60% exit 0%; }
+      .scene-note { animation: settle linear both; animation-timeline: --scene; animation-range: entry 45% entry 100%; }
+    }
+  }
 }
-@keyframes illus-in { from { opacity: 0; transform: translateY(12px); } }
-@keyframes bar-fill { from { transform: scaleX(0); } }
+@keyframes rise { from { opacity: 0; transform: translateY(18px); } }
+@keyframes word-in { from { opacity: 0; letter-spacing: .04em; } }
+@keyframes phone-in { from { opacity: 0; transform: translateY(60px) rotateX(16deg) scale(.94); } }
+@keyframes word-drift { to { transform: translateY(16vh) scale(1.08); opacity: .15; } }
+@keyframes phone-lift { to { transform: translateY(-12vh) scale(1.1) rotateZ(0deg); } }
+@keyframes fade-away { to { opacity: 0; transform: translateY(-36px); } }
+@keyframes settle { from { opacity: 0; transform: translateY(44px); } }
+@keyframes light-up { from { opacity: .18; } }
+@keyframes phone-enter { from { opacity: 0; transform: translateY(26vh) rotateX(24deg) rotateZ(5deg) scale(.82); filter: blur(6px); } }
+@keyframes phone-leave { to { transform: translateY(-5vh) scale(.88); filter: blur(4px); opacity: .5; } }
+@keyframes word-enter { from { opacity: 0; transform: translateX(-9vw); letter-spacing: .03em; } }
+@keyframes word-leave { to { opacity: .25; transform: translateX(-3vw); } }
+@keyframes scene-open { from { border-radius: 56px 56px 0 0; } to { border-radius: 0; } }
+
 
 /* Forced colors (Windows high contrast): masked icons are painted with a background, which the
    browser would replace with Canvas and make invisible. Paint them in system text colors. */
 @media (forced-colors: active) {
-  .yes, .pain li::before, .checks li::before, .faqs summary::after, .dot, .bar i { forced-color-adjust: none; background: CanvasText; }
-  .bar { forced-color-adjust: none; background: Canvas; border: 1px solid CanvasText; }
+  .yes, .checks li::before, .faqs summary::after, .dot { forced-color-adjust: none; background: CanvasText; }
 }
 
 @media (prefers-reduced-motion: reduce) {

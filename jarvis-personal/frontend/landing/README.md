@@ -37,3 +37,5 @@ Content rules, enforced by `scripts/test-dincr-public-contract.mjs`:
 - **Screenshots:** the hero shows a labeled illustration with sample data until `heroScreenshot` (a real app capture, with width/height) is set in `config.json`. Needed capture: DINCR Home on a phone (Free or VIP) with synthetic data, about 600×1300 px.
 
 This is an isolated static entry within the existing frontend repository because its existing Vite root loads the private app and telemetry on `/`. It does not change Capacitor routes or the deployed app.
+
+The home page is a sequence of full-screen scenes on the apps' indigo palette (`indigo-N` in `style.css`, checked against `native/design-tokens/color-styles.json`). Scroll motion is CSS only (`animation-timeline`), so the page keeps no script beyond the language one and reads complete in a browser without it. `shots/` holds real Android captures with the synthetic store sample, resized from `store-assets/raw/android`.

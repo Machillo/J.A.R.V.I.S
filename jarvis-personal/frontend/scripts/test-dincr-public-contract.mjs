@@ -83,6 +83,7 @@ for (const [file, html] of Object.entries(pagesHtml)) {
   }
   for (const [img] of html.matchAll(/<img\b[^>]*>/g)) assert.match(img, /\balt="[^"]*"/, `${file}: img without alt`);
   for (const [img] of html.matchAll(/<img\b[^>]*>/g)) assert.match(img, /\bwidth="\d+" height="\d+"/, `${file}: img without dimensions (layout shift)`);
+  for (const [, src] of html.matchAll(/<img\b[^>]*\bsrc="\/shots\/([^"]+)"/g)) assert.ok(builtFiles.has(`shots/${src}`), `${file}: missing screen ${src}`);
   // Links: internal targets exist, mail only to the official addresses, no dead store links.
   for (const [, href] of html.matchAll(/href="([^"]+)"/g)) {
     if (href.startsWith('mailto:')) assert.match(href, /^mailto:(soporte|privacidad)@dincr\.com$/, `${file}: ${href}`);
@@ -197,6 +198,7 @@ assert.match(css, /@media \(forced-colors: active\)/, 'masked icons stay visible
   ];
   // DESIGN.md is mandatory: a missing or renamed file fails here instead of skipping the check.
   const design = (await readFile(new URL('../../../DESIGN.md', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+  const indigoSwatches = JSON.parse(await readFile(new URL('../../native/design-tokens/color-styles.json', import.meta.url), 'utf8')).styles.indigo.swatches;
   const token = key => design.match(new RegExp(`^  ${key}: "(#[0-9A-Fa-f]{6})"$`, 'm'))?.[1];
   for (const [scheme, vars] of Object.entries(schemes)) {
     assert.ok(Object.keys(vars).length >= 19, `${scheme}: every color variable names its DESIGN.md token`);
@@ -205,8 +207,10 @@ assert.match(css, /@media \(forced-colors: active\)/, 'masked icons stay visible
       assert.ok(value >= min, `${scheme}: ${fg} on ${bg} is ${value.toFixed(2)}:1, needs ${min}:1`);
     }
     for (const [name, { hex, token: tokenName }] of Object.entries(vars)) {
-      const key = scheme === 'dark' ? `dark-${tokenName}` : tokenName;
-      const value = token(key);
+      // `indigo-N` is a swatch of the apps' default style, the same in both schemes.
+      const swatch = tokenName.match(/^indigo-(\d)$/);
+      const key = swatch ? `color-styles indigo ${swatch[1]}` : scheme === 'dark' ? `dark-${tokenName}` : tokenName;
+      const value = swatch ? indigoSwatches[Number(swatch[1])] : token(key);
       assert.ok(value, `DESIGN.md defines ${key} (landing --${name})`);
       assert.equal(hex.toUpperCase(), value.toUpperCase(), `landing --${name} (${scheme}) drifted from DESIGN.md ${key}`);
     }
