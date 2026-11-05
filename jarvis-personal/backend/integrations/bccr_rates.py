@@ -106,10 +106,12 @@ def auto_close_active(conn) -> bool:
 def store(conn, rows: list[tuple[date, Decimal]], source: str) -> None:
     for day, rate in rows:
         conn.execute(
-            """INSERT INTO market_exchange_rates (rate_date, currency, rate_type, rate, source) VALUES (%s,%s,%s,%s,%s)
+            f"""INSERT INTO market_exchange_rates (rate_date, currency, rate_type, rate, source) VALUES (%s,%s,%s,%s,%s)
                ON CONFLICT (rate_date, currency, rate_type) DO UPDATE
                SET rate=EXCLUDED.rate, source=EXCLUDED.source, updated_at=NOW()
+               WHERE market_exchange_rates.source <> '{SOURCE_TODAY}' OR EXCLUDED.source = '{SOURCE_TODAY}'
                RETURNING rate_date""",  # The connection adds `RETURNING id` otherwise, and this table has no id.
+            # A day Hacienda published keeps its figure: the next runs' history never replaces it.
             (day, CURRENCY, RATE_TYPE, rate, source),
         )
 

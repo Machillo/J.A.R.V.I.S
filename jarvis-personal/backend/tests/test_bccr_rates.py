@@ -119,6 +119,21 @@ def test_todays_official_rate_is_stored_last_so_it_wins_on_its_day(cron, monkeyp
     assert answer["rates"] == 1 and answer["failed_sources"] == 0 and answer["converted"] == 1
 
 
+def test_history_never_replaces_a_day_hacienda_published():
+    class Connection:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, sql, params):
+            self.calls.append((sql, params))
+
+    conn = Connection()
+    br.store(conn, [(date(2026, 11, 3), Decimal("455.1"))], br.SOURCE_HISTORY)
+    sql, params = conn.calls[0]
+    assert "WHERE market_exchange_rates.source <> 'hacienda' OR EXCLUDED.source = 'hacienda'" in sql
+    assert params[-1] == br.SOURCE_HISTORY
+
+
 def test_one_service_down_does_not_stop_the_other(cron, monkeypatch):
     def down(*_):
         raise br.RateFeedError("HTTP 503")
