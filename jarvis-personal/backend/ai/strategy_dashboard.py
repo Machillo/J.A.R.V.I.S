@@ -13,7 +13,7 @@ from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance import dividend_plan
 from backend.finance.emergency_fund import get_salvavidas_state
-from backend.ai import owner_analysis, owner_commitments, owner_debt_block_store
+from backend.ai import owner_analysis, owner_commitments, owner_debt_block_store, owner_investment_destination
 from backend.ai.preferences import get_preference
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
@@ -373,6 +373,9 @@ def _owner_usual_month(workspace_id: str, recurring_income: float, installments:
     average, _estimated = average_income(workspace_id, today)
     plan = dividend_plan.normalize(get_preference(dividend_plan.PREFERENCE_KEY, {}))
     net_yield = dividend_plan.calculate(plan, None, {"open": False, "blockers": []})["net_yield_pct"]
+    savings = owner_investment_destination.destination(get_preference)
+    if savings:  # his investment goes to that account: its rate is what investing earns
+        net_yield = savings["annual_rate"]
     fixed_categories = {str(item.get("category") or "").lower() for item in living.get("included_fixed") or []}
     lived, necessary = _owner_lived_spending(workspace_id, fixed_categories, today)
     return owner_analysis.OwnerMonth(
@@ -1495,6 +1498,8 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
         director=director,
         timeline=timeline,
     )
+    # His investment share goes to the savings account he named, when he named one.
+    priority = owner_investment_destination.apply(allocation_items, priority, owner_investment_destination.destination(get_preference))
 
     debt_free_date = _add_months_iso(date.today(), total_months if total_months < 999 else None)
     base_debt_free_date = _add_months_iso(date.today(), base_total_months if base_total_months < 999 else None)

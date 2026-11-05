@@ -144,6 +144,8 @@ import Testing
         #expect(DistributionLabels.bucket("meta_prioritaria", language: .spanish) == "Meta prioritaria")
         #expect(DistributionLabels.bucket("ataque_de_deuda", targetName: "Tarjeta", language: .spanish) == "Ataque de deuda · Tarjeta")
         #expect(DistributionLabels.bucket("ataque_de_deuda", language: .spanish) == "Ataque de deuda")
+        #expect(DistributionLabels.bucket("inversion", targetName: "Cuenta X · 4% anual", language: .spanish) == "Ahorro en Cuenta X · 4% anual")
+        #expect(DistributionLabels.bucket("inversion", language: .spanish) == "Inversión")
         #expect(DistributionLabels.bucket("fondo_de_emergencia", language: .spanish) == "Salvavidas")
         #expect(DistributionLabels.bucket("vida_controlada", language: .spanish) == "Vida controlada")
         #expect(DistributionLabels.bucket("inversion", language: .spanish) == "Inversión")

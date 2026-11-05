@@ -363,7 +363,10 @@ public enum DistributionLabels {
             return "\(base) · \(targetName)"
         case "fondo_de_emergencia": return "Salvavidas"
         case "vida_controlada": return language.pick("Vida controlada", "Controlled living")
-        case "inversion": return language.pick("Inversión", "Investment")
+        case "inversion":
+            // The Owner may name the savings account his investment share goes to.
+            guard let targetName, !targetName.isEmpty else { return language.pick("Inversión", "Investment") }
+            return language.pick("Ahorro en \(targetName)", "Saving in \(targetName)")
         case "metas_o_inversion": return language.pick("Metas o inversión", "Goals or investment")
         case "pension_complementaria": return language.pick("Pensión complementaria", "Complementary pension")
         default: return key ?? "—"
