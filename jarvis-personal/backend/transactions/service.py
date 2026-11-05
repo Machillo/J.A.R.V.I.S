@@ -303,11 +303,7 @@ def get_currency_alerts():
     """Return every old/new USD transaction still missing a daily conversion rate."""
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        # First reuse any rate that was already saved for that date. This makes
-        # historical imports and future inserts self-healing.
-        _reuse_saved_rates(conn, workspace_id)
-        conn.commit()
-
+        # Read only (CLAUDE.md 4.C): a saved rate is applied by apply_currency_rate, never here.
         rows = conn.execute(
             """
             SELECT id, transaction_date, description, amount, transaction_type,
@@ -390,6 +386,8 @@ def apply_currency_rate(transaction_date: str, rate: float):
                 (amount, rate, row["id"], workspace_id),
             )
 
+        # Pending rows of other dates whose rate is already saved are applied by this command too.
+        _reuse_saved_rates(conn, workspace_id)
         conn.commit()
 
     return {
