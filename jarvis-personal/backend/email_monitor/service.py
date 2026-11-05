@@ -1541,7 +1541,7 @@ def scan_email_text(
         ).fetchone()
         candidate_row = dict(candidate_row) if candidate_row else {}
 
-        # A combined scheduled commitment (for example Casa + préstamo papá)
+        # A combined scheduled commitment (for example rent plus a loan)
         # may not have one canonical transaction because part of it is supplied
         # by the fixed-expense calendar. Keep a self trace so the duplicate is
         # auditable without inventing a second financial transaction.

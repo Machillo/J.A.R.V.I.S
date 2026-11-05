@@ -9,7 +9,7 @@ function formatJarvisResponse(data) {
   return tx("Señor, análisis completado.", "Sir, analysis complete.");
 }
 
-export default function Dashboard({ jarvisResponse, chatHistory = [], userName = "Kenneth", profilePreferences, currentUser, onOpenProfile }) {
+export default function Dashboard({ jarvisResponse, chatHistory = [], userName = "", profilePreferences, currentUser, onOpenProfile }) {
   const responseText = formatJarvisResponse(jarvisResponse);
   const hasResponse = Boolean(responseText) || chatHistory.length > 0;
   const latestMessages = chatHistory.slice(-6);
@@ -20,7 +20,7 @@ export default function Dashboard({ jarvisResponse, chatHistory = [], userName =
       <header className="jarvis-home-v2-hero">
         <div className="jarvis-home-v2-mark" aria-hidden="true"><Brain size={24} /></div>
         <div>
-          <p>{tx("Hola", "Hello")} {userName || "Kenneth"}</p>
+          <p>{tx("Hola", "Hello")} {userName}</p>
           <h1>DINCR Owner</h1>
           <span>{tx("¿Qué hacemos ahora?", "What shall we do now?")}</span>
         </div>

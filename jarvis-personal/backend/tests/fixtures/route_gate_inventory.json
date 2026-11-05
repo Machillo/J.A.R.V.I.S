@@ -643,13 +643,6 @@
   ]
  },
  {
-  "method": "POST",
-  "path": "/finance/fixed-expenses/seed-owner-defaults",
-  "gates": [
-   "internal_only"
-  ]
- },
- {
   "method": "GET",
   "path": "/finance/fixed-expenses/status",
   "gates": [
