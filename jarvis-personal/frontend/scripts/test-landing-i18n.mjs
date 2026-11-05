@@ -170,7 +170,7 @@ for (const path of allPages) {
 // --- The English legal texts mirror the Spanish ones -----------------------------------
 const source = await readFile(new URL('../src/pages/PublicInfoPage.jsx', import.meta.url), 'utf8');
 for (const [name, path, facts] of [
-  ['PrivacyPage', '/privacidad/', ['gmail.readonly', 'Mail.Read', 'read-only', 'does not send, modify or delete emails', 'not sold', 'data brokers', 'Supabase Vault', 'after 30 days', 'after 90 days', 'revoked with Google', 'revoke access from their Google account', 'Limited Use', 'Google API Services User Data Policy', 'download a copy of their data', '18 years', 'privacidad@dincr.com', 'soporte@dincr.com', 'Firebase Analytics and Crashlytics', 'PostHog']],
+  ['PrivacyPage', '/privacidad/', ['gmail.readonly', 'Mail.Read', 'read-only', 'does not send, modify or delete emails', 'not sold', 'data brokers', 'Supabase Vault', 'after 30 days', 'after 90 days', 'revoked with Google', 'revoke access from their Google account', 'Limited Use', 'Google API Services User Data Policy', 'download a copy of their data', '18 years', 'privacidad@dincr.com', 'soporte@dincr.com', 'Firebase App Distribution', 'PostHog']],
   ['TermsPage', '/terminos/', ['18 years', 'not a bank', '₡2,990', '₡4,990', 'December 31, 2026', 'January 1, 2027', 'Google Play or the App Store', 'laws of Costa Rica', 'soporte@dincr.com', 'non-waivable']],
 ]) {
   const version = source.slice(source.indexOf(`function ${name}() {`)).match(/VERSIÓN ([0-9-]+v\d+)/)[1];
