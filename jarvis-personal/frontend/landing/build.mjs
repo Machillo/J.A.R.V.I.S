@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, copyFile, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, cp, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { legalEn } from './legal-en.mjs';
@@ -45,7 +45,7 @@ for (const name of ['TermsPage', 'PrivacyPage']) {
   }
 }
 
-// The only script on the public site besides structured data. No network, no storage
+// The only script on the public site besides structured data; scroll motion is CSS only. No network, no storage
 // other than the visitor's own language choice, no tracking.
 const languageScript = `(function(){var d=document.documentElement,K="dincr:language";`
   + `function pick(){var s;try{s=localStorage.getItem(K)}catch(e){}if(s==="es"||s==="en")return s;`
@@ -96,10 +96,8 @@ function site(lang) {
   const promo = `<p class="note">${t('Basic y VIP son gratis hasta el 31 de diciembre de 2026, sin cobro automático. Antes de cobrar cualquier plan, vas a ver el precio y vas a tener que confirmarlo.', 'Basic and VIP are free until December 31, 2026, with no automatic charge. Before any plan is charged, you will see the price and have to confirm it.')}</p>`;
 
   // --- Home --------------------------------------------------------------------------
-  // A real screenshot replaces the illustration when `heroScreenshot` is configured.
-  const heroVisual = cfg.heroScreenshot
-    ? `<figure class="hero-visual"><img class="shot" src="${escape(cfg.heroScreenshot)}" alt="${t('Pantalla de DINCR', 'DINCR screen')}" width="300" height="650" decoding="async"></figure>`
-    : `<figure class="hero-visual"><div class="illus" aria-hidden="true"><div class="illus-card"><span class="illus-label">${t('Último movimiento', 'Latest transaction')}</span><div class="illus-row"><strong>${t('Supermercado', 'Supermarket')}</strong><span class="illus-amount">−${crc(12500)}</span></div></div><div class="illus-card illus-card-soft"><span class="illus-label">${t('Presupuesto de este mes', 'This month’s budget')}</span><div class="bar"><i style="width:62%"></i></div><span class="illus-note">${t('62 % usado', '62% used')}</span></div></div><figcaption>${t('Ilustración con datos de ejemplo.', 'Illustration with sample data.')}</figcaption></figure>`;
+  // Screens are real captures of the Android app with the synthetic store sample (landing/shots).
+  const shot = (name, alt, lazy = true) => `<img src="/shots/${lang}/${name}.jpg" alt="${alt}" width="720" height="1600" decoding="async"${lazy ? ' loading="lazy"' : ''}>`;
 
   const steps = [
     [t('Registrá', 'Record'), t('Anotá tus movimientos, deudas y metas en segundos.', 'Enter your transactions, debts and goals in seconds.')],
@@ -107,12 +105,13 @@ function site(lang) {
     [t('Vos decidís', 'You decide'), t('Tus datos los manejás vos: los corregís, los borrás o los descargás cuando querás.', 'Your data is yours to manage: correct it, delete it or download it whenever you want.')],
     [t('Ves qué sigue', 'You see what’s next'), t('Resumen, presupuesto y estrategia con tus próximos pasos, según tu plan.', 'Summary, budget and strategy with your next steps, depending on your plan.')],
   ];
+  // Each screen is shown with the lowest plan that includes it.
   const features = [
-    [t('Movimientos y gastos', 'Transactions and expenses'), t('Ingresos y gastos por categoría, con un resumen claro de tu mes.', 'Income and expenses by category, with a clear summary of your month.'), 'Free'],
-    [t('Deudas', 'Debts'), t('Saldos, cuotas y fechas de pago de cada deuda en un solo lugar.', 'Balances, installments and payment dates for every debt in one place.'), 'Free'],
-    [t('Metas', 'Goals'), t('Ahorrá para objetivos concretos y seguí tu avance.', 'Save for specific goals and follow your progress.'), 'Free'],
-    [t('Presupuesto y calendario', 'Budget and calendar'), t('Presupuesto guiado, pagos recurrentes y calendario financiero.', 'Guided budget, recurring payments and financial calendar.'), 'Basic'],
-    [t('Estrategia y proyecciones', 'Strategy and projections'), t('Prioridad recomendada, proyecciones, escenarios y revisión mensual.', 'Recommended priority, projections, scenarios and monthly review.'), 'VIP'],
+    [t('Movimientos y gastos', 'Transactions and expenses'), t('Ingresos y gastos por categoría, con un resumen claro de tu mes.', 'Income and expenses by category, with a clear summary of your month.'), 'Free', '03-movements', t('Lista de movimientos de septiembre con ingresos y gastos', 'September transactions list with income and expenses'), 'indigo'],
+    [t('Deudas', 'Debts'), t('Saldos, cuotas y fechas de pago de cada deuda en un solo lugar.', 'Balances, installments and payment dates for every debt in one place.'), 'Free', '04-debts', t('Deudas con el total pendiente y las cuotas del mes', 'Debts with the total outstanding and monthly payments'), 'lilac'],
+    [t('Metas', 'Goals'), t('Ahorrá para objetivos concretos y seguí tu avance.', 'Save for specific goals and follow your progress.'), 'Free', '05-goals', t('Fondo de emergencia y plan de ahorro con su avance', 'Emergency fund and savings plan with their progress'), 'mist'],
+    [t('Presupuesto y calendario', 'Budget and calendar'), t('Presupuesto guiado, pagos recurrentes y calendario financiero.', 'Guided budget, recurring payments and financial calendar.'), 'Basic', '06-budget', t('Presupuesto del mes por categoría', 'Monthly budget by category'), 'night'],
+    [t('Estrategia y proyecciones', 'Strategy and projections'), t('Prioridad recomendada, proyecciones, escenarios y revisión mensual.', 'Recommended priority, projections, scenarios and monthly review.'), 'VIP', '01-home', t('Inicio del plan VIP con lo que podés gastar y qué atender', 'VIP home with what you can spend and what needs attention'), 'deep'],
   ];
   const privacyPoints = [
     t('Tus datos no se venden ni se usan para publicidad.', 'Your data is not sold or used for advertising.'),
@@ -130,14 +129,14 @@ function site(lang) {
   ];
   const faq = faqItems.map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('');
 
-  const home = `<section class="hero"><div class="wrap hero-grid"><div class="hero-copy"><h1>${t('Tus finanzas en orden, con menos trabajo manual.', 'Your finances in order, with less manual work.')}</h1><p class="lead">${t('DINCR es la app de finanzas personales para Costa Rica: reúne tus ingresos, gastos, deudas y metas y te muestra con claridad dónde estás y qué sigue.', 'DINCR is the personal finance app for Costa Rica: it brings together your income, expenses, debts and goals and shows you clearly where you stand and what comes next.')}</p><div class="actions"><a class="button" href="#${id.plans}">${t('Ver planes', 'See plans')}</a><a class="button button-ghost" href="#${id.how}">${t('Cómo funciona', 'How it works')}</a></div>${availability}</div>${heroVisual}</div></section>
-<section class="section problem"><div class="wrap"><h2>${t('Tu dinero está en todos lados. Tu panorama, en ninguno.', 'Your money is everywhere. Your overview is nowhere.')}</h2><ul class="pain"><li>${t('Los gastos pequeños se pierden en el mes.', 'Small expenses get lost during the month.')}</li><li>${t('Cada deuda tiene su cuota y su fecha.', 'Every debt has its own installment and due date.')}</li><li>${t('Sin registro, cuesta saber cuánto podés gastar.', 'Without a record, it’s hard to know how much you can spend.')}</li></ul><p class="section-lead">${t('DINCR lo junta en un solo lugar y lo mantiene al día.', 'DINCR brings it together in one place and keeps it up to date.')}</p></div></section>
-<section class="section band" id="${id.how}"><div class="wrap"><h2>${t('Vos conservás el control.', 'You stay in control.')}</h2><ol class="steps">${steps.map(([h, p]) => `<li><h3>${h}</h3><p>${p}</p></li>`).join('')}</ol></div></section>
-<section class="section" id="${id.features}"><div class="wrap"><h2>${t('Lo que necesitás para decidir mejor.', 'What you need to make better decisions.')}</h2><div class="features">${features.map(([h, p, plan]) => `<article class="feature"><span class="badge badge-${plan.toLowerCase()}">${plan}</span><h3>${h}</h3><p>${p}</p></article>`).join('')}</div><p class="note">${t('La insignia indica el plan desde el que está disponible cada función.', 'The badge shows the plan from which each feature is available.')}</p></div></section>
-<section class="section band" id="${id.privacy}"><div class="wrap split"><div><h2>${t('Tus datos financieros son tuyos.', 'Your financial data is yours.')}</h2><p class="section-lead">${t('DINCR maneja información sensible. Por eso está protegida y solo vos decidís qué registrar.', 'DINCR handles sensitive information. That is why it stays protected and only you decide what to record.')}</p><div class="inline-links"><a href="/privacidad/">${t('Política de privacidad', 'Privacy policy')}</a><a href="/seguridad/">${t('Seguridad', 'Security')}</a></div></div><ul class="checks">${privacyPoints.map(p => `<li>${p}</li>`).join('')}</ul></div></section>
+  const home = `<section class="hero"><p class="hero-word" aria-hidden="true">DINCR</p><div class="wrap hero-grid"><div class="hero-copy"><h1>${t('Tus finanzas en orden, con menos trabajo manual.', 'Your finances in order, with less manual work.')}</h1><p class="lead">${t('DINCR es la app de finanzas personales para Costa Rica: reúne tus ingresos, gastos, deudas y metas y te muestra con claridad dónde estás y qué sigue.', 'DINCR is the personal finance app for Costa Rica: it brings together your income, expenses, debts and goals and shows you clearly where you stand and what comes next.')}</p><div class="actions"><a class="button" href="#${id.plans}">${t('Ver planes', 'See plans')}</a><a class="button button-ghost" href="#${id.how}">${t('Cómo funciona', 'How it works')}</a></div>${availability}</div><figure class="phone hero-phone">${shot('02-overview', t('Inicio de DINCR con el resultado del mes y la deuda pendiente', 'DINCR home with the month’s result and outstanding debt'), false)}</figure></div></section>
+<section class="problem"><div class="wrap"><h2>${t('Tu dinero está en todos lados. Tu panorama, en ninguno.', 'Your money is everywhere. Your overview is nowhere.')}</h2><ul class="pain"><li>${t('Los gastos pequeños se pierden en el mes.', 'Small expenses get lost during the month.')}</li><li>${t('Cada deuda tiene su cuota y su fecha.', 'Every debt has its own installment and due date.')}</li><li>${t('Sin registro, cuesta saber cuánto podés gastar.', 'Without a record, it’s hard to know how much you can spend.')}</li></ul><p class="problem-answer">${t('DINCR lo junta en un solo lugar y lo mantiene al día.', 'DINCR brings it together in one place and keeps it up to date.')}</p></div></section>
+<section class="scenes" id="${id.features}"><div class="scenes-intro"><div class="wrap"><h2>${t('Lo que necesitás para decidir mejor.', 'What you need to make better decisions.')}</h2><p>${t('Son pantallas reales de la app, con datos de ejemplo. La insignia indica el plan desde el que está disponible cada función.', 'These are real app screens with sample data. The badge shows the plan from which each feature is available.')}</p></div></div>${features.map(([h, p, plan, image, alt, tone]) => `<div class="scene-track"><article class="scene scene-${tone}"><div class="scene-copy"><h3>${h}</h3><div class="scene-note"><span class="badge badge-${plan.toLowerCase()}">${plan}</span><p>${p}</p></div></div><figure class="phone scene-phone">${shot(image, alt)}</figure></article></div>`).join('')}</section>
+<section class="section how" id="${id.how}"><div class="wrap"><h2>${t('Vos conservás el control.', 'You stay in control.')}</h2><ol class="steps">${steps.map(([h, p]) => `<li><h3>${h}</h3><p>${p}</p></li>`).join('')}</ol></div></section>
+<section class="section privacy" id="${id.privacy}"><div class="wrap split"><div><h2>${t('Tus datos financieros son tuyos.', 'Your financial data is yours.')}</h2><p class="section-lead">${t('DINCR maneja información sensible. Por eso está protegida y solo vos decidís qué registrar.', 'DINCR handles sensitive information. That is why it stays protected and only you decide what to record.')}</p><div class="inline-links"><a href="/privacidad/">${t('Política de privacidad', 'Privacy policy')}</a><a href="/seguridad/">${t('Seguridad', 'Security')}</a></div></div><ul class="checks">${privacyPoints.map(p => `<li>${p}</li>`).join('')}</ul></div></section>
 <section class="section" id="${id.plans}"><div class="wrap"><h2>${t('Empezá gratis. Crecé cuando lo necesités.', 'Start free. Grow when you need to.')}</h2>${planCards(3)}${promo}<a class="text-link" href="/precios/">${t('Comparar planes en detalle', 'Compare plans in detail')}</a></div></section>
 <section class="section band"><div class="wrap narrow"><h2>${t('Lo esencial, sin letra pequeña.', 'The essentials, with no fine print.')}</h2><div class="faqs">${faq}</div></div></section>
-<section class="section cta"><div class="wrap narrow center"><h2>${t('Poné tus finanzas en orden.', 'Put your finances in order.')}</h2><p class="section-lead">${t('Empezá con Free y pasá a Basic o VIP cuando lo necesités.', 'Start with Free and move to Basic or VIP when you need to.')}</p>${availability}<div class="actions center"><a class="button" href="/precios/">${t('Ver planes', 'See plans')}</a></div></div></section>`;
+<section class="closing"><div class="wrap closing-grid"><div><h2>${t('Poné tus finanzas en orden.', 'Put your finances in order.')}</h2><p class="lead">${t('Empezá con Free y pasá a Basic o VIP cuando lo necesités.', 'Start with Free and move to Basic or VIP when you need to.')}</p>${availability}<div class="actions"><a class="button" href="/precios/">${t('Ver planes', 'See plans')}</a></div></div><figure class="phone closing-phone">${shot('01-home', t('Inicio de DINCR con el plan VIP', 'DINCR home on the VIP plan'))}</figure></div></section>`;
 
   // --- Pricing -----------------------------------------------------------------------
   const rows = [
@@ -208,6 +207,7 @@ for (const [from, to] of [['favicon-32.png', 'favicon-32.png'], ['apple-touch-ic
   await copyFile(join(root, 'public', from), join(out, to));
 }
 await copyFile(join(import.meta.dirname, 'style.css'), join(out, 'style.css'));
+await cp(join(import.meta.dirname, 'shots'), join(out, 'shots'), { recursive: true });
 await mkdir(join(out, '.well-known'), { recursive: true });
 await copyFile(
   join(import.meta.dirname, '.well-known', 'microsoft-identity-association.json'),
