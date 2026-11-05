@@ -66,20 +66,7 @@ public enum StoreSample {
           "start_date": "2026-06-01", "end_date": "2027-06-01", "status": "active"]]
     }
 
-    /// Same bank notices as Android's `StoreSample.candidates()`: one in colones, one in dollars that
-    /// asks for the user's rate. `inputs.pending_notices` pins how many there are.
-    static func candidates(_ language: AppLanguage) -> [[String: Any]] {
-        let bank = language.pick("Mi banco", "My bank")
-        return [
-            ["candidate_id": 21, "email_id": 21, "bank": bank, "sender": "avisos@banco.example", "subject": language.pick("Notificación de compra", "Purchase notice"),
-             "received_at": "2026-09-27T10:00:00Z", "description": language.pick("Supermercado", "Groceries"), "amount": 15_300, "currency": "CRC",
-             "account_base_currency": "CRC", "transaction_date": "2026-09-27", "transaction_type": "expense", "category": language.pick("Comida", "Food"),
-             "review_status": "pending"],
-            ["candidate_id": 22, "email_id": 22, "bank": bank, "sender": "avisos@banco.example", "subject": language.pick("Compra internacional", "International purchase"),
-             "received_at": "2026-09-26T10:00:00Z", "description": language.pick("Tienda en línea", "Online store"), "amount": 25, "currency": "USD",
-             "account_base_currency": "CRC", "transaction_date": "2026-09-26", "transaction_type": "expense", "category": language.pick("Compras", "Shopping"),
-             "review_status": "pending"],
-        ]
-    }
+    /// No bank notices, as in Android's `StoreSample.candidates()`: mail reading is not a public feature, so store images can't show it.
+    static func candidates(_ language: AppLanguage) -> [[String: Any]] { [] }
 }
 #endif

@@ -15,7 +15,7 @@ for (const route of routes) {
   assert.doesNotMatch(html, /J\.A\.R\.V\.I\.S\.|JARVIS|₡5\.990|5,990|precio candidato/i);
 }
 const price = await readFile(new URL('precios/index.html', out), 'utf8');
-assert.match(price, /₡4\.990/);
+assert.doesNotMatch(price, /₡\d/);
 const support = await readFile(new URL('soporte/index.html', out), 'utf8');
 assert.match(support, /mailto:soporte@dincr\.com/);
 assert.match(support, /mailto:privacidad@dincr\.com/);
@@ -124,14 +124,11 @@ assert.match(home, /id="como-funciona"/);
 assert.match(home, /Lanzamiento próximo en Android y iPhone/, 'pre-launch state is explicit while there are no store URLs');
 assert.doesNotMatch(marketing, /\bOwner\b/, 'Owner is never a public plan');
 
-// Prices: the landing config must match the backend price list.
 const config = JSON.parse(await readFile(new URL('../landing/config.json', import.meta.url), 'utf8'));
-const backendPrices = await readFile(new URL('../../backend/product_ops/service.py', import.meta.url), 'utf8');
-for (const plan of ['basic', 'vip']) {
-  const match = backendPrices.match(new RegExp(`"${plan}": \\{"regular": (\\d+)\\}`));
-  assert.ok(match, `backend price for ${plan}`);
-  assert.equal(config.pricesCRC[plan], Number(match[1]), `${plan} price matches the backend`);
-  assert.ok(pagesHtml['precios/index.html'].includes(`₡${String(match[1]).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`), `${plan} price shown`);
+
+// Prices: no marketing page shows a plan price while there are no purchases (the Terms do).
+for (const file of ['index.html', 'precios/index.html', 'descargar/index.html', 'seguridad/index.html']) {
+  assert.doesNotMatch(pagesHtml[file], /₡2[.,]990|₡4[.,]990|\/mes\b|\/month\b/, `${file} shows no plan price`);
 }
 
 // Stylesheet: responsive, reduced motion, visible focus, touch targets; cache-busted.

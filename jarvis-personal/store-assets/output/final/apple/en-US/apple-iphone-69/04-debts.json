@@ -1,5 +1,5 @@
 {
-  "output_sha256": "a49bbcf23ad87a06783cc591be3073fd75e40ac22ed58c125adf6ebf7bf3f992",
+  "output_sha256": "19bb6b3a0044d1cc64d7d59da709c536f133d9b35c811064369de8270728b93d",
   "mode": "final",
   "target": "apple-iphone-69",
   "store": "apple",
@@ -11,18 +11,18 @@
   "width": 1320,
   "height": 2868,
   "alpha": false,
-  "caption_ratio": 0.1357,
+  "caption_ratio": 0.1399,
   "capture": {
     "file": "raw/ios/en/phone/04-debts.png",
-    "sha256": "04adad533edb9d2225b415303236fdeaa1b0eaba2c7a57a0dad53b7bf8bb2df2",
+    "sha256": "670843cee97622b193b4c5845528d2d163171a1161b8654f61a152f7e68f1076",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-30T03:31:00.971Z",
+    "captured_at": "2026-11-05T14:14:14.599Z",
     "device": null
   },
-  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
-  "generated_at": "2026-09-30T03:56:59.002Z"
+  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "generated_at": "2026-11-05T14:16:30.174Z"
 }

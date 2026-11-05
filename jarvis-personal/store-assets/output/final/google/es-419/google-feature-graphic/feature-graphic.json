@@ -1,5 +1,5 @@
 {
-  "output_sha256": "62ffa1cffc4aed44ae5c7adc4be41368e4ba384f3d602446ec1a80bcb3f60f9a",
+  "output_sha256": "faa3e63192fee445efb2d4fa8c9b77aee40d7364f4f50d8e6efffcf84e142467",
   "mode": "final",
   "target": "google-feature-graphic",
   "store": "google",
@@ -13,8 +13,8 @@
   "alpha": false,
   "caption_ratio": null,
   "capture": null,
-  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
-  "generated_at": "2026-09-30T01:15:49.048Z"
+  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "generated_at": "2026-11-05T14:15:10.221Z"
 }

@@ -1,5 +1,5 @@
 {
-  "output_sha256": "d86d1fd1dcde440b9854d475027ae83b21f7a237181150168972130c1b4c5a47",
+  "output_sha256": "b41d9bbd88198dd8f90b9de9f84c771c3b2c837e4df98461ac416cf58b0ca8c0",
   "mode": "final",
   "target": "apple-iphone-69",
   "store": "apple",
@@ -11,18 +11,18 @@
   "width": 1320,
   "height": 2868,
   "alpha": false,
-  "caption_ratio": 0.1362,
+  "caption_ratio": 0.1405,
   "capture": {
     "file": "raw/ios/en/phone/06-budget.png",
-    "sha256": "a56cd998651873243548ade8b0c8a68fc9374ede11f4e8775b9b340b44d2fe72",
+    "sha256": "03e86aebceeea64bb3b69b54242babcd9914b725193db97897516ed64ea9e49f",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-30T03:31:00.971Z",
+    "captured_at": "2026-11-05T14:14:14.599Z",
     "device": null
   },
-  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
-  "generated_at": "2026-09-30T03:57:01.820Z"
+  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
+  "generated_at": "2026-11-05T14:16:38.083Z"
 }

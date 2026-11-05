@@ -68,13 +68,12 @@ import Testing
         #expect(try await english.freeDashboard().monthlyHistory == spanish.freeDashboard().monthlyHistory)
     }
 
-    /// A VIP store account shows a connected mailbox with the notices `pending_notices` counts.
-    @Test func vipStoreHasTheMailboxAndItsNotices() async throws {
+    /// Mail reading is not public: a store image must never offer to review mail notices.
+    @Test func vipStoreHasNoMailNotices() async throws {
         let vip = Self.service(.spanish, plan: .vip)
-        #expect(try await vip.mailStatus().isConnected)
         let pending = try await vip.mailCandidates(pendingOnly: true)
-        #expect(pending.count == StoreSample.inputs(.spanish)["pending_notices"] as? Int)
-        #expect(pending.contains { $0.needsRate })
+        #expect(pending.isEmpty)
+        #expect(StoreSample.inputs(.spanish)["pending_notices"] as? Int == 0)
     }
 
     /// #292: the safe-to-spend minimum is the lowest expected balance, never "commitments".

@@ -111,15 +111,8 @@ internal class StoreSample(private val language: AppLanguage) {
 
     fun recurring() = listOf(RecurringItem(5, t("Internet del hogar", "Home internet"), money(24900), utilities, "expense", "monthly", 8, true))
 
-    fun candidates(): List<MailCandidate> {
-        val bank = t("Mi banco", "My bank")
-        return listOf(
-            MailCandidate(21, 21, null, bank, "avisos@banco.example", t("Notificación de compra", "Purchase notice"), "${day(27)}T10:00:00Z", groceries, money(15300), "CRC",
-                accountBaseCurrency = "CRC", transactionDate = day(27), transactionType = "expense", category = food, reviewStatus = "pending"),
-            MailCandidate(22, 22, null, bank, "avisos@banco.example", t("Compra internacional", "International purchase"), "${day(26)}T10:00:00Z", t("Tienda en línea", "Online store"), money(25), "USD",
-                accountBaseCurrency = "CRC", transactionDate = day(26), transactionType = "expense", category = shopping, reviewStatus = "pending"),
-        )
-    }
+    /** No bank notices: mail reading is not a public feature, so store images can't show it. */
+    fun candidates(): List<MailCandidate> = emptyList()
 
     /**
      * A backend response for this account exactly as the real engines computed it (strategy, VIP

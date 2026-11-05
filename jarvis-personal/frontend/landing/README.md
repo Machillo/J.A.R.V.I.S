@@ -21,7 +21,7 @@ Dashboard settings, which must match:
 
 Vercel builds the web app separately as DINCR's **internal lab** (not the commercial app, never indexed, never linked from here). The commercial app is native iOS/Android. `npm run test:surfaces` keeps the three surfaces apart.
 
-The legal pages are rendered from `src/pages/PublicInfoPage.jsx` at build time, with the version read from the same source. Prices come from `config.json` and `npm run test:landing` checks them against `backend/product_ops/service.py`. The review block is disabled until authentic, authorized data is configured.
+The legal pages are rendered from `src/pages/PublicInfoPage.jsx` at build time, with the version read from the same source. The marketing pages show no prices while there are no purchases; only the Terms state them. The review block is disabled until authentic, authorized data is configured.
 
 Content rules, enforced by `scripts/test-dincr-public-contract.mjs`:
 - **Brand:** public brand DINCR only. The icon is `apple-touch-icon.png` / `favicon-32.png`, never the legacy "J" `favicon.svg`.

@@ -2,21 +2,21 @@
   "platform": "android",
   "fixture": "STORE",
   "fixture_date": "2026-09-28",
-  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "source_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "source_dirty": false,
-  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "pipeline_commit": "64e0f0b5fcd043329b0f0edd8f99493e1fc5b55b",
   "built": true,
-  "captured_at": "2026-09-30T01:15:01.510Z",
+  "captured_at": "2026-11-05T14:05:59.768Z",
   "app": {
     "package": "com.dincr.app",
     "flavor": "dincr",
     "build_type": "debug",
-    "version_name": "2.0.0-rc.1",
-    "last_update": "2026-09-29 19:13:35"
+    "version_name": "2.0.0",
+    "last_update": "2026-11-05 08:05:01"
   },
   "device": {
-    "model": "sdk_gphone64_x86_64",
-    "sdk": 35,
+    "model": "sdk_gphone64_arm64",
+    "sdk": 36,
     "width": 1080,
     "height": 2400,
     "density": 420
@@ -29,7 +29,7 @@
       "locale": "es",
       "plan": "vip",
       "file": "raw/android/es/phone/01-home.png",
-      "sha256": "7ea0ef075d726f9ceb88e825f3c6764a677eaa17e70c83419fba3329ab46ea20",
+      "sha256": "5f2c84d4713f59e6b326eb69a8ed87cea57922d1615bed6cb4ad6c560a52a50d",
       "width": 1080,
       "height": 2400
     },
@@ -38,7 +38,7 @@
       "locale": "es",
       "plan": "free",
       "file": "raw/android/es/phone/02-overview.png",
-      "sha256": "b444801ab8d81a08b3cf53c1be9eb06387e6d4c165c9fc94bf604638142a152f",
+      "sha256": "09c6beb6dbd95ae1463bd0bf7b976478cc1f3502206ef14974900f2ad1add62f",
       "width": 1080,
       "height": 2400
     },
@@ -47,7 +47,7 @@
       "locale": "es",
       "plan": "free",
       "file": "raw/android/es/phone/03-movements.png",
-      "sha256": "67450ed2546648ce649144895d29792ce3abe3d7507196ac131a2809dcadab73",
+      "sha256": "34f5298e1038f88e8f6ed5528f34943db75f1404d83759b13e232e15a90a6f0f",
       "width": 1080,
       "height": 2400
     },
@@ -56,7 +56,7 @@
       "locale": "es",
       "plan": "free",
       "file": "raw/android/es/phone/04-debts.png",
-      "sha256": "3b58b43a7baa9258acaf8438807bce8bac5787685c1ae83541f1bdb56c1f1189",
+      "sha256": "c5c0fb5839810c06d63db1a49f1e2844b952f28daffdf691ef4defb45a19c293",
       "width": 1080,
       "height": 2400
     },
@@ -65,7 +65,7 @@
       "locale": "es",
       "plan": "free",
       "file": "raw/android/es/phone/05-goals.png",
-      "sha256": "45b8b8f08cb79fd4e5aa8e6f9ecc6f5d4d94db61aa61dea4b6f04720552c6176",
+      "sha256": "bbdc033792c77260fe0aa301d641350e78db098d4348146ae9e55578f691844c",
       "width": 1080,
       "height": 2400
     },
@@ -74,7 +74,7 @@
       "locale": "es",
       "plan": "basic",
       "file": "raw/android/es/phone/06-budget.png",
-      "sha256": "96c97b7a3ec7ff66be7fd6ca391f46ed838c45012b9d1ad846bfa42b0fe9370a",
+      "sha256": "e43fe64f159ffc4e016fe2aede4589f414a41d4801f20f3ed7a94c8701ef7def",
       "width": 1080,
       "height": 2400
     },
@@ -83,7 +83,7 @@
       "locale": "es",
       "plan": "basic",
       "file": "raw/android/es/phone/07-strategy.png",
-      "sha256": "66f1d9f6d30ebce2c2da04db72e205cd076d90dc4c267a37c15b05ee2f4d43c3",
+      "sha256": "5517b83090c98eee865f77f620faaecd53810f45384946a8e6e8ccb7f6dc09b6",
       "width": 1080,
       "height": 2400
     },
@@ -92,7 +92,7 @@
       "locale": "en",
       "plan": "vip",
       "file": "raw/android/en/phone/01-home.png",
-      "sha256": "f98380f2dd35330947265fba9ce4b7ce4cda55afd9d48e14bc1dad4cfd2f4ba6",
+      "sha256": "8ddc9915431149670b27886ad3a024bd06abcdb97d9bc933d33b07a0904ebdd5",
       "width": 1080,
       "height": 2400
     },
@@ -101,7 +101,7 @@
       "locale": "en",
       "plan": "free",
       "file": "raw/android/en/phone/02-overview.png",
-      "sha256": "08e7e24aa60d585a591ebe7a44f4ff5113fb8017d3c13b0bf5297f84669dc97d",
+      "sha256": "75004403a4f3865c0fca673864e9285205adf44cbeb67f387c9ad3534ec5089c",
       "width": 1080,
       "height": 2400
     },
@@ -110,7 +110,7 @@
       "locale": "en",
       "plan": "free",
       "file": "raw/android/en/phone/03-movements.png",
-      "sha256": "56da20c6803a61dfbd9e3ed8f6d86016f36116e0d6bc0cabbb1a4c1b8ba23f39",
+      "sha256": "a15ed4554776275e4ea6ccecdce06580f0fb478e06ccaef4563f7b3d3ec4a38b",
       "width": 1080,
       "height": 2400
     },
@@ -119,7 +119,7 @@
       "locale": "en",
       "plan": "free",
       "file": "raw/android/en/phone/04-debts.png",
-      "sha256": "18f5f5af39c0091ed29b1885d1bd090fcd99f8b2cf95ebac6b9a847d2f7bceb5",
+      "sha256": "7022265b311bbf94f52b6ad005e0c0b79b515eec37e6148dc1a7d6bdcd2ff3d4",
       "width": 1080,
       "height": 2400
     },
@@ -128,7 +128,7 @@
       "locale": "en",
       "plan": "free",
       "file": "raw/android/en/phone/05-goals.png",
-      "sha256": "f287e7380644cc5d6eb6f051c7fde6140501586581169fc03e8b5c504806c981",
+      "sha256": "f098da0da9db362d219fa3047990c1a549a20c66fb71ea3eb71d6b85fba2a899",
       "width": 1080,
       "height": 2400
     },
@@ -137,7 +137,7 @@
       "locale": "en",
       "plan": "basic",
       "file": "raw/android/en/phone/06-budget.png",
-      "sha256": "02abff24338f34b62f1d81a59142a583355702f5066be3b1cad27f59652356b6",
+      "sha256": "ccb87ec8e0554c003fd5422be989d398b3bb67a2900bc94b2c4e1b9814e2c7ae",
       "width": 1080,
       "height": 2400
     },
@@ -146,7 +146,7 @@
       "locale": "en",
       "plan": "basic",
       "file": "raw/android/en/phone/07-strategy.png",
-      "sha256": "7b8c5133e54dbed45888904bb7769818058f292866317450f14e3ca997bdad45",
+      "sha256": "5324df8bc195166646fab9dcc4da2193fb27d6117f6bd3748a707fe082df55d7",
       "width": 1080,
       "height": 2400
     }
