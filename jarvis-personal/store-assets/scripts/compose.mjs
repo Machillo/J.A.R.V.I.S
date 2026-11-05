@@ -323,6 +323,7 @@ export async function compose(argv = process.argv.slice(2)) {
   const icon = pathToFileURL(path.join(repoRoot, "jarvis-personal/frontend/resources/icon.png")).href;
   const screenTemplate = fs.readFileSync(path.join(root, "templates/screen.html"), "utf8");
   const featureTemplate = fs.readFileSync(path.join(root, "templates/feature-graphic.html"), "utf8");
+  const pairTemplate = fs.readFileSync(path.join(root, "templates/pair.html"), "utf8");
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-store-work-"));
   const written = [];
 
@@ -336,25 +337,52 @@ export async function compose(argv = process.argv.slice(2)) {
         const watermark = final ? "" : `<span>PREVIEW · ${locale.id === "es" ? "NO PARA STORES" : "NOT FOR STORES"}</span>`;
         const common = { ...colors, width: target.width, height: target.height, lang: locale.id, brand_name: copy.brand.name, icon, watermark };
 
+        // The real capture of a screen, or a labelled placeholder in preview mode.
+        const sourceFor = (screen) => {
+          const source = rawPathFor(target, locale.id, screen.id, args.rawDir);
+          if (fs.existsSync(source)) return { source, placeholder: false };
+          if (final) throw new Error(`missing capture ${source}`);
+          const [w, h] = PLACEHOLDER_SIZE[target.id];
+          const label = locale.id === "es" ? `Falta la captura real de "${screen.area}"` : `Missing the real capture of "${screen.area}"`;
+          const phHtml = path.join(work, `ph-${target.id}-${locale.id}-${screen.id}.html`);
+          fs.writeFileSync(phHtml, placeholderHtml(w, h, colors, label));
+          const placeholderFile = path.join(work, `ph-${target.id}-${locale.id}-${screen.id}.png`);
+          render(browser, phHtml, placeholderFile, w, h);
+          return { source: placeholderFile, placeholder: true };
+        };
+        const textFor = (screen) => {
+          const text = copy.screens[screen.copy_key];
+          if (!text) throw new Error(`copy/${locale.id}.json has no caption for ${screen.copy_key}`);
+          return text;
+        };
+        const badgeFor = (screen) => (screen.plan && screen.plan !== "free" ? copy.plan_badges[screen.plan] : "");
+        const shown = target.single ? [] : screensFor(screens, target, final).slice(0, target.max_count);
+        // span_with: two screens composed as one picture across two images (templates/pair.html).
+        const leadOf = Object.fromEntries(shown.filter((s) => s.span_with && shown.some((o) => o.id === s.span_with)).flatMap((s) => [[s.id, s], [s.span_with, s]]));
+
         const jobs = target.single
           ? [{ id: "feature-graphic", html: fill(featureTemplate, { ...common, ...copy.feature_graphic }), source: null }]
-          : screensFor(screens, target, final).slice(0, target.max_count).map((screen) => {
-            const text = copy.screens[screen.copy_key];
-            if (!text) throw new Error(`copy/${locale.id}.json has no caption for ${screen.copy_key}`);
-            let source = rawPathFor(target, locale.id, screen.id, args.rawDir);
-            let placeholder = false;
-            if (!fs.existsSync(source)) {
-              if (final) throw new Error(`missing capture ${source}`);
-              placeholder = true;
-              const [w, h] = PLACEHOLDER_SIZE[target.id];
-              const label = locale.id === "es" ? `Falta la captura real de "${screen.area}"` : `Missing the real capture of "${screen.area}"`;
-              const phHtml = path.join(work, `ph-${target.id}-${locale.id}-${screen.id}.html`);
-              fs.writeFileSync(phHtml, placeholderHtml(w, h, colors, label));
-              source = path.join(work, `ph-${target.id}-${locale.id}-${screen.id}.png`);
-              render(browser, phHtml, source, w, h);
-            }
+          : shown.map((screen) => {
+            const text = textFor(screen);
+            const { source, placeholder } = sourceFor(screen);
             const wide = target.width / target.height > 0.6;
             const layout = `${target.template}${wide ? " wide" : ""}`;
+            const lead = leadOf[screen.id];
+            if (lead) {
+              const partner = shown.find((s) => s.id === lead.span_with);
+              const half = screen.id === lead.id ? 0 : 1;
+              const a = sourceFor(lead), b = sourceFor(partner);
+              const html = fill(pairTemplate, {
+                ...common, layout, half,
+                title_a: textFor(lead).title, subtitle_a: textFor(lead).subtitle, badge_a: badgeFor(lead),
+                title_b: textFor(partner).title, subtitle_b: textFor(partner).subtitle, badge_b: badgeFor(partner),
+                shot_a: pathToFileURL(a.source).href, shot_b: pathToFileURL(b.source).href,
+                caption_a_id: half === 0 ? 'id="caption"' : "", caption_b_id: half === 1 ? 'id="caption"' : "",
+                shot_a_id: half === 0 ? 'id="shot"' : "", shot_b_id: half === 1 ? 'id="shot"' : "",
+              });
+              // The second image also shows part of the first screen's capture: recorded as span_capture.
+              return { id: screen.id, plan: screen.plan, html, source, placeholder, span: half === 1 ? a : null };
+            }
             const html = fill(screenTemplate, {
               ...common, layout, frame_class: target.template === "apple" ? "device" : "card",
               title: text.title, subtitle: text.subtitle,
@@ -384,6 +412,7 @@ export async function compose(argv = process.argv.slice(2)) {
             locale: storeLocale, language: locale.id, screen: job.id, plan: job.plan ?? null,
             width: info.width, height: info.height, alpha: info.alpha,
             caption_ratio: target.single ? null : measured.captionRatio,
+            span_capture: job.span ? { file: job.span.placeholder ? null : rel(job.span.source), sha256: sha256(job.span.source) } : null,
             capture: job.source ? {
               file: job.placeholder ? null : rel(job.source), sha256: sha256(job.source), placeholder: Boolean(job.placeholder),
               fixture: manifest?.fixture ?? null, fixture_date: manifest?.fixture_date ?? null,

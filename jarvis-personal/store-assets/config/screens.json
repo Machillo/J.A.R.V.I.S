@@ -48,7 +48,8 @@
           "confirmed": true,
           "how_to_reach": "Hoy/Today tab with a VIP account (command center: safe to spend, priority, roadmap)"
         }
-      }
+      },
+      "span_with": "02-overview"
     },
     {
       "id": "02-overview",
@@ -170,5 +171,6 @@
       "merge_commit": "5c139af2dcdf49a05c257e7fa4950dce5769e941",
       "reason": "Before #294 the iOS app was a prototype (Free overview for every plan, no budget, strategy or Email Monitor)."
     }
-  }
+  },
+  "$comment_span": "span_with: this screen and the named next one are composed as one picture across two images (templates/pair.html); each image keeps its own capture as its provenance, and the first screen's capture, which crosses into the second image, is recorded there as span_capture."
 }
