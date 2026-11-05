@@ -115,6 +115,17 @@ def weekly_committed(blocks: list[dict[str, Any]], today: date) -> float:
     return round(sum(block["weekly_amount"] for block in active(blocks, today)), 2)
 
 
+def wealth_rows() -> list[dict[str, Any]]:
+    """What each open block holds today, as Patrimonio's rows. Their ids are negative: no real account."""
+    today = costa_rica_today()
+    rows = []
+    for index, block in enumerate(open_blocks(stored_blocks()), start=1):
+        saved = with_progress(block, today)["saved_so_far"]
+        rows.append({"id": -index, "name": tx(f"Ahorro para {block.get('debt_name') or 'tu deuda'}", f"Saving for {block.get('debt_name') or 'your debt'}"),
+                     "account_type": "locked_saving", "currency": "CRC", "original_amount": saved, "amount": saved})
+    return rows
+
+
 def create_block(payload: dict[str, Any]) -> dict[str, Any]:
     """The Owner created a block at the bank: record it (one block per debt at a time)."""
     today = costa_rica_today()

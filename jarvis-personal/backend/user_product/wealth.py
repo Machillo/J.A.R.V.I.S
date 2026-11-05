@@ -7,6 +7,8 @@
 - Salvavidas: the emergency fund as its screen counts it (``get_salvavidas_state``: declared plus
   automatic contributions). Its linked account (``account_type='emergency_fund'``) is not counted
   again as an account. An unknown Salvavidas stays unknown, not ₡0.
+- locked savings (the Owner only): what his savings for debts hold today, one row each, listed with
+  the accounts. Their money is at the bank until it is paid into the debt.
 - investments: the latest live IBKR snapshot marked for net worth, else the recorded investments.
 - debts: what is left of every active debt.
 
@@ -18,9 +20,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.auth.current_user import get_current_workspace_id
+from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance import balance_movements
+from backend.finance.category_catalog import owner_account_context
 from backend.finance.emergency_fund import get_salvavidas_state
 
 
@@ -36,6 +39,7 @@ def get_wealth() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         accounts = _accounts(conn, workspace_id) if _exists(conn, "account_balances") else []
+        owner = owner_account_context(conn, get_current_account_id(), workspace_id)
         investments = _investments(conn, workspace_id)
         debts = [dict(row) for row in conn.execute(
             """SELECT id, name, remaining_amount FROM debts
@@ -50,6 +54,10 @@ def get_wealth() -> dict[str, Any]:
     salvavidas_amount = salvavidas_state.get("current_amount") if salvavidas_state else None
     salvavidas = {"name": "Salvavidas", "amount": _money(salvavidas_amount)}
 
+    if owner:
+        from backend.ai.owner_debt_block_store import wealth_rows
+
+        accounts = accounts + wealth_rows()
     owned = [row for row in accounts if row["amount"] is None or row["amount"] >= 0]
     overdrawn = [{**row, "amount": round(-row["amount"], 2)} for row in accounts if row["amount"] is not None and row["amount"] < 0]
     debt_rows = [{"id": row["id"], "name": row["name"], "amount": _money(row["remaining_amount"])} for row in debts]
