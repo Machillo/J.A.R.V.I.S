@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// "Pagado con" for manual expenses, with the backend's rules (`expense_account`): only the user's
@@ -26,3 +27,4 @@ extension FixtureBackend {
         return .set(id)
     }
 }
+#endif

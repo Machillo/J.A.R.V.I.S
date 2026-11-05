@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture's Salvavidas automatic contributions (Debug demos and tests only), mirroring
@@ -126,3 +127,4 @@ extension FixtureBackend {
         }
     }
 }
+#endif

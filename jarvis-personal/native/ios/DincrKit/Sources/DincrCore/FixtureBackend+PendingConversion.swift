@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// Expenses waiting for the close, with the backend's rules (`pending_conversion`): an expense typed in
@@ -139,3 +140,4 @@ extension FixtureBackend {
         return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
     }
 }
+#endif

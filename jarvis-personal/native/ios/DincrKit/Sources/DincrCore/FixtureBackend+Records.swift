@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // The fixture backend's JARVIS → Registros routes (Debug demos and tests only). Same shapes and
@@ -59,3 +60,4 @@ extension FixtureBackend {
                 "note": "DINCR solo detecta y propone revisión. Ningún movimiento se borra, duplica o corrige automáticamente."]
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// An in-memory DINCR backend behind the HTTP transport, for Debug demos, previews and tests only
@@ -1236,3 +1237,4 @@ public struct FixtureTokens: AccessTokenProvider {
     public init() {}
     public func accessToken(forceRefresh: Bool) async throws -> String { "fixture-session" }
 }
+#endif
