@@ -163,7 +163,9 @@ val checkDincrReleaseConfig = tasks.register("checkDincrReleaseConfig") {
         if (missing.isNotEmpty()) throw GradleException("DINCR release build is missing: ${missing.joinToString()}")
     }
 }
-tasks.configureEach { if (name == "preDincrReleaseBuild") dependsOn(checkDincrReleaseConfig) }
+// Only the store bundle: CI compiles assembleRelease without secrets on purpose.
+tasks.configureEach { if (name == "bundleDincrRelease") dependsOn(checkDincrReleaseConfig) }
+tasks.configureEach { if (name == "preDincrReleaseBuild") mustRunAfter(checkDincrReleaseConfig) }
 
 // Sample data never ships. The shrinker drops the code; this drops the JSON, and the check below
 // fails the store build if either one is ever back.
