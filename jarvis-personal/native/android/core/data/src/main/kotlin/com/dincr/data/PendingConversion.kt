@@ -23,6 +23,13 @@ data class PendingConversion(
     /** Every waiting expense, whatever its month (Hoy's card). */
     val estimateOfAll: PendingEstimate get() = estimate("", "")
 
+    /** The waiting dollars of a card statement, [start] to [end] inclusive (`yyyy-MM-dd`). */
+    fun estimateBetween(start: String, end: String): PendingEstimate {
+        val shown = items.filter { it.entryDate >= start && it.entryDate.take(10) <= end }
+        val known = shown.mapNotNull { it.estimatedAmount }
+        return PendingEstimate(if (known.isEmpty()) null else known.fold(java.math.BigDecimal.ZERO, java.math.BigDecimal::add), shown.size - known.size)
+    }
+
     /** What the waiting dollars on screen add to the expenses: with a search every month, without one only [month]. */
     fun estimate(month: String, query: String): PendingEstimate {
         val shown = items.filter { (query.isNotBlank() || it.entryDate.startsWith(month)) && SearchText.matches(query, listOf(it.description, it.category)) }

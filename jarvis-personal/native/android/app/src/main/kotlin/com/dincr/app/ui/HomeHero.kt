@@ -90,6 +90,17 @@ private fun Figure(status: HomeStatus, cycle: String?, dollars: BigDecimal?) {
             HeroFact(if (status.cycle == null) tx("Resultado del mes", "Month result") else tx("Resultado del corte", "Statement result"), status.result?.let { it - (dollars ?: BigDecimal.ZERO) }, MoneyFormat.Sign.NONE, "—")
         }
     }
+    // Result = income − expenses − what else this line names, so the figures on screen add up.
+    if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) {
+        val parts = listOfNotNull(
+            status.debtPaid?.let { val paid = Dincr.money.format(it); tx("$paid pagados a deudas", "$paid paid to debts") },
+            status.automaticSaved?.let { val saved = Dincr.money.format(it); tx("$saved de ahorro automático", "$saved of automatic savings") },
+        )
+        if (parts.isNotEmpty()) {
+            Text(tx("El resultado también resta ", "The result also subtracts ") + parts.joinToString(tx(" y ", " and ")) + ".",
+                Modifier.testTag("home.status.resultNote"), style = MaterialTheme.typography.bodySmall, color = OnHero2)
+        }
+    }
     dollars?.let {
         val amount = Dincr.money.format(it)
         Text(tx("Gastos incluye ≈ $amount estimado en dólares.", "Expenses include ≈ $amount estimated in dollars."),

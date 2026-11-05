@@ -109,6 +109,18 @@ def _owner_report_months(conn, workspace_id: str, months: list[dict]) -> list[di
     return report
 
 
+def _owner_cycle_savings(cycle: dict, today: date) -> dict:
+    """The Owner only: takes the statement's automatic savings out of its result."""
+    from backend.ai.owner_commitments import cycle_automatic_savings
+    from backend.ai.owner_debt_block_store import stored_blocks
+    from backend.ai.preferences import get_preference
+
+    savings = cycle_automatic_savings(get_preference("salvavidas") or {}, stored_blocks(), date.fromisoformat(cycle["period_start"]),
+                                      date.fromisoformat(cycle["period_end"]), today)
+    cycle.update(automatic_saved=savings["saved"], balance=round(cycle["balance"] - savings["saved"], 2))
+    return savings
+
+
 def get_vip_command_center() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     today = costa_rica_today()
@@ -144,6 +156,7 @@ def get_vip_command_center() -> dict:
         owner = owner_account_context(conn, account_id, workspace_id)
         report_months = _owner_report_months(conn, workspace_id, months) if owner else months
         owner_cycle = owner_ledger.owner_cycle_totals(conn, workspace_id, today) if owner else None
+        owner_savings = _owner_cycle_savings(owner_cycle, today) if owner else None
         imported_income = imported_income_by_month(conn, workspace_id, _shift_month(current, -11))
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
@@ -205,7 +218,8 @@ def get_vip_command_center() -> dict:
         # arrives, and what he spends is on the statement, not in a declared estimate.
         monthly_income = owner_cycle["income"]
         known_commitments = owner_cycle["expenses"] + owner_ledger.payments_outside_the_card(debts)
-    margin = round(monthly_income - known_commitments, 2)
+    # The Owner's automatic savings leave every Thursday: that money is not free to spend.
+    margin = round(monthly_income - known_commitments - (owner_savings["total"] if owner else 0), 2)
     emergency_gap = max(emergency_target - savings, 0)
     all_assets = round(sum(_money(row["current_balance"]) for row in accounts if row.get("include_in_net_worth") and row.get("currency") == "CRC"), 2)
     # Only balances the user entered or confirmed replace the declared liquid savings.
