@@ -24,6 +24,7 @@ from fastapi.responses import RedirectResponse
 from backend.core.database import get_connection
 from backend.email_monitor.gmail_content import plain_text_from_html
 from backend.finance.category_catalog import owner_account_context
+from backend.user_product import mail_authenticity
 from backend.user_product import mail_oauth, owner_mail_automation
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
@@ -412,8 +413,13 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
         # A fetch failure raises and keeps the scan cursor so the message is retried;
         # an ingestion failure never raises (it is recorded as 'failed').
         full = _graph_get(access_token, f"/me/messages/{quote(message_id, safe='')}", {
-            "$select": "id,subject,from,receivedDateTime,body,hasAttachments",
+            "$select": "id,subject,from,receivedDateTime,body,hasAttachments,internetMessageHeaders",
         })
+        verdicts = [item.get("value", "") for item in full.get("internetMessageHeaders") or []
+                    if str(item.get("name", "")).lower() == "authentication-results"]
+        if mail_authenticity.forged(verdicts):
+            # Recorded as ignored: its content and PDFs are not used.
+            sender, full = mail_authenticity.UNVERIFIED_SENDER, {**full, "body": {}, "hasAttachments": False}
         attachment_text, names = _attachments(access_token, message_id) if full.get("hasAttachments") else ("", [])
         results.append(_ingest_message(
             connection, message_id, subject=full.get("subject") or "", sender=sender,
