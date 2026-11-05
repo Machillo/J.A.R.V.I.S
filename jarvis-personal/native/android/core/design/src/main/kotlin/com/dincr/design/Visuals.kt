@@ -93,9 +93,9 @@ fun CompositionDonut(
     val format = Dincr.money
     val parts = composition.spokenParts(format)
     val barColors = if (Dincr.colors.bg.luminance() < 0.5f) BAR_COLORS_DARK else BAR_COLORS_LIGHT
+    // One color per part, in the ring too: shades of one hue could not be told apart.
     fun shade(index: Int, id: String): Color =
-        if (asBar) barColors[index % barColors.size].let { if (selectedId == null || id == selectedId) it else it.copy(alpha = 0.3f) }
-        else if (selectedId != null) color.copy(alpha = if (id == selectedId) 1f else 0.4f) else color.copy(alpha = visualShade(index))
+        barColors[index % barColors.size].let { if (selectedId == null || id == selectedId) it else it.copy(alpha = 0.3f) }
 
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
         if (composition.isDrawable && asBar) {
@@ -230,6 +230,8 @@ fun TrendLineChart(title: String, series: TrendSeries, color: Color = Dincr.colo
     val c = Dincr.colors
     var selectedPeriod by remember(series) { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+        // TalkBack hears the title from the chart, with its points.
+        Text(title, style = MaterialTheme.typography.titleSmall, color = c.text, modifier = Modifier.clearAndSetSemantics { })
         if (!series.hasTrend) {
             VisualNotice(AppLanguage.current().pick("Todavía no hay suficientes datos para ver una tendencia.", "Not enough data yet to show a trend."), title)
             series.knownPoints.firstOrNull()?.let { only ->

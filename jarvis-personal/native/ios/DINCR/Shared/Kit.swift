@@ -261,6 +261,23 @@ enum Day {
 }
 
 /// A money text field in the user's separators. Returns the parsed value through `AmountInput`.
+/// A text field whose name stays visible once it is filled, like `MoneyField`.
+struct LabeledTextField: View {
+    let label: String
+    @Binding var text: String
+    var axis: Axis = .horizontal
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s1) {
+            Text(label).font(DincrFont.label).foregroundStyle(.dincrText2)
+            TextField(label, text: $text, axis: axis)
+                .font(DincrFont.body)
+                .padding(DincrSpacing.s2)
+                .background(RoundedRectangle(cornerRadius: 10).stroke(DincrColor.lineStrong))
+        }
+    }
+}
+
 struct MoneyField: View {
     let label: String
     @Binding var text: String
@@ -273,7 +290,7 @@ struct MoneyField: View {
             Text(label).font(DincrFont.label).foregroundStyle(.dincrText2)
             HStack(spacing: DincrSpacing.s2) {
                 Text(format.symbol).foregroundStyle(.dincrTextMuted).accessibilityHidden(true)
-                TextField(label, text: $text, prompt: Text(format.inputText(18_450)))
+                TextField(label, text: $text, prompt: Text("0"))
                     .keyboardType(.decimalPad)
                     .font(DincrFont.body.monospacedDigit())
                     .accessibilityIdentifier(identifier ?? "")

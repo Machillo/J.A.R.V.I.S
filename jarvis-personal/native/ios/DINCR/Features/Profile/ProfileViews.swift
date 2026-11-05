@@ -424,14 +424,14 @@ struct SupportView: View {
         ScreenScroll(title: tx("Soporte", "Support")) {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
                 Picker(tx("Tipo", "Type"), selection: $category) {
-                    Text(tx("Un problema", "A problem")).tag("error")
+                    Text(tx("Problema", "Problem")).tag("error")
                     Text(tx("Una idea", "An idea")).tag("improvement")
                     Text(tx("Pagos", "Payments")).tag("payment")
                     Text(tx("Mi cuenta", "My account")).tag("account")
                 }
                 .pickerStyle(.segmented)
-                TextField(tx("Asunto", "Subject"), text: $subject).textFieldStyle(.roundedBorder)
-                TextField(tx("Detalle", "Details"), text: $message, axis: .vertical).lineLimit(4...8).textFieldStyle(.roundedBorder)
+                LabeledTextField(label: tx("Asunto", "Subject"), text: $subject)
+                LabeledTextField(label: tx("Detalle", "Details"), text: $message, axis: .vertical).lineLimit(4...8)
                 Text(tx("No incluyas contraseñas, códigos ni números completos de tarjeta.", "Don’t include passwords, codes or full card numbers."))
                     .font(DincrFont.caption).foregroundStyle(.dincrTextMuted)
                 if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }

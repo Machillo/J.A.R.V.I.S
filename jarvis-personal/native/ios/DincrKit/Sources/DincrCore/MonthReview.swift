@@ -52,6 +52,10 @@ public enum MonthReview {
 
     /// One thing to do, from the month's own figures (a rule, not advice).
     static func action(_ summary: MonthlySummary, left: Decimal?, format: MoneyFormat, language: AppLanguage) -> String {
+        // Unknown is not "all good": without the month's figures there is nothing to keep doing.
+        guard left != nil else {
+            return language.pick("Registrá tus ingresos y gastos para saber cómo va tu mes.", "Record your income and expenses to see how your month is going.")
+        }
         if let left, left < 0 {
             if let top = summary.topCategory, let name = top.category, let amount = top.amount {
                 return language.pick("Tu gasto más grande fue \(name) (\(format.string(amount))). Bajarlo un poco es lo que más ayuda.",
