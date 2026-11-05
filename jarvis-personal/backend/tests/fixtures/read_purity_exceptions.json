@@ -16,20 +16,6 @@
    "risk": "LOW / derived net-worth snapshot written on read (D12 temporary compatibility)"
   },
   {
-   "path": "/transactions/currency/alerts",
-   "writes": [
-    [
-     "UPDATE",
-     "transactions"
-    ]
-   ],
-   "category": "C",
-   "scope": "owner-only",
-   "reason": "legacy currency-rate persistence during GET (_reuse_saved_rates: UPDATE transactions SET amount, exchange_rate)",
-   "risk": "HIGH / financial ledger mutation",
-   "removed_by": "P0.2b"
-  },
-  {
    "path": "/finance/dashboard",
    "writes": [
     [

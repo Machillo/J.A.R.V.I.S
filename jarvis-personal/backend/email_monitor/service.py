@@ -584,26 +584,10 @@ def get_email_monitor_status() -> dict[str, Any]:
         workspace_id = _workspace_id_for_user(conn, user_id)
 
     with get_connection() as conn:
-        _seed_default_card_aliases(conn, user_id, workspace_id)
+        # Read only (CLAUDE.md 4.C): a workspace without settings shows the defaults.
         settings = conn.execute(
-            """
-            INSERT INTO email_monitor_settings (user_id, workspace_id, gmail_query)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (workspace_id)
-            DO UPDATE SET
-                gmail_query = CASE
-                    WHEN email_monitor_settings.gmail_query IS NULL
-                      OR email_monitor_settings.gmail_query = ''
-                      OR email_monitor_settings.gmail_query LIKE '%%Notificación de transacción%%'
-                    THEN EXCLUDED.gmail_query
-                    ELSE email_monitor_settings.gmail_query
-                END,
-                auto_commit_confidence = 999,
-                updated_at = NOW()
-            RETURNING *
-            """,
-            (user_id, workspace_id, DEFAULT_QUERY),
-        ).fetchone()
+            "SELECT * FROM email_monitor_settings WHERE workspace_id = %s", (workspace_id,)
+        ).fetchone() or {"workspace_id": workspace_id, "gmail_query": DEFAULT_QUERY}
 
         totals = conn.execute(
             """
@@ -629,7 +613,6 @@ def get_email_monitor_status() -> dict[str, Any]:
         ).fetchone()
         totals = dict(totals)
         totals["ignored"] = int((ignored or {}).get("ignored") or 0)
-        conn.commit()
 
     return {
         "status": "OK",
@@ -1678,7 +1661,6 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
     params.append(safe_limit)
 
     with get_connection() as conn:
-        _seed_default_card_aliases(conn, user_id, workspace_id)
         rows = conn.execute(
             f"""
             SELECT
@@ -1709,7 +1691,6 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
             """,
             (workspace_id,),
         ).fetchone()
-        conn.commit()
 
     return {
         "status": "OK",
