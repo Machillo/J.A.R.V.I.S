@@ -20,7 +20,7 @@ const ROLE_LABELS = { owner: ["Propietario", "Owner"], user: ["Usuario", "User"]
 const roleLabel = (role) => ROLE_LABELS[role] ? tx(...ROLE_LABELS[role]) : role;
 const PLAN_RANK = { free: 1, basic: 2, vip: 3 };
 // Access ends at a stored instant; show the last day it still includes, in Costa Rica time
-// (the launch promotion ends 2027-01-01 06:00 UTC, which is "until December 31, 2026").
+// (the launch promotion ends 2027-04-01 06:00 UTC, which is "until March 31, 2027").
 const formatDay = (ms) => new Date(ms).toLocaleDateString(language === "es" ? "es-CR" : "en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" });
 const planDate = (value) => value ? formatDay(Date.parse(value) - 1) : "";
 // The first day of the new plan (the instant itself, not the last day of the current one).
@@ -194,7 +194,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
         <div>
           <p className="eyebrow">{tx("Planes", "Plans")}</p>
           <h2>{tx("Cambiar de plan","Change plan")}</h2>
-          <span>{!billing ? tx("Estamos confirmando los precios de Basic y VIP.", "We’re confirming Basic and VIP prices.") : promotionActive ? tx("Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático.", "Basic and VIP are free until December 31, 2026. There will be no automatic charge.") : tx("Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante.", "Basic and VIP purchases through Google Play and the App Store will be available later.")}</span>
+          <span>{!billing ? tx("Estamos confirmando los precios de Basic y VIP.", "We’re confirming Basic and VIP prices.") : promotionActive ? tx("Basic y VIP están gratis hasta el 31 de marzo de 2027. No habrá cobro automático.", "Basic and VIP are free until March 31, 2027. There will be no automatic charge.") : tx("Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante.", "Basic and VIP purchases through Google Play and the App Store will be available later.")}</span>
         </div>
       </div>
 
@@ -261,7 +261,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
               planName={planName}
               isDowngrade={isDowngrade}
             />
-            {confirming !== "free" && confirming !== currentPlan && !isDowngrade(confirming) && <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio previsto será ${confirming === "basic" ? "₡2.990" : "₡4.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. From January its planned price will be ${confirming === "basic" ? "₡2,990" : "₡4,990"}/month, with no automatic charge.`)}</span></div>}
+            {confirming !== "free" && confirming !== currentPlan && !isDowngrade(confirming) && <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de marzo de 2027. Desde abril su precio previsto será ${confirming === "basic" ? "₡2.990" : "₡4.990"}/mes, sin cobro automático.`, `This plan will be free until March 31, 2027. From April its planned price will be ${confirming === "basic" ? "₡2,990" : "₡4,990"}/month, with no automatic charge.`)}</span></div>}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
             <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>{tx("Cancelar","Cancel")}</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? tx("Procesando...","Processing...") : `${tx("Confirmar","Confirm")} ${selected?.name || confirming.toUpperCase()}`}</button></div>
           </section>

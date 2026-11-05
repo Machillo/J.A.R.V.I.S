@@ -2,7 +2,7 @@
 
 Borrador para que lo revise el responsable antes de pegarlo en cada consola. Describe lo que cada plan alcanza según `native/feature-reachability.json`. Nada de esto se publica solo.
 
-**Fecha con vencimiento:** la promoción termina el 31 de diciembre de 2026. Ese párrafo hay que quitarlo o cambiarlo ese día, y agregar los precios a la ficha cuando existan las compras.
+**Fecha con vencimiento:** la promoción termina el 31 de marzo de 2027. Ese párrafo hay que quitarlo o cambiarlo ese día, y agregar los precios a la ficha cuando existan las compras.
 
 **Datos de la ficha (iguales en las dos tiendas):**
 
@@ -58,7 +58,7 @@ Todo lo anterior, y además:
 • Análisis financiero completo
 
 PROMOCIÓN
-Basic y VIP son gratis hasta el 31 de diciembre de 2026, sin cobro automático.
+Basic y VIP son gratis hasta el 31 de marzo de 2027, sin cobro automático.
 
 TUS DATOS
 • DINCR no se conecta a tu banco ni mueve tu dinero. Vos anotás los datos.
@@ -111,7 +111,7 @@ Everything above, plus:
 • Full financial analysis
 
 PROMOTION
-Basic and VIP are free until December 31, 2026, with no automatic charge.
+Basic and VIP are free until March 31, 2027, with no automatic charge.
 
 YOUR DATA
 • DINCR does not connect to your bank or move your money. You enter the data.
@@ -139,7 +139,7 @@ Tu dinero, con propósito
 **Texto promocional (máximo 170):**
 
 ```text
-Basic y VIP son gratis hasta el 31 de diciembre de 2026, sin cobro automático.
+Basic y VIP son gratis hasta el 31 de marzo de 2027, sin cobro automático.
 ```
 
 **Palabras clave (máximo 100):**
@@ -167,7 +167,7 @@ Your money, with purpose
 **Promotional text:**
 
 ```text
-Basic and VIP are free until December 31, 2026, with no automatic charge.
+Basic and VIP are free until March 31, 2027, with no automatic charge.
 ```
 
 **Keywords:**

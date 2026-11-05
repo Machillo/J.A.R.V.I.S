@@ -451,7 +451,7 @@ class FakeBackend(
             path == "/auth/legal/accept" -> {
                 profile = profile.copy(legal = profile.legal?.copy(required = false))
                 legalGateClosed = false
-                ok("""{"status":"accepted","required":false,"terms_version":"2026-11-05-v4","privacy_version":"2026-11-05-v5"}""")
+                ok("""{"status":"accepted","required":false,"terms_version":"2026-11-05-v5","privacy_version":"2026-11-05-v5"}""")
             }
             path == "/auth/plans" -> ok(PLANS)
             path == "/auth/plan" -> {
@@ -462,7 +462,7 @@ class FakeBackend(
                     put("profile", json.encodeToJsonElement(Profile.serializer(), profile))
                 }.toString())
             }
-            path == "/product-ops/billing/catalog" -> ok("""{"plans":[{"code":"basic","regular_price_crc":2990},{"code":"vip","regular_price_crc":4990}],"promotion":$PROMOTION,"notice":"Basic y VIP gratis hasta el 31 de diciembre de 2026."}""")
+            path == "/product-ops/billing/catalog" -> ok("""{"plans":[{"code":"basic","regular_price_crc":2990},{"code":"vip","regular_price_crc":4990}],"promotion":$PROMOTION,"notice":"Basic y VIP gratis hasta el 31 de marzo de 2027."}""")
             path == "/product-ops/feature-flags" -> ok(FLAGS)
             path == "/product-ops/health" -> ok("""{"status":"operational","active_incidents":0}""")
             path == "/product-ops/release-policy" -> ok("""{"platform":"android","current_version":"${query["version"]}","status":"current","required":false,"active":false}""")
@@ -1146,7 +1146,7 @@ class FakeBackend(
         subscription = if (role == Role.OWNER) Profile.Subscription("vip", "VIP", "active", "owner")
         else Profile.Subscription(plan.wire, plan.name.lowercase().replaceFirstChar { it.uppercase() }, "active",
             if (plan == PlanTier.FREE || scenario == Scenario.STORE) "self_service" else "courtesy"),
-        legal = Profile.Legal(required = scenario == Scenario.LEGAL_REQUIRED, termsVersion = "2026-11-05-v4", privacyVersion = "2026-11-05-v5"),
+        legal = Profile.Legal(required = scenario == Scenario.LEGAL_REQUIRED, termsVersion = "2026-11-05-v5", privacyVersion = "2026-11-05-v5"),
     )
 
     private companion object {
@@ -1166,7 +1166,7 @@ class FakeBackend(
         /** The writes the server's legal gate lets through before acceptance (`auth/legal.py`). */
         val OPEN_BEFORE_ACCEPTANCE = setOf("DELETE /auth/me", "POST /auth/legal/accept", "POST /product-ops/feedback")
         const val LEGAL_REQUIRED = """{"detail":{"code":"legal_acceptance_required","message":"Antes de continuar, aceptá los Términos y la Política de Privacidad vigentes."}}"""
-        const val PROMOTION = """{"code":"launch-free-2026","active":true,"ends_at":"2027-01-01T06:00:00Z","message":"Basic y VIP gratis hasta el 31 de diciembre de 2026."}"""
+        const val PROMOTION = """{"code":"launch-free-2026","active":true,"ends_at":"2027-04-01T06:00:00Z","message":"Basic y VIP gratis hasta el 31 de marzo de 2027."}"""
         val PLANS = """[{"code":"free","name":"Free","tagline":"Ordená lo esencial","features":["Ingresos y gastos","Deudas","Metas"],"regular_price_crc":0,"promotion":null},""" +
             """{"code":"basic","name":"Basic","tagline":"Planificá tu mes","features":["Presupuesto guiado","Calendario financiero","Pagos recurrentes","Estrategia básica"],"regular_price_crc":2990,"promotion":$PROMOTION},""" +
             """{"code":"vip","name":"VIP","tagline":"Tu director financiero","features":["Avisos bancarios del correo","Estrategia y proyecciones","Escenarios","Aguinaldo"],"regular_price_crc":4990,"promotion":$PROMOTION}]"""

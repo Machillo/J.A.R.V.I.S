@@ -6,7 +6,7 @@ Son borradores para que los revise el responsable antes de enviarlos. Describen 
 
 - Publica una persona, no una empresa.
 - Solo iPhone y Android. Sin iPad, tabletas ni Mac.
-- Gratis hasta el 31 de diciembre de 2026, sin compras dentro de la app durante esa promoción.
+- Gratis hasta el 31 de marzo de 2027, sin compras dentro de la app durante esa promoción.
 - La lectura de correo es solo del rol interno al lanzar: no se anuncia.
 
 ## Notas para quien revisa (App Store y Google Play)
@@ -18,7 +18,7 @@ hold funds, offer loans, or execute investments, and it is not a bank or a finan
 
 Sign in: use the test account provided in the access section.
 
-Plans: Basic and VIP are free until December 31, 2026. There are no purchases in this
+Plans: Basic and VIP are free until March 31, 2027. There are no purchases in this
 version. After that date, purchases will use the App Store or Google Play.
 
 Internal role: the app contains an internal role available only to the developer's own
@@ -38,7 +38,7 @@ La cuenta de prueba la crea el responsable, con datos inventados. Nunca debe ser
 |---|---|---|---|
 | Nombre y correo | Sí | Cuenta | Vienen de Google o Apple al iniciar sesión |
 | Información financiera del usuario | Sí | Funciones de la app | Ingresos, gastos, deudas, metas y saldos que el usuario ingresa |
-| Eventos de uso | No desde la app | No aplica | Las apps nativas no incluyen PostHog. El servidor envía contadores anónimos, sin identificar a la persona |
+| Actividad en la app (interacciones) | Sí | Analítica | La app le avisa a nuestro servidor de eventos de uso, como abrir una función, sin montos ni descripciones. Quedan ligados a la cuenta y se borran con ella. El servidor además envía a PostHog contadores anónimos, que no identifican a la persona |
 
 - Datos cifrados en tránsito: sí (HTTPS).
 - El usuario puede pedir que se borren: sí, desde la app y en `dincr.com/eliminar-cuenta/`.
@@ -47,7 +47,7 @@ La cuenta de prueba la crea el responsable, con datos inventados. Nunca debe ser
 
 Datos que **no** se recogen en una cuenta normal: ubicación, contactos, fotos, SMS como permiso del sistema (lo que el usuario comparte es texto que él elige enviar), correo electrónico del buzón.
 
-Permisos de Android: internet, biometría, notificaciones, y arrancar con el teléfono (para volver a poner recordatorios).
+Permisos de Android: internet, estado de la red, biometría (también aparece el permiso antiguo de huella), notificaciones, arrancar con el teléfono (para volver a poner recordatorios) y compras de Google Play (`BILLING`, viene con la librería de compras; no se cobra nada mientras no haya productos creados).
 
 ## Google Play: Funciones financieras
 
@@ -57,6 +57,7 @@ Elegir finanzas personales: gestión de presupuesto y seguimiento de gastos. No 
 
 - Información de contacto: nombre y correo, vinculados a la persona, para funcionalidad de la app.
 - Información financiera: "otra información financiera", vinculada a la persona, para funcionalidad de la app.
+- Uso: "interacción con el producto", vinculada a la persona, para analítica.
 - Seguimiento entre apps: no.
 
 Tiene que coincidir con `native/ios/DINCR/Resources/PrivacyInfo.xcprivacy`.
@@ -68,6 +69,5 @@ Tiene que coincidir con `native/ios/DINCR/Resources/PrivacyInfo.xcprivacy`.
 
 ## Pendiente de confirmar antes de enviar
 
-- Confirmar con el formulario de Google si los contadores anónimos del servidor deben declararse.
-- Plazo real de las copias de respaldo de Supabase, que la política fija en máximo 30 días.
+- Copias de respaldo: el plan gratis de Supabase no incluye copias automáticas. Antes de enviar, decidir si se sube de plan (el plan Pro guarda 7 días) y mantener las copias manuales dentro de los 30 días que promete la política.
 - Texto de la ficha de cada tienda: borrador en `listing.md`.

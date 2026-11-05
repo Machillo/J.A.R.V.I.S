@@ -158,7 +158,7 @@ struct PlanCardView: View {
             } else if canChoose, catalog?.promotion?.active == true, let price {
                 // Free until the promotion ends: the price of later never reads like today's charge.
                 let later = MoneyFormat(currency: "CRC").string(Decimal(price))
-                Text(tx("Gratis hasta el 31 de diciembre", "Free until December 31")).font(DincrFont.title2)
+                Text(tx("Gratis hasta el 31 de marzo", "Free until March 31")).font(DincrFont.title2)
                 Text(tx("Después, \(later) al mes. Sin cobro automático.", "Then \(later) per month. No automatic charge."))
                     .font(DincrFont.bodySmall).foregroundStyle(.dincrText2)
             } else if let price {
