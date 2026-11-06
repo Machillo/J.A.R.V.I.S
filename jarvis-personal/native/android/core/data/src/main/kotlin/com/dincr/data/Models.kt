@@ -139,6 +139,8 @@ data class MonthTotals(
     @SerialName("payment_date") val paymentDate: String? = null,
     /** The Owner only: the automatic savings already taken in this statement (part of the balance). */
     @SerialName("automatic_saved") val automaticSaved: Money? = null,
+    /** The Owner only: whole OT hours that bring a negative statement back to zero (null: not negative or unknown). */
+    @SerialName("ot_hours_to_cover") val otHoursToCover: Int? = null,
 )
 
 @Serializable

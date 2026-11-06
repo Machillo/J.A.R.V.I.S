@@ -137,6 +137,8 @@ public struct MonthTotals: Decodable, Sendable, Equatable, Identifiable {
     public var paymentDate: String? = nil
     /// The Owner only: the automatic savings already taken in this statement (part of `balance`).
     public var automaticSaved: Decimal? = nil
+    /// The Owner only: whole OT hours that bring a negative statement back to zero (nil: not negative or unknown).
+    public var otHoursToCover: Int? = nil
     public var id: String { month }
 
     public init(month: String, income: Decimal, expenses: Decimal, debtPaid: Decimal? = nil, balance: Decimal? = nil) {

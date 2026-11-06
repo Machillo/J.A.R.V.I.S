@@ -377,7 +377,8 @@ def get_vip_command_center() -> dict:
         # The Owner: Hoy's statement counted whole from its first day, and "Podés gastar" is what his
         # strategy leaves for him when it splits that statement's result (owner_hoy_projection).
         owner_cycle.update(income=owner_statement["income"], expenses=owner_statement["expenses"], debt_paid=0.0,
-                           automatic_saved=0.0, balance=owner_statement["result"], projection=owner_statement)
+                           automatic_saved=0.0, balance=owner_statement["result"], projection=owner_statement,
+                           ot_hours_to_cover=owner_statement.get("ot_hours_to_cover"))
         free = owner_statement["free_share"]
         if free is not None:
             safe_to_spend, safe_missing = free, []
