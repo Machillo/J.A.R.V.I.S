@@ -127,7 +127,8 @@ struct MovementsView: View {
         .sheet(item: $editor) { mode in
             MovementEditor(mode: mode, latestRate: latestRate) { message in
                 announce(message)
-                Task { await load() }
+                // This list reads again on the change (onChange below), and Hoy too.
+                model.noteDataChanged()
             }
         }
         .sheet(item: $closing) { period in

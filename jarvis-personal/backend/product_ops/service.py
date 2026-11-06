@@ -18,6 +18,7 @@ from backend.core import observability
 from backend.core.database import connection_pool_stats, get_connection
 from backend.core.schema_state import tables_exist
 from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
+from backend.core.i18n import tx
 from backend.product_ops.email_monitor_dashboard import build_email_monitor_dashboard
 
 LAUNCH_PROMOTION_CODE = "launch-free-2026"
@@ -456,7 +457,8 @@ def activate_launch_promotion(plan_code: str):
     return {
         "status": "promotion_active",
         "promotion": launch_promotion_status(),
-        "message": f"{plan_code.upper()} quedó activo gratis hasta el 31 de marzo de 2027.",
+        "message": tx(f"{plan_code.upper()} quedó activo gratis hasta el 31 de marzo de 2027.",
+                      f"{plan_code.upper()} is now active for free until March 31, 2027."),
     }
 
 

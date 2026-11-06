@@ -6,6 +6,7 @@ import SwiftUI
 /// drawn from `HomeToday`. The public plans and the Owner (below its JARVIS space) share it.
 /// Unknown figures are "—" with a "?" that says what DINCR needs and opens the real flow to add it.
 struct HomeBlocks: View {
+    @Environment(AppModel.self) private var model
     let home: HomeToday
     var idPrefix = "home"
     var ownerStyle = false
@@ -30,7 +31,7 @@ struct HomeBlocks: View {
             }
         }
         .sheet(item: $editor) { request in
-            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await reload() } }
+            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await reload() }; model.noteDataChanged() }
         }
     }
 }

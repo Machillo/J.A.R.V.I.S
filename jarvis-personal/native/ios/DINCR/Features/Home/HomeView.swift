@@ -44,7 +44,7 @@ private struct PublicHomeView: View {
         }
         .navigationTitle(tx("Hoy", "Today"))
         .sheet(item: $editor) { request in
-            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await load(tier) } }
+            MovementEditor(mode: .create, initialKind: request.kind) { _ in model.noteDataChanged() }  // Hoy reads again on the change, Movimientos too
         }
         .refreshable { await load(tier) }
         .task(id: tier) { await load(tier) }

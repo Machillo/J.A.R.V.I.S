@@ -153,6 +153,39 @@ public enum CategoryStyle {
 
     public static func label(_ category: String?) -> String {
         guard let category, !category.isEmpty else { return AppLanguage.current.pick("Sin categoría", "Uncategorized") }
-        return category
+        // Categories are stored in Spanish (the backend's catalog); in English they read in English.
+        return AppLanguage.current.pick(category, english[category] ?? category)
     }
+
+    /// The app's own category names in English. Anything else (a bank's or the user's) stays as written.
+    static let english: [String: String] = [
+        "Comida": "Food",
+        "Vivienda": "Housing",
+        "Servicios": "Utilities",
+        "Internet": "Internet",
+        "Teléfono": "Phone",
+        "Transporte": "Transport",
+        "Gasolina": "Fuel",
+        "Restaurante": "Restaurants",
+        "Salud": "Health",
+        "Entretenimiento": "Entertainment",
+        "Compras": "Shopping",
+        "Seguros": "Insurance",
+        "Deporte": "Sports",
+        "Mascotas": "Pets",
+        "Otros": "Other",
+        "Salario": "Salary",
+        "Boleta de pago": "Pay stub",
+        "Bono": "Bonus",
+        "Reembolso": "Refund",
+        "Otros ingresos": "Other income",
+        "Supermercado": "Groceries",
+        "Horas extra": "Overtime",
+        "Deudas": "Debts",
+        "Ahorro": "Savings",
+        "Educación": "Education",
+        "Ropa": "Clothing",
+        "Viajes": "Travel",
+        "Suscripciones": "Subscriptions"
+    ]
 }

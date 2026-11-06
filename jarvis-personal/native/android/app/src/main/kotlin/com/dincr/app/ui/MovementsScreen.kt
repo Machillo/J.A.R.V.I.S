@@ -254,8 +254,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                     val edit = CustomAccessibilityAction(tx("Editar", "Edit")) { editing = EditorMode.Edit(movement); true }
                                     val delete = CustomAccessibilityAction(tx("Eliminar", "Delete")) { pendingDelete = movement; true }
                                     MoneyRow(
-                                        title = item.description.takeIf { it.isNotBlank() } ?: item.category ?: tx("Gasto", "Expense"),
-                                        subtitle = listOfNotNull(item.category, dayLabel(item.entryDate),
+                                        title = item.description.takeIf { it.isNotBlank() } ?: categoryLabel(item.category) ?: tx("Gasto", "Expense"),
+                                        subtitle = listOfNotNull(categoryLabel(item.category), dayLabel(item.entryDate),
                                             item.estimatedAmount?.let { "≈ ${Dincr.money.format(it)}" }).joinToString(" · "),
                                         amount = item.originalAmount, kind = MovementKind.EXPENSE, icon = iconFor(movement), readOnly = false,
                                         currency = item.originalCurrency,
@@ -276,8 +276,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                 val delete = CustomAccessibilityAction(tx("Eliminar", "Delete")) { pendingDelete = movement; true }
                                 val original = originalLabel(movement, Dincr.money)
                                 MoneyRow(
-                                    title = movement.description?.takeIf { it.isNotBlank() } ?: movement.category ?: tx("Movimiento", "Transaction"),
-                                    subtitle = listOfNotNull(movement.category, original, if (editable) null else tx("Solo lectura", "Read only")).joinToString(" · "),
+                                    title = movement.description?.takeIf { it.isNotBlank() } ?: categoryLabel(movement.category) ?: tx("Movimiento", "Transaction"),
+                                    subtitle = listOfNotNull(categoryLabel(movement.category), original, if (editable) null else tx("Solo lectura", "Read only")).joinToString(" · "),
                                     amount = movement.amount, kind = movement.kind, icon = iconFor(movement), readOnly = !editable,
                                     modifier = Modifier.widthIn(max = 600.dp)
                                         .then(if (editable) Modifier.clickable { editing = EditorMode.Edit(movement) }.semantics { customActions = listOf(edit, delete) } else Modifier),
@@ -303,6 +303,8 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     editing?.let { mode ->
         MovementEditorSheet(model, mode, latestRate = (state as? Load.Ready)?.value?.let(com.dincr.data.ConversionPreview::latestUserRate), onDismiss = { editing = null }, onSaved = { message ->
             editing = null
+            // Hoy reads again too (it shows the same month).
+            model.noteDataChanged()
             scope.launch { load(); snackbar.showSnackbar(message) }
         }, onDelete = { pendingDelete = it; editing = null })
     }
