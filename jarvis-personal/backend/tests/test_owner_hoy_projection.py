@@ -18,12 +18,13 @@ DEBTS = [
 
 def test_every_installment_of_the_statement_counts_from_its_first_day():
     pending = projection.pending_installments(DEBTS, set(), END)
-    # A and B; the card plan is on the statement, C falls after it, D's payment is unknown.
-    assert pending == {"total": Decimal("80000.0"), "unknown": 1}
+    # A, B and the card plan (the schedule posts it like any debt); C falls after it, D's payment is unknown.
+    assert pending == {"total": Decimal("89000.0"), "unknown": 1}
 
 
 def test_an_installment_already_paid_is_not_counted_again():
-    assert projection.pending_installments(DEBTS, {1}, END)["total"] == Decimal("30000.0")
+    assert projection.pending_installments(DEBTS, {1}, END)["total"] == Decimal("39000.0")
+    assert projection.pending_installments(DEBTS, {1, 3}, END)["total"] == Decimal("30000.0")
 
 
 FIXED = [

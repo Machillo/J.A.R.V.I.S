@@ -316,3 +316,27 @@ def test_card_installments_are_not_counted_on_top_of_the_statement():
     debts = [{"monthly_payment": 100, "debt_type": "loan"}, {"monthly_payment": 20, "debt_type": "tasa_cero"},
              {"monthly_payment": 5, "debt_type": "minicuotas"}, {"monthly_payment": 1, "debt_type": None}]
     assert owner_ledger.payments_outside_the_card(debts) == 101
+
+
+SCHEDULED = {"movement_id": "transaction:20", "source_id": 20, "origin": "transaction", "transaction_date": "2026-10-05",
+             "description": "Cuota Préstamo", "amount": 50.0, "transaction_type": "expense", "ledger_type": "debt_payment",
+             "category": "Préstamo", "notes": "debt_id:8;installment:3", "editable": False}
+
+
+def test_the_owner_list_leaves_out_what_the_debt_schedule_posts_by_itself(monkeypatch):
+    from backend.user_product import free_service
+    monkeypatch.setattr(free_service, "get_connection", lambda: ListConnection([*ROWS, SCHEDULED]))
+    for role, listed in (("owner", False), ("user", True)):
+        token = _as(role)
+        try:
+            ids = {row["movement_id"] for row in free_service.list_free_movements()}
+        finally:
+            reset_current_user(token)
+        assert ("transaction:20" in ids) is listed, role
+        assert {row["movement_id"] for row in ROWS} <= ids, "every recorded movement stays"
+
+
+def test_only_the_schedule_note_marks_an_automatic_installment():
+    assert owner_ledger.is_automatic_installment({"origin": "transaction", "notes": "debt_id:8;installment:3"})
+    assert not owner_ledger.is_automatic_installment({"origin": "transaction", "notes": "pago manual debt_id:8"})
+    assert not owner_ledger.is_automatic_installment({"origin": "expense", "notes": "debt_id:8;installment:3"})

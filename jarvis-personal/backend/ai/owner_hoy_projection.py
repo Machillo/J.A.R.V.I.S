@@ -24,8 +24,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# The card installment plans the statement already holds as charges (owner_ledger).
-CARD_INSTALLMENT_TYPES = {"tasa_cero", "minicuotas"}
 # Debt payments made with money counted elsewhere: a locked block's abono (its weekly savings were
 # already this or an earlier statement's automatic savings) and a confirmed distribution's abonos
 # (the leftover of the statement before). Spending them again here would count them twice.
@@ -49,12 +47,14 @@ def _day(value: Any) -> date | None:
 def pending_installments(debts: list[dict[str, Any]], paid_debt_ids: set[int], end_exclusive: date) -> dict[str, Any]:
     """Each debt's installment of the statement not paid yet: one per debt (a statement is one month).
 
-    Left out: card installment plans (already charges on the statement), debts whose installment
-    was paid in the statement (``paid_debt_ids``), debts whose next installment falls after it, and
+    Every debt counts, card installment plans (tasa cero, minicuotas) too: the daily debt schedule
+    posts their installment as a debt payment like any other, and the card statements imported so
+    far carry no installment charges. Left out: debts whose installment was paid in the statement
+    (``paid_debt_ids``, already in the ledger), debts whose next installment falls after it, and
     unknown payments (counted in ``unknown``, never as 0)."""
     total, unknown = Decimal("0"), 0
     for debt in debts:
-        if str(debt.get("debt_type") or "").lower() in CARD_INSTALLMENT_TYPES or int(debt["id"]) in paid_debt_ids:
+        if int(debt["id"]) in paid_debt_ids:
             continue
         next_due = _day(debt.get("next_payment_date"))
         if next_due is not None and next_due >= end_exclusive:

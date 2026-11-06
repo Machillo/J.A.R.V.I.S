@@ -149,10 +149,10 @@ def list_free_movements() -> list[dict]:
     # rows also say what they really are and what they count in (owner_ledger); for everyone
     # else the response is unchanged.
     if owner:
-        with get_connection() as conn:
-            estimates = owner_ledger.salary_estimate_rows(conn, workspace_id, [dict(row) for row in rows])
-        merged = sorted([*map(dict, rows), *estimates], key=lambda row: str(row.get("transaction_date") or ""), reverse=True)
-        return [{key: value for key, value in owner_ledger.classify_movement(row).items() if key != "ledger_type"} for row in merged]
+        # The Owner's Movimientos list what he records or accepts. What the app does by itself (each
+        # debt's scheduled installment and the projected salary) stays out: Hoy's statement counts it.
+        kept = [dict(row) for row in rows if not owner_ledger.is_automatic_installment(dict(row))]
+        return [{key: value for key, value in owner_ledger.classify_movement(row).items() if key != "ledger_type"} for row in kept]
     return [{key: value for key, value in dict(row).items() if key != "ledger_type"} for row in rows]
 
 
