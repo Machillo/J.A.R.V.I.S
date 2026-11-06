@@ -500,7 +500,7 @@ def test_a_statement_counts_its_own_days_and_the_cut_day_once(db):
     assert first["salary_estimated"] is True and first["income"] < 2 * 2000
 
 
-# Movimientos shows the salary the app already knows, so its income adds up to the same as Hoy.
+# The Owner's Movimientos list what he records: the projected salary is Hoy's (owner_hoy_projection), not a row.
 def _owner_list(db, monkeypatch, today):
     from backend.user_product import free_service, owner_ledger
 
@@ -511,24 +511,19 @@ def _owner_list(db, monkeypatch, today):
     return free_service.list_free_movements(), owner_ledger
 
 
-def test_the_month_in_course_lists_the_salary_and_adds_up_to_the_month_total(db, monkeypatch):
+def test_the_month_in_course_lists_no_projected_salary(db, monkeypatch):
     rows, _ = _owner_list(db, monkeypatch, date(2026, 11, 20))
     november = [row for row in rows if str(row["transaction_date"]).startswith("2026-11")]
-    estimate = [row for row in november if row["origin"] == "salary_estimate"]
-    assert len(estimate) == 1 and estimate[0]["transaction_type"] == "income" and estimate[0]["counts_in"] == "income"
-    assert estimate[0]["editable"] is False and estimate[0]["amount"] > 0
-    assert "estimado" in estimate[0]["description"]
-    income = sum(float(row["amount"]) for row in november if row.get("counts_in") == "income")
-    assert income == pytest.approx(2040), "the same income as Hoy and the Resumen"
+    assert not [row for row in november if row["origin"] == "salary_estimate"], "the app's projection is not a movement"
 
 
-def test_a_deposit_is_inside_the_estimate_and_never_counted_twice(db, monkeypatch):
+def test_a_deposit_he_records_is_listed_as_it_is(db, monkeypatch):
     with db.cursor() as cur:
         cur.execute("INSERT INTO transactions(workspace_id,transaction_date,description,amount,transaction_type,category) VALUES(%s,'2026-11-05','Planilla',700,'income','Salario')", (WS_A,))
     rows, _ = _owner_list(db, monkeypatch, date(2026, 11, 20))
     november = [row for row in rows if str(row["transaction_date"]).startswith("2026-11")]
-    assert sum(float(row["amount"]) for row in november if row.get("counts_in") == "income") == pytest.approx(2040)
-    assert [float(row["amount"]) for row in november if row["origin"] == "salary_estimate"] == [pytest.approx(1340)]
+    assert [float(row["amount"]) for row in november if row["description"] == "Planilla"] == [pytest.approx(700)]
+    assert not [row for row in november if row["origin"] == "salary_estimate"]
 
 
 def test_a_closed_month_with_salary_received_lists_no_estimate(db, monkeypatch):
