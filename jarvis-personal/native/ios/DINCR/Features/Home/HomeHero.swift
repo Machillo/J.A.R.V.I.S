@@ -135,8 +135,13 @@ struct HomeHero: View {
         .buttonStyle(OwnerHeroButtonStyle(prominent: false))
         .accessibilityLabel(tx("Registrar ingreso", "Record income"))
         .accessibilityIdentifier("\(idPrefix).addIncome")
-        // The one way into JARVIS from Hoy (spec OW-1): the Owner's Hoy only.
+        // The one way into JARVIS from Hoy (spec OW-1) and his goals and savings (OW-2): the Owner's Hoy only.
         if showsJarvis {
+            NavigationLink { GoalsView() } label: {
+                Label(tx("Metas y ahorros", "Goals and savings"), systemImage: "target")
+            }
+            .buttonStyle(OwnerHeroButtonStyle(prominent: false))
+            .accessibilityIdentifier("owner.home.goals")
             NavigationLink(value: ProfileRoute.jarvis) {
                 Label("JARVIS", systemImage: "sparkles")
             }

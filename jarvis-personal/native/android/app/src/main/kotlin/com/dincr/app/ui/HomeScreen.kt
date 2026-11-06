@@ -168,6 +168,7 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
     Column(Modifier.fillMaxSize().imePadding().background(Dincr.colors.bg).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
         HomeHero(prefix, greeting, name, status, status?.cycle?.let(::cycleText),
             onExpense = { editor = MovementKind.EXPENSE }, onIncome = { editor = MovementKind.INCOME }, onJarvis = if (owner) ({ nav.open("jarvis") }) else null,
+            onGoals = if (owner) ({ nav.open("goals") }) else null,
             modifier = Modifier.fillMaxWidth().padding(bottom = 0.dp), dollars = dollars)
         Box(Modifier.fillMaxWidth().height(24.dp).background(HomeHeroColor)) {
             Box(Modifier.fillMaxSize().background(Dincr.colors.bg, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)))
@@ -176,7 +177,7 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
             verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
             agenda?.let { OwnerAgenda(it, nav) }
             PendingDollarsCard(model, dollarsRefresh) { nav.tab(Destination.MOVEMENTS) }
-            LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = onSaved, figureInHero = true) }
+            LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = onSaved, figureInHero = true, quickAccess = !owner) }
         }
     }
     editor?.let { kind ->
@@ -240,7 +241,7 @@ private fun OwnerAgenda(agenda: LoadHandle<List<JarvisEvent>>, nav: Navigator) {
 // MARK: The four blocks
 
 @Composable
-private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved: () -> Unit, figureInHero: Boolean) {
+private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved: () -> Unit, figureInHero: Boolean, quickAccess: Boolean) {
     var editor by remember { mutableStateOf<MovementKind?>(null) }
     val open: (HomeDestination) -> Unit = { destination ->
         when (destination) {
@@ -253,7 +254,8 @@ private fun HomeBlocks(model: AppModel, home: HomeToday, nav: Navigator, onSaved
     HomeStatusCard(home.status, open, figureInHero)
     home.attention?.let { AttentionSection(it, nav) }
     HomeNextCard(home.next, open)
-    HomeShortcuts(home.shortcuts, open)
+    // The Owner's Hoy has no quick access: his entries are the hero's buttons (OW-2).
+    if (quickAccess) HomeShortcuts(home.shortcuts, open)
     editor?.let { kind ->
         MovementEditorSheet(model, EditorMode.Create, onDismiss = { editor = null }, onSaved = { editor = null; onSaved() }, onDelete = {}, initialKind = kind)
     }

@@ -68,7 +68,8 @@
   "RT-1",
   "DB-1",
   "L-2",
-  "OW-1"
+  "OW-1",
+  "OW-2"
  ],
  "fixtures": {
   "ios": {
@@ -209,13 +210,21 @@
   {
    "id": "home.debts",
    "name": "Deudas (Hoy → Tus finanzas: shortcut; managed in Plan → Deudas since UX-4)",
-   "decision": "baseline-81fd2cc4",
+   "decision": "OW-2",
    "plans": {
     "free": "AVAILABLE",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
+    "owner": "HIDDEN_BY_PLAN"
    },
+   "transitional_hidden": [
+    {
+     "plan": "owner",
+     "platform": "both",
+     "reason": "OW-2: the Owner's Hoy has no quick access (his entries are the hero's buttons); he manages debts in Plan → Deudas (plan.debts, AVAILABLE)",
+     "resolved_by": "UX-7 (Hoy rebuilt: the debts shortcut is reconsidered for every plan)"
+    }
+   ],
    "target": "UX-7: the Hoy shortcut is reconsidered when Hoy is rebuilt; Plan → Deudas is the home (UX-4)",
    "backend": [
     {
@@ -231,8 +240,7 @@
    ],
    "ios": {
     "tab": "home",
-    "id": "home.debts",
-    "owner_id": "owner.home.debts"
+    "id": "home.debts"
    },
    "android": {
     "tab": "Hoy",
@@ -245,8 +253,8 @@
   },
   {
    "id": "home.goals",
-   "name": "Metas y ahorros (Hoy → Tus finanzas)",
-   "decision": "baseline-81fd2cc4",
+   "name": "Metas y ahorros (Hoy → Tus finanzas; Owner: botón del inicio de Hoy, OW-2)",
+   "decision": "OW-2",
    "plans": {
     "free": "AVAILABLE",
     "basic": "AVAILABLE",

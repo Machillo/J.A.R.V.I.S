@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -55,7 +56,7 @@ private val HeroControl: Color @Composable get() = Dincr.colors.sceneControl
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status: HomeStatus?, cycle: String?, onExpense: () -> Unit, onIncome: () -> Unit, onJarvis: (() -> Unit)?, modifier: Modifier = Modifier, dollars: BigDecimal? = null) {
+internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status: HomeStatus?, cycle: String?, onExpense: () -> Unit, onIncome: () -> Unit, onJarvis: (() -> Unit)?, modifier: Modifier = Modifier, dollars: BigDecimal? = null, onGoals: (() -> Unit)? = null) {
     Column(modifier.background(HomeHeroColor).padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s4), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
         Column(Modifier.testTag("$tagPrefix.greeting").semantics(mergeDescendants = true) { heading() }) {
             Text(greeting, style = MaterialTheme.typography.bodyLarge, color = OnHero2)
@@ -67,7 +68,8 @@ internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status:
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             HeroAction(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
             HeroAction(tx("Ingreso", "Income"), tx("Registrar ingreso", "Record income"), Icons.Rounded.Add, prominent = false, tag = "$tagPrefix.addIncome", onClick = onIncome)
-            // The one way into JARVIS from Hoy (spec OW-1): the Owner's Hoy only.
+            // The Owner's goals and savings (OW-2) and the one way into JARVIS from Hoy (OW-1): his Hoy only.
+            onGoals?.let { HeroAction(tx("Metas y ahorros", "Goals and savings"), tx("Metas y ahorros", "Goals and savings"), Icons.Rounded.Flag, prominent = false, tag = "owner.home.goals", onClick = it) }
             onJarvis?.let { HeroAction("JARVIS", "JARVIS", Icons.Rounded.AutoAwesome, prominent = false, tag = "owner.home.jarvis", onClick = it) }
         }
     }

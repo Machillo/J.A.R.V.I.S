@@ -24,7 +24,10 @@ struct HomeBlocks: View {
                 AttentionSection(today: attention, idPrefix: "\(idPrefix).attention", ownerStyle: ownerStyle)
             }
             HomeNextCard(next: home.next, idPrefix: idPrefix, ownerStyle: ownerStyle, links: links)
-            HomeShortcuts(shortcuts: home.shortcuts, idPrefix: idPrefix, ownerStyle: ownerStyle, links: links)
+            // The Owner's Hoy has no quick access: his entries are the hero's buttons (OW-2).
+            if !ownerStyle {
+                HomeShortcuts(shortcuts: home.shortcuts, idPrefix: idPrefix, ownerStyle: ownerStyle, links: links)
+            }
         }
         .sheet(item: $editor) { request in
             MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await reload() } }
