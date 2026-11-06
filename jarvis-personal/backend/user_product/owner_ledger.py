@@ -40,6 +40,7 @@ server-authenticated role. Free, Basic and VIP keep their current totals. Readin
 """
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable
@@ -340,6 +341,15 @@ def owner_salary(conn, workspace_id: str, start: date, end: date, tables: set[st
         result["estimated"] = result["estimated"] or month_salary["estimated"]
         result["closed_estimated"] = result["closed_estimated"] or month_salary["closed_estimated"]
     return result
+
+
+# The note the daily debt schedule writes on each installment it posts (finance.service.apply_due_installments).
+_SCHEDULED_INSTALLMENT = re.compile(r"debt_id:\d+;installment:\d+")
+
+
+def is_automatic_installment(row: dict) -> bool:
+    """A movement the daily debt schedule posted by itself (not one the Owner recorded)."""
+    return row.get("origin") == "transaction" and bool(_SCHEDULED_INSTALLMENT.fullmatch(str(row.get("notes") or "")))
 
 
 def salary_estimate_rows(conn, workspace_id: str, rows: list[dict]) -> list[dict]:
