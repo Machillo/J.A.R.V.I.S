@@ -1,4 +1,5 @@
 import DincrCore
+import DincrDesign
 import Foundation
 import Observation
 import UIKit
@@ -315,6 +316,7 @@ final class AppModel {
         // A shortcut token issued to another account is never used by this one.
         if let linked = shortcutTokens.read(), linked.accountID != profile.id { shortcutTokens.clear() }
         self.profile = profile
+        DincrColorStyleStore.shared.setAllowed(profile.planTier == .vip || profile.isOwner)
         lastIdentityRefresh = .now
         switch IdentityGate.of(profile) {
         case .unsupportedRole:

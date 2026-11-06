@@ -94,15 +94,29 @@ public struct DincrColorStyle: Sendable, Identifiable {
 public final class DincrColorStyleStore: @unchecked Sendable {
     public static let shared = DincrColorStyleStore()
     private static let key = "dincr.colorStyle"
+    private static let allowedKey = "dincr.colorStyle.allowed"
 
     public private(set) var id: String
+    /// Color styles are a VIP and Owner perk: any other plan draws the default, whatever is stored.
+    /// Kept on the device so the right colors show before the account loads.
+    public private(set) var allowed: Bool
 
     private init() {
         let stored = UserDefaults.standard.string(forKey: Self.key) ?? DincrColorStyles.defaultID
         id = DincrColorStyles.all.contains { $0.id == stored } ? stored : DincrColorStyles.defaultID
+        allowed = UserDefaults.standard.bool(forKey: Self.allowedKey)
     }
 
-    var colors: DincrColorStyle.Colors? { DincrColorStyles.all.first { $0.id == id }?.colors }
+    var colors: DincrColorStyle.Colors? {
+        guard allowed else { return DincrColorStyles.all.first { $0.id == DincrColorStyles.defaultID }?.colors }
+        return DincrColorStyles.all.first { $0.id == id }?.colors
+    }
+
+    public func setAllowed(_ value: Bool) {
+        guard value != allowed else { return }
+        allowed = value
+        UserDefaults.standard.set(value, forKey: Self.allowedKey)
+    }
 
     public func select(_ next: String) {
         guard DincrColorStyles.all.contains(where: { $0.id == next }) else { return }

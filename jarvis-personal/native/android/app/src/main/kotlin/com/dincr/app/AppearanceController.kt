@@ -31,8 +31,12 @@ class AppearanceController(private val store: SharedPreferences, scope: Coroutin
     private val launcher = scope
     private val pickedStyle = MutableStateFlow(store.getString(COLOR_STYLE_KEY, null) ?: DincrColorStyles.DEFAULT_ID)
 
-    /** The color style picked in Perfil, kept on this device for every plan. An unknown id draws the default. */
-    val colorStyle: StateFlow<String> = pickedStyle.asStateFlow()
+    /** Color styles are a VIP and Owner perk, kept on the device so the right colors show before the account loads. */
+    private val styleAllowed = MutableStateFlow(store.getBoolean(COLOR_STYLE_ALLOWED_KEY, false))
+
+    /** The color style the theme draws: the one picked in Perfil for VIP and the Owner, the default otherwise. An unknown id draws the default. */
+    val colorStyle: StateFlow<String> = combine(pickedStyle, styleAllowed) { picked, allowed -> if (allowed) picked else DincrColorStyles.DEFAULT_ID }
+        .stateIn(launcher, SharingStarted.Eagerly, if (styleAllowed.value) pickedStyle.value else DincrColorStyles.DEFAULT_ID)
 
     fun selectColorStyle(id: String) {
         pickedStyle.value = id
@@ -60,6 +64,11 @@ class AppearanceController(private val store: SharedPreferences, scope: Coroutin
             draft.value = null
         }
         profile.value = next
+        val allowed = next.planTier == com.dincr.data.PlanTier.VIP || next.isOwner
+        if (allowed != styleAllowed.value) {
+            styleAllowed.value = allowed
+            store.edit().putBoolean(COLOR_STYLE_ALLOWED_KEY, allowed).apply()
+        }
         if (AppearancePolicy.isPersonalizable(next)) launcher.launch { runCatching { load() } }
         else saved.value = null
     }
@@ -107,3 +116,4 @@ class AppearanceController(private val store: SharedPreferences, scope: Coroutin
 }
 
 private const val COLOR_STYLE_KEY = "dincr.colorStyle"
+private const val COLOR_STYLE_ALLOWED_KEY = "dincr.colorStyle.allowed"
