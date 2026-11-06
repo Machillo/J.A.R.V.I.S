@@ -133,7 +133,7 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
     var dollarsRefresh by remember { mutableStateOf(0) }
     PullToRefreshBox(refreshing, onRefresh = { dollarsRefresh += 1; if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
         modifier = Modifier.fillMaxSize().padding(padding).testTag("home.refresh")) {
-        HomeContent(model, profile?.firstName.orEmpty(), home, if (owner) agenda else null, nav, dollarsRefresh, onSaved = { dollarsRefresh += 1; if (owner) home.reload() else refreshHome() })
+        HomeContent(model, profile?.firstName.orEmpty(), home, if (owner) agenda else null, nav, dollarsRefresh, onSaved = { dollarsRefresh += 1; if (owner) home.reload() else refreshHome(); model.noteDataChanged() })
     }
 }
 

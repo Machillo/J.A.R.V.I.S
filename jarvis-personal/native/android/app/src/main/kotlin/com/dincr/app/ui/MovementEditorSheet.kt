@@ -288,10 +288,10 @@ fun MovementEditorSheet(
                 isError = descriptionError != null, supportingText = descriptionError?.let { { Text(it) } }, modifier = Modifier.fillMaxWidth().testTag("editor.description"))
             var expanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(expanded, { expanded = it }) {
-                OutlinedTextField(category, {}, readOnly = true, label = { Text(tx("Categoría", "Category")) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                OutlinedTextField(categoryLabel(category) ?: category, {}, readOnly = true, label = { Text(tx("Categoría", "Category")) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable))
                 ExposedDropdownMenu(expanded, { expanded = false }) {
-                    categories.forEach { option -> DropdownMenuItem({ Text(option) }, { category = option; expanded = false }) }
+                    categories.forEach { option -> DropdownMenuItem({ Text(categoryLabel(option) ?: option) }, { category = option; expanded = false }) }
                 }
             }
             OutlinedButton({ pickingDate = true }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("${tx("Fecha", "Date")}: ${dayLabel(date.toString())}") }

@@ -154,7 +154,7 @@ struct MovementEditor: View {
                 }
                 Section {
                     Picker(tx("Categoría", "Category"), selection: $category) {
-                        ForEach(categories, id: \.self) { Text($0).tag($0) }
+                        ForEach(categories, id: \.self) { Text(CategoryStyle.label($0)).tag($0) }
                     }
                     DatePicker(tx("Fecha", "Date"), selection: $date, in: ...Date.now.addingTimeInterval(86_400 * 365), displayedComponents: .date)
                     if showsPaidWith {

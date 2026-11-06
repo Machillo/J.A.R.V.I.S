@@ -28,7 +28,7 @@ struct OwnerHomeView: View {
         }
         .navigationTitle(tx("Hoy", "Today"))
         .sheet(item: $editor) { request in
-            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await loadHome(tier) } }
+            MovementEditor(mode: .create, initialKind: request.kind) { _ in Task { await loadHome(tier) }; model.noteDataChanged() }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
