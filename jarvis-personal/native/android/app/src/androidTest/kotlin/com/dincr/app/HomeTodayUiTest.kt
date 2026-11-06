@@ -131,7 +131,10 @@ class HomeTodayUiTest {
         assertTrue("one way into JARVIS", tags("owner.home.jarvis.chat").isEmpty())
         waitForTag("owner.home")
         assertFalse("the Owner never gets the public Hoy", tags("home.today").isNotEmpty())
-        assertQuickAccess()
+        // OW-2: no quick access on the Owner's Hoy; goals and savings sit with the hero's buttons.
+        waitForTag("owner.home.goals")
+        assertTrue("with Gasto, Ingreso and JARVIS", tags("owner.home.goals").first().positionInRoot.y < status)
+        assertTrue("no quick access for the Owner", tags("home.shortcuts").isEmpty())
         // The JARVIS row inside the tagged container is what takes the tap.
         compose.onAllNodes(hasAnyAncestor(hasTestTag("owner.home.jarvis")) and hasClickAction()).onFirst()
             .performSemanticsAction(SemanticsActions.OnClick)

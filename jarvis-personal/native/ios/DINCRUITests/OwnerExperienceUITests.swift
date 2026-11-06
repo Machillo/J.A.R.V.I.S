@@ -97,17 +97,14 @@ final class OwnerExperienceUITests: XCTestCase {
         XCTAssertTrue(text("Por revisar", in: app).waitForExistence(timeout: 10), "the Email Monitor's review list")
     }
 
-    func testOwnerTodayReachesDebtsAndGoals() {
-        // Debts and goals left the Plan tab for Today (#302); the Owner's own Today (#303) keeps them,
-        // opening the same screens the other plans reach from theirs.
+    func testOwnerTodayReachesGoalsAndPlanKeepsDebts() {
+        // OW-2: the Owner's Today opens goals and savings from the hero; debts live in Plan → Deudas.
         let app = launch()
         XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))
-        reveal("owner.home.debts", in: app).tap()
-        XCTAssertTrue(app.navigationBars["Deudas"].waitForExistence(timeout: 10), "the debts screen")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertFalse(element("owner.home.debts", in: app).exists, "no debts shortcut on the Owner's Today")
         reveal("owner.home.goals", in: app).tap()
         XCTAssertTrue(app.navigationBars["Metas y ahorro"].waitForExistence(timeout: 10), "the goals screen")
-        // UX-4: debts are managed in Plan → Deudas too (Today keeps its shortcut); goals stay on Today.
+        // UX-4: debts are managed in Plan → Deudas; goals stay on Today.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.tabBars.buttons["Plan"].tap()
         XCTAssertTrue(element("plan.strategy", in: app).waitForExistence(timeout: 10))

@@ -107,8 +107,11 @@ final class HomeTodayUITests: XCTestCase {
         XCTAssertTrue(jarvis.waitForExistence(timeout: 10) && status.waitForExistence(timeout: 10))
         XCTAssertLessThan(jarvis.frame.minY, status.frame.minY, "JARVIS comes first")
         XCTAssertFalse(element("owner.home.jarvis.chat", in: app).exists, "one way into JARVIS")
-        reveal("owner.home.shortcuts", in: app)
-        assertQuickAccess(app, prefix: "owner.home")
+        // OW-2: no quick access on the Owner's Hoy; goals and savings sit with the hero's buttons.
+        XCTAssertTrue(element("owner.home.goals", in: app).exists)
+        XCTAssertLessThan(element("owner.home.goals", in: app).frame.minY, status.frame.minY, "with Gasto, Ingreso and JARVIS")
+        XCTAssertFalse(element("owner.home.shortcuts", in: app).exists, "no quick access for the Owner")
+        XCTAssertFalse(element("owner.home.debts", in: app).exists, "debts are in Plan → Deudas")
         XCTAssertFalse(element("home.today", in: app).exists, "the Owner never gets the public Hoy")
     }
 }
