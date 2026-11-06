@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from math import ceil
 from typing import Any
@@ -23,6 +24,8 @@ from backend.user_product.basic_service import (
     _profile,
     _shift_month,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _money_text(value: float) -> str:
@@ -121,6 +124,20 @@ def _owner_cycle_savings(cycle: dict, today: date) -> dict:
     return savings
 
 
+def _owner_statement(conn, account_id: str, workspace_id: str, cycle: dict, savings: dict, debts: list[dict]) -> dict | None:
+    """The Owner only: his statement projected whole and his strategy's free share of its result.
+    None when it can't be read: Hoy then keeps the ledger's figures."""
+    from backend.ai import owner_hoy_projection
+    from backend.user_product.entry_currency import account_base_currency
+
+    try:
+        statement = owner_hoy_projection.project(conn, workspace_id, cycle, savings, debts, account_base_currency(conn, account_id))
+    except Exception as exc:  # noqa: BLE001 — Hoy never fails because of the projection
+        logger.warning("owner_statement_unavailable error_type=%s", type(exc).__name__)
+        return None
+    return {**statement, "free_share": owner_hoy_projection.free_share(statement["result"])}
+
+
 def get_vip_command_center() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     today = costa_rica_today()
@@ -157,6 +174,7 @@ def get_vip_command_center() -> dict:
         report_months = _owner_report_months(conn, workspace_id, months) if owner else months
         owner_cycle = owner_ledger.owner_cycle_totals(conn, workspace_id, today) if owner else None
         owner_savings = _owner_cycle_savings(owner_cycle, today) if owner else None
+        owner_statement = _owner_statement(conn, account_id, workspace_id, owner_cycle, owner_savings, debts) if owner else None
         imported_income = imported_income_by_month(conn, workspace_id, _shift_month(current, -11))
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
@@ -355,6 +373,14 @@ def get_vip_command_center() -> dict:
         timeline.append({**event, "projected_balance": round(balance, 2)})
     lowest_balance = min([row["projected_balance"] for row in timeline], default=liquid_assets) if not cash_missing else None
     safe_to_spend = round(max(min(margin, lowest_balance), 0), 2) if not safe_missing else None
+    if owner_statement is not None:
+        # The Owner: Hoy's statement counted whole from its first day, and "Podés gastar" is what his
+        # strategy leaves for him when it splits that statement's result (owner_hoy_projection).
+        owner_cycle.update(income=owner_statement["income"], expenses=owner_statement["expenses"], debt_paid=0.0,
+                           automatic_saved=0.0, balance=owner_statement["result"], projection=owner_statement)
+        free = owner_statement["free_share"]
+        if free is not None:
+            safe_to_spend, safe_missing = free, []
 
     projection = []
     for months_ahead in ((1, 3, 6, 12) if not projection_missing else ()):

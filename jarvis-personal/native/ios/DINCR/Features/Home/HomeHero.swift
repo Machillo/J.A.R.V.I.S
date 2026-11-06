@@ -42,8 +42,8 @@ struct HomeHero: View {
         .frame(maxWidth: .infinity)
         .task(id: "\(model.dataGeneration)-\(status?.cycle?.start ?? "")") {
             // Optional: Hoy never fails because of it; on error the figures stay as registered.
-            // The Owner's figures are his card statement's, so its dollars are too.
-            if let read = try? await model.service.pendingConversion() {
+            // The Owner's statement already counts its dollars (the server's projected statement).
+            if !showsJarvis, let read = try? await model.service.pendingConversion() {
                 dollars = status?.cycle.map { read.estimate(from: $0.start, through: $0.end).sum } ?? read.estimate(month: String(Day.today().prefix(7)), query: "").sum
             }
         }
@@ -68,12 +68,13 @@ struct HomeHero: View {
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) { facts(status) }
             }
             .accessibilityIdentifier("\(idPrefix).status.facts")
-            if status.headline == .safeToSpend, let takenOut = resultNote(status) {
+            // The Owner's three figures add up by themselves: no note under them.
+            if !showsJarvis, status.headline == .safeToSpend, let takenOut = resultNote(status) {
                 Text(takenOut).font(DincrFont.caption).foregroundStyle(OwnerColor.onHero2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("\(idPrefix).status.resultNote")
             }
-            if let dollars {
+            if !showsJarvis, let dollars {
                 Text(tx("Gastos incluye ≈ \(format.string(dollars)) estimado en dólares.", "Expenses include ≈ \(format.string(dollars)) estimated in dollars."))
                     .font(DincrFont.caption).foregroundStyle(OwnerColor.onHero2)
                     .accessibilityIdentifier("\(idPrefix).status.dollars")
