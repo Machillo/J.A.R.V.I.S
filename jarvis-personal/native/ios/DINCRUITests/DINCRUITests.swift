@@ -212,10 +212,10 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Cafe del dia"].waitForExistence(timeout: 10))
     }
 
-    func testBelowVipTheColorStyleIsLocked() {
+    func testBelowVipThereAreNoColorStyles() {
         let app = launch(extra: ["-DincrTab", "profile", "-DincrPlan", "free"])
-        XCTAssertTrue(app.descendants(matching: .any)["profile.colorStyle.locked"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.descendants(matching: .any)["profile.colorStyle"].exists, "Free cannot open the color styles")
+        XCTAssertTrue(app.descendants(matching: .any)["profile.subscription"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["profile.colorStyle"].exists, "Free has no color styles")
     }
 
     func testAColorStyleIsPickedAndStaysAfterRelaunching() {

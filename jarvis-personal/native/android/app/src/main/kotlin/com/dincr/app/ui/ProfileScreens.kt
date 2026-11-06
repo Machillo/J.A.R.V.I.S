@@ -98,12 +98,9 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
             }
         }
         // APP-1: the personal appearance is an Owner-only experiment (the server refuses everyone else).
-        // Color styles: VIP and the Owner. Below VIP the entry stays visible, locked, and opens the plans.
+        // Color styles: VIP and the Owner. Below VIP the entry is not shown: Perfil keeps no locked rows.
         if (profile?.planTier == com.dincr.data.PlanTier.VIP || profile?.isOwner == true) DincrCard(Modifier.testTag("profile.colorStyle")) {
             NavRow(Icons.Rounded.Palette, tx("Estilo de colores", "Color style"), tx("Elegí los colores de tu app", "Pick your app’s colors")) { nav.open("colorStyle") }
-        }
-        else DincrCard(Modifier.testTag("profile.colorStyle.locked")) {
-            NavRow(Icons.Rounded.Palette, tx("Estilo de colores", "Color style"), tx("Disponible desde VIP", "Available from VIP"), badge = "VIP") { nav.open("plans") }
         }
         if (AppearancePolicy.isPersonalizable(profile)) DincrCard(Modifier.testTag("profile.appearance")) {
             NavRow(Icons.Rounded.Palette, tx("Personalización", "Personalization"), tx("Tema, colores, texto y densidad", "Theme, colors, text and density")) { nav.open("appearance") }
