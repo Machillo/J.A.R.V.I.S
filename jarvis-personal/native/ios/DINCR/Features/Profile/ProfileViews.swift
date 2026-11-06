@@ -92,8 +92,18 @@ struct ProfileHubView: View {
                     Text(tx("Claro", "Light")).tag(Appearance.light.rawValue)
                     Text(tx("Oscuro", "Dark")).tag(Appearance.dark.rawValue)
                 } label: { Label(tx("Apariencia", "Appearance"), systemImage: "circle.lefthalf.filled") }
-                NavigationLink { ColorStyleView() } label: { Label(tx("Estilo de colores", "Color style"), systemImage: "paintpalette") }
-                    .accessibilityIdentifier("profile.colorStyle")
+                if model.planTier == .vip || model.profile?.isOwner == true {
+                    NavigationLink { ColorStyleView() } label: { Label(tx("Estilo de colores", "Color style"), systemImage: "paintpalette") }
+                        .accessibilityIdentifier("profile.colorStyle")
+                } else {
+                    // Below VIP the entry stays visible and says where it comes from.
+                    LabeledContent {
+                        Text("VIP").font(DincrFont.caption.weight(.semibold)).foregroundStyle(.dincrTextMuted)
+                    } label: { Label(tx("Estilo de colores", "Color style"), systemImage: "lock") }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityHint(tx("Disponible en el plan VIP", "Available on the VIP plan"))
+                        .accessibilityIdentifier("profile.colorStyle.locked")
+                }
             }
             .dincrRowBackground()
             Section(tx("Ayuda y legal", "Help and legal")) {

@@ -28,6 +28,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertTrue
+import androidx.compose.ui.test.onAllNodesWithTag
 import org.junit.Rule
 import org.junit.Test
 
@@ -413,8 +414,15 @@ class FlowsTest {
         waitForText("Compra grande")
     }
 
+    @Test fun belowVipTheColorStyleIsLocked() {
+        launch(plan = "free")
+        tab(tx("Perfil", "Profile"))
+        waitForTag("profile.colorStyle.locked")
+        assertTrue(compose.onAllNodesWithTag("profile.colorStyle").fetchSemanticsNodes().isEmpty())
+    }
+
     @Test fun aColorStyleIsPickedAndStaysAfterRelaunching() {
-        val first = launch()
+        val first = launch(plan = "vip")
         tab(tx("Perfil", "Profile"))
         compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
         click(tx("Estilo de colores", "Color style"))
@@ -422,7 +430,7 @@ class FlowsTest {
         compose.onNodeWithTag("colorStyle.vino").performScrollTo().performClick()
         compose.onNodeWithTag("colorStyle.vino").assertIsSelected()
         first.close()
-        launch()
+        launch(plan = "vip")
         tab(tx("Perfil", "Profile"))
         compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
         click(tx("Estilo de colores", "Color style"))
