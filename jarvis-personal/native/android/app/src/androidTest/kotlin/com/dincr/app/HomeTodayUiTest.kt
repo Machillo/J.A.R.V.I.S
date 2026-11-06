@@ -92,7 +92,7 @@ class HomeTodayUiTest {
         clickTag("home.status.help")
         clickTag("home.status.missing.income")
         // The existing movement editor, opened as an income (salary / pay stub categories).
-        waitForText("Salario")
+        waitForText(tx("Salario", "Salary"))
     }
 
     @Test fun basicAddsItsBudgetWithoutVipIntelligence() {

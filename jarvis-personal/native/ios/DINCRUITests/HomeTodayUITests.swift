@@ -70,7 +70,7 @@ final class HomeTodayUITests: XCTestCase {
         reveal("home.status.missing.income", in: app).tap()
         // The existing movement editor, opened as an income (salary / pay stub categories).
         XCTAssertTrue(app.buttons["editor.save"].waitForExistence(timeout: 5))
-        XCTAssertTrue(text("Salario", in: app).exists || app.buttons["Salario"].exists)
+        XCTAssertTrue(["Salario", "Salary"].contains { text($0, in: app).exists || app.buttons[$0].exists })
     }
 
     func testBasicAddsItsBudgetWithoutVipIntelligence() {
