@@ -133,13 +133,13 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
     var dollarsRefresh by remember { mutableStateOf(0) }
     PullToRefreshBox(refreshing, onRefresh = { dollarsRefresh += 1; if (owner) { home.reload(); agenda?.reload() } else refreshHome() },
         modifier = Modifier.fillMaxSize().padding(padding).testTag("home.refresh")) {
-        HomeContent(model, profile?.firstName.orEmpty(), home, if (owner) agenda else null, nav, dollarsRefresh, onSaved = { dollarsRefresh += 1; if (owner) home.reload() else refreshHome(); model.noteDataChanged() })
+        HomeContent(model, profile?.firstName.orEmpty(), home, if (owner) agenda else null, nav, dollarsRefresh, vip = tier == HomeToday.Tier.VIP, onSaved = { dollarsRefresh += 1; if (owner) home.reload() else refreshHome(); model.noteDataChanged() })
     }
 }
 
 /** Hoy: the hero, and on a rounded sheet over it the blocks. [agenda] is given only on the Owner's Hoy, with JARVIS. */
 @Composable
-private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToday>, agenda: LoadHandle<List<JarvisEvent>>?, nav: Navigator, dollarsRefresh: Int, onSaved: () -> Unit) {
+private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToday>, agenda: LoadHandle<List<JarvisEvent>>?, nav: Navigator, dollarsRefresh: Int, vip: Boolean, onSaved: () -> Unit) {
     var editor by remember { mutableStateOf<MovementKind?>(null) }
     val owner = agenda != null
     val prefix = if (owner) "owner.home" else "home"
@@ -168,7 +168,7 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
     Column(Modifier.fillMaxSize().imePadding().background(Dincr.colors.bg).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
         HomeHero(prefix, greeting, name, status, status?.cycle?.let(::cycleText),
             onExpense = { editor = MovementKind.EXPENSE }, onIncome = { editor = MovementKind.INCOME }, onJarvis = if (owner) ({ nav.open("jarvis") }) else null,
-            onGoals = if (owner) ({ nav.open("goals") }) else null,
+            onGoals = if (owner || vip) ({ nav.open("goals") }) else null,  // OW-2, VIP-1
             modifier = Modifier.fillMaxWidth().padding(bottom = 0.dp), dollars = dollars)
         Box(Modifier.fillMaxWidth().height(24.dp).background(HomeHeroColor)) {
             Box(Modifier.fillMaxSize().background(Dincr.colors.bg, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)))
@@ -177,7 +177,7 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
             verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
             agenda?.let { OwnerAgenda(it, nav) }
             PendingDollarsCard(model, dollarsRefresh) { nav.tab(Destination.MOVEMENTS) }
-            LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = onSaved, figureInHero = true, quickAccess = !owner) }
+            LoadContent(home, rows = 3) { today -> HomeBlocks(model, today, nav, onSaved = onSaved, figureInHero = true, quickAccess = !owner && !vip) }
         }
     }
     editor?.let { kind ->

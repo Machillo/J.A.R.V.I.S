@@ -29,7 +29,7 @@ private struct PublicHomeView: View {
         let tier = HomeTodayLoader.tier(model)
         let status: HomeStatus? = if case .loaded(let home) = state { home.status } else { nil }
         HomeHeroScreen(id: "home.today") {
-            HomeHero(greeting: tx("Hola,", "Hi,"), name: model.profile?.firstName, status: status, cycle: status?.cycle.map(HomeStatusCopy.cycle),
+            HomeHero(showsGoals: tier == .vip, greeting: tx("Hola,", "Hi,"), name: model.profile?.firstName, status: status, cycle: status?.cycle.map(HomeStatusCopy.cycle),
                      register: { editor = EditorRequest(kind: $0) })
         } sheet: {
             switch state {

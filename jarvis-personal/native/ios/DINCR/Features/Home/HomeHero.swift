@@ -8,6 +8,8 @@ import SwiftUI
 struct HomeHero: View {
     var idPrefix = "home"
     var showsJarvis = false
+    /// VIP and the Owner: goals and savings with the hero's buttons, all on one row (OW-2, VIP-1).
+    var showsGoals = false
     let greeting: String
     let name: String?
     let status: HomeStatus?
@@ -30,8 +32,8 @@ struct HomeHero: View {
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("\(idPrefix).greeting")
             if let status { figure(status) }
-            if showsJarvis {
-                // The Owner's four entries stay on one row: icon over a one-word title.
+            if showsJarvis || showsGoals {
+                // VIP's and the Owner's entries stay on one row: icon over a one-word title.
                 HStack(spacing: DincrSpacing.s2) { actions }
                     .labelStyle(HeroTileLabelStyle())
             } else {
@@ -148,14 +150,17 @@ struct HomeHero: View {
         .buttonStyle(OwnerHeroButtonStyle(prominent: false))
         .accessibilityLabel(tx("Registrar ingreso", "Record income"))
         .accessibilityIdentifier("\(idPrefix).addIncome")
-        // The one way into JARVIS from Hoy (spec OW-1) and his goals and savings (OW-2): the Owner's Hoy only.
-        if showsJarvis {
+        // Goals and savings: VIP and the Owner (OW-2, VIP-1).
+        if showsJarvis || showsGoals {
             NavigationLink { GoalsView() } label: {
                 Label(tx("Ahorros", "Savings"), systemImage: "target")
             }
             .accessibilityLabel(tx("Metas y ahorros", "Goals and savings"))
             .buttonStyle(OwnerHeroButtonStyle(prominent: false))
-            .accessibilityIdentifier("owner.home.goals")
+            .accessibilityIdentifier("\(idPrefix).goals")
+        }
+        // The one way into JARVIS from Hoy (spec OW-1): the Owner's Hoy only.
+        if showsJarvis {
             NavigationLink(value: ProfileRoute.jarvis) {
                 Label("JARVIS", systemImage: "sparkles")
             }

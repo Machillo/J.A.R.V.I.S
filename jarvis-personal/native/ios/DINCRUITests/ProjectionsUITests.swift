@@ -63,7 +63,7 @@ final class ProjectionsUITests: XCTestCase {
         for scenario in ["populated", "empty"] {
             let app = launch(scenario: scenario)
             XCTAssertTrue(app.tabBars.buttons["Hoy"].waitForExistence(timeout: 10))
-            XCTAssertTrue(element("home.debts", in: app).waitForExistence(timeout: 10), scenario)  // Hoy has loaded
+            XCTAssertTrue(element("home.goals", in: app).waitForExistence(timeout: 10), scenario)  // Hoy has loaded (VIP-1: the hero's goals button)
             XCTAssertEqual(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'proyecci'")).count, 0, scenario)
             app.terminate()
         }

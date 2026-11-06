@@ -114,7 +114,10 @@ class HomeTodayUiTest {
         waitForTag("home.attention")
         waitForTag("home.next")
         waitForText("Tu prioridad es bajar la tarjeta")
-        assertQuickAccess()
+        // VIP-1: no quick access; goals and savings sit with the hero's buttons, debts are in Plan.
+        waitForTag("home.goals")
+        assertTrue("with Gasto and Ingreso", tags("home.goals").first().positionInRoot.y < tags("home.status").first().positionInRoot.y)
+        assertTrue("no quick access for VIP", tags("home.shortcuts").isEmpty() && tags("home.debts").isEmpty())
         assertNoRetiredBlocks("vip")
         clickTag("home.next.action")
         waitForText(tx("Sobrante para repartir", "Surplus to allocate"))  // Plan → Tu plan del mes
