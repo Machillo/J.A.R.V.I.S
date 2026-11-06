@@ -418,16 +418,16 @@ class FlowsTest {
         tab(tx("Perfil", "Profile"))
         compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
         click(tx("Estilo de colores", "Color style"))
-        waitForTag("colorStyle.rosa")
-        compose.onNodeWithTag("colorStyle.rosa").performScrollTo().performClick()
-        compose.onNodeWithTag("colorStyle.rosa").assertIsSelected()
+        waitForTag("colorStyle.vino")
+        compose.onNodeWithTag("colorStyle.vino").performScrollTo().performClick()
+        compose.onNodeWithTag("colorStyle.vino").assertIsSelected()
         first.close()
         launch()
         tab(tx("Perfil", "Profile"))
         compose.waitUntil(15_000) { compose.onAllNodes(hasText(tx("Estilo de colores", "Color style"))).fetchSemanticsNodes().isNotEmpty() }
         click(tx("Estilo de colores", "Color style"))
-        waitForTag("colorStyle.rosa")
-        compose.onNodeWithTag("colorStyle.rosa").assertIsSelected()
+        waitForTag("colorStyle.vino")
+        compose.onNodeWithTag("colorStyle.vino").assertIsSelected()
         // Back to the default, so other tests on this device start from it.
         compose.onNodeWithTag("colorStyle.indigo").performScrollTo().performClick()
     }

@@ -5,23 +5,23 @@ public enum DincrColorStyles {
     public static let defaultID = "indigo"
     public static let all: [DincrColorStyle] = [
     DincrColorStyle(id: "indigo", nameEs: "Índigo", nameEn: "Indigo", swatches: [0x0A0B1E, 0x2A2E6E, 0x4A4FD9, 0x8F95FF, 0xF2F2F7], colors: nil),
-    DincrColorStyle(id: "rosa", nameEs: "Rosa", nameEn: "Pink", swatches: [0x121212, 0x1F2937, 0x334155, 0x64748B, 0xF1F5F9, 0xEC4899], colors: DincrColorStyle.Colors(
-            bg: Color(light: 0xF1F5F9, dark: 0x121212), surface: Color(light: 0xFFFFFF, dark: 0x1F2937), surface2: Color(light: 0xE2E8F0, dark: 0x334155), border: Color(light: 0xCBD5E1, dark: 0x334155), fieldBorder: Color(light: 0x64748B, dark: 0x94A3B8),
-            text: Color(light: 0x121212, dark: 0xF1F5F9), text2: Color(light: 0x334155, dark: 0xCBD5E1), textMuted: Color(light: 0x475569, dark: 0xB4BFCE),
-            accent: Color(light: 0xBE185D, dark: 0xF472B6), accentActive: Color(light: 0x9D174D, dark: 0xEC4899), onAccent: Color(light: 0xFFFFFF, dark: 0x121212),
-            accentContainer: Color(light: 0xFCE7F3, dark: 0x4A1530), onAccentContainer: Color(light: 0x831843, dark: 0xFBCFE8),
-            hero: Color(light: 0x1F2937, dark: 0x1F2937), heroControl: Color(light: 0x334155, dark: 0x334155), onHero2: Color(light: 0xCBD5E1, dark: 0xCBD5E1))),
-    DincrColorStyle(id: "bosque", nameEs: "Bosque y arena", nameEn: "Forest and sand", swatches: [0x0B0F0D, 0x1F2A1F, 0x3E5A3F, 0x8CA98C, 0xD9C7A3, 0xB08D57], colors: DincrColorStyle.Colors(
-            bg: Color(light: 0xF5F1E6, dark: 0x0B0F0D), surface: Color(light: 0xFFFFFF, dark: 0x1F2A1F), surface2: Color(light: 0xECE6D6, dark: 0x2B3A2B), border: Color(light: 0xD9C7A3, dark: 0x3E5A3F), fieldBorder: Color(light: 0x7C7355, dark: 0x8CA98C),
-            text: Color(light: 0x0B0F0D, dark: 0xF3EFE4), text2: Color(light: 0x3E5A3F, dark: 0xD9C7A3), textMuted: Color(light: 0x4F5F4F, dark: 0xB5BFA9),
-            accent: Color(light: 0x7F5F2C, dark: 0xD0AB6E), accentActive: Color(light: 0x6F5429, dark: 0xC09A5C), onAccent: Color(light: 0xFFFFFF, dark: 0x0B0F0D),
-            accentContainer: Color(light: 0xF3E8D2, dark: 0x3A2F1B), onAccentContainer: Color(light: 0x4A3715, dark: 0xE8D9B8),
-            hero: Color(light: 0x1F2A1F, dark: 0x1F2A1F), heroControl: Color(light: 0x3E5A3F, dark: 0x3E5A3F), onHero2: Color(light: 0xD9C7A3, dark: 0xD9C7A3))),
-    DincrColorStyle(id: "oliva", nameEs: "Oliva", nameEn: "Olive", swatches: [0x0F1F17, 0x1E3A2E, 0x3E5A3F, 0x6B7F67, 0xC7CBB8, 0x3D4337], colors: DincrColorStyle.Colors(
-            bg: Color(light: 0xF1F2EA, dark: 0x0F1F17), surface: Color(light: 0xFFFFFF, dark: 0x1E3A2E), surface2: Color(light: 0xE4E6DA, dark: 0x2A4A3B), border: Color(light: 0xC7CBB8, dark: 0x3E5A3F), fieldBorder: Color(light: 0x6B7F67, dark: 0x8FA38B),
-            text: Color(light: 0x0F1F17, dark: 0xF1F3EA), text2: Color(light: 0x3D4337, dark: 0xC7CBB8), textMuted: Color(light: 0x525A4C, dark: 0xB9BEAA),
-            accent: Color(light: 0x3E5A3F, dark: 0xC7CBB8), accentActive: Color(light: 0x2F4630, dark: 0xB3B8A2), onAccent: Color(light: 0xFFFFFF, dark: 0x0F1F17),
-            accentContainer: Color(light: 0xE3E9DC, dark: 0x3D4337), onAccentContainer: Color(light: 0x1E3A2E, dark: 0xE4E7D8),
-            hero: Color(light: 0x1E3A2E, dark: 0x1E3A2E), heroControl: Color(light: 0x3E5A3F, dark: 0x3E5A3F), onHero2: Color(light: 0xC7CBB8, dark: 0xC7CBB8))),
+    DincrColorStyle(id: "vino", nameEs: "Vino", nameEn: "Wine", swatches: [0x1A060C, 0x4A1022, 0x6B1A33, 0xF2C9CF, 0xFBF3F4, 0xB6F23A], colors: DincrColorStyle.Colors(
+            bg: Color(light: 0xFBF3F4, dark: 0x1A060C), surface: Color(light: 0xFFFFFF, dark: 0x2A0C16), surface2: Color(light: 0xF6E1E4, dark: 0x3D1422), border: Color(light: 0xEBCBD1, dark: 0x4F1C2E), fieldBorder: Color(light: 0x8C5A66, dark: 0xA06A7A),
+            text: Color(light: 0x2A0812, dark: 0xFBEFF1), text2: Color(light: 0x5A2A38, dark: 0xF2C9CF), textMuted: Color(light: 0x6E3A48, dark: 0xD9A9B3),
+            accent: Color(light: 0x7A1A38, dark: 0xB6F23A), accentActive: Color(light: 0x5E1229, dark: 0x9ED62A), onAccent: Color(light: 0xFFFFFF, dark: 0x1A060C),
+            accentContainer: Color(light: 0xF2C9CF, dark: 0x2F3D10), onAccentContainer: Color(light: 0x4A1022, dark: 0xD9FA9A),
+            hero: Color(light: 0x4A1022, dark: 0x4A1022), heroControl: Color(light: 0x6B1A33, dark: 0x6B1A33), onHero2: Color(light: 0xF2C9CF, dark: 0xF2C9CF))),
+    DincrColorStyle(id: "grafito", nameEs: "Grafito", nameEn: "Graphite", swatches: [0x151619, 0x2B2D33, 0x3A3D45, 0x6B6F78, 0xE4E6EA, 0xF2412C], colors: DincrColorStyle.Colors(
+            bg: Color(light: 0xF1F2F4, dark: 0x151619), surface: Color(light: 0xFFFFFF, dark: 0x2B2D33), surface2: Color(light: 0xE4E6EA, dark: 0x3A3D45), border: Color(light: 0xD5D8DE, dark: 0x3A3D45), fieldBorder: Color(light: 0x6B6F78, dark: 0x8A8E98),
+            text: Color(light: 0x16171A, dark: 0xE4E6EA), text2: Color(light: 0x3A3D45, dark: 0xC9CCD3), textMuted: Color(light: 0x555963, dark: 0xA9ADB6),
+            accent: Color(light: 0xC8321F, dark: 0xFF6A55), accentActive: Color(light: 0xA6281A, dark: 0xF2412C), onAccent: Color(light: 0xFFFFFF, dark: 0x151619),
+            accentContainer: Color(light: 0xFDE3DF, dark: 0x4A1810), onAccentContainer: Color(light: 0x7A1A0E, dark: 0xFFD3CC),
+            hero: Color(light: 0x2B2D33, dark: 0x2B2D33), heroControl: Color(light: 0x3A3D45, dark: 0x3A3D45), onHero2: Color(light: 0xC9CCD3, dark: 0xC9CCD3))),
+    DincrColorStyle(id: "petroleo", nameEs: "Petróleo", nameEn: "Petrol", swatches: [0x062328, 0x0E4A52, 0x176069, 0xF3E6CF, 0xFAF4EA, 0xA24BFF], colors: DincrColorStyle.Colors(
+            bg: Color(light: 0xFAF4EA, dark: 0x062328), surface: Color(light: 0xFFFFFF, dark: 0x0E3A41), surface2: Color(light: 0xF3E6CF, dark: 0x134A52), border: Color(light: 0xE6D6B8, dark: 0x1C5961), fieldBorder: Color(light: 0x6E6450, dark: 0x6F9EA4),
+            text: Color(light: 0x0B2226, dark: 0xF3E6CF), text2: Color(light: 0x234A50, dark: 0xE2D3B8), textMuted: Color(light: 0x3E5654, dark: 0xBFB49E),
+            accent: Color(light: 0x7C2FD6, dark: 0xB98AFF), accentActive: Color(light: 0x6421B3, dark: 0xCBA6FF), onAccent: Color(light: 0xFFFFFF, dark: 0x062328),
+            accentContainer: Color(light: 0xEFE3FF, dark: 0x31195A), onAccentContainer: Color(light: 0x4A1690, dark: 0xE5D6FF),
+            hero: Color(light: 0x0E4A52, dark: 0x0E4A52), heroControl: Color(light: 0x176069, dark: 0x176069), onHero2: Color(light: 0xF3E6CF, dark: 0xF3E6CF))),
     ]
 }
