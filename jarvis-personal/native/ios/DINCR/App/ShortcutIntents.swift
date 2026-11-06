@@ -43,7 +43,7 @@ enum ShortcutIntentRuntime {
 struct RegisterApplePayPurchaseIntent: AppIntent {
     static let title: LocalizedStringResource = "Registrar compra en DINCR"
     static let description = IntentDescription(
-        "Envía una compra con Apple Pay a DINCR para que la revisés en Movimientos → Por revisar. Usala en la automatización Transacción.")
+        "Envía una compra pagada con el teléfono a DINCR para que la revisés en Movimientos → Por revisar. Usala en la automatización Transacción.")
     static let openAppWhenRun = false
 
     @Parameter(title: "Monto", description: "El monto de la compra, con o sin símbolo de moneda.")
