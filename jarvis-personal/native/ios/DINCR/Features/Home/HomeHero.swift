@@ -30,9 +30,15 @@ struct HomeHero: View {
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("\(idPrefix).greeting")
             if let status { figure(status) }
-            ViewThatFits(in: .horizontal) {
+            if showsJarvis {
+                // The Owner's four entries stay on one row: icon over a one-word title.
                 HStack(spacing: DincrSpacing.s2) { actions }
-                VStack(spacing: DincrSpacing.s2) { actions }
+                    .labelStyle(HeroTileLabelStyle())
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: DincrSpacing.s2) { actions }
+                    VStack(spacing: DincrSpacing.s2) { actions }
+                }
             }
         }
         .padding(.horizontal, DincrSpacing.s4)
@@ -68,7 +74,14 @@ struct HomeHero: View {
                 VStack(alignment: .leading, spacing: DincrSpacing.s2) { facts(status) }
             }
             .accessibilityIdentifier("\(idPrefix).status.facts")
-            // The Owner's three figures add up by themselves: no note under them.
+            // The Owner's three figures add up by themselves; under them, what a negative statement asks for.
+            if showsJarvis, let hours = status.otHoursToCover {
+                Text(hours == 1 ? tx("Necesitás 1 hora de OT para cubrir el saldo negativo.", "You need 1 hour of OT to cover the negative balance.")
+                                : tx("Necesitás \(hours) horas de OT para cubrir el saldo negativo.", "You need \(hours) hours of OT to cover the negative balance."))
+                    .font(DincrFont.caption.weight(.semibold)).foregroundStyle(OwnerColor.onHero)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("\(idPrefix).status.otHours")
+            }
             if !showsJarvis, status.headline == .safeToSpend, let takenOut = resultNote(status) {
                 Text(takenOut).font(DincrFont.caption).foregroundStyle(OwnerColor.onHero2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -138,8 +151,9 @@ struct HomeHero: View {
         // The one way into JARVIS from Hoy (spec OW-1) and his goals and savings (OW-2): the Owner's Hoy only.
         if showsJarvis {
             NavigationLink { GoalsView() } label: {
-                Label(tx("Metas y ahorros", "Goals and savings"), systemImage: "target")
+                Label(tx("Ahorros", "Savings"), systemImage: "target")
             }
+            .accessibilityLabel(tx("Metas y ahorros", "Goals and savings"))
             .buttonStyle(OwnerHeroButtonStyle(prominent: false))
             .accessibilityIdentifier("owner.home.goals")
             NavigationLink(value: ProfileRoute.jarvis) {
@@ -148,6 +162,17 @@ struct HomeHero: View {
             .buttonStyle(OwnerHeroButtonStyle(prominent: false))
             .accessibilityIdentifier("owner.home.jarvis")
         }
+    }
+}
+
+/// The Owner's hero entries: the icon over a one-word title, so four fit on one row.
+private struct HeroTileLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 2) {
+            configuration.icon.font(.system(size: 16, weight: .semibold))
+            configuration.title.font(DincrFont.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .padding(.vertical, DincrSpacing.s2)
     }
 }
 

@@ -152,3 +152,26 @@ def test_a_bonus_typed_in_the_app_is_not_swallowed_by_the_projected_salary(monke
     # The projection replaces only salary rows: the bonus stays on top of it in the period's income.
     assert salary["received"] == 0
     assert salary["salary"] == 700_000
+
+
+PROFILE = {"hourly_rate": 2_000, "overtime_multiplier": 1.5}
+DEDUCTIONS = [{"deduction_type": "percentage", "amount": 10.67}, {"deduction_type": "fixed", "amount": 5_000}]
+
+
+def test_an_ot_hour_is_worth_its_net_pay():
+    # 2 000 × 1.5 = 3 000 gross, less the 10.67 % percentage deductions (the fixed one is the base's).
+    assert projection.ot_hour_net(PROFILE, DEDUCTIONS) == Decimal("2679.9000")
+
+
+def test_hours_of_ot_that_cover_a_negative_statement():
+    hour = projection.ot_hour_net(PROFILE, DEDUCTIONS)
+    assert projection.ot_hours_to_cover(-17_000, hour) == 7  # 6.34 hours, rounded up to whole hours
+    assert projection.ot_hours_to_cover(-2_679.90, hour) == 1
+
+
+def test_no_hours_when_nothing_is_missing_or_the_rate_is_unknown():
+    hour = projection.ot_hour_net(PROFILE, DEDUCTIONS)
+    assert projection.ot_hours_to_cover(0, hour) is None
+    assert projection.ot_hours_to_cover(5_000, hour) is None
+    assert projection.ot_hour_net(None, DEDUCTIONS) is None
+    assert projection.ot_hours_to_cover(-17_000, None) is None

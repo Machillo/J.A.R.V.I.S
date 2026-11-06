@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
+from math import ceil
 from decimal import Decimal
 from typing import Any
 
@@ -97,6 +98,37 @@ def projected(cycle: dict[str, Any], *, installments: Decimal, fixed: Decimal, s
             "parts": {key: money(value) for key, value in parts.items()}, "dollars_unknown": dollars is None}
 
 
+def ot_hour_net(profile: dict[str, Any] | None, deductions: list[dict[str, Any]]) -> Decimal | None:
+    """What one hour of OT leaves in hand: hourly rate × OT multiplier, less the percentage payroll
+    deductions (the same ones the salary rule takes from OT). Unknown without a rate."""
+    rate = _d((profile or {}).get("hourly_rate"))
+    if rate <= 0:
+        return None
+    multiplier = _d((profile or {}).get("overtime_multiplier") or "1.5")
+    share = sum((_d(row.get("amount")) for row in deductions
+                 if str(row.get("deduction_type") or "").lower().strip() == "percentage"), Decimal("0")) / 100
+    net = rate * multiplier * (1 - share)
+    return net if net > 0 else None
+
+
+def ot_hours_to_cover(result: Any, hour_net: Decimal | None) -> int | None:
+    """Whole OT hours that bring a negative statement back to zero; None when it isn't negative or
+    an OT hour's value is unknown."""
+    deficit = -_d(result)
+    if deficit <= 0 or not hour_net:
+        return None
+    return ceil(deficit / hour_net)
+
+
+def _ot_inputs(conn, workspace_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    profile = conn.execute(
+        "SELECT hourly_rate, overtime_multiplier FROM employment_profile WHERE workspace_id=%s ORDER BY id DESC LIMIT 1",
+        (workspace_id,),
+    ).fetchone()
+    deductions = conn.execute("SELECT deduction_type, amount FROM payroll_deductions WHERE workspace_id=%s", (workspace_id,)).fetchall()
+    return (dict(profile) if profile else None), [dict(row) for row in deductions]
+
+
 def _paid_installment_debt_ids(conn, workspace_id: str, start: date, end_exclusive: date) -> set[int]:
     rows = conn.execute(
         """SELECT DISTINCT debt_id FROM debt_payments WHERE workspace_id=%s AND payment_type='monthly_payment'
@@ -145,7 +177,13 @@ def project(conn, workspace_id: str, cycle: dict[str, Any], savings: dict[str, A
     dollars = pending_conversion.estimate_between(conn, workspace_id, base_currency, start, last)
     result = projected(cycle, installments=installments["total"], fixed=fixed, savings_total=savings.get("total"), dollars=dollars,
                        funded_elsewhere=_funded_elsewhere(conn, workspace_id, start, end_exclusive))
-    return {**result, "unknown_installments": installments["unknown"]}
+    try:
+        profile, deductions = _ot_inputs(conn, workspace_id)
+        hours = ot_hours_to_cover(result["result"], ot_hour_net(profile, deductions))
+    except Exception as exc:  # noqa: BLE001 — the OT hint is optional
+        logger.warning("owner_ot_hours_unavailable error_type=%s", type(exc).__name__)
+        hours = None
+    return {**result, "unknown_installments": installments["unknown"], "ot_hours_to_cover": hours}
 
 
 def free_share(result: float) -> float | None:

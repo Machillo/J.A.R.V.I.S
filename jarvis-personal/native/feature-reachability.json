@@ -292,6 +292,7 @@
    "android": {
     "tab": "Hoy",
     "text": "Metas y ahorros",
+    "owner_tag": "owner.home.goals",
     "en": {
      "tab": "Today",
      "text": "Goals and savings"

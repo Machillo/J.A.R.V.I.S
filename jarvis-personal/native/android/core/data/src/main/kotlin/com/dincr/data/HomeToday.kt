@@ -67,7 +67,8 @@ data class HomeToday(
                 income, registered(month?.expenses), registered(month?.debtPaid), if (income == null) null else month?.balance,
                 debtBalance(debts, null), margin = spend?.monthlyMargin, lowestBalance = spend?.next45DaysMinimum,
                 budget = budgetLeft(budget), pending = pending(calendar, today),
-                cycle = month?.let(HomeStatus.Cycle::of), automaticSaved = registered(month?.automaticSaved))
+                cycle = month?.let(HomeStatus.Cycle::of), automaticSaved = registered(month?.automaticSaved),
+                otHoursToCover = month?.otHoursToCover)
             val director = center.director
             val headline = director?.headline?.trim()?.takeIf { it.isNotEmpty() }
             // The director needs inputs before recommending: priority `incomplete` (#326), or a known
@@ -174,6 +175,8 @@ data class HomeStatus(
     val cycle: Cycle? = null,
     /** The Owner only: the statement's automatic savings so far (taken out of the result). */
     val automaticSaved: BigDecimal? = null,
+    /** The Owner only: whole OT hours that cover a negative statement. */
+    val otHoursToCover: Int? = null,
 ) {
     data class Cycle(val start: String, val end: String, val payment: String?) {
         companion object {

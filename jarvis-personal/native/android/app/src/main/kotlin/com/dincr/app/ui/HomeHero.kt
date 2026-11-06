@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -64,13 +66,21 @@ internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status:
         }
         // The Owner's three figures add up by themselves: no note under them.
         status?.let { Figure(it, cycle, dollars, notes = onJarvis == null) }
-        // Wraps instead of squeezing a label on a narrow screen or at a large text size.
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
-            HeroAction(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
-            HeroAction(tx("Ingreso", "Income"), tx("Registrar ingreso", "Record income"), Icons.Rounded.Add, prominent = false, tag = "$tagPrefix.addIncome", onClick = onIncome)
-            // The Owner's goals and savings (OW-2) and the one way into JARVIS from Hoy (OW-1): his Hoy only.
-            onGoals?.let { HeroAction(tx("Metas y ahorros", "Goals and savings"), tx("Metas y ahorros", "Goals and savings"), Icons.Rounded.Flag, prominent = false, tag = "owner.home.goals", onClick = it) }
-            onJarvis?.let { HeroAction("JARVIS", "JARVIS", Icons.Rounded.AutoAwesome, prominent = false, tag = "owner.home.jarvis", onClick = it) }
+        if (onJarvis != null) {
+            // The Owner's four entries stay on one row: icon over a one-word title. His goals and
+            // savings (OW-2) and the one way into JARVIS from Hoy (OW-1) are his Hoy only.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                HeroTile(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
+                HeroTile(tx("Ingreso", "Income"), tx("Registrar ingreso", "Record income"), Icons.Rounded.Add, prominent = false, tag = "$tagPrefix.addIncome", onClick = onIncome)
+                onGoals?.let { HeroTile(tx("Ahorros", "Savings"), tx("Metas y ahorros", "Goals and savings"), Icons.Rounded.Flag, prominent = false, tag = "owner.home.goals", onClick = it) }
+                HeroTile("JARVIS", "JARVIS", Icons.Rounded.AutoAwesome, prominent = false, tag = "owner.home.jarvis", onClick = onJarvis)
+            }
+        } else {
+            // Wraps instead of squeezing a label on a narrow screen or at a large text size.
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                HeroAction(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
+                HeroAction(tx("Ingreso", "Income"), tx("Registrar ingreso", "Record income"), Icons.Rounded.Add, prominent = false, tag = "$tagPrefix.addIncome", onClick = onIncome)
+            }
         }
     }
 }
@@ -94,6 +104,12 @@ private fun Figure(status: HomeStatus, cycle: String?, dollars: BigDecimal?, not
         }
     }
     // Result = income − expenses − what else this line names, so the figures on screen add up.
+    // The Owner: what a negative statement asks for, in hours of OT.
+    if (!notes) status.otHoursToCover?.let { hours ->
+        Text(if (hours == 1) tx("Necesitás 1 hora de OT para cubrir el saldo negativo.", "You need 1 hour of OT to cover the negative balance.")
+             else tx("Necesitás $hours horas de OT para cubrir el saldo negativo.", "You need $hours hours of OT to cover the negative balance."),
+            Modifier.testTag("owner.home.status.otHours"), style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = OnHero)
+    }
     if (notes && status.headline == HomeStatus.Headline.SAFE_TO_SPEND) {
         val parts = listOfNotNull(
             status.debtPaid?.let { val paid = Dincr.money.format(it); tx("$paid pagados a deudas", "$paid paid to debts") },
@@ -131,6 +147,22 @@ private fun HeroAmount(amount: BigDecimal?, sign: MoneyFormat.Sign, big: Boolean
         style = (if (big) MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold, fontSize = 40.sp) else MaterialTheme.typography.labelLarge).merge(TabularNums),
         color = OnHero, maxLines = 1,
     )
+}
+
+@Composable
+private fun RowScope.HeroTile(label: String, spokenLabel: String, icon: ImageVector, prominent: Boolean, tag: String, onClick: () -> Unit) {
+    Box(Modifier.weight(1f).testTag(tag)) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(20.dp)).background(if (prominent) OnHero else HeroControl)
+                .clickable(onClickLabel = spokenLabel, role = Role.Button, onClick = onClick)
+                .semantics(mergeDescendants = true) { contentDescription = spokenLabel }
+                .padding(horizontal = DincrSpacing.s1, vertical = DincrSpacing.s2),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+        ) {
+            Icon(icon, contentDescription = null, tint = if (prominent) HomeHeroColor else OnHero, modifier = Modifier.size(18.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, color = if (prominent) HomeHeroColor else OnHero, maxLines = 1)
+        }
+    }
 }
 
 @Composable

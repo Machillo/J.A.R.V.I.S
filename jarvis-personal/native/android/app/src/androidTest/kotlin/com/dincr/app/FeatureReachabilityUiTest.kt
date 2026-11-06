@@ -92,7 +92,8 @@ class FeatureReachabilityUiTest {
         val id = feature.getValue("id").jsonPrimitive.content
         val expected = state(feature, plan)
         val text = location.string("tab_button") ?: location.string("text")
-        val tag = location.string("tag")
+        // The Owner's Hoy may name its own entry (e.g. his one-word hero buttons, OW-2).
+        val tag = (if (plan == "owner") location.string("owner_tag") else null) ?: location.string("tag")
         val visible = if (tag != null) waitFor(5_000) { tagged(tag) } else waitFor(if (expected == "AVAILABLE") 5_000 else 1_000) { present(text!!) }
         when (expected) {
             "AVAILABLE" -> if (!visible) failures += "$id [$plan]: not reachable"
