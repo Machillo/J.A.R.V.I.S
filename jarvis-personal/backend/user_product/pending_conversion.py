@@ -186,6 +186,20 @@ def _estimates(conn, rows, base: str) -> dict[int, Decimal]:
     return estimates
 
 
+def estimate_between(conn, workspace_id: str, base: str, start: date, end: date) -> Decimal | None:
+    """The waiting expenses typed from ``start`` to ``end`` (inclusive), in colones at their purchase
+    day's rate (read-only). None when one of them has no estimate: the total would read as complete."""
+    if not pending_available(conn):
+        return Decimal("0")
+    rows = [row for row in _pending_rows(conn, workspace_id) if start <= date.fromisoformat(str(row["entry_date"])[:10]) <= end]
+    if not rows:
+        return Decimal("0")
+    estimates = _estimates(conn, rows, base)
+    if any(row["id"] not in estimates for row in rows):
+        return None
+    return sum(estimates.values(), Decimal("0"))
+
+
 def list_pending() -> dict[str, Any]:
     """The caller's expenses waiting for their conversion, grouped by close, with their totals (read-only)."""
     workspace_id = get_current_workspace_id()

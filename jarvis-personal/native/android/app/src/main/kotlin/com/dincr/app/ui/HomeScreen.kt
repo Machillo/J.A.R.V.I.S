@@ -153,7 +153,8 @@ private fun HomeContent(model: AppModel, name: String, home: LoadHandle<HomeToda
     var dollars by remember { mutableStateOf<java.math.BigDecimal?>(null) }
     val dollarsGeneration by model.dataGeneration.collectAsStateWithLifecycle()
     LaunchedEffect(dollarsGeneration, status?.cycle?.start) {
-        // The Owner's figures are his card statement's, so its dollars are too.
+        // The Owner's statement already counts its dollars (the server's projected statement).
+        if (owner) { dollars = null; return@LaunchedEffect }
         dollars = try { model.api.pendingConversion().let { read -> status?.cycle?.let { read.estimateBetween(it.start, it.end).sum } ?: read.estimate(java.time.YearMonth.now().toString(), "").sum } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { dollars }
     }
     // Light status bar icons over the hero, only while this screen is on.

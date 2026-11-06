@@ -1,0 +1,162 @@
+"""Owner only: Hoy's statement projected whole from its first day.
+
+The Owner's Hoy shows his card statement (``owner_ledger.owner_cycle_window``). He never types his
+installments, his fixed expenses or his automatic savings: they go by themselves. So the statement
+counts them from its first day, and what he records adds on top:
+
+- Ingresos: the ledger's income (the salary rule with OT, bonuses and VGH, plus other incomes).
+- Gastos: what the ledger already holds (spending and posted debt payments), plus the installments
+  and fixed expenses due in the statement that are not paid yet, plus the statement's automatic
+  savings, plus the dollar expenses still waiting for their close (estimated in colones).
+- Resultado: Ingresos − Gastos.
+
+A commitment already paid is in the ledger and is not added again. Derived on read, nothing is
+written. Users' Hoy never calls this module (``vip_service`` calls it only for the verified Owner).
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# The card installment plans the statement already holds as charges (owner_ledger).
+CARD_INSTALLMENT_TYPES = {"tasa_cero", "minicuotas"}
+# Debt payments made with money counted elsewhere: a locked block's abono (its weekly savings were
+# already this or an earlier statement's automatic savings) and a confirmed distribution's abonos
+# (the leftover of the statement before). Spending them again here would count them twice.
+FUNDED_ELSEWHERE = ("debt_savings_block", "owner_distribution")
+_PAID = "paid"
+
+
+def _d(value: Any) -> Decimal:
+    return Decimal(str(value or 0))
+
+
+def _day(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10]) if value else None
+    except ValueError:
+        return None
+
+
+def pending_installments(debts: list[dict[str, Any]], paid_debt_ids: set[int], end_exclusive: date) -> dict[str, Any]:
+    """Each debt's installment of the statement not paid yet: one per debt (a statement is one month).
+
+    Left out: card installment plans (already charges on the statement), debts whose installment
+    was paid in the statement (``paid_debt_ids``), debts whose next installment falls after it, and
+    unknown payments (counted in ``unknown``, never as 0)."""
+    total, unknown = Decimal("0"), 0
+    for debt in debts:
+        if str(debt.get("debt_type") or "").lower() in CARD_INSTALLMENT_TYPES or int(debt["id"]) in paid_debt_ids:
+            continue
+        next_due = _day(debt.get("next_payment_date"))
+        if next_due is not None and next_due >= end_exclusive:
+            continue
+        if debt.get("monthly_payment") is None:
+            unknown += 1
+            continue
+        total += _d(debt["monthly_payment"])
+    return {"total": total, "unknown": unknown}
+
+
+def pending_fixed(items: list[dict[str, Any]], start: date, end_exclusive: date, is_debt: Any) -> Decimal:
+    """The fixed expenses due in the statement not matched as paid (``get_fixed_expense_status`` items).
+    A fixed expense that is a debt is already an installment above (``is_debt``)."""
+    total = Decimal("0")
+    for item in items:
+        due = _day(item.get("due_date"))
+        if not item.get("due_this_month") or due is None or not start <= due < end_exclusive:
+            continue
+        if item.get("status") == _PAID or is_debt(item.get("fixed_expense") or {}):
+            continue
+        total += _d(item.get("expected_amount"))
+    return total
+
+
+def projected(cycle: dict[str, Any], *, installments: Decimal, fixed: Decimal, savings_total: Any, dollars: Decimal | None,
+              funded_elsewhere: Decimal = Decimal("0")) -> dict[str, Any]:
+    """The statement's three figures; the parts of Gastos are kept for whoever needs to explain it."""
+    income = _d(cycle.get("income"))
+    parts = {
+        "recorded": _d(cycle.get("expenses")),
+        "debt_paid": max(_d(cycle.get("debt_paid")) - funded_elsewhere, Decimal("0")),
+        "installments_pending": installments,
+        "fixed_pending": fixed,
+        "automatic_savings": _d(savings_total),
+        "dollars_estimated": dollars or Decimal("0"),
+    }
+    expenses = sum(parts.values(), Decimal("0"))
+    money = lambda value: float(value.quantize(Decimal("0.01")))  # noqa: E731
+    return {"income": money(income), "expenses": money(expenses), "result": money(income - expenses),
+            "parts": {key: money(value) for key, value in parts.items()}, "dollars_unknown": dollars is None}
+
+
+def _paid_installment_debt_ids(conn, workspace_id: str, start: date, end_exclusive: date) -> set[int]:
+    rows = conn.execute(
+        """SELECT DISTINCT debt_id FROM debt_payments WHERE workspace_id=%s AND payment_type='monthly_payment'
+           AND payment_date >= %s AND payment_date < %s AND debt_id IS NOT NULL""",
+        (workspace_id, start, end_exclusive),
+    ).fetchall()
+    return {int(row["debt_id"]) for row in rows}
+
+
+def _funded_elsewhere(conn, workspace_id: str, start: date, end_exclusive: date) -> Decimal:
+    from backend.user_product.owner_ledger import _transaction_date_sql
+
+    transaction_date = _transaction_date_sql()
+    row = conn.execute(
+        f"""SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE workspace_id=%s
+            AND LOWER(BTRIM(COALESCE(transaction_type,'')))='debt_payment' AND source = ANY(%s)
+            AND {transaction_date} >= %s AND {transaction_date} < %s""",
+        (workspace_id, list(FUNDED_ELSEWHERE), start, end_exclusive),
+    ).fetchone()
+    return _d(row["total"])
+
+
+def _fixed_items(start: date, end_exclusive: date) -> list[dict[str, Any]]:
+    from backend.finance.fixed_expenses import get_fixed_expense_status
+
+    months, month = [], start.replace(day=1)
+    while month < end_exclusive:
+        months.append(month.strftime("%Y-%m"))
+        month = (month + timedelta(days=32)).replace(day=1)
+    return [item for key in months for item in get_fixed_expense_status(key).get("items") or []]
+
+
+def project(conn, workspace_id: str, cycle: dict[str, Any], savings: dict[str, Any], debts: list[dict[str, Any]],
+            base_currency: str) -> dict[str, Any]:
+    """The Owner's statement (``owner_cycle_totals``) projected whole. SELECT only."""
+    from backend.ai.strategy_dashboard import _is_debt_like_fixed_expense
+    from backend.user_product import pending_conversion
+
+    start = date.fromisoformat(cycle["period_start"])
+    last = date.fromisoformat(cycle["period_end"])
+    end_exclusive = last + timedelta(days=1)
+    installments = pending_installments(debts, _paid_installment_debt_ids(conn, workspace_id, start, end_exclusive), end_exclusive)
+    debt_names = {str(debt.get("name") or "").lower().strip() for debt in debts}
+    fixed = pending_fixed(_fixed_items(start, end_exclusive), start, end_exclusive,
+                          lambda row: _is_debt_like_fixed_expense(row, debt_names))
+    dollars = pending_conversion.estimate_between(conn, workspace_id, base_currency, start, last)
+    result = projected(cycle, installments=installments["total"], fixed=fixed, savings_total=savings.get("total"), dollars=dollars,
+                       funded_elsewhere=_funded_elsewhere(conn, workspace_id, start, end_exclusive))
+    return {**result, "unknown_installments": installments["unknown"]}
+
+
+def free_share(result: float) -> float | None:
+    """What the Owner's strategy leaves for him (``vida_controlada``) when it splits the statement's
+    result: the same split as JARVIS's exact distribution. Nothing left: 0. Unavailable: None."""
+    if result <= 0:
+        return 0.0
+    try:
+        from backend.ai.strategy_dashboard import _owner_strategy_blueprint
+
+        return round(float(_owner_strategy_blueprint(manual_available=round(result, 2)).get("safe_to_spend") or 0), 2)
+    except Exception as exc:  # noqa: BLE001 — Hoy never fails because of the strategy
+        logger.warning("owner_free_share_unavailable error_type=%s", type(exc).__name__)
+        return None

@@ -165,6 +165,12 @@ def _transaction_date_sql() -> str:
 # '6 hours')::date``: UTC-6, no daylight saving, so it needs no time-zone database and no session
 # time zone. Every statement names its table literally, so the role-grant scanner sees it
 # (tests/test_dincr_app_grants.py): no interpolated table names.
+# The ``salaries`` rows that are salary (the app's "Salario" and "Boleta de pago", and rows without a
+# category from before categories existed); every other category is another income.
+SALARY_ROWS_SQL = """SELECT COALESCE(SUM(amount),0) AS total FROM salaries WHERE workspace_id=%s
+        AND (category IS NULL OR LOWER(BTRIM(category)) IN ('salario','boleta de pago'))
+        AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s"""
+
 RECORD_SUMS = {
     "salaries": ("salaries", """SELECT COALESCE(SUM(amount),0) AS total FROM salaries WHERE workspace_id=%s
         AND (created_at - interval '6 hours')::date >= %s AND (created_at - interval '6 hours')::date < %s"""),
@@ -299,7 +305,9 @@ def _period_salary(conn, workspace_id: str, start: date, end: date, inputs: dict
         f"""SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE workspace_id=%s
             AND LOWER(BTRIM(COALESCE(transaction_type,'')))='income' AND LOWER(BTRIM(COALESCE(category,'')))='salario'
             AND {transaction_date} >= %s AND {transaction_date} < %s""", (workspace_id, start, end)).fetchone()["total"]
-    declared = conn.execute(RECORD_SUMS["salaries"][1], (workspace_id, start, end)).fetchone()["total"] if "salaries" in tables else 0
+    # Only salary rows are what the rule replaces: a "Bono" or "Otros ingresos" typed in the app is
+    # also kept in ``salaries`` and adds to the period on top of the salary.
+    declared = conn.execute(SALARY_ROWS_SQL, (workspace_id, start, end)).fetchone()["total"] if "salaries" in tables else 0
     received = _decimal(deposits) + _decimal(declared)
     if not (inputs["profile"] or inputs["base_net"] > 0) or (not is_open and received > 0):
         return {"salary": received, "received": received, "estimated": False, "closed_estimated": False}

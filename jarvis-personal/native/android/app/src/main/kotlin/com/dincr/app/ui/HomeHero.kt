@@ -61,7 +61,8 @@ internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status:
             Text(greeting, style = MaterialTheme.typography.bodyLarge, color = OnHero2)
             if (name.isNotEmpty()) Text("$name.", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = OnHero)
         }
-        status?.let { Figure(it, cycle, dollars) }
+        // The Owner's three figures add up by themselves: no note under them.
+        status?.let { Figure(it, cycle, dollars, notes = onJarvis == null) }
         // Wraps instead of squeezing a label on a narrow screen or at a large text size.
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             HeroAction(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
@@ -74,7 +75,7 @@ internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status:
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Figure(status: HomeStatus, cycle: String?, dollars: BigDecimal?) {
+private fun Figure(status: HomeStatus, cycle: String?, dollars: BigDecimal?, notes: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
         Text(
             if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) tx("Podés gastar con tranquilidad", "Safe to spend") else tx("Resultado del mes", "This month’s result"),
@@ -91,7 +92,7 @@ private fun Figure(status: HomeStatus, cycle: String?, dollars: BigDecimal?) {
         }
     }
     // Result = income − expenses − what else this line names, so the figures on screen add up.
-    if (status.headline == HomeStatus.Headline.SAFE_TO_SPEND) {
+    if (notes && status.headline == HomeStatus.Headline.SAFE_TO_SPEND) {
         val parts = listOfNotNull(
             status.debtPaid?.let { val paid = Dincr.money.format(it); tx("$paid pagados a deudas", "$paid paid to debts") },
             status.automaticSaved?.let { val saved = Dincr.money.format(it); tx("$saved de ahorro automático", "$saved of automatic savings") },
@@ -101,7 +102,7 @@ private fun Figure(status: HomeStatus, cycle: String?, dollars: BigDecimal?) {
                 Modifier.testTag("home.status.resultNote"), style = MaterialTheme.typography.bodySmall, color = OnHero2)
         }
     }
-    dollars?.let {
+    if (notes) dollars?.let {
         val amount = Dincr.money.format(it)
         Text(tx("Gastos incluye ≈ $amount estimado en dólares.", "Expenses include ≈ $amount estimated in dollars."),
             Modifier.testTag("home.status.dollars"), style = MaterialTheme.typography.bodySmall, color = OnHero2)
