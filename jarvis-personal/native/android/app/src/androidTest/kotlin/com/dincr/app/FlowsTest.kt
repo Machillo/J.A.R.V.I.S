@@ -414,10 +414,10 @@ class FlowsTest {
         waitForText("Compra grande")
     }
 
-    @Test fun belowVipTheColorStyleIsLocked() {
+    @Test fun belowVipThereAreNoColorStyles() {
         launch(plan = "free")
         tab(tx("Perfil", "Profile"))
-        waitForTag("profile.colorStyle.locked")
+        waitForText(tx("Suscripción", "Subscription"))
         assertTrue(compose.onAllNodesWithTag("profile.colorStyle").fetchSemanticsNodes().isEmpty())
     }
 
