@@ -51,6 +51,23 @@ import Testing
         }
     }
 
+    /// App Store Connect rejects a build (ITMS-90626) when Siri / Shortcuts text says "Apple".
+    @Test func intentTextNeverSaysApple() throws {
+        let markers = [": AppIntent", "AppShortcutsProvider", "AppEntity", "AppEnum"]
+        let literal = try Regex(#""[^"]*""#)
+        var seen = 0
+        for file in Self.appFiles() where file.pathExtension == "swift" {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            guard markers.contains(where: { text.contains($0) }) else { continue }
+            seen += 1
+            for match in text.matches(of: literal) {
+                let value = String(text[match.range])
+                #expect(!value.lowercased().contains("apple"), "\(file.lastPathComponent): \(value)")
+            }
+        }
+        #expect(seen > 0, "the guard must actually see the intent sources")
+    }
+
     @Test func sessionsNeverTouchUserDefaults() throws {
         for file in Self.appFiles() where file.pathExtension == "swift" {
             let lines = try String(contentsOf: file, encoding: .utf8).split(separator: "\n")
