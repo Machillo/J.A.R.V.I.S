@@ -13,7 +13,7 @@ from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance import dividend_plan
 from backend.finance.emergency_fund import get_salvavidas_state
-from backend.ai import owner_analysis, owner_commitments, owner_debt_block_store, owner_investment_destination
+from backend.ai import owner_analysis, owner_commitments, owner_debt_block_store, owner_hoy_projection, owner_investment_destination
 from backend.ai.preferences import get_preference
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
@@ -1285,8 +1285,12 @@ def _absorb_automatic(director: dict[str, Any], amount: float, order: tuple[str,
             "investment_recommended": shown.get("inversion", 0.0), "investment_target": shown.get("inversion", 0.0)}, taken
 
 
-def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str, Any]:
+def _owner_strategy_blueprint(manual_available: float | None = None, statement_base: float | None = None) -> dict[str, Any]:
     """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea).
+
+    The plan of the month splits Hoy's statement result (22→21, ``owner_hoy_projection``): the same
+    surplus Hoy shows, with installments, fixed expenses and automatic savings already out of it.
+    ``statement_base`` passes that result in (Hoy's "Podés gastar"); without it, it is read here.
 
     `manual_available` (exact-amount distribution, a planning tool): the money the Owner has LEFT
     after already paying expenses, cards and installments. It is the base itself: nothing is taken
@@ -1383,6 +1387,12 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
     if manual_available is not None:
         # The amount is already what is left: no obligation is deducted from it a second time.
         current_before_allocation = manual_available
+    else:
+        if statement_base is None:
+            statement_base = owner_hoy_projection.statement_result()
+        if statement_base is not None:
+            # Hoy's statement, counted whole: the plan splits the very surplus Hoy shows.
+            current_before_allocation = statement_base
 
     # Strategy and the Salvavidas screen must share the same source of truth.
     # The current balance is manual in V1; the monthly base is recalculated live
@@ -1408,7 +1418,12 @@ def _owner_strategy_blueprint(manual_available: float | None = None) -> dict[str
     # The Salvavidas automatic contributions and the locked savings blocks' contributions still to
     # come go by themselves: the distribution says only what to move on top of them
     # (owner_commitments.absorb).
-    if manual_available is None:
+    if manual_available is None and statement_base is not None:
+        # The statement's automatic savings are already out of its result: nothing to absorb.
+        automatic = owner_commitments.automatic_savings(salvavidas, cycle_report, date.today())
+        blocks = owner_commitments.block_savings(_stored_debt_blocks(), cycle_report, date.today())
+        automatic_taken, blocks_taken, automatic_moved = 0.0, 0.0, 0.0
+    elif manual_available is None:
         automatic = owner_commitments.automatic_savings(salvavidas, cycle_report, date.today())
         director, automatic_taken = _absorb_automatic(director, automatic["amount"], owner_commitments.ABSORB_ORDER, exact=False)
         blocks = owner_commitments.block_savings(_stored_debt_blocks(), cycle_report, date.today())
