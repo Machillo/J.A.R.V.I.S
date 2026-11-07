@@ -25,8 +25,8 @@ struct HomeBlocks: View {
                 AttentionSection(today: attention, idPrefix: "\(idPrefix).attention", ownerStyle: ownerStyle)
             }
             HomeNextCard(next: home.next, idPrefix: idPrefix, ownerStyle: ownerStyle, links: links)
-            // The Owner's Hoy has no quick access: his entries are the hero's buttons (OW-2).
-            if !ownerStyle {
+            // VIP's and the Owner's Hoy have no quick access: their entries are the hero's buttons (OW-2, VIP-1).
+            if !ownerStyle && home.tier != .vip {
                 HomeShortcuts(shortcuts: home.shortcuts, idPrefix: idPrefix, ownerStyle: ownerStyle, links: links)
             }
         }

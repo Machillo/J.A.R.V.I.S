@@ -95,7 +95,11 @@ final class HomeTodayUITests: XCTestCase {
         reveal("home.next.action", in: app).tap()
         XCTAssertTrue(app.navigationBars["Tu plan del mes"].waitForExistence(timeout: 10), "the detail lives in Plan → Tu plan del mes")
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        assertQuickAccess(app)
+        // VIP-1: no quick access; goals and savings sit with the hero's buttons, debts are in Plan.
+        XCTAssertTrue(element("home.goals", in: app).waitForExistence(timeout: 10))
+        XCTAssertLessThan(element("home.goals", in: app).frame.minY, element("home.status", in: app).frame.minY, "with Gasto and Ingreso")
+        XCTAssertFalse(element("home.shortcuts", in: app).exists, "no quick access for VIP")
+        XCTAssertFalse(element("home.debts", in: app).exists, "debts are in Plan → Deudas")
         assertNoRetiredBlocks(app, "vip")
     }
 

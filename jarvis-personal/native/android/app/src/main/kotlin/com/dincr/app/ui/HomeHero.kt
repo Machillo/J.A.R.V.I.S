@@ -66,14 +66,14 @@ internal fun HomeHero(tagPrefix: String, greeting: String, name: String, status:
         }
         // The Owner's three figures add up by themselves: no note under them.
         status?.let { Figure(it, cycle, dollars, notes = onJarvis == null) }
-        if (onJarvis != null) {
-            // The Owner's four entries stay on one row: icon over a one-word title. His goals and
-            // savings (OW-2) and the one way into JARVIS from Hoy (OW-1) are his Hoy only.
+        if (onGoals != null) {
+            // VIP's and the Owner's entries stay on one row: icon over a one-word title. Goals and
+            // savings are VIP's and the Owner's (OW-2, VIP-1); JARVIS is the Owner's Hoy only (OW-1).
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                 HeroTile(tx("Gasto", "Expense"), tx("Registrar gasto", "Record expense"), Icons.Rounded.Add, prominent = true, tag = "$tagPrefix.addExpense", onClick = onExpense)
                 HeroTile(tx("Ingreso", "Income"), tx("Registrar ingreso", "Record income"), Icons.Rounded.Add, prominent = false, tag = "$tagPrefix.addIncome", onClick = onIncome)
-                onGoals?.let { HeroTile(tx("Ahorros", "Savings"), tx("Metas y ahorros", "Goals and savings"), Icons.Rounded.Flag, prominent = false, tag = "owner.home.goals", onClick = it) }
-                HeroTile("JARVIS", "JARVIS", Icons.Rounded.AutoAwesome, prominent = false, tag = "owner.home.jarvis", onClick = onJarvis)
+                HeroTile(tx("Ahorros", "Savings"), tx("Metas y ahorros", "Goals and savings"), Icons.Rounded.Flag, prominent = false, tag = "$tagPrefix.goals", onClick = onGoals)
+                onJarvis?.let { HeroTile("JARVIS", "JARVIS", Icons.Rounded.AutoAwesome, prominent = false, tag = "owner.home.jarvis", onClick = it) }
             }
         } else {
             // Wraps instead of squeezing a label on a narrow screen or at a large text size.

@@ -3,6 +3,8 @@ package com.dincr.app
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
@@ -38,9 +40,10 @@ class GoalPlanUiTest {
         throw AssertionError("timed out waiting for $what")
     }
     private fun openGoals() {
-        val goals = tx("Metas y ahorros", "Goals and savings")
-        waitUntil("Hoy") { present(goals) }
-        val node = compose.onAllNodes(hasText(goals) and hasClickAction()).onFirst()
+        // Free/Basic: the quick access tile; VIP: the hero's "Ahorros" (VIP-1). Both are tagged home.goals.
+        val goals = (hasTestTag("home.goals") or hasAnyAncestor(hasTestTag("home.goals"))) and hasClickAction()
+        waitUntil("Hoy") { compose.onAllNodes(goals, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        val node = compose.onAllNodes(goals, useUnmergedTree = true).onFirst()
         runCatching { node.performScrollTo() }
         node.performSemanticsAction(SemanticsActions.OnClick)
         waitUntil("goals") { present("Fondo de emergencia") }

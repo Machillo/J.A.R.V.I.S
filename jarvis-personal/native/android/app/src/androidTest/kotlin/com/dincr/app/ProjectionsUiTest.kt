@@ -103,7 +103,7 @@ class ProjectionsUiTest {
     @Test fun hoyShowsNoProjection() {
         for (fixtures in listOf("POPULATED", "EMPTY")) {
             launch(fixtures = fixtures)
-            waitUntil("Hoy loaded ($fixtures)") { tagged("home.debts") }
+            waitUntil("Hoy loaded ($fixtures)") { tagged("home.goals") }  // VIP-1: the hero's goals button
             assertTrue(fixtures, !present("proyecci"))
         }
     }

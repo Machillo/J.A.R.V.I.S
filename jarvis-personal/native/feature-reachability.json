@@ -70,7 +70,8 @@
   "L-2",
   "OW-1",
   "OW-2",
-  "OW-3"
+  "OW-3",
+  "VIP-1"
  ],
  "fixtures": {
   "ios": {
@@ -211,14 +212,20 @@
   {
    "id": "home.debts",
    "name": "Deudas (Hoy → Tus finanzas: shortcut; managed in Plan → Deudas since UX-4)",
-   "decision": "OW-2",
+   "decision": "VIP-1",
    "plans": {
     "free": "AVAILABLE",
     "basic": "AVAILABLE",
-    "vip": "AVAILABLE",
+    "vip": "HIDDEN_BY_PLAN",
     "owner": "HIDDEN_BY_PLAN"
    },
    "transitional_hidden": [
+    {
+     "plan": "vip",
+     "platform": "both",
+     "reason": "VIP-1: VIP's Hoy has no quick access (its entries are the hero's buttons, as the Owner's, OW-2); debts are managed in Plan → Deudas (plan.debts, AVAILABLE)",
+     "resolved_by": "UX-7 (Hoy rebuilt: the debts shortcut is reconsidered for every plan)"
+    },
     {
      "plan": "owner",
      "platform": "both",
@@ -254,8 +261,8 @@
   },
   {
    "id": "home.goals",
-   "name": "Metas y ahorros (Hoy → Tus finanzas; Owner: botón del inicio de Hoy, OW-2)",
-   "decision": "OW-2",
+   "name": "Metas y ahorros (Hoy → Tus finanzas; VIP y Owner: botón del inicio de Hoy, OW-2 y VIP-1)",
+   "decision": "VIP-1",
    "plans": {
     "free": "AVAILABLE",
     "basic": "AVAILABLE",
@@ -293,6 +300,7 @@
    "android": {
     "tab": "Hoy",
     "text": "Metas y ahorros",
+    "tag": "home.goals",
     "owner_tag": "owner.home.goals",
     "en": {
      "tab": "Today",
