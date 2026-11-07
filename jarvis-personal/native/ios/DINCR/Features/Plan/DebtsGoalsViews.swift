@@ -102,6 +102,7 @@ private struct DebtList: View {
     let edit: (Debt) -> Void
     let delete: (Debt) -> Void
     let history: (Debt) -> Void
+    @State private var order: DebtOrder = .saved
 
     var body: some View {
         if debts.isEmpty {
@@ -109,8 +110,25 @@ private struct DebtList: View {
                            message: tx("Agregá tarjetas o préstamos para ver tu avance y tu estrategia.", "Add cards or loans to see your progress and your strategy.")) { EmptyView() }
         }
         DebtPayoffSummary(summary: DebtPayoff.summary(debts), total: DebtProgress.total(debts), strategy: strategyDate)
-        ForEach(debts) { debt in
+        // The Owner orders his debts by balance or rate, either way (OW-3).
+        if model.profile?.isOwner == true, debts.count > 1 {
+            DincrFilterChips(DebtOrder.allCases, selection: $order, title: Self.title)
+                .accessibilityIdentifier("debts.order")
+        }
+        ForEach(order.sorted(debts)) { debt in
             DebtRow(debt: debt, open: Binding(get: { openDebts.contains(debt.id) }, set: { if $0 { openDebts.insert(debt.id) } else { openDebts.remove(debt.id) } }), canWrite: canWrite, canEdit: canEdit, pay: pay, edit: edit, delete: delete, history: history)
+        }
+    }
+}
+
+extension DebtList {
+    static func title(_ order: DebtOrder) -> String {
+        switch order {
+        case .saved: tx("Como las guardé", "As saved")
+        case .balanceHigh: tx("Mayor saldo", "Largest balance")
+        case .balanceLow: tx("Menor saldo", "Smallest balance")
+        case .rateHigh: tx("Mayor interés", "Highest rate")
+        case .rateLow: tx("Menor interés", "Lowest rate")
         }
     }
 }
@@ -310,6 +328,7 @@ struct DebtForm: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(DincrColor.negative) } }
             }
+            .dincrForm()
             .navigationTitle(isEditing ? tx("Editar deuda", "Edit debt") : tx("Nueva deuda", "New debt"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -595,6 +614,7 @@ struct GoalForm: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(DincrColor.negative) } }
             }
+            .dincrForm()
             .navigationTitle(isEditing ? tx("Editar meta", "Edit goal") : tx("Nueva meta", "New goal"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -684,6 +704,7 @@ struct SavingsPlanForm: View {
                 }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
+            .dincrForm()
             .navigationTitle(plan == nil ? tx("Nuevo plan de ahorro", "New savings plan") : tx("Editar plan", "Edit plan"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

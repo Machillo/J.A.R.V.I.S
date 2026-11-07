@@ -118,12 +118,13 @@ private fun ObservedIncomeNote() {
  * Tu plan del mes in its locked state and sees both here, locked, opening Suscripción. iOS: `OrganizeYourMonth`.
  */
 @Composable
-private fun OrganizeYourMonth(plan: PlanTier, nav: Navigator) {
+private fun OrganizeYourMonth(plan: PlanTier, nav: Navigator, owner: Boolean = false) {
     SectionTitle(tx("Para organizar tu mes", "To organize your month"))
     DincrCard {
         Column {
             if (plan.allows(Feature.GUIDED_BUDGET)) {
-                Box(Modifier.testTag("plan.month.budget")) { NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") } }
+                // The Owner doesn't use a budget (OW-3): his statement is the limit.
+                if (!owner) Box(Modifier.testTag("plan.month.budget")) { NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") } }
                 Box(Modifier.testTag("plan.month.calendar")) { NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), tx("Pagos e ingresos del mes", "Payments and income this month")) { nav.open("calendar") } }
             } else {
                 val locked = tx("Disponible desde Basic", "Available from Basic")
@@ -154,7 +155,7 @@ fun StrategyScreen(model: AppModel, nav: Navigator) {
             // UX-7: the personal minimum (UX-8: the priority is DINCR's recommendation, not a setting).
             DincrCard { NavRow(Icons.Rounded.Tune, tx("Ajustes del plan", "Plan settings"), tx("Mínimo personal por mes", "Personal minimum per month")) { nav.open("planPreferences") } }
         }
-        OrganizeYourMonth(profile?.planTier ?: PlanTier.FREE, nav)
+        OrganizeYourMonth(profile?.planTier ?: PlanTier.FREE, nav, owner = profile?.isOwner == true)
         FinancialDisclaimer()
     }
 }
@@ -464,7 +465,8 @@ internal fun DirectorDistribution(s: DirectorStrategy, nav: Navigator) {
             AmountLine(Distribution.allocationLabel(item, language) + (item.percentage?.let { " · ${it.toInt()} %" } ?: ""), item.amount)
         }
     }
-    val lines = Distribution.formulaLines(s)
+    // The Owner keeps only the surplus and its split (OW-3): "where it comes from" is Hoy's statement.
+    val lines = if (s.isOwnerScope) emptyList() else Distribution.formulaLines(s)
     if (lines.isNotEmpty()) Section(tx("De dónde sale", "Where it comes from")) {
         lines.forEach { (key, amount) -> AmountLine(OwnerReading.formulaLabel(key, s, language), amount, emphasize = key == "surplus") }
     }

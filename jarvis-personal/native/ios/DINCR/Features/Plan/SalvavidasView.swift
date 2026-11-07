@@ -316,6 +316,7 @@ private struct SavingsAmountSheet: View {
                             "What the account holds today, including a contribution that already arrived today. It’s the same figure as in Goals and savings → My savings."))
                 }
             }
+            .dincrForm()
             .navigationTitle(tx("Ahorros", "Savings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

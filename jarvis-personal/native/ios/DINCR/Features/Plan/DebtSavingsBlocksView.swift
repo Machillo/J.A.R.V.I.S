@@ -146,6 +146,7 @@ private struct CreateBlockSheet: View {
                 DatePicker(tx("Primer ahorro", "First saving"), selection: $start, displayedComponents: .date)
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
+            .dincrForm()
             .navigationTitle(tx("Ahorro creado", "Saving created"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -227,6 +228,7 @@ private struct ApplyBlockSheet: View {
                 }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
+            .dincrForm()
             .navigationTitle(tx("Abono a la deuda", "Payment into the debt"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

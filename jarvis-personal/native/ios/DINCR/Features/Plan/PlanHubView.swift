@@ -217,6 +217,7 @@ struct AmountSheet: View {
                     }
                 }
             }
+            .dincrForm()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

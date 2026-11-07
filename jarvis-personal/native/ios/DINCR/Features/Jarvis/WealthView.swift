@@ -277,6 +277,7 @@ private struct BusinessEntrySheet: View {
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }
             }
+            .dincrForm()
             .navigationTitle(tx("Nuevo negocio", "New business"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -343,6 +344,7 @@ private struct BusinessMovementSheet: View {
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }
             }
+            .dincrForm()
             .navigationTitle(business.name ?? tx("Registrar movimiento", "Record movement"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -521,6 +521,7 @@ struct CorrectionSheet: View {
                 DatePicker(tx("Fecha", "Date"), selection: $date, in: ...Date.now, displayedComponents: .date)
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
+            .dincrForm()
             .navigationTitle(tx("Corregir aviso", "Correct notice"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

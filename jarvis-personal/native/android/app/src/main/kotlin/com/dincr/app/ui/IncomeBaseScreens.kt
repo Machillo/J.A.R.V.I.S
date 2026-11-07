@@ -82,7 +82,9 @@ private fun IncomeBaseForm(model: AppModel, current: FinancialProfile?, observed
         if (incomeType == "hourly") FormField(tx("Horas por día", "Hours per day"), hours, { hours = it }, errors["hours"], KeyboardType.Decimal)
         ChoiceChips(listOf("weekly" to tx("Semanal", "Weekly"), "biweekly" to tx("Quincenal", "Every two weeks"), "monthly" to tx("Mensual", "Monthly")), frequency, { frequency = it }, tx("Te pagan", "You get paid"))
     }
-    Section(tx("Gastos esenciales", "Essential expenses")) {
+    // The Owner's month is his statement (OW-3): not asked. The stored value is still sent as it was.
+    val owner = model.profile.collectAsStateWithLifecycle().value?.isOwner == true
+    if (!owner) Section(tx("Gastos esenciales", "Essential expenses")) {
         MoneyField(tx("Gastos esenciales del mes", "Essential monthly expenses"), essentials, { essentials = it }, errors["essentials"])
         Caption(tx("Dejá vacío lo que no sabés: DINCR lo trata como desconocido, no como cero.", "Leave empty what you don’t know: DINCR treats it as unknown, not zero."))
     }
