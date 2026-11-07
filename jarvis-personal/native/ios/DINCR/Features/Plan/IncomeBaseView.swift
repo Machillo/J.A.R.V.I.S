@@ -66,8 +66,11 @@ private struct IncomeBaseForm: View {
                     Text(tx("Mensual", "Monthly")).tag("monthly")
                 }
             }
-            Section(tx("Gastos esenciales", "Essential expenses")) {
-                MoneyField(label: tx("Gastos esenciales del mes", "Essential monthly expenses"), text: $essentials)
+            // The Owner's month is his statement (OW-3): not asked. The stored value is still sent as it was.
+            if model.profile?.isOwner != true {
+                Section(tx("Gastos esenciales", "Essential expenses")) {
+                    MoneyField(label: tx("Gastos esenciales del mes", "Essential monthly expenses"), text: $essentials)
+                }
             }
             ProfileSaveSection(save: save, id: "incomeBase.save") { Task { await submit() } }
             // §15 PR 5 (option A): the recurring income and expenses, the existing screen (every plan, UX-9).

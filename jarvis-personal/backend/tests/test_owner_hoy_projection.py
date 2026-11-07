@@ -18,12 +18,13 @@ DEBTS = [
 
 def test_every_installment_of_the_statement_counts_from_its_first_day():
     pending = projection.pending_installments(DEBTS, set(), END)
-    # A and B; the card plan is on the statement, C falls after it, D's payment is unknown.
-    assert pending == {"total": Decimal("80000.0"), "unknown": 1}
+    # A, B and the card plan (the schedule posts it like any debt); C falls after it, D's payment is unknown.
+    assert pending == {"total": Decimal("89000.0"), "unknown": 1}
 
 
 def test_an_installment_already_paid_is_not_counted_again():
-    assert projection.pending_installments(DEBTS, {1}, END)["total"] == Decimal("30000.0")
+    assert projection.pending_installments(DEBTS, {1}, END)["total"] == Decimal("39000.0")
+    assert projection.pending_installments(DEBTS, {1, 3}, END)["total"] == Decimal("30000.0")
 
 
 FIXED = [
@@ -84,8 +85,8 @@ def test_podes_gastar_is_the_strategys_free_share_of_the_result(monkeypatch):
 
     seen = {}
 
-    def blueprint(manual_available=None):
-        seen["amount"] = manual_available
+    def blueprint(manual_available=None, statement_base=None):
+        seen["amount"] = statement_base
         return {"safe_to_spend": 25_000.0}
 
     monkeypatch.setattr(strategy_dashboard, "_owner_strategy_blueprint", blueprint)
@@ -175,3 +176,14 @@ def test_no_hours_when_nothing_is_missing_or_the_rate_is_unknown():
     assert projection.ot_hours_to_cover(5_000, hour) is None
     assert projection.ot_hour_net(None, DEDUCTIONS) is None
     assert projection.ot_hours_to_cover(-17_000, None) is None
+
+
+def test_the_owners_monthly_margin_is_the_statement_result():
+    """Proyecciones and the debt planner read the same surplus as Hoy and the plan of the month."""
+    import inspect
+
+    from backend.user_product import vip_service
+
+    source = inspect.getsource(vip_service.get_vip_command_center)
+    assert 'if owner_statement is not None:\n        # The Owner\'s month is Hoy\'s statement counted whole' in source
+    assert 'margin = owner_statement["result"]' in source

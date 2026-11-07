@@ -85,6 +85,7 @@ struct AfterExtraSheet: View {
                 }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
+            .dincrForm()
             .navigationTitle(tx("Tu abono extra", "Your extra payment"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

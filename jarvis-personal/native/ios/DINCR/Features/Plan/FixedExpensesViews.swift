@@ -165,6 +165,7 @@ private struct OwnerFixedExpenseForm: View {
                     .accessibilityIdentifier("fixedExpenses.day")
                 if let error { Text(error).foregroundStyle(DincrColor.negative).accessibilityIdentifier("fixedExpenses.error") }
             }
+            .dincrForm()
             .navigationTitle(editing == nil ? tx("Nuevo gasto fijo", "New fixed expense") : tx("Editar gasto fijo", "Edit fixed expense"))
             .navigationBarTitleDisplayMode(.inline)
             .onAppear(perform: prefill)

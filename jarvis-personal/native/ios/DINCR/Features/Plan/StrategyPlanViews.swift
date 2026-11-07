@@ -45,8 +45,11 @@ private struct OrganizeYourMonth: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             SectionHeader(title: tx("Para organizar tu mes", "To organize your month"))
             if model.planTier.allows(.guidedBudget) {
-                entry(symbol: "chart.pie", title: tx("Presupuesto", "Budget"), subtitle: tx("Límites por categoría", "Limits by category"),
-                      id: "plan.month.budget") { BudgetView() }
+                // The Owner doesn't use a budget (OW-3): his statement is the limit.
+                if model.profile?.isOwner != true {
+                    entry(symbol: "chart.pie", title: tx("Presupuesto", "Budget"), subtitle: tx("Límites por categoría", "Limits by category"),
+                          id: "plan.month.budget") { BudgetView() }
+                }
                 entry(symbol: "calendar", title: tx("Calendario financiero", "Financial calendar"),
                       subtitle: tx("Pagos e ingresos del mes", "Payments and income this month"), id: "plan.month.calendar") { CalendarView() }
             } else {
@@ -575,7 +578,8 @@ struct DashboardDistribution: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("distribution.dashboard")
 
-        if let lines = plan.distributionFormula?.lines, !lines.isEmpty {
+        // The Owner keeps only the surplus and its split (OW-3): "where it comes from" is Hoy's statement.
+        if !plan.isOwnerScope, let lines = plan.distributionFormula?.lines, !lines.isEmpty {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("De dónde sale", "Where it comes from"))
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in

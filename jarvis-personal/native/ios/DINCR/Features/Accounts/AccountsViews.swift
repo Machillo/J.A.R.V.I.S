@@ -341,6 +341,7 @@ struct DeclareOwnAccountForm: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(DincrColor.negative) } }
             }
+            .dincrForm()
             .navigationTitle(tx("Cuenta propia", "Own account"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

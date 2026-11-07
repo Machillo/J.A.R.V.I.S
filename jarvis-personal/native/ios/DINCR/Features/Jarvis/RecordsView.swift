@@ -171,6 +171,7 @@ private struct ConfirmBalanceSheet: View {
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }
             }
+            .dincrForm()
             .navigationTitle(tx("Confirmar saldo", "Confirm balance"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -238,6 +238,9 @@ def get_vip_command_center() -> dict:
         known_commitments = owner_cycle["expenses"] + owner_ledger.payments_outside_the_card(debts)
     # The Owner's automatic savings leave every Thursday: that money is not free to spend.
     margin = round(monthly_income - known_commitments - (owner_savings["total"] if owner else 0), 2)
+    if owner_statement is not None:
+        # The Owner's month is Hoy's statement counted whole: one surplus in Hoy, Plan and Proyecciones.
+        margin = owner_statement["result"]
     emergency_gap = max(emergency_target - savings, 0)
     all_assets = round(sum(_money(row["current_balance"]) for row in accounts if row.get("include_in_net_worth") and row.get("currency") == "CRC"), 2)
     # Only balances the user entered or confirmed replace the declared liquid savings.
