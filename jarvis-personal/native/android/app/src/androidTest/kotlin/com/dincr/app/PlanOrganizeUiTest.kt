@@ -128,7 +128,9 @@ class PlanOrganizeUiTest {
         for ((plan, role) in listOf("vip" to null, "vip" to "owner")) {
             launch(plan, role)
             click(month)
-            waitUntil("organize ($role)") { tagged("plan.month.budget") && tagged("plan.month.calendar") }
+            // OW-3: the Owner's plan has no budget; VIP keeps it. Both keep the calendar.
+            waitUntil("organize ($role)") { tagged("plan.month.calendar") && (role == "owner" || tagged("plan.month.budget")) }
+            if (role == "owner") assertFalse("the Owner has no budget", tagged("plan.month.budget"))
             back()
             click(income)
             waitUntil("recurring ($role)") { tagged("incomeBase.recurring") }

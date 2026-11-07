@@ -230,6 +230,7 @@ private struct AccountForm: View {
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }
             }
+            .dincrForm()
             .navigationTitle(existing == nil ? tx("Nueva cuenta", "New account") : tx("Actualizar saldo", "Update balance"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

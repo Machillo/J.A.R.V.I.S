@@ -34,22 +34,35 @@ fun ProjectionsScreen(model: AppModel, nav: Navigator) {
         LoadContent(center) { c ->
             when (val state = Projections.state(c)) {
                 is Projections.Complete -> {
-                    if (state.lowConfidence) {
-                        Text(ProjectionText.lowConfidence(), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted,
-                            modifier = Modifier.testTag("projections.lowConfidence"))
-                    }
-                    // UX-14 / I09: the same points as lines; the cards below stay as the text alternative.
-                    ProjectionSeries.of(state).forEach { item ->
-                        Column(Modifier.testTag("projections.chart.${item.kind.tag}")) {
-                            DincrCard { TrendLineChart(ProjectionText.chartTitle(item.kind), item.series, ProjectionText.chartColor(item.kind)) }
+                    // In plain words first: the assumption behind every figure below.
+                    DincrCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                            Text(tx("Si seguís igual", "If nothing changes"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
+                            Text(ProjectionText.assumption(c.safeToSpend?.monthlyMargin), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                            if (state.lowConfidence) {
+                                Text(ProjectionText.lowConfidence(), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted,
+                                    modifier = Modifier.testTag("projections.lowConfidence"))
+                            }
                         }
                     }
                     state.points.forEach { p ->
                         Column(Modifier.testTag("projections.point.${p.months ?: 0}")) {
                             Section(ProjectionText.horizon(p.months ?: 0)) {
-                                AmountLine(tx("Efectivo", "Cash"), p.cash)
-                                AmountLine(tx("Deuda", "Debt"), p.debt)
-                                AmountLine(tx("Patrimonio neto", "Net worth"), p.netWorth)
+                                AmountLine(tx("Tendrías ahorrado", "You would have saved"), p.cash)
+                                AmountLine(tx("Te quedaría por pagar", "You would still owe"), p.debt)
+                                AmountLine(tx("Lo tuyo (ahorro − deudas)", "Yours (savings − debts)"), p.netWorth)
+                            }
+                        }
+                    }
+                    // The same figures month by month, each chart saying what it is.
+                    SectionTitle(tx("Cómo cambia mes a mes", "How it changes month by month"))
+                    ProjectionSeries.of(state).forEach { item ->
+                        Column(Modifier.testTag("projections.chart.${item.kind.tag}")) {
+                            DincrCard {
+                                Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
+                                    TrendLineChart(ProjectionText.chartTitle(item.kind), item.series, ProjectionText.chartColor(item.kind))
+                                    Text(ProjectionText.chartCaption(item.kind), style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
+                                }
                             }
                         }
                     }
@@ -84,11 +97,11 @@ private fun ProjectionIncomplete(missing: List<ProjectionInput>, nav: Navigator)
 
 @Composable
 private fun DebtPlanCard(plan: CommandCenter.Plan) {
-    Section(tx("Plan de deudas recomendado", "Recommended debt plan")) {
-        InfoLine(tx("Empezar por", "Start with"), plan.target ?: "—")
-        AmountLine(tx("Pago mensual al objetivo", "Monthly payment to the target"), plan.monthlyToTarget)
-        plan.months?.let { InfoLine(tx("Tiempo estimado", "Estimated time"), tx("$it meses", "$it months")) }
-        AmountLine(tx("Intereses estimados", "Estimated interest"), plan.interest)
+    Section(tx("Para salir de deudas", "To get out of debt")) {
+        InfoLine(tx("Primero pagá", "Pay first"), plan.target ?: "—")
+        AmountLine(tx("Poné cada mes a esa deuda", "Put toward it each month"), plan.monthlyToTarget)
+        plan.months?.let { InfoLine(tx("Quedarías sin deudas en", "Debt-free in"), tx("$it meses", "$it months")) }
+        AmountLine(tx("Intereses que pagarías", "Interest you would pay"), plan.interest)
     }
 }
 
@@ -107,9 +120,24 @@ private object ProjectionText {
     )
 
     @Composable fun chartTitle(kind: ProjectionSeries.Kind) = when (kind) {
-        ProjectionSeries.Kind.CASH -> tx("Efectivo proyectado", "Projected cash")
-        ProjectionSeries.Kind.DEBT -> tx("Deuda proyectada", "Projected debt")
-        ProjectionSeries.Kind.NET_WORTH -> tx("Patrimonio neto proyectado", "Projected net worth")
+        ProjectionSeries.Kind.CASH -> tx("Tu plata ahorrada", "Your money saved")
+        ProjectionSeries.Kind.DEBT -> tx("Lo que te queda por pagar", "What you still owe")
+        ProjectionSeries.Kind.NET_WORTH -> tx("Lo tuyo de verdad", "What is really yours")
+    }
+
+    @Composable fun chartCaption(kind: ProjectionSeries.Kind) = when (kind) {
+        ProjectionSeries.Kind.CASH -> tx("Sube con lo que te sobra cada mes.", "It grows with what is left each month.")
+        ProjectionSeries.Kind.DEBT -> tx("Baja con cada cuota que pagás.", "It goes down with every installment you pay.")
+        ProjectionSeries.Kind.NET_WORTH -> tx("Tu plata ahorrada menos lo que debés. Si es negativo, todavía debés más de lo que tenés.",
+            "Your money saved minus what you owe. Below zero, you still owe more than you have.")
+    }
+
+    @Composable fun assumption(margin: java.math.BigDecimal?): String {
+        val base = tx("Esto calcula tus próximos meses si cada mes te sobra lo mismo que este y pagás tus cuotas.",
+            "This works out your next months if every month leaves you what this one does and you pay your installments.")
+        if (margin == null) return base
+        val amount = Dincr.money.format(margin)
+        return tx("Este mes te sobran $amount. ", "This month leaves you $amount. ") + base
     }
 
     @Composable fun chartColor(kind: ProjectionSeries.Kind) = when (kind) {

@@ -102,6 +102,7 @@ private struct AdditionalCardSheet: View {
                             "This card’s pending purchases become what that person owes you."))
                 }
             }
+            .dincrForm()
             .navigationTitle(tx("Tarjeta adicional", "Additional card"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

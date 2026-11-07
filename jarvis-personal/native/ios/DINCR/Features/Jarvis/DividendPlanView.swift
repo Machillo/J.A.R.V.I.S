@@ -202,6 +202,7 @@ private struct DividendPlanSheet: View {
                     Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative).accessibilityIdentifier("wealth.dividends.error")
                 }
             }
+            .dincrForm()
             .navigationTitle(tx("Plan de dividendos", "Dividend plan"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

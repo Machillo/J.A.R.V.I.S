@@ -161,6 +161,7 @@ private struct ReceivablePaymentSheet: View {
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }
             }
+            .dincrForm()
             .navigationTitle(tx("Pago de \(receivable.personName ?? "")", "Payment from \(receivable.personName ?? "")"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -218,6 +219,7 @@ private struct ReceivableEntrySheet: View {
                     if let error { Text(error).font(DincrFont.caption).foregroundStyle(DincrColor.negative) }
                 }
             }
+            .dincrForm()
             .navigationTitle(tx("Nuevo cobro", "New collection"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

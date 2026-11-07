@@ -69,7 +69,8 @@
   "DB-1",
   "L-2",
   "OW-1",
-  "OW-2"
+  "OW-2",
+  "OW-3"
  ],
  "fixtures": {
   "ios": {
@@ -811,13 +812,21 @@
   {
    "id": "month.budget",
    "name": "Plan → Tu plan del mes → Para organizar tu mes → Presupuesto (§15 PR 5 option A; PR 10 option A: its only home, Free opens Tu plan del mes locked and sees it locked)",
-   "decision": "PR-10-A",
+   "decision": "OW-3",
    "plans": {
     "free": "VISIBLE_LOCKED",
     "basic": "AVAILABLE",
     "vip": "AVAILABLE",
-    "owner": "AVAILABLE"
+    "owner": "HIDDEN_BY_PLAN"
    },
+   "transitional_hidden": [
+    {
+     "plan": "owner",
+     "platform": "both",
+     "reason": "OW-3: the Owner doesn't use a budget; his card statement (22→21) is the limit he follows in Hoy",
+     "resolved_by": "UX-7 (Plan rebuilt: the budget entry is reconsidered for the Owner)"
+    }
+   ],
    "backend": [
     {
      "method": "GET",

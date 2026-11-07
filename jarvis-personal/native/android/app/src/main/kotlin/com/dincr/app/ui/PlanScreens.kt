@@ -2,6 +2,7 @@ package com.dincr.app.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -189,7 +190,12 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
                 }
                 WaitingForBankCard(list, waiting, model.isOn(OpsFlag.FINANCIAL_WRITES)) { answering = it }
                 DebtPayoffSummary(DebtPayoff.summary(list), DebtProgress.total(list), strategyDate)
-                list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }, onHistory = { history = debt }) }
+                // The Owner orders his debts by balance or rate, either way (OW-3).
+                var order by remember { mutableStateOf(com.dincr.data.DebtOrder.SAVED) }
+                if (profile?.isOwner == true && list.size > 1) Box(Modifier.testTag("debts.order")) {
+                    ChoiceChips(com.dincr.data.DebtOrder.entries.map { it to debtOrderTitle(it) }, order, { order = it })
+                }
+                order.sorted(list).forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }, onHistory = { history = debt }) }
             }
         }
     }
@@ -371,4 +377,12 @@ private fun DebtForm(model: AppModel, debt: Debt?, advanced: Boolean, onDismiss:
             DateField(tx("Próximo pago", "Next payment"), next, { next = it }, allowClear = true)
         }
     }
+}
+
+private fun debtOrderTitle(order: com.dincr.data.DebtOrder): String = when (order) {
+    com.dincr.data.DebtOrder.SAVED -> tx("Como las guardé", "As saved")
+    com.dincr.data.DebtOrder.BALANCE_HIGH -> tx("Mayor saldo", "Largest balance")
+    com.dincr.data.DebtOrder.BALANCE_LOW -> tx("Menor saldo", "Smallest balance")
+    com.dincr.data.DebtOrder.RATE_HIGH -> tx("Mayor interés", "Highest rate")
+    com.dincr.data.DebtOrder.RATE_LOW -> tx("Menor interés", "Lowest rate")
 }

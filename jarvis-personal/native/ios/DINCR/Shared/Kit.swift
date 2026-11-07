@@ -309,3 +309,12 @@ extension MoneyFormat {
         return tx("Escribí un monto mayor que cero, por ejemplo \(example).", "Enter an amount above zero, for example \(example).")
     }
 }
+
+extension View {
+    /// A form on the app's own background (as the movement editor and Ingresos y base), not the
+    /// system's plain grouped gray: the same look in every editor and sheet.
+    func dincrForm() -> some View {
+        scrollContentBackground(.hidden)
+            .dincrScreenBackground()
+    }
+}

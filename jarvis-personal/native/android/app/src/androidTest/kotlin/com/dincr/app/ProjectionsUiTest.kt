@@ -123,7 +123,7 @@ class ProjectionsUiTest {
             openProjections()
             listOf("cash", "debt", "netWorth").forEach { kind -> waitUntil("$role chart $kind") { reveal("projections.chart.$kind") } }
             // TalkBack: the chart says its title and every point.
-            val cash = tx("Efectivo proyectado", "Projected cash")
+            val cash = tx("Tu plata ahorrada", "Your money saved")
             val spoken = compose.onAllNodes(androidx.compose.ui.test.hasContentDescription(cash, substring = true), useUnmergedTree = true)
                 .fetchSemanticsNodes().flatMap { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription).orEmpty() }.joinToString()
             listOf(tx("1 mes", "1 month"), tx("12 meses", "12 months")).forEach { assertTrue("$role: $it in $spoken", spoken.contains(it)) }

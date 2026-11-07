@@ -112,6 +112,7 @@ private struct BudgetEditor: View {
                 }
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
+            .dincrForm()
             .navigationTitle(tx("Límites", "Limits"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -352,6 +353,7 @@ private struct RecurringForm: View {
                 TextField(tx("Día (1–31, opcional)", "Day (1–31, optional)"), text: $day).keyboardType(.numberPad)
                 if let error { Text(error).foregroundStyle(DincrColor.negative) }
             }
+            .dincrForm()
             .navigationTitle(editing == nil ? tx("Nuevo recurrente", "New recurring item") : tx("Editar recurrente", "Edit recurring item"))
             .onAppear(perform: prefill)
             .navigationBarTitleDisplayMode(.inline)

@@ -68,7 +68,10 @@ class FeatureReachabilitySpecTest {
                 val expected = state(id, tier.wire)
                 assertEquals("$id ${tier.wire}: $expected", expected == "AVAILABLE", tier.allows(feature))
             }
-            assertEquals(id, "AVAILABLE", state(id, "owner"))
+            // The Owner reaches every gated feature, except one his own screens leave out on purpose
+            // (OW-3: no budget in his plan), listed in the spec's transitional_hidden.
+            val owner = state(id, "owner")
+            assertTrue("$id owner: $owner", owner == "AVAILABLE" || (owner == "HIDDEN_BY_PLAN" && id == "month.budget"))
         }
     }
 

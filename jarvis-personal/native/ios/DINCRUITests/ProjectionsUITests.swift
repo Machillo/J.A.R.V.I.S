@@ -95,7 +95,7 @@ final class ProjectionsUITests: XCTestCase {
             XCTAssertTrue(element("projections.chart.\(kind)", in: app).waitForExistence(timeout: 10), "\(context): \(kind)")
         }
         // VoiceOver: the chart says its title and every point.
-        let cash = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Efectivo proyectado")).firstMatch
+        let cash = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Tu plata ahorrada")).firstMatch
         XCTAssertTrue(cash.exists, context)
         let spoken = (cash.value as? String) ?? ""
         for months in ["1 mes", "3 meses", "6 meses", "12 meses"] { XCTAssertTrue(spoken.contains(months), "\(context): \(months) in \(spoken)") }
