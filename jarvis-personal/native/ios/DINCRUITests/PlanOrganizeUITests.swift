@@ -106,8 +106,9 @@ final class PlanOrganizeUITests: XCTestCase {
         for (plan, role) in [("vip", nil), ("vip", "owner")] as [(String?, String?)] {
             let app = launch(plan: plan, role: role)
             open("plan.strategy", in: app)
-            XCTAssertTrue(reveal("plan.month.budget", in: app).exists, role ?? "vip")
             XCTAssertTrue(reveal("plan.month.calendar", in: app).exists, role ?? "vip")
+            // OW-3: the Owner's plan has no budget; VIP keeps it.
+            XCTAssertEqual(element("plan.month.budget", in: app).exists, role != "owner", role ?? "vip")
             back(app)
             open("plan.incomeBase", in: app)
             XCTAssertTrue(reveal("incomeBase.recurring", in: app).exists, role ?? "vip")
