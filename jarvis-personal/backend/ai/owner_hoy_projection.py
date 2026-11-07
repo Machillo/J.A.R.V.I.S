@@ -186,6 +186,37 @@ def project(conn, workspace_id: str, cycle: dict[str, Any], savings: dict[str, A
     return {**result, "unknown_installments": installments["unknown"], "ot_hours_to_cover": hours}
 
 
+def statement_result() -> float | None:
+    """Hoy's statement result for the signed-in Owner, read on its own (the plan of the month splits
+    it). SELECT only. None when it can't be read: the plan then keeps its own estimate."""
+    try:
+        from backend.ai.owner_commitments import cycle_automatic_savings
+        from backend.ai.owner_debt_block_store import stored_blocks
+        from backend.ai.preferences import get_preference
+        from backend.auth.current_user import get_current_account_id, get_current_workspace_id
+        from backend.ai import strategy_dashboard  # its connection: the strategy's tests answer it in memory
+        from backend.core.time import costa_rica_today
+        from backend.user_product import owner_ledger
+        from backend.user_product.debt_payments import with_known_payments
+        from backend.user_product.debt_rates import with_known_rates
+        from backend.user_product.entry_currency import account_base_currency
+
+        today = costa_rica_today()
+        account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
+        with strategy_dashboard.get_connection() as conn:
+            cycle = owner_ledger.owner_cycle_totals(conn, workspace_id, today)
+            savings = cycle_automatic_savings(get_preference("salvavidas") or {}, stored_blocks(), date.fromisoformat(cycle["period_start"]),
+                                              date.fromisoformat(cycle["period_end"]), today)
+            debts = with_known_payments(with_known_rates([dict(row) for row in conn.execute(
+                """SELECT id,name,remaining_amount,total_amount,monthly_payment,monthly_payment_known,interest_rate,interest_rate_known,debt_type,
+                          payment_day,next_payment_date FROM debts WHERE workspace_id=%s AND remaining_amount>0 ORDER BY id""",
+                (workspace_id,)).fetchall()]))
+            return project(conn, workspace_id, cycle, savings, debts, account_base_currency(conn, account_id))["result"]
+    except Exception as exc:  # noqa: BLE001 — the plan never fails because of it
+        logger.warning("owner_statement_result_unavailable error_type=%s", type(exc).__name__)
+        return None
+
+
 def free_share(result: float) -> float | None:
     """What the Owner's strategy leaves for him (``vida_controlada``) when it splits the statement's
     result: the same split as JARVIS's exact distribution. Nothing left: 0. Unavailable: None."""
@@ -194,7 +225,7 @@ def free_share(result: float) -> float | None:
     try:
         from backend.ai.strategy_dashboard import _owner_strategy_blueprint
 
-        return round(float(_owner_strategy_blueprint(manual_available=round(result, 2)).get("safe_to_spend") or 0), 2)
+        return round(float(_owner_strategy_blueprint(statement_base=round(result, 2)).get("safe_to_spend") or 0), 2)
     except Exception as exc:  # noqa: BLE001 — Hoy never fails because of the strategy
         logger.warning("owner_free_share_unavailable error_type=%s", type(exc).__name__)
         return None

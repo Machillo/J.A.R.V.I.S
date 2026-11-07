@@ -385,3 +385,18 @@ def test_a_valid_confirmation_reaches_the_service(client, monkeypatch):
     monkeypatch.setattr(routes, "confirm_owner_distribution", lambda *args: seen.append(args) or {"status": "applied"})
     assert client.post(CONFIRM, json=VALID_CONFIRM, headers=HEADERS).status_code == 200
     assert seen and seen[0][2] == "confirm-http-0001" and seen[0][4] == "a" * 64
+
+
+def test_the_plan_of_the_month_splits_hoys_statement_result(owner_inputs, monkeypatch):
+    # One surplus in every screen: the plan splits what Hoy's statement (22→21) leaves.
+    monkeypatch.setattr(sd.owner_hoy_projection, "statement_result", lambda: 123_000.0)
+    plan = _estimate()
+    assert plan["available_before_goals"] == 123_000
+    # Its automatic savings are already out of that result: nothing is absorbed a second time.
+    assert plan["automatic_savings"]["taken_from_distribution"] == 0
+    assert plan["debt_savings_blocks"]["taken_from_distribution"] == 0
+
+
+def test_without_hoys_statement_the_plan_keeps_its_estimate(owner_inputs, monkeypatch):
+    monkeypatch.setattr(sd.owner_hoy_projection, "statement_result", lambda: None)
+    assert _estimate()["available_before_goals"] != 123_000
